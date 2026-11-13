@@ -63,14 +63,15 @@ def info(fen):
     return len(W) + len(B), any(x[0] == 'K' for x in W), any(x[0] == 'K' for x in B)
 
 
-def label(lo, hi, stm, dtm=None):
-    """Interval for the side to move -> D, Wn or Ln for white (n = plies to the end with perfect play,
-    when known), or >=D, <=D, ? when not decided."""
+def label(lo, hi, stm, dtm=None, ply=0):
+    """Interval for the side to move -> D, Wn or Ln for white, or >=D, <=D, ? when not decided. n is the
+    ply (counted from the start position) after which the game ends with perfect play: the ply of the
+    node plus its distance to mate. A white win always ends on an odd ply, a black win on an even ply."""
     if stm == 'B':
         lo, hi = -hi, -lo
     if lo != hi:
         return {(0, 1): '≥D', (-1, 0): '≤D', (-1, 1): '?'}[(lo, hi)]
-    return {1: 'W', 0: 'D', -1: 'L'}[lo] + (str(dtm) if dtm is not None and lo != 0 else '')
+    return {1: 'W', 0: 'D', -1: 'L'}[lo] + (str(ply + dtm) if dtm is not None and lo != 0 else '')
 
 
 def main():
@@ -221,7 +222,7 @@ def main():
 
     def walk_tree(fen, path):
         name = 'beginstand' if not path else ('wit ' if len(path) % 2 else 'zwart ') + path[-1]
-        tree.append('    ' * len(path) + f'{name}  {label(*iv[fen], fen[0], dtm.get(fen))}')
+        tree.append('    ' * len(path) + f'{name}  {label(*iv[fen], fen[0], dtm.get(fen), len(path))}')
         if len(path) < args.table and fen in children:
             for nota, c in children[fen]:
                 walk_tree(c, path + [nota])
@@ -232,12 +233,12 @@ def main():
     diagrams = ['## Diagrammen', '', 'w/b = witte/zwarte schijf, W/B = dam.', '',
                 f'Beginstand, wit aan zet: **{label(*root, "W", dtm.get(START))}**', '', '```', diagram(START), '```', '']
     for nota, c in children[START]:
-        diagrams += [f'Na 1. {nota}, zwart aan zet: **{label(*iv[c], c[0], dtm.get(c))}**', '', '```', diagram(c), '```', '']
+        diagrams += [f'Na 1. {nota}, zwart aan zet: **{label(*iv[c], c[0], dtm.get(c), 1)}**', '', '```', diagram(c), '```', '']
     md = ['# Openingen van 6×6-dammen', '',
           f'Beginstand, wit aan zet: **{label(*root, "W", dtm.get(START))}**.', '',
-          'Notatie vanuit wit: D = remise, Wn = wit wint, Ln = wit verliest, met n het aantal ply tot het einde '
-          'van de partij bij perfect spel (DTM). Waar n ontbreekt, is het resultaat exact maar de afstand onbekend '
-          '(de 10-stukkendatabase bevat alleen winst/remise/verlies).', '',
+          'Notatie vanuit wit: D = remise, Wn = wit wint, Ln = wit verliest, met n de ply (geteld vanaf de beginstand) '
+          'waarna de partij bij perfect spel eindigt; een witte winst eindigt dus altijd op een oneven ply, een zwarte '
+          'op een even ply. Waar n ontbreekt, is het resultaat exact maar de afstand onbekend.', '',
           'Methode: de volledige openings-DAG (transposities samengevoegd), uitgebreid zolang een stelling meer dan '
           f'{eng.built} stukken heeft en hoogstens één kant dammen. Bladeren: databasestellingen (exact), stellingen '
           'zonder zetten (verloren) en stellingen met meer stukken en dammen aan beide kanten (onbekend). Waarden zijn '
@@ -247,7 +248,7 @@ def main():
           *diagrams, '## Boom', '', '```', *tree, '```', '', f'## Alle openingen van {args.table} ply', '',
           f"{len(rows)} openingen: W {res['W']}, D {res['D']}, L {res['L']}.", '',
           '| # | opening | resultaat |', '|---|---|---|']
-    md += [f"| {i} | {' '.join(p)} | {label(*iv[f], f[0], dtm.get(f))} |" for i, (p, f) in enumerate(rows, 1)]
+    md += [f"| {i} | {' '.join(p)} | {label(*iv[f], f[0], dtm.get(f), len(p))} |" for i, (p, f) in enumerate(rows, 1)]
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     Path(args.out + '.md').write_text('\n'.join(md) + '\n')
     Path(args.out + '.json').write_text(json.dumps({

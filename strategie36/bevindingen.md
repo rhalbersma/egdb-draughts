@@ -7,6 +7,13 @@ afstand tot het einde in ply (DTM).
 
 ## Belangrijkste bevindingen
 
+### De beginstand van 6×6 is remise
+
+Met de databases tot en met 10 stukken en de volledige openingsboom is de beginstand exact opgelost: remise
+(details en de tabel van alle 106 openingen van 3 ply in [`results/opening_6x6.md`](../results/opening_6x6.md)).
+Alle vijf eerste zetten van wit houden remise. Na 1. 13-11 6-8 2. 11×6 is het remise, maar 2. … 2×9?? (de
+randslag van hoofdstuk 7) verliest.
+
 ### Hoofdstuk 6/7: de randslag-opening 1. 13-11 6-8 2. 11×6 2×9
 
 * **3. 15-12 wint snel (bevestigd):** winst in 25 ply.
@@ -20,6 +27,71 @@ afstand tot het einde in ply (DTM).
   * Diagram 6.9 klopt op zichzelf: met wit aan zet wint wit (18-15 of 1-15), met zwart aan zet is het
     remise. De nieuwe remise-conclusie van Jansen en Brascamp voor 6.9 houdt dus stand. Alleen ontstaat
     6.9 pas na de witte fout 10. 4-1.
+#### De stelling na de randslag (diagram 7.1)
+
+1. 13-11 6-8 2. 11×6 2×9, wit aan zet; wit wint:
+
+```
+     a b c d e f
+ 6     ●   ·   ●       1  2  3
+ 5   ●   ●   ·        4  5  6
+ 4     ·   ·   ●       7  8  9
+ 3   ·   ·   ·       10 11 12
+ 2     ·   ○   ○      13 14 15
+ 1   ○   ○   ○       16 17 18
+```
+
+| zet | waarde |
+|---|---|
+| **15-12** | wit wint in 25 ply |
+| **16-13** | wit wint in 53 ply |
+| 14-11 | remise |
+| 14-12 | remise |
+| 17-13 | remise |
+
+#### De fout op zet 10 in de hoofdvariant
+
+1. 13-11 6-8 2. 11×6 2×9 3. 16-13 5-8 4. 14-11 1-5 5. 11×6 9×2 6. 15-12 5-7 7. 17-14 7-10 8. 13-11 4-7
+9. 11×4 10-13, wit aan zet; wit wint, maar alleen met 10. 12-8!:
+
+```
+     a b c d e f
+ 6     ·   ●   ●       1  2  3
+ 5   ○   ·   ·        4  5  6
+ 4     ·   ·   ·       7  8  9
+ 3   ·   ·   ○       10 11 12
+ 2     ●   ○   ·      13 14 15
+ 1   ·   ·   ○       16 17 18
+```
+
+| zet | waarde |
+|---|---|
+| **12-8!** | wit wint in 39 ply |
+| 4-1? (boek) | remise: 13-16 11. 12-9 geeft diagram 6.9 met zwart aan zet |
+| 12-9 | remise |
+| 14-11 | remise |
+| 18-15 | remise |
+
+10. 12-8! 13-16 11. 14-11 2-5 12. 8×1 16×6: wit laat zwart een dam halen, haalt er zelf ook een en houdt de
+schijven op 4 en 18. Het resterende eindspel, met wit aan zet, is gewonnen (33 ply), alleen met 18-14 of 1-15:
+
+```
+     a b c d e f
+ 6     ○   ·   ●       1  2  3
+ 5   ○   ·   ●        4  5  6
+ 4     ·   ·   ·       7  8  9
+ 3   ·   ·   ·       10 11 12
+ 2     ·   ·   ·      13 14 15
+ 1   ·   ·   ○       16 17 18
+```
+
+Wit: dam 1, schijven 4 en 18; zwart: schijf 3, dam 6. Een verwant van diagram 2.2/3.1, met de dam op 1 in plaats
+van de schijf op 10. Verder: 13. 18-14 6-13 14. 1-15 13-6 15. 4-1 6-13 16. 1-4 13-10 17. 4-11 10-2 18. 14-12 3-6
+19. 11×3 2-9 20. 12-8 9-2 21. 15-12 2-7 22. 3-6 7-2 23. 6-9 2-7 24. 9-2 7-4 25. 12-15 4-14 26. 2-7 14×4
+27. 15-18 4-1 28. 18-15 1×12 29. 15×8 en zwart heeft geen stukken meer.
+
+#### Overige openingsbevindingen
+
 * **Diagram 7.13 (wit aan zet, volgens het boek remise) is winst voor wit:** 9-6! 8×3 13-11! 7×14 18×11
   (13 ply). De remise na 6. 17-14 9-12 7. 14×9 bestaat wel, maar alleen met 7. … 4-7 (diagram 7.14 is
   inderdaad remise); 7. … 5-7 verliest.

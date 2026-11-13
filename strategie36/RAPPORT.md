@@ -40,7 +40,7 @@ randslag van hoofdstuk 7) verliest.
   2 |   .   w   w |     |    13    14    15 |
   1 | w   w   w   |     | 16    17    18    |
     +-------------+     +-------------------+
-      a b c d e f        a  b  c  d  e  f
+      a b c d e f
 ```
 
 | zet | waarde |
@@ -65,7 +65,7 @@ randslag van hoofdstuk 7) verliest.
   2 |   b   w   . |     |    13    14    15 |
   1 | .   .   w   |     | 16    17    18    |
     +-------------+     +-------------------+
-      a b c d e f        a  b  c  d  e  f
+      a b c d e f
 ```
 
 | zet | waarde |
@@ -88,7 +88,7 @@ schijven op 4 en 18. Het resterende eindspel, met wit aan zet, is gewonnen (33 p
   2 |   .   .   . |     |    13    14    15 |
   1 | .   .   w   |     | 16    17    18    |
     +-------------+     +-------------------+
-      a b c d e f        a  b  c  d  e  f
+      a b c d e f
 ```
 
 Wit: dam 1, schijven 4 en 18; zwart: schijf 3, dam 6. Een verwant van diagram 2.2/3.1, met de dam op 1 in plaats

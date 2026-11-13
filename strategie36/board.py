@@ -39,7 +39,7 @@ def diagram(fen, numbers=True):
             line += gap + '| ' + ' '.join(nums) + ' |'
         lines.append(line)
     lines += ['    +-------------+' + (gap + num_rule if numbers else ''),
-              '      a b c d e f' + (gap + '   a  b  c  d  e  f' if numbers else '')]
+              '      a b c d e f']
     return '\n'.join(lines)
 
 

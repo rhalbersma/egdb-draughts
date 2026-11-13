@@ -28,7 +28,7 @@
 // to the slices; no graph-history problems arise.
 //
 // Protocol (stdin, one command per line):
-//   build <n> [t]   build all slices with at most n pieces, with t threads
+//   build <n> [t] [d]  build all slices with at most n pieces, with t threads; above d pieces WDL only
 //   save <file>     save the prebuilt slices;  load <file>  load them
 //   pos <FEN>       value of the position and of every legal move (exact DTM)
 //   posw <FEN>      win / draw / loss of the position and of every legal move (faster above the slices)
@@ -344,17 +344,40 @@ Pos pos_of(Meta const& s, std::uint64_t idx, int stm)
 
 // ---------------------------------------------------------------- storage
 //
-// Prebuilt slices (every canonical slice with at most `built_max` pieces) live in one byte array `db`,
-// found through an open-addressing table key -> offset. Slices needed beyond that (positions with more
-// than `built_max` but at most `slice_max` pieces, and positions with kings on both sides) are solved on
-// demand and kept in `extra`.
+// Prebuilt slices (every canonical slice with at most `built_max` pieces) are found through an
+// open-addressing table key -> offset. Slices with at most `dtm_max` pieces store one byte of DTM per
+// position in `db`; larger prebuilt slices store only win / draw / loss in two bits per position in
+// `wdlbits` (Syzygy style), each slice starting at a 64-bit word so that slices can be written in
+// parallel. Slices needed beyond the prebuilt ones (positions with kings on both sides and more pieces)
+// are solved on demand and kept in `extra` with 16-bit values.
+//
+// Values above `dtm_max` pieces are pseudo distances: the win / draw / loss is exact, the number is not
+// (a WDL slice reports a win as 1 and a loss as 0).
 
 int built_max = 0;
+int dtm_max = 99;
 int slice_max = 8;
 std::vector<std::uint8_t> db;
-std::vector<std::uint64_t> tab_key, tab_off;   // tab_key = pack + 1, 0 = empty
-std::unordered_map<std::uint64_t, std::vector<std::uint8_t>> extra;
+std::vector<std::uint64_t> wdlbits;                // 2 bits per position: 0 = loss, 1 = win, 2 = draw
+constexpr std::uint64_t WDL_FLAG = 1ull << 63;
+std::vector<std::uint64_t> tab_key, tab_off;      // tab_key = pack + 1 (0 = empty); tab_off = byte offset or WDL_FLAG | position offset
+std::unordered_map<std::uint64_t, std::vector<std::uint16_t>> extra;
 std::uint64_t extra_positions = 0;
+
+struct SliceRef {
+        std::uint8_t* dtm = nullptr;          // DTM bytes
+        std::uint16_t const* val16 = nullptr; // on-demand slice
+        std::uint64_t wdl = ~0ull;            // position offset in wdlbits
+};
+
+std::uint16_t ref_value(SliceRef const& r, std::uint64_t i)
+{
+        if (r.dtm) return widen(r.dtm[i]);
+        if (r.val16) return r.val16[i];
+        std::uint64_t j = r.wdl + i;
+        unsigned c = unsigned(wdlbits[j >> 5] >> ((j & 31) * 2)) & 3;
+        return c == 2 ? DRAW : std::uint16_t(c);
+}
 
 std::size_t tab_slot(std::uint64_t k)
 {
@@ -362,33 +385,38 @@ std::size_t tab_slot(std::uint64_t k)
         return std::size_t(h >> 20) & (tab_key.size() - 1);
 }
 
-std::uint8_t const* find_prebuilt(std::uint64_t k)
+bool find_prebuilt(std::uint64_t k, SliceRef& r)
 {
-        if (tab_key.empty()) return nullptr;
+        if (tab_key.empty()) return false;
         for (std::size_t i = tab_slot(k);; i = (i + 1) & (tab_key.size() - 1)) {
-                if (tab_key[i] == k + 1) return db.data() + tab_off[i];
-                if (tab_key[i] == 0) return nullptr;
+                if (tab_key[i] == k + 1) {
+                        if (tab_off[i] & WDL_FLAG) r.wdl = tab_off[i] & ~WDL_FLAG;
+                        else r.dtm = db.data() + tab_off[i];
+                        return true;
+                }
+                if (tab_key[i] == 0) return false;
         }
 }
 
-void solve_slice(Meta const& s, std::uint8_t* out);
+void solve_slice(Meta const& s, std::uint16_t* out);
 
-std::uint8_t const* slice_values(Key const& key)
+SliceRef slice_values(Key const& key)
 {
         std::uint64_t k = key.pack();
-        if (pieces(key) <= built_max) {
-                std::uint8_t const* v = find_prebuilt(k);
-                if (v) return v;
-        }
+        SliceRef r;
+        if (pieces(key) <= built_max && find_prebuilt(k, r)) return r;
         auto it = extra.find(k);
-        if (it != extra.end()) return it->second.data();
-        Meta s = meta_of(key);
-        std::vector<std::uint8_t> val(2 * s.P);
-        solve_slice(s, val.data());
-        extra_positions += 2 * s.P;
-        if ((extra.size() + 1) % 10000 == 0)
-                std::cerr << "on demand: " << extra.size() + 1 << " slices, " << extra_positions << " positions" << std::endl;
-        return extra.emplace(k, std::move(val)).first->second.data();
+        if (it == extra.end()) {
+                Meta s = meta_of(key);
+                std::vector<std::uint16_t> val(2 * s.P);
+                solve_slice(s, val.data());
+                extra_positions += 2 * s.P;
+                if ((extra.size() + 1) % 10000 == 0)
+                        std::cerr << "on demand: " << extra.size() + 1 << " slices, " << extra_positions << " positions" << std::endl;
+                it = extra.emplace(k, std::move(val)).first;
+        }
+        r.val16 = it->second.data();
+        return r;
 }
 
 // ---------------------------------------------------------------- lookup
@@ -441,20 +469,20 @@ bool in_slices(Pos const& p)
 
 std::uint16_t from_successors(Pos const& p);
 
-std::uint8_t lookup8(Pos const& p0)
+std::uint16_t lookup_slice(Pos const& p0)
 {
         Pos const p = canonical_key(key_of(p0)) ? p0 : mirror(p0);
         Key const key = key_of(p);
-        thread_local std::uint8_t const* last = nullptr;
+        thread_local SliceRef last;
         thread_local std::uint64_t last_key = ~0ull;
         thread_local Meta last_meta;
         if (key.pack() != last_key) { last = slice_values(key); last_key = key.pack(); last_meta = meta_of(key); }
-        return last[p.stm * last_meta.P + index_of(last_meta, p)];
+        return ref_value(last, p.stm * last_meta.P + index_of(last_meta, p));
 }
 
 int alphabeta(Pos const& p, int alpha, int beta)
 {
-        if (in_slices(p)) return to_score(widen(lookup8(p)));
+        if (in_slices(p)) return to_score((lookup_slice(p)));
         PosKey const key = std::min(pack(p), pack(mirror(p)));
         if (auto it = tt.find(key); it != tt.end()) {
                 Bounds const b = it->second;
@@ -472,7 +500,7 @@ int alphabeta(Pos const& p, int alpha, int beta)
         std::vector<int> exact(ms.size(), INFS);
         for (std::size_t i = 0; i < ms.size(); ++i) {
                 int pri;
-                if (in_slices(ms[i].next)) { exact[i] = up(to_score(widen(lookup8(ms[i].next)))); pri = exact[i]; }
+                if (in_slices(ms[i].next)) { exact[i] = up(to_score((lookup_slice(ms[i].next)))); pri = exact[i]; }
                 else pri = ms[i].captured ? -WSC + 1000 : -WSC + 500;
                 order.push_back({ -pri, i });
         }
@@ -493,14 +521,14 @@ int alphabeta(Pos const& p, int alpha, int beta)
 
 std::uint16_t lookup(Pos const& p0)
 {
-        if (in_slices(p0)) return widen(lookup8(p0));
+        if (in_slices(p0)) return (lookup_slice(p0));
         return from_score(alphabeta(p0, -INFS, INFS));
 }
 
 // win / draw / loss only: two null-window searches (prunes far more than the exact DTM search)
 char wdl(Pos const& p)
 {
-        if (in_slices(p)) { std::uint16_t v = widen(lookup8(p)); return v == DRAW ? 'D' : (v & 1) ? 'W' : 'L'; }
+        if (in_slices(p)) { std::uint16_t v = (lookup_slice(p)); return v == DRAW ? 'D' : (v & 1) ? 'W' : 'L'; }
         if (alphabeta(p, 0, 1) >= 1) return 'W';
         if (alphabeta(p, -1, 0) <= -1) return 'L';
         return 'D';
@@ -558,16 +586,13 @@ void for_each_predecessor(Meta const& s, Pos const& q, F&& f)
         }
 }
 
-std::uint8_t enc(int v)
-{
-        if (v > MAXDTM8) { std::cerr << "DTM overflow (" << v << ")" << std::endl; std::abort(); }
-        return std::uint8_t(v);
-}
+constexpr std::uint16_t UNKNOWN16 = 0xFFFE;
+constexpr std::uint16_t NONE16 = 0xFFFF;
 
-void solve_slice(Meta const& s, std::uint8_t* out)
+void solve_slice(Meta const& s, std::uint16_t* out)
 {
         std::uint64_t T = 2 * s.P;
-        std::vector<std::uint8_t> ewin(T, NONE8);
+        std::vector<std::uint16_t> ewin(T, NONE16);
         int maxd = 0;
         for (std::uint64_t i = 0; i < T; ++i) {
                 Pos p = pos_of(s, i % s.P, int(i / s.P));
@@ -581,58 +606,57 @@ void solve_slice(Meta const& s, std::uint8_t* out)
                         else ew = std::min(ew, v + 1);
                 }
                 if (c == 0) {
-                        out[i] = ew < INF ? enc(ew) : ed ? DRAW8 : enc(el);
-                        if (out[i] != DRAW8) maxd = std::max(maxd, int(out[i]));
+                        out[i] = ew < INF ? std::uint16_t(ew) : ed ? DRAW : std::uint16_t(el);
+                        if (out[i] != DRAW) maxd = std::max(maxd, int(out[i]));
                 } else {
-                        out[i] = UNKNOWN8;
-                        if (ew < INF) { ewin[i] = enc(ew); maxd = std::max(maxd, ew); }
+                        out[i] = UNKNOWN16;
+                        if (ew < INF) { ewin[i] = std::uint16_t(ew); maxd = std::max(maxd, ew); }
                 }
         }
+        if (maxd >= 0xFF00) { std::cerr << "DTM overflow" << std::endl; std::abort(); }
         std::vector<std::uint64_t> cand((T + 63) / 64);
         for (int n = 1; n <= maxd + 1; ++n) {
-                std::uint8_t const prev = std::uint8_t(n - 1);
+                std::uint16_t const prev = std::uint16_t(n - 1);
                 bool const wins = n & 1;
                 for (std::uint64_t i = 0; i < T; ++i) {
                         if (out[i] != prev) continue;
                         Pos q = pos_of(s, i % s.P, int(i / s.P));
                         for_each_predecessor(s, q, [&](std::uint64_t j) {
-                                if (out[j] != UNKNOWN8) return;
-                                if (wins) { out[j] = std::uint8_t(n); maxd = std::max(maxd, n); }
+                                if (out[j] != UNKNOWN16) return;
+                                if (wins) { out[j] = std::uint16_t(n); maxd = std::max(maxd, n); }
                                 else cand[j / 64] |= 1ull << (j % 64);
                         });
                 }
                 if (wins) {
                         for (std::uint64_t i = 0; i < T; ++i)
-                                if (ewin[i] == n && out[i] == UNKNOWN8) { out[i] = std::uint8_t(n); maxd = std::max(maxd, n); }
+                                if (ewin[i] == n && out[i] == UNKNOWN16) { out[i] = std::uint16_t(n); maxd = std::max(maxd, n); }
                         continue;
                 }
                 for (std::uint64_t w = 0; w < cand.size(); ++w) {
                         for (std::uint64_t b = cand[w]; b; b &= b - 1) {
                                 std::uint64_t j = w * 64 + std::uint64_t(__builtin_ctzll(b));
-                                if (out[j] != UNKNOWN8) continue;
+                                if (out[j] != UNKNOWN16) continue;
                                 Pos p = pos_of(s, j % s.P, int(j / s.P));
                                 int worst = 0;
                                 bool lost = true;
                                 for (auto const& mv : moves(p)) {
-                                        std::uint16_t v;
-                                        if (internal_move(p, mv)) {
-                                                std::uint8_t v8 = out[std::uint64_t(1 - p.stm) * s.P + index_of(s, mv.next)];
-                                                if (v8 >= DRAW8) { lost = false; break; }
-                                                v = v8;
-                                        } else v = lookup(mv.next);
-                                        if (v == DRAW || !(v & 1)) { lost = false; break; }
+                                        std::uint16_t v = internal_move(p, mv)
+                                                ? out[std::uint64_t(1 - p.stm) * s.P + index_of(s, mv.next)]
+                                                : lookup(mv.next);
+                                        if (v >= UNKNOWN16 || !(v & 1)) { lost = false; break; }
                                         worst = std::max(worst, int(v));
                                 }
                                 if (lost) {
-                                        out[j] = enc(worst + 1);
+                                        out[j] = std::uint16_t(worst + 1);
                                         maxd = std::max(maxd, worst + 1);
                                 }
                         }
                         cand[w] = 0;
                 }
+                if (maxd >= 0xFF00) { std::cerr << "DTM overflow" << std::endl; std::abort(); }
         }
         for (std::uint64_t i = 0; i < T; ++i)
-                if (out[i] == UNKNOWN8) out[i] = DRAW8;
+                if (out[i] == UNKNOWN16) out[i] = DRAW;
 }
 
 // ---------------------------------------------------------------- building all slices up to n pieces
@@ -647,11 +671,11 @@ int distance(Key const& k)
         return d;
 }
 
-void build(int nmax, int threads)
+// all canonical slices with at most nmax pieces; slices with more than dmax pieces are stored as WDL
+void build(int nmax, int threads, int dmax)
 {
         std::vector<Job> jobs;
         std::uint32_t const allowW = FULL & ~PROMO_WHITE, allowB = FULL & ~PROMO_BLACK;
-        // enumerate white men subsets, then black men subsets, then king counts
         std::vector<std::uint32_t> wsets;
         for (std::uint32_t w = allowW;; w = (w - 1) & allowW) {
                 if (__builtin_popcount(w) <= nmax) wsets.push_back(w);
@@ -677,56 +701,75 @@ void build(int nmax, int threads)
         std::sort(jobs.begin(), jobs.end(), [](Job const& a, Job const& b) {
                 return std::tie(a.level_n, a.men, a.dist, a.key) < std::tie(b.level_n, b.men, b.dist, b.key);
         });
-        std::uint64_t total = 0;
-        for (auto const& j : jobs) total += 2 * j.P;
-        std::cerr << "build: " << jobs.size() << " slices, " << total << " positions (" << total / 1e9 << " GB)" << std::endl;
-        db.assign(total, UNKNOWN8);
         std::size_t cap = 1;
         while (cap < 2 * jobs.size()) cap <<= 1;
         tab_key.assign(cap, 0);
         tab_off.assign(cap, 0);
-        std::uint64_t off = 0;
+        std::uint64_t bytes = 0, wpos = 0, total = 0;
         for (auto const& j : jobs) {
                 std::size_t i = tab_slot(j.key);
                 while (tab_key[i]) i = (i + 1) & (cap - 1);
                 tab_key[i] = j.key + 1;
-                tab_off[i] = off;
-                off += 2 * j.P;
+                if (j.level_n <= dmax) { tab_off[i] = bytes; bytes += 2 * j.P; }
+                else { tab_off[i] = WDL_FLAG | wpos; wpos += (2 * j.P + 31) / 32 * 32; }
+                total += 2 * j.P;
         }
+        std::cerr << "build: " << jobs.size() << " slices, " << total << " positions; DTM " << bytes / 1e9
+                  << " GB, WDL " << wpos / 4 / 1e9 << " GB" << std::endl;
+        db.assign(bytes, UNKNOWN8);
+        wdlbits.assign(wpos / 32, 0);
         built_max = nmax;
+        dtm_max = dmax;
         slice_max = std::max(slice_max, nmax);
         auto t0 = std::chrono::steady_clock::now();
         std::uint64_t done = 0;
-        int last_n = 0;
         for (std::size_t g = 0; g < jobs.size();) {
                 std::size_t h = g;
                 while (h < jobs.size() && jobs[h].level_n == jobs[g].level_n && jobs[h].men == jobs[g].men && jobs[h].dist == jobs[g].dist) ++h;
                 #pragma omp parallel for schedule(dynamic, 1) num_threads(threads)
                 for (std::size_t i = g; i < h; ++i) {
-                        Key k = Key::unpack(jobs[i].key);
-                        solve_slice(meta_of(k), const_cast<std::uint8_t*>(find_prebuilt(jobs[i].key)));
+                        Meta m = meta_of(Key::unpack(jobs[i].key));
+                        std::vector<std::uint16_t> tmp(2 * m.P);
+                        solve_slice(m, tmp.data());
+                        SliceRef r;
+                        find_prebuilt(jobs[i].key, r);
+                        if (r.dtm) {
+                                for (std::uint64_t x = 0; x < tmp.size(); ++x) {
+                                        if (tmp[x] != DRAW && tmp[x] > MAXDTM8) { std::cerr << "DTM overflow (" << tmp[x] << ")" << std::endl; std::abort(); }
+                                        r.dtm[x] = tmp[x] == DRAW ? DRAW8 : std::uint8_t(tmp[x]);
+                                }
+                        } else {
+                                for (std::uint64_t x = 0; x < tmp.size(); ++x) {
+                                        std::uint64_t c = tmp[x] == DRAW ? 2 : (tmp[x] & 1);
+                                        std::uint64_t y = r.wdl + x;
+                                        wdlbits[y >> 5] |= c << ((y & 31) * 2);
+                                }
+                        }
                 }
                 for (std::size_t i = g; i < h; ++i) done += 2 * jobs[i].P;
-                if (h == jobs.size() || jobs[h].level_n != last_n) {
+                if (h == jobs.size() || jobs[h].level_n != jobs[g].level_n || jobs[h].men != jobs[g].men) {
                         double sec = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-                        std::cerr << "build: " << jobs[g].level_n << " pieces done, " << done << " / " << total
+                        std::cerr << "build: " << jobs[g].level_n << " pieces, " << jobs[g].men << " men done, " << done << " / " << total
                                   << " positions, " << sec << " s" << std::endl;
-                        if (h < jobs.size()) last_n = jobs[h].level_n;
                 }
                 g = h;
         }
 }
 
-// file format: magic, built_max, number of slices, (key, offset) pairs, size of db, db
+// file format v2: magic, built_max, dtm_max, table size, db size, wdlbits words, table keys, table offsets, db, wdlbits
+// (v1, without dtm_max and wdlbits, can still be loaded)
+constexpr std::uint64_t MAGIC1 = 0x3678364244424745ull, MAGIC2 = 0x3678364244424746ull;
+
 bool save(std::string const& path)
 {
         std::FILE* f = std::fopen(path.c_str(), "wb");
         if (!f) return false;
-        std::uint64_t hdr[4] = { 0x3678364244424745ull, std::uint64_t(built_max), tab_key.size(), db.size() };
+        std::uint64_t hdr[6] = { MAGIC2, std::uint64_t(built_max), std::uint64_t(dtm_max), tab_key.size(), db.size(), wdlbits.size() };
         std::fwrite(hdr, sizeof hdr, 1, f);
         std::fwrite(tab_key.data(), 8, tab_key.size(), f);
         std::fwrite(tab_off.data(), 8, tab_off.size(), f);
         std::fwrite(db.data(), 1, db.size(), f);
+        std::fwrite(wdlbits.data(), 8, wdlbits.size(), f);
         return std::fclose(f) == 0;
 }
 
@@ -734,20 +777,29 @@ bool load(std::string const& path)
 {
         std::FILE* f = std::fopen(path.c_str(), "rb");
         if (!f) return false;
-        std::uint64_t hdr[4];
-        bool ok = std::fread(hdr, sizeof hdr, 1, f) == 1 && hdr[0] == 0x3678364244424745ull;
+        std::uint64_t magic = 0, hdr[5] = {};
+        bool ok = std::fread(&magic, 8, 1, f) == 1;
+        if (ok && magic == MAGIC1) {
+                ok = std::fread(hdr, 8, 3, f) == 3;
+                hdr[3] = hdr[2]; hdr[2] = hdr[1]; hdr[1] = 99; hdr[4] = 0;   // built_max, dtm_max, table, db, wdl
+        } else if (ok && magic == MAGIC2) {
+                ok = std::fread(hdr, 8, 5, f) == 5;
+        } else ok = false;
         if (ok) {
-                tab_key.resize(hdr[2]); tab_off.resize(hdr[2]); db.resize(hdr[3]);
+                tab_key.resize(hdr[2]); tab_off.resize(hdr[2]); db.resize(hdr[3]); wdlbits.resize(hdr[4]);
                 ok = std::fread(tab_key.data(), 8, hdr[2], f) == hdr[2] && std::fread(tab_off.data(), 8, hdr[2], f) == hdr[2]
-                  && std::fread(db.data(), 1, hdr[3], f) == hdr[3];
-                built_max = int(hdr[1]);
+                  && std::fread(db.data(), 1, hdr[3], f) == hdr[3] && std::fread(wdlbits.data(), 8, hdr[4], f) == hdr[4];
+                built_max = int(hdr[0]);
+                dtm_max = int(hdr[1]);
                 slice_max = std::max(slice_max, built_max);
         }
         std::fclose(f);
         return ok;
 }
 
-// recompute every value of every prebuilt and extra slice from its successors
+char wdl_of_value(std::uint16_t v) { return v == DRAW ? 'D' : (v & 1) ? 'W' : 'L'; }
+
+// recompute every value of every prebuilt and extra slice from its successors (WDL only above dtm_max)
 std::uint64_t verify(int threads)
 {
         std::vector<std::uint64_t> keys;
@@ -758,9 +810,12 @@ std::uint64_t verify(int threads)
         for (std::size_t i = 0; i < keys.size(); ++i) {
                 Key key = Key::unpack(keys[i]);
                 Meta s = meta_of(key);
-                std::uint8_t const* val = (pieces(key) <= built_max && find_prebuilt(keys[i])) ? find_prebuilt(keys[i]) : extra.at(keys[i]).data();
-                for (std::uint64_t j = 0; j < 2 * s.P; ++j)
-                        if (widen(val[j]) != from_successors(pos_of(s, j % s.P, int(j / s.P)))) ++errors;
+                SliceRef r = slice_values(key);
+                bool exact = r.dtm != nullptr;
+                for (std::uint64_t j = 0; j < 2 * s.P; ++j) {
+                        std::uint16_t a = ref_value(r, j), b = from_successors(pos_of(s, j % s.P, int(j / s.P)));
+                        if (exact ? a != b : wdl_of_value(a) != wdl_of_value(b)) ++errors;
+                }
         }
         return errors;
 }
@@ -842,9 +897,9 @@ int main()
                 std::getline(ls, rest);
                 std::stringstream rs(rest);
                 if (cmd == "build") {
-                        int n = 8, threads = 4;
-                        rs >> n >> threads;
-                        build(n, threads);
+                        int n = 8, threads = 4, dmax = 99;
+                        rs >> n >> threads >> dmax;
+                        build(n, threads, dmax);
                         std::cout << "built " << built_max << "\nend" << std::endl;
                         continue;
                 }
@@ -870,7 +925,7 @@ int main()
                 if (cmd == "stats") {
                         std::uint64_t ns = 0;
                         for (auto k : tab_key) ns += k != 0;
-                        std::cout << "built " << built_max << " slices " << ns << " positions " << db.size()
+                        std::cout << "built " << built_max << " dtm " << dtm_max << " slices " << ns << " dtm bytes " << db.size() << " wdl bytes " << wdlbits.size() * 8
                                   << " extra slices " << extra.size() << " positions " << extra_positions
                                   << " tt " << tt.size() << " nodes " << ab_nodes << "\nend" << std::endl;
                         continue;
@@ -902,11 +957,11 @@ int main()
                         if (!canonical_key(key_of(p))) p = mirror(p);
                         Key const key = key_of(p);
                         Meta const s = meta_of(key);
-                        std::uint8_t const* val = slice_values(key);
+                        SliceRef const val = slice_values(key);
                         for (int side = 0; side < 2; ++side) {
                                 std::uint64_t w = 0, d = 0, l = 0, qn = 0, qd = 0; int mw = 0, ml = 0;
                                 for (std::uint64_t i = 0; i < s.P; ++i) {
-                                        std::uint16_t v = widen(val[side * s.P + i]);
+                                        std::uint16_t v = ref_value(val, side * s.P + i);
                                         Pos q0 = pos_of(s, i, 0), q1 = pos_of(s, i, 1);
                                         if (!has_capture(q0) && !has_capture(q1)) { ++qn; qd += v == DRAW; }
                                         if (v == DRAW) ++d;

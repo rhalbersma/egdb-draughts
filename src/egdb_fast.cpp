@@ -1,8 +1,8 @@
 // Fast kings-only endgame databases (DTM) for draughts on general W x H chequer boards.
 //
 // Same rules, output formats and DTM convention as egdb.cpp, but built for speed:
-// - bitboards: xstd::bit_fixed_set<N> (xstd-bits), with N = 64, 128, 192, 256, 384 or 512 chosen at
-//   run time from the number of playable squares, and precomputed rays per square and direction
+// - bitboards: xstd::bit_align<xstd::bit_fixed_set<N>> (xstd-bits): the number of playable squares rounded up
+//   to whole 64-bit blocks (64, 128, ..., 512), chosen at run time, and precomputed rays per square and direction
 // - compact combinatorial indexing: index = colex_rank(white) * C(N - w, b) + colex_rank(black'),
 //   where black' are the black squares renumbered among the squares white does not occupy,
 //   so every array slot is a legal position (no gaps)
@@ -17,6 +17,7 @@
 #include <tabula/grids/chequer.hpp>             // chequer
 #include <tabula/lake.hpp>                      // algebraic
 #include <xstd/bits/bit_set/bit_fixed_set.hpp>  // bit_fixed_set
+#include <xstd/bits/bit_type_traits/bit_align.hpp> // bit_align
 
 #include <algorithm>
 #include <array>
@@ -932,18 +933,27 @@ public:
         }
 };
 
-// pick the narrowest bitboard that holds every playable square
-template<std::size_t... Ns>
-int dispatch(Geometry const& g, Options const& opt, std::index_sequence<Ns...>)
+// The bitboard for boards that need K blocks of 64 bits: bit_align rounds the width of the smallest
+// such board, (K - 1) * 64 + 1 squares, up to whole blocks, so that no block carries an unused tail.
+template<std::size_t K>
+using bitboard = xstd::bit_align<xstd::bit_fixed_set<(K - 1) * 64 + 1>>;
+
+constexpr std::size_t max_blocks = max_squares / 64;
+
+template<std::size_t... Ks>
+int dispatch(Geometry const& g, Options const& opt, std::index_sequence<Ks...>)
 {
-        auto result = -1;
+        auto const blocks = (static_cast<std::size_t>(g.n) + 63) / 64;
         auto const kmax = std::max(opt.target_w, opt.target_b);
-        auto const try_one = [&]<std::size_t N>() {
-                if (result >= 0 || static_cast<std::size_t>(g.n) > N) { return; }
-                std::cout << std::format("bitboard: xstd::bit_fixed_set<{}>\n", N);
-                result = std::make_unique<Engine<xstd::bit_fixed_set<N>>>(g, kmax)->run(opt);
+        auto result = -1;
+        auto const try_one = [&]<std::size_t K>() {
+                if (K != blocks) { return; }
+                using BB = bitboard<K>;
+                static_assert(BB::max_size() == K * 64);
+                std::cout << std::format("bitboard: xstd::bit_align<xstd::bit_fixed_set<{}>> = {} squares\n", (K - 1) * 64 + 1, BB::max_size());
+                result = std::make_unique<Engine<BB>>(g, kmax)->run(opt);
         };
-        (try_one.template operator()<Ns>(), ...);
+        (try_one.template operator()<Ks + 1>(), ...);
         if (result < 0) { throw std::invalid_argument("board too large"); }
         return result;
 }
@@ -1056,7 +1066,7 @@ try {
                 opt.board_name, g.grid.width, g.grid.height, g.grid.parity, g.n, lake.size());
         std::cout << g.diagram(xstd::bit_fixed_set<max_squares>{}, xstd::bit_fixed_set<max_squares>{});
 
-        auto const errors = dispatch(g, opt, std::index_sequence<64, 128, 192, 256, 384, 512>{});
+        auto const errors = dispatch(g, opt, std::make_index_sequence<max_blocks>{});
         return errors == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 } catch (std::exception const& e) {
         std::cerr << "error: " << e.what() << '\n';

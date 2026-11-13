@@ -34,9 +34,10 @@ with width, height and parity), produce **byte-identical** text output, and prin
 
 The fast version:
 
-* **bitboards**: [`xstd::bit_fixed_set<N>`](https://github.com/rhalbersma/xstd-bits) with precomputed rays per square
-  and direction; the engine is a template on the bitboard type and the program picks the narrowest
-  `N ∈ {64, 128, 192, 256, 384, 512}` that holds every playable square, so any board up to 512 squares works;
+* **bitboards**: [`xstd::bit_fixed_set`](https://github.com/rhalbersma/xstd-bits) with precomputed rays per square
+  and direction; the engine is a template on the bitboard type, and for a board that needs `K` blocks of 64 bits the
+  program uses `xstd::bit_align<xstd::bit_fixed_set<(K − 1) · 64 + 1>>`, i.e. the width rounded up to whole blocks
+  (64, 128, …, 512 squares), so any board up to 512 squares works;
 * **compact indexing**: `index = colex_rank(white) · C(N − w, b) + colex_rank(black′)`, where `black′`
   renumbers the black squares among the squares white does not occupy, so every array slot is a legal position;
 * **retrograde analysis**: positions with a capture are resolved immediately from the smaller
@@ -61,7 +62,7 @@ The fast version:
 | 9×17, 3-1 | ~40 min | 5.1 s |
 | 12×21, 3-1 (126 squares, 40 M positions) | — | 22 s |
 | all 154 runs of the full re-run (international grid, lake boards, checkers) | many hours | 7 min |
-| 12×23, 3-1 (138 squares, 58 M positions, `bit_fixed_set<192>`) | — | 101 s |
+| 12×23, 3-1 (138 squares, 58 M positions, 3 blocks) | — | 101 s |
 
 Against a hand-rolled `unsigned __int128` bitboard, `bit_fixed_set<64>` is exactly as fast (≤ 64 squares) and
 `bit_fixed_set<128>` ranges from 15% faster to 35% slower (65–128 squares; 10×12: 0.96 s vs 1.12 s, 9×17: 4.2 s vs 3.1 s).

@@ -216,15 +216,22 @@ def main():
     ap.add_argument('--slicemax', type=int, default=8)
     ap.add_argument('--db', default=str(Path(__file__).resolve().parent.parent / 'data' / '6x6_le8.db'))
     ap.add_argument('--json', default=str(Path(__file__).resolve().parent / 'results.json'))
+    ap.add_argument('--maxpieces', type=int, default=12, help='skip diagrams and lines that start with more pieces')
     args = ap.parse_args()
     eng = Engine(args.engine, args.slicemax, args.db if Path(args.db).exists() else None)
     t0 = time.time()
     diagrams = []
+    def npieces(fen):
+        return sum(len([x for x in part[1:].split(',') if x]) for part in fen.split(':')[1:])
     for did in DIAGRAMS:
+        if npieces(DIAGRAMS[did][0]) > args.maxpieces:
+            continue
         diagrams.append(check_diagram(eng, did))
         print(f'[{time.time() - t0:7.1f}s] diagram {did}', file=sys.stderr, flush=True)
     lines = []
     for sec, start, text, claim, note in LINES:
+        if npieces(DIAGRAMS[start][0]) > args.maxpieces:
+            continue
         lines.append(check_line(eng, sec, start, text, claim, note))
         r = lines[-1]
         print(f'[{time.time() - t0:7.1f}s] {sec} {start} {r["status"]}: {text[:60]}', file=sys.stderr, flush=True)

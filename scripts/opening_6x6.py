@@ -9,7 +9,7 @@ solved" (Science, 2007): a manager builds the opening tree to a fixed depth, mer
 (so it is a DAG), the leaves are solved by depth-first alpha-beta down to the endgame databases, and
 the values are backed up by minimax through the DAG.
 
-usage: opening_6x6.py path/to/egdb_6x6 [--db data/6x6_le10.db] [--depth 6] [--table 3] [--out results/opening_6x6]
+usage: opening_6x6.py path/to/egdb_6x6 [--db data/6x6_le10.db] [--depth 10] [--table 3] [--out results/opening_6x6]
 
 Leaves are positions at the given depth, positions inside the databases (at most `built_max` pieces)
 and positions without moves. All values are win / draw / loss (no distances), as in the checkers proof.
@@ -62,7 +62,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('engine')
     ap.add_argument('--db', default='data/6x6_le10.db')
-    ap.add_argument('--depth', type=int, default=6, help='depth of the manager tree in plies')
+    ap.add_argument('--depth', type=int, default=10, help='depth of the manager tree in plies')
     ap.add_argument('--table', type=int, default=3, help='depth of the openings in the table')
     ap.add_argument('--out', default='results/opening_6x6')
     args = ap.parse_args()

@@ -99,65 +99,65 @@ Beginstand, wit aan zet: **D**
 
 ## Boom
 
+Per stelling staan de zetten op volgorde van waarde voor wie ze doet: winst (snelste eerst), remise, verlies (taaiste eerst); daarbinnen numeriek.
+
 ```
 beginstand  D
     wit 13-10  D
-        zwart 4-7  L
-            wit 14-11  L44
-            wit 14-12  W
-            wit 15-12  L
-            wit 16-13  D
-            wit 17-13  D
         zwart 5-7  D
             wit 10x5  D
         zwart 5-8  D
-            wit 10-7  L22
-            wit 14-11  L42
             wit 14-12  D
-            wit 15-12  L
             wit 16-13  D
+            wit 14-11  L42
+            wit 10-7  L22
+            wit 15-12  L
             wit 17-13  L
         zwart 6-8  D
-            wit 10-7  L22
+            wit 16-13  D
+            wit 17-13  D
             wit 14-11  L26
+            wit 10-7  L22
             wit 14-12  L
             wit 15-12  L
-            wit 16-13  D
-            wit 17-13  D
         zwart 6-9  D
-            wit 10-7  L22
             wit 14-11  D
-            wit 14-12  L30
-            wit 15-12  L
             wit 16-13  D
             wit 17-13  D
-    wit 13-11  D
+            wit 14-12  L30
+            wit 10-7  L22
+            wit 15-12  L
         zwart 4-7  L
-            wit 11x4  W
+            wit 14-12  W
+            wit 16-13  D
+            wit 17-13  D
+            wit 14-11  L44
+            wit 15-12  L
+    wit 13-11  D
         zwart 5-7  D
-            wit 11-8  L
-            wit 14-12  L18
             wit 15-12  D
             wit 16-13  D
+            wit 14-12  L18
+            wit 11-8  L
             wit 17-13  L
         zwart 5-8  D
-            wit 11-7  L22
             wit 14-12  D
-            wit 15-12  L28
             wit 16-13  D
             wit 17-13  D
+            wit 15-12  L28
+            wit 11-7  L22
         zwart 6-8  D
             wit 11x6  D
+        zwart 4-7  L
+            wit 11x4  W
         zwart 6-9  L
-            wit 11-7  L22
             wit 11-8  W25
-            wit 14-12  L
             wit 15-12  D
             wit 16-13  D
             wit 17-13  D
+            wit 11-7  L22
+            wit 14-12  L
     wit 14-11  D
-        zwart 4-7  L
-            wit 11x4  W
         zwart 5-7  D
             wit 11-8  D
             wit 13-10  L26
@@ -165,28 +165,23 @@ beginstand  D
             wit 17-14  L
             wit 18-14  L
         zwart 5-8  D
-            wit 11-7  L
-            wit 13-10  L42
-            wit 15-12  L
             wit 17-14  D
+            wit 13-10  L42
+            wit 11-7  L
+            wit 15-12  L
             wit 18-14  L
         zwart 6-8  D
             wit 11x6  D
         zwart 6-9  D
-            wit 11-7  L
             wit 11-8  D
             wit 13-10  D
-            wit 15-12  L18
             wit 17-14  D
+            wit 15-12  L18
+            wit 11-7  L
             wit 18-14  L
-    wit 14-12  D
         zwart 4-7  L
-            wit 12-8  W25
-            wit 12-9  L
-            wit 13-10  W
-            wit 13-11  L18
-            wit 17-14  L
-            wit 18-14  L
+            wit 11x4  W
+    wit 14-12  D
         zwart 5-7  D
             wit 12-8  D
             wit 12-9  D
@@ -198,14 +193,21 @@ beginstand  D
             wit 12x5  D
         zwart 6-8  D
             wit 12-9  D
-            wit 13-10  L
             wit 13-11  D
-            wit 17-14  L
             wit 18-14  D
+            wit 13-10  L
+            wit 17-14  L
         zwart 6-9  D
             wit 12-8  D
             wit 13-10  L30
             wit 13-11  L
+            wit 17-14  L
+            wit 18-14  L
+        zwart 4-7  L
+            wit 12-8  W25
+            wit 13-10  W
+            wit 13-11  L18
+            wit 12-9  L
             wit 17-14  L
             wit 18-14  L
     wit 15-12  D
@@ -216,30 +218,32 @@ beginstand  D
             wit 13-11  L
             wit 14-11  L
             wit 18-15  L
-        zwart 5-7  L
-            wit 12-8  D
-            wit 12-9  W
-            wit 13-10  L
-            wit 13-11  D
-            wit 14-11  L18
-            wit 18-15  L
-        zwart 5-8  L34
-            wit 12x5  W33
         zwart 6-8  D
             wit 12-9  D
+            wit 18-15  D
             wit 13-10  L
             wit 13-11  L
             wit 14-11  L
-            wit 18-15  D
         zwart 6-9  D
-            wit 12-8  L
-            wit 13-10  L
             wit 13-11  D
             wit 14-11  L18
+            wit 12-8  L
+            wit 13-10  L
+            wit 18-15  L
+        zwart 5-8  L34
+            wit 12x5  W33
+        zwart 5-7  L
+            wit 12-9  W
+            wit 12-8  D
+            wit 13-11  D
+            wit 14-11  L18
+            wit 13-10  L
             wit 18-15  L
 ```
 
 ## Alle openingen van 3 ply
+
+Numeriek gesorteerd.
 
 106 openingen: W 8, D 40, L 58.
 

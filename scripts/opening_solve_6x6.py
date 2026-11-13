@@ -221,19 +221,41 @@ def main():
     walk(START, [])
     tree = []
 
+    def numeric(nota):
+        return tuple(int(x) for x in re.split('[-x]', nota))
+
+    def best_first(moves):
+        """Siblings ordered by their value for the side that makes the move: wins (fastest first), draws,
+        undecided, losses (slowest first); unknown distances last within their class; then by move."""
+        def key(m):
+            nota, c = m
+            lo, hi = iv[c]
+            n = dtm.get(c)
+            if lo != hi:
+                rank = (2, 0)
+            elif lo == -1:                      # the side to move after the move loses: a win for the mover
+                rank = (0, n if n is not None else 10**6)
+            elif lo == 0:
+                rank = (1, 0)
+            else:
+                rank = (3, -n if n is not None else 10**6)
+            return rank + numeric(nota)
+        return sorted(moves, key=key)
+
     def walk_tree(fen, path):
         name = 'beginstand' if not path else ('wit ' if len(path) % 2 else 'zwart ') + path[-1]
         tree.append('    ' * len(path) + f'{name}  {label(*iv[fen], fen[0], dtm.get(fen), bool(path))}')
         if len(path) < args.table and fen in children:
-            for nota, c in children[fen]:
+            for nota, c in best_first(children[fen]):
                 walk_tree(c, path + [nota])
     walk_tree(START, [])
+    rows.sort(key=lambda r: tuple(numeric(m) for m in r[0]))
     res = Counter(label(*iv[f], f[0], None, True)[:1] for _, f in rows)
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'strategie36'))
     from board import diagram
     diagrams = ['## Diagrammen', '', 'w/b = witte/zwarte schijf, W/B = dam.', '',
                 f'Beginstand, wit aan zet: **{label(*root, "W", dtm.get(START))}**', '', '```', diagram(START), '```', '']
-    for nota, c in children[START]:
+    for nota, c in best_first(children[START]):
         diagrams += [f'1. {nota} (zwart aan zet): **{label(*iv[c], c[0], dtm.get(c), True)}**', '', '```', diagram(c), '```', '']
     md = ['# Openingen van 6×6-dammen', '',
           f'Beginstand, wit aan zet: **{label(*root, "W", dtm.get(START))}**.', '',
@@ -248,7 +270,9 @@ def main():
           'als intervallen teruggerekend, vanuit wit gezien.', '',
           f'DAG: {len(children)} inwendige stellingen, bladeren: ' + ', '.join(f'{k} {v}' for k, v in kinds.items()) + '.',
           f'Onbekende bladeren die de beginstand nog kunnen beïnvloeden: {len(relevant)}.', '',
-          *diagrams, '## Boom', '', '```', *tree, '```', '', f'## Alle openingen van {args.table} ply', '',
+          *diagrams, '## Boom', '', 'Per stelling staan de zetten op volgorde van waarde voor wie ze doet: winst (snelste '
+          'eerst), remise, verlies (taaiste eerst); daarbinnen numeriek.', '', '```', *tree, '```', '',
+          f'## Alle openingen van {args.table} ply', '', 'Numeriek gesorteerd.', '',
           f"{len(rows)} openingen: W {res['W']}, D {res['D']}, L {res['L']}.", '',
           '| # | opening | resultaat |', '|---|---|---|']
     md += [f"| {i} | {' '.join(p)} | {label(*iv[f], f[0], dtm.get(f), bool(p))} |" for i, (p, f) in enumerate(rows, 1)]

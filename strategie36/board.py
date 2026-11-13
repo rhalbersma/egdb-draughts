@@ -13,7 +13,9 @@ usage: board.py FEN [FEN ...]
 import sys
 
 
-def diagram(fen):
+def diagram(fen, numbers=True):
+    """Framed diagram with rank numbers and file letters; with numbers=True the numbered board is
+    printed next to it, two characters per square."""
     cell = {}
     for part in fen.split(':')[1:]:
         side = part[0]
@@ -21,15 +23,23 @@ def diagram(fen):
             if it:
                 king = it[0] == 'K'
                 cell[int(it[1:] if king else it)] = (side.upper() if king else side.lower())
-    lines = ['    +-------------+']
+    gap = '     '
+    num_rule = '+' + '-' * 19 + '+'
+    lines = ['    +-------------+' + (gap + num_rule if numbers else '')]
     for r in range(6):                       # r = 0 is row 6 (squares 1-3)
-        row = [' '] * 12
+        row, nums = [' '] * 12, []
         for c in range(6):
-            if (r + c) % 2 == 1:             # dark square: b6 is dark
-                sq = r * 3 + c // 2 + 1
+            dark = (r + c) % 2 == 1          # b6 is a dark square
+            sq = r * 3 + c // 2 + 1
+            if dark:
                 row[2 * c] = cell.get(sq, '.')
-        lines.append(f'  {6 - r} | ' + ''.join(row) + '|')
-    lines += ['    +-------------+', '      a b c d e f']
+            nums.append(f'{sq:2d}' if dark else '  ')
+        line = f'  {6 - r} | ' + ''.join(row) + '|'
+        if numbers:
+            line += gap + '| ' + ' '.join(nums) + ' |'
+        lines.append(line)
+    lines += ['    +-------------+' + (gap + num_rule if numbers else ''),
+              '      a b c d e f' + (gap + '   a  b  c  d  e  f' if numbers else '')]
     return '\n'.join(lines)
 
 

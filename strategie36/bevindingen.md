@@ -29,16 +29,18 @@ randslag van hoofdstuk 7) verliest.
     6.9 pas na de witte fout 10. 4-1.
 #### De stelling na de randslag (diagram 7.1)
 
-1. 13-11 6-8 2. 11×6 2×9, wit aan zet; wit wint:
+1. 13-11 6-8 2. 11×6 2×9, wit aan zet; wit wint (w/b = witte/zwarte schijf, W/B = dam):
 
 ```
-     a b c d e f
- 6     ●   ·   ●       1  2  3
- 5   ●   ●   ·        4  5  6
- 4     ·   ·   ●       7  8  9
- 3   ·   ·   ·       10 11 12
- 2     ·   ○   ○      13 14 15
- 1   ○   ○   ○       16 17 18
+    +-------------+
+  6 |   b   .   b |
+  5 | b   b   .   |
+  4 |   .   .   b |
+  3 | .   .   .   |
+  2 |   .   w   w |
+  1 | w   w   w   |
+    +-------------+
+      a b c d e f
 ```
 
 | zet | waarde |
@@ -55,13 +57,15 @@ randslag van hoofdstuk 7) verliest.
 9. 11×4 10-13, wit aan zet; wit wint, maar alleen met 10. 12-8!:
 
 ```
-     a b c d e f
- 6     ·   ●   ●       1  2  3
- 5   ○   ·   ·        4  5  6
- 4     ·   ·   ·       7  8  9
- 3   ·   ·   ○       10 11 12
- 2     ●   ○   ·      13 14 15
- 1   ·   ·   ○       16 17 18
+    +-------------+
+  6 |   .   b   b |
+  5 | w   .   .   |
+  4 |   .   .   . |
+  3 | .   .   w   |
+  2 |   b   w   . |
+  1 | .   .   w   |
+    +-------------+
+      a b c d e f
 ```
 
 | zet | waarde |
@@ -76,13 +80,15 @@ randslag van hoofdstuk 7) verliest.
 schijven op 4 en 18. Het resterende eindspel, met wit aan zet, is gewonnen (33 ply), alleen met 18-14 of 1-15:
 
 ```
-     a b c d e f
- 6     ○   ·   ●       1  2  3
- 5   ○   ·   ●        4  5  6
- 4     ·   ·   ·       7  8  9
- 3   ·   ·   ·       10 11 12
- 2     ·   ·   ·      13 14 15
- 1   ·   ·   ○       16 17 18
+    +-------------+
+  6 |   W   .   b |
+  5 | w   .   B   |
+  4 |   .   .   . |
+  3 | .   .   .   |
+  2 |   .   .   . |
+  1 | .   .   w   |
+    +-------------+
+      a b c d e f
 ```
 
 Wit: dam 1, schijven 4 en 18; zwart: schijf 3, dam 6. Een verwant van diagram 2.2/3.1, met de dam op 1 in plaats

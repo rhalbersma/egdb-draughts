@@ -1,4 +1,9 @@
 #!/bin/bash
+#          Copyright Rein Halbersma 2026.
+# Distributed under the Boost Software License, Version 1.0.
+#    (See accompanying file LICENSE_1_0.txt or copy at
+#          http://www.boost.org/LICENSE_1_0.txt)
+
 # Regenerate all databases and summaries with egdb_fast (build it first: cmake -B build && cmake --build build).
 # - international draughts 3-1 (with 2-1 and 1-1 as sub-databases): B = 3..12, L = B..2B+3 (up to 162 squares, the larger boards take minutes each)
 # - the 15 boards with one square removed from 10x10

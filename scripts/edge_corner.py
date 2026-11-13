@@ -1,3 +1,8 @@
+#          Copyright Rein Halbersma 2026.
+# Distributed under the Boost Software License, Version 1.0.
+#    (See accompanying file LICENSE_1_0.txt or copy at
+#          http://www.boost.org/LICENSE_1_0.txt)
+
 # Cross table for checkers 3-2: white kings on the edge x black kings in double corners.
 # usage: edge_corner.py W H dbdir   (double corners are detected automatically)
 import sys

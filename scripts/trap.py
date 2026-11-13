@@ -1,3 +1,8 @@
+#          Copyright Rein Halbersma 2026.
+# Distributed under the Boost Software License, Version 1.0.
+#    (See accompanying file LICENSE_1_0.txt or copy at
+#          http://www.boost.org/LICENSE_1_0.txt)
+
 # usage: trap.py W H P dbfile sq sq sq
 # For a fixed placement of the three white kings, show the DTM for every square of the
 # black king: a map with black to move, plus summaries for black and for white to move.

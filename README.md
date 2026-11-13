@@ -424,3 +424,14 @@ scripts/run_all.sh                 # all databases, a few minutes; writes data/ 
 * [`scripts/edge_corner.py`](scripts/edge_corner.py): checkers 3-2 draws by white kings on the edge × black kings in double corners.
 * [`scripts/checkers_draws.py`](scripts/checkers_draws.py): classifies checkers draws (immediate shots versus blockades).
 * [`scripts/force_capture.py`](scripts/force_capture.py): can black force the win of a white king, and how fast.
+
+---
+
+## License
+
+<pre>
+         Copyright Rein Halbersma 2026.
+Distributed under the <a href="http://www.boost.org/users/license.html">Boost Software License, Version 1.0</a>.
+   (See accompanying file LICENSE_1_0.txt or copy at
+         <a href="http://www.boost.org/LICENSE_1_0.txt">http://www.boost.org/LICENSE_1_0.txt</a>)
+</pre>

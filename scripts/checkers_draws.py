@@ -1,3 +1,8 @@
+#          Copyright Rein Halbersma 2026.
+# Distributed under the Boost Software License, Version 1.0.
+#    (See accompanying file LICENSE_1_0.txt or copy at
+#          http://www.boost.org/LICENSE_1_0.txt)
+
 # Classify the quiet checkers 3-2 draws with white to move: what happens after each white move?
 # usage: checkers_draws.py W H dbdir
 import sys

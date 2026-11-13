@@ -24,9 +24,11 @@ in het boek: veld 1 = b6, veld 16 = a1, en de lange lijn is 16-13-11-8-6-3. Wit 
     worden eerst in een bitmap verzameld en daarna met voorwaartse zetgeneratie geverifieerd.
   * De DTM wordt per iteratie bijgewerkt. Wat onbeslist blijft, is remise (herhaling).
 * **Opbouw.** Alle slices tot en met 8 stukken (1,7 miljard stellingen, 4,5 miljoen slices, 513 s
-  op 4 threads) en tot en met 9 stukken (7,3 miljard stellingen) worden vooraf gebouwd, met
+  op 4 threads) en tot en met 9 stukken (7,3 miljard stellingen, 34 min) worden vooraf gebouwd, met
   kleursymmetrie (180° draaien en de kleuren wisselen), en opgeslagen als één byte-array met een
-  offsettabel.
+  offsettabel. Voor de opening is daarnaast een database tot en met 10 stukken gebouwd (25,7 miljard
+  stellingen, 25 miljoen slices, 1 u 52 min): DTM tot en met 8 stukken en, in Syzygy-stijl, alleen
+  winst/remise/verlies in 2 bits per stelling voor 9 en 10 stukken (samen 7,8 GB).
 * **Boven de vooraf gebouwde grens.**
   * Stellingen met dammen aan beide kanten gaan naar slices die op verzoek worden berekend.
   * Alle andere stellingen kunnen zich niet herhalen: wie geen dam heeft, moet elke zet een schijf

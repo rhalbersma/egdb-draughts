@@ -33,6 +33,7 @@
 //   pos <FEN>       value of the position and of every legal move (exact DTM)
 //   posw <FEN>      win / draw / loss of the position and of every legal move (faster above the slices)
 //   wdl <FEN>       win / draw / loss of the position
+//   moves <FEN>     legal moves with the resulting positions (no values)
 //   pv <FEN>        principal variation
 //   slice <FEN>     statistics of the slice containing the position
 //   slicemax <n>    largest number of pieces for which every position comes from the slices
@@ -943,6 +944,9 @@ int main()
                         }
                         std::stable_sort(rows.begin(), rows.end(), [](auto const& a, auto const& b) { return a.first > b.first; });
                         for (auto const& r : rows) std::cout << r.second << '\n';
+                        std::cout << "end" << std::endl;
+                } else if (cmd == "moves") {
+                        for (auto const& mv : moves(p)) std::cout << "move " << notation(mv) << ' ' << fen_of(mv.next) << '\n';
                         std::cout << "end" << std::endl;
                 } else if (cmd == "wdl") {
                         std::cout << "wdl " << wdl(p) << "\nend" << std::endl;

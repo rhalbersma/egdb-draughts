@@ -17,21 +17,26 @@
 // Database organisation: a "slice" fixes the squares of the white and black men and the number of
 // white and black kings. Within a slice only king moves without capture keep the position in the slice;
 // every other move (man move, capture, promotion) goes to a slice with fewer pieces, fewer men or men
-// further advanced, so the slices form an acyclic graph. Slices are computed on demand, recursively,
-// by retrograde analysis with depth-to-mate (DTM, plies until the side to move has no move left).
-// Positions that are never decided are draws (repetition).
+// further advanced, so the slices form an acyclic graph. Each slice is solved by leapfrog retrograde
+// analysis with one byte of depth-to-mate (DTM, plies until the side to move has no move left) per
+// position; positions that are never decided are draws (repetition).
 //
-// Slices hold every position with at most `slice_max` (default 8) pieces and every position in which both
-// sides have a king. Positions with more pieces in which at most one side has kings cannot repeat (the
-// side without kings must move a man or capture), so their exact values follow from their successors by
-// memoised recursion; no graph-history problems arise.
+// All slices up to `built_max` pieces can be built in advance (`build`) and saved; slices with more
+// pieces are solved on demand. Slices hold every position with at most `slice_max` pieces and every
+// position in which both sides have a king. Other positions cannot repeat (the side without kings must
+// move a man or capture), so their exact values, with DTM, come from a forward alpha-beta search down
+// to the slices; no graph-history problems arise.
 //
 // Protocol (stdin, one command per line):
-//   pos <FEN>       value of the position and of every legal move
+//   build <n> [t]   build all slices with at most n pieces, with t threads
+//   save <file>     save the prebuilt slices;  load <file>  load them
+//   pos <FEN>       value of the position and of every legal move (exact DTM)
+//   posw <FEN>      win / draw / loss of the position and of every legal move (faster above the slices)
+//   wdl <FEN>       win / draw / loss of the position
 //   pv <FEN>        principal variation
 //   slice <FEN>     statistics of the slice containing the position
 //   slicemax <n>    largest number of pieces for which every position comes from the slices
-//   verify          recompute every value in every computed slice from its successors
+//   verify [t]      recompute every value in every slice from its successors
 //   stats           number of slices and positions computed so far
 // FEN: W:W17,K16:B2,K15 (side to move, white pieces, black pieces; K = king).
 // Values: "W<n>" win in n plies, "L<n>" loss in n plies, "D" draw (for the side to move).
@@ -388,8 +393,8 @@ std::uint8_t const* slice_values(Key const& key)
 //
 // Positions with at most `slice_max` pieces, or with kings on both sides, come from the slices: only
 // when both sides have a king can a position repeat. Other positions cannot repeat (the side without
-// kings has to move a man or capture), so their exact value, with DTM, follows from their successors
-// by memoised recursion.
+// kings has to move a man or capture), so their exact value, with DTM, follows from a forward
+// alpha-beta search down to the slices (see below).
 
 using PosKey = unsigned __int128;
 PosKey pack(Pos const& p)
@@ -403,7 +408,29 @@ struct PosKeyHash {
                 return std::size_t(h ^ (h >> 31));
         }
 };
-std::unordered_map<PosKey, std::uint16_t, PosKeyHash> memo;
+
+// ---------------------------------------------------------------- forward alpha-beta with exact DTM
+//
+// Scores for the side to move: win in n plies = WSC - n, loss in n plies = -(WSC - n), draw = 0.
+// A child's score s becomes up(s) for the parent (a win in n for the child is a loss in n + 1 for the
+// parent and vice versa); a window bound b of the parent becomes down(b) for the child (the inverse of
+// the decreasing function up). The leaves (slices) are exact and the searched positions cannot repeat,
+// so the tree is acyclic and alpha-beta with a full window returns the exact DTM; the transposition
+// table keeps lower and upper bounds relative to the position itself, so no ply correction is needed.
+
+constexpr int WSC = 30000, INFS = 32000;
+int to_score(std::uint16_t v) { return v == DRAW ? 0 : (v & 1) ? WSC - v : -(WSC - v); }
+std::uint16_t from_score(int s) { return s == 0 ? DRAW : std::uint16_t(s > 0 ? WSC - s : WSC + s); }
+int up(int s) { return s > 0 ? 1 - s : s < 0 ? -s - 1 : 0; }
+int down(int b)
+{
+        if (b >= INFS) return -INFS;
+        if (b <= -INFS) return INFS;
+        return b > 0 ? -b - 1 : b < 0 ? 1 - b : 0;
+}
+struct Bounds { std::int16_t lo = -INFS, hi = INFS; };
+std::unordered_map<PosKey, Bounds, PosKeyHash> tt;
+std::uint64_t ab_nodes = 0;
 
 bool in_slices(Pos const& p)
 {
@@ -423,15 +450,58 @@ std::uint8_t lookup8(Pos const& p0)
         return last[p.stm * last_meta.P + index_of(last_meta, p)];
 }
 
+int alphabeta(Pos const& p, int alpha, int beta)
+{
+        if (in_slices(p)) return to_score(widen(lookup8(p)));
+        PosKey const key = std::min(pack(p), pack(mirror(p)));
+        if (auto it = tt.find(key); it != tt.end()) {
+                Bounds const b = it->second;
+                if (b.lo == b.hi || b.lo >= beta) return b.lo;
+                if (b.hi <= alpha) return b.hi;
+                alpha = std::max(alpha, int(b.lo));
+                beta = std::min(beta, int(b.hi));
+        }
+        if (++ab_nodes % 1000000 == 0) std::cerr << "alphabeta: " << ab_nodes << " nodes, tt " << tt.size() << std::endl;
+        auto ms = moves(p);
+        int best = -INFS;
+        if (ms.empty()) best = -WSC;
+        // order: children with a known exact value first (best first), then captures, then the rest
+        std::vector<std::pair<int, std::size_t>> order;
+        std::vector<int> exact(ms.size(), INFS);
+        for (std::size_t i = 0; i < ms.size(); ++i) {
+                int pri;
+                if (in_slices(ms[i].next)) { exact[i] = up(to_score(widen(lookup8(ms[i].next)))); pri = exact[i]; }
+                else pri = ms[i].captured ? -WSC + 1000 : -WSC + 500;
+                order.push_back({ -pri, i });
+        }
+        std::sort(order.begin(), order.end());
+        int const alpha0 = alpha;
+        for (auto const& [pri, i] : order) {
+                int a = std::max(alpha, best);
+                int s = exact[i] != INFS ? exact[i] : up(alphabeta(ms[i].next, down(beta), down(a)));
+                best = std::max(best, s);
+                if (best >= beta) break;
+        }
+        Bounds& b = tt[key];
+        if (best <= alpha0) b.hi = std::int16_t(std::min(int(b.hi), best));
+        else if (best >= beta) b.lo = std::int16_t(std::max(int(b.lo), best));
+        else b.lo = b.hi = std::int16_t(best);
+        return best;
+}
+
 std::uint16_t lookup(Pos const& p0)
 {
         if (in_slices(p0)) return widen(lookup8(p0));
-        PosKey k = std::min(pack(p0), pack(mirror(p0)));
-        auto it = memo.find(k);
-        if (it != memo.end()) return it->second;
-        std::uint16_t v = from_successors(p0);
-        memo.emplace(k, v);
-        return v;
+        return from_score(alphabeta(p0, -INFS, INFS));
+}
+
+// win / draw / loss only: two null-window searches (prunes far more than the exact DTM search)
+char wdl(Pos const& p)
+{
+        if (in_slices(p)) { std::uint16_t v = widen(lookup8(p)); return v == DRAW ? 'D' : (v & 1) ? 'W' : 'L'; }
+        if (alphabeta(p, 0, 1) >= 1) return 'W';
+        if (alphabeta(p, -1, 0) <= -1) return 'L';
+        return 'D';
 }
 
 // value of a position recomputed from the values of its successors
@@ -800,7 +870,7 @@ int main()
                         for (auto k : tab_key) ns += k != 0;
                         std::cout << "built " << built_max << " slices " << ns << " positions " << db.size()
                                   << " extra slices " << extra.size() << " positions " << extra_positions
-                                  << " memo " << memo.size() << "\nend" << std::endl;
+                                  << " tt " << tt.size() << " nodes " << ab_nodes << "\nend" << std::endl;
                         continue;
                 }
                 Pos p;
@@ -816,6 +886,15 @@ int main()
                         }
                         std::stable_sort(rows.begin(), rows.end(), [](auto const& a, auto const& b) { return a.first > b.first; });
                         for (auto const& r : rows) std::cout << r.second << '\n';
+                        std::cout << "end" << std::endl;
+                } else if (cmd == "wdl") {
+                        std::cout << "wdl " << wdl(p) << "\nend" << std::endl;
+                } else if (cmd == "posw") {
+                        std::cout << "wdl " << wdl(p) << '\n';
+                        for (auto const& mv : moves(p)) {
+                                char c = wdl(mv.next);
+                                std::cout << "move " << notation(mv) << ' ' << (c == 'W' ? 'L' : c == 'L' ? 'W' : 'D') << ' ' << fen_of(mv.next) << '\n';
+                        }
                         std::cout << "end" << std::endl;
                 } else if (cmd == "slice") {
                         if (!canonical_key(key_of(p))) p = mirror(p);

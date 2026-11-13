@@ -1,3 +1,8 @@
+#          Copyright Rein Halbersma 2026.
+# Distributed under the Boost Software License, Version 1.0.
+#    (See accompanying file LICENSE_1_0.txt or copy at
+#          http://www.boost.org/LICENSE_1_0.txt)
+
 # Checkers (short kings): from a start position, can black force winning a white king, and how fast?
 # Explores all positions reachable without captures; black "scores" when it is black's turn and
 # black has a capture; white "escapes" when it is white's turn and white has a capture.

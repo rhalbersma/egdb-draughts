@@ -27,15 +27,16 @@ This page collects the programs, the tables and the most interesting findings.
 | Program | Data structure | Algorithm | Notes |
 |---|---|---|---|
 | [`src/egdb.cpp`](src/egdb.cpp) | one `std::map` per material balance, key = (sorted white squares, sorted black squares) | forward iteration per ply | deliberately simple, easy to check |
-| [`src/egdb_fast.cpp`](src/egdb_fast.cpp) | compact combinatorial index, one byte per position and side to move | retrograde analysis with move counters, OpenMP | 200–450× faster |
+| [`src/egdb_fast.cpp`](src/egdb_fast.cpp) | `xstd::bit_fixed_set` bitboards, compact combinatorial index, one byte per position and side to move | retrograde analysis with move counters, OpenMP | 200–450× faster, boards up to 512 squares |
 
 Both use [tabula](https://github.com/rhalbersma/tabula) for the board geometry (`tabula::chequer`
 with width, height and parity), produce **byte-identical** text output, and print the same statistics.
 
 The fast version:
 
-* **bitboards**: occupancy in 128-bit words and precomputed rays per square and direction, so a
-  board can have at most 128 playable squares;
+* **bitboards**: [`xstd::bit_fixed_set<N>`](https://github.com/rhalbersma/xstd-bits) with precomputed rays per square
+  and direction; the engine is a template on the bitboard type and the program picks the narrowest
+  `N ∈ {64, 128, 192, 256, 384, 512}` that holds every playable square, so any board up to 512 squares works;
 * **compact indexing**: `index = colex_rank(white) · C(N − w, b) + colex_rank(black′)`, where `black′`
   renumbers the black squares among the squares white does not occupy, so every array slot is a legal position;
 * **retrograde analysis**: positions with a capture are resolved immediately from the smaller
@@ -60,8 +61,15 @@ The fast version:
 | 9×17, 3-1 | ~40 min | 5.1 s |
 | 12×21, 3-1 (126 squares, 40 M positions) | — | 22 s |
 | all 154 runs of the full re-run (international grid, lake boards, checkers) | many hours | 7 min |
+| 12×23, 3-1 (138 squares, 58 M positions, `bit_fixed_set<192>`) | — | 101 s |
+
+Against a hand-rolled `unsigned __int128` bitboard, `bit_fixed_set<64>` is exactly as fast (≤ 64 squares) and
+`bit_fixed_set<128>` ranges from 15% faster to 35% slower (65–128 squares; 10×12: 0.96 s vs 1.12 s, 9×17: 4.2 s vs 3.1 s).
 
 ### Usage
+
+Requires a C++23 compiler (GCC 14 or later), CMake 3.30 or later, OpenMP and the Boost.Container headers;
+[tabula](https://github.com/rhalbersma/tabula) and [xstd-bits](https://github.com/rhalbersma/xstd-bits) are fetched by CMake.
 
 ```
 cmake -B build && cmake --build build
@@ -144,10 +152,10 @@ More than 80% of all quiet wins on these two boards end with black capturing int
  9     (15)/(15)  21  (19)/21   (27) (17)/(19) (31) (19)/(21) (21)  (19)/23  (19) (19)/(19) (21)
 10       (15)     21     25     (27)   (19)    (31)   (21)    (21)   (19)     27   (19)    (19)
 11     (15)/(15)  21  (19)/21   (27) (17)/(19) (31) (19)/(21) (21) (19)/(21) (19)  (19)/25  (19)
-12       (15)     21     25     (27)   (19)    (31)   (21)    (21)   (19)    (21)
+12       (15)     21     25     (27)   (19)    (31)   (21)    (21)   (19)    (21)          27
 ```
 `†`: on 8×8 there are 40 positions (2 up to symmetry) with the single king to move that draw by a fork,
-even with white on the long diagonal. Blank: more than 128 squares (not computed).
+even with white on the long diagonal. Blank: not computed.
 
 The 10×10 numbers agree with mdgsoftware.nl: with three kings to move 486,444 wins and 434,756 draws;
 with the single king to move 16,812 wins, 863,802 draws and 40,586 losses.
@@ -158,7 +166,7 @@ with the single king to move 16,812 wins, 863,802 draws and 40,586 losses.
 |---|---|
 | **L = B + 1** | won on every board |
 | **L = B + 2** | won, except the "wrong" colouring p0 for B = 9 and 11 |
-| **L = 2B − 1** | won, except p0 for B = 9 and 11 (10×19: 27 plies, 11×21 p1: 25 plies; 12×23 has more than 128 squares) |
+| **L = 2B − 1** | won, except p0 for B = 9 and 11 (10×19: 27 plies, 11×21 p1: 25 plies, 12×23: 27 plies) |
 
 The colouring rule of the book is confirmed: from B = 9 on, for odd B only the colouring with playable corners (p1) wins.
 On B = 7 the wrong colouring still wins (5×9 p0, 7×13 p0) because the general method still reaches that far.

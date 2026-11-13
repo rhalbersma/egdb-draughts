@@ -160,3 +160,4 @@ checkers32_11x10             - exit=0 0 error(s) | 3-2 11x10 parity 1 squares 55
 checkers32_12x10             - exit=0 0 error(s) | 3-2 12x10 parity 1 squares 60 quiet-draws wtm 2744990 btm 4428338 max-win 127 rules checkers
 checkers32_9x7_p0            - exit=0 0 error(s) | 3-2 9x7 parity 0 squares 31 quiet-draws wtm 124148 btm 197088 max-win 93 rules checkers
 checkers32_9x9_p0            - exit=0 0 error(s) | 3-2 9x9 parity 0 squares 40 quiet-draws wtm 1201460 btm 1831496 max-win 99 rules checkers
+31_23x12_p1              101.3s exit=0 0 error(s) | 3-1 23x12 parity 1 squares 138 quiet-draws wtm 0 btm 35710 max-win 27 rules international

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Regenerate all databases and summaries with egdb_fast (build it first: cmake -B build && cmake --build build).
-# - international draughts 3-1 (with 2-1 and 1-1 as sub-databases): B = 3..12, L = B..2B+3, at most 128 squares
+# - international draughts 3-1 (with 2-1 and 1-1 as sub-databases): B = 3..12, L = B..2B+3 (up to 162 squares, the larger boards take minutes each)
 # - the 15 boards with one square removed from 10x10
 # - English checkers 3-2 on a range of boards
 # One board at a time (each run uses all cores). Databases go to data/, the summary to data/summary.txt.
@@ -29,7 +29,7 @@ for h in 3 4 5 6 7 8 9 10 11 12; do
   for w in $(seq $h $((2 * h + 3))); do
     for p in $( ((w % 2 && h % 2)) && echo 0 1 || echo 1); do
       n=$(( (w * h + p) / 2 ))
-      [ $n -gt 128 ] && continue
+      [ $n -gt 512 ] && continue
       keys=$(( $(binom3 $n) * (n - 3) ))
       text=""; [ $keys -gt 5000000 ] && text="--no-text"
       run 31_${w}x${h}_p$p --width $w --height $h --parity $p --out data/${w}x${h}_p$p $text

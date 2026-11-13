@@ -6,7 +6,7 @@
 
 """Check every claim of "Strategie der 36 velden" against the exact 6x6 databases of egdb_6x6.
 
-usage: check.py path/to/egdb_6x6 [--slicemax 7] [--out report.md] [--json results.json]
+usage: check.py path/to/egdb_6x6 [--db data/6x6_le8.db] [--slicemax 8] [--json results.json]
 """
 
 import argparse
@@ -22,9 +22,13 @@ from claims import DIAGRAMS, LINES  # noqa: E402
 
 
 class Engine:
-    def __init__(self, exe, slicemax):
+    def __init__(self, exe, slicemax, db=None):
         self.p = subprocess.Popen([exe], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, bufsize=1)
         self.cache = {}
+        if db:
+            out = self.cmd(f'load {db}')
+            if not out or not out[0].startswith('load ok'):
+                raise RuntimeError(f'cannot load {db}: {out}')
         self.cmd(f'slicemax {slicemax}')
 
     def cmd(self, line):
@@ -209,10 +213,11 @@ def check_diagram(eng, did):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('engine')
-    ap.add_argument('--slicemax', type=int, default=7)
+    ap.add_argument('--slicemax', type=int, default=8)
+    ap.add_argument('--db', default=str(Path(__file__).resolve().parent.parent / 'data' / '6x6_le8.db'))
     ap.add_argument('--json', default=str(Path(__file__).resolve().parent / 'results.json'))
     args = ap.parse_args()
-    eng = Engine(args.engine, args.slicemax)
+    eng = Engine(args.engine, args.slicemax, args.db if Path(args.db).exists() else None)
     t0 = time.time()
     diagrams = []
     for did in DIAGRAMS:

@@ -30,6 +30,8 @@
 // Protocol (stdin, one command per line):
 //   build <n> [t] [d]  build all slices with at most n pieces, with t threads; above d pieces WDL only
 //   save <file>     save the prebuilt slices;  load <file>  load them
+//   extend <n> [t] <file>  add the layer of n-piece slices with DTM in a memory-mapped file (+ .idx)
+//   attach <file>   attach such a layer after loading the layers below
 //   pos <FEN>       value of the position and of every legal move (exact DTM)
 //   posw <FEN>      win / draw / loss of the position and of every legal move (faster above the slices)
 //   wdl <FEN>       win / draw / loss of the position
@@ -55,6 +57,9 @@
 #include <sstream>
 #include <string>
 #include <tuple>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <unistd.h>
 #include <unordered_map>
 #include <vector>
 
@@ -364,6 +369,9 @@ int slice_max = 8;
 std::vector<std::uint8_t> db;
 std::vector<std::uint64_t> wdlbits;                // 2 bits per position: 0 = loss, 1 = win, 2 = draw
 constexpr std::uint64_t WDL_FLAG = 1ull << 63;
+constexpr std::uint64_t DB2_FLAG = 1ull << 62;    // offset into db2: a layer of DTM slices in a memory-mapped file
+std::uint8_t* db2 = nullptr;
+std::size_t db2_size = 0;
 std::vector<std::uint64_t> tab_key, tab_off;      // tab_key = pack + 1 (0 = empty); tab_off = byte offset or WDL_FLAG | position offset
 std::unordered_map<std::uint64_t, std::vector<std::uint16_t>> extra;
 std::uint64_t extra_positions = 0;
@@ -397,6 +405,7 @@ bool find_prebuilt(std::uint64_t k, SliceRef& r)
         for (std::size_t i = tab_slot(k);; i = (i + 1) & (tab_key.size() - 1)) {
                 if (tab_key[i] == k + 1) {
                         if (tab_off[i] & WDL_FLAG) r.wdl = tab_off[i] & ~WDL_FLAG;
+                        else if (tab_off[i] & DB2_FLAG) r.dtm = db2 + (tab_off[i] & ~DB2_FLAG);
                         else r.dtm = db.data() + tab_off[i];
                         return true;
                 }
@@ -679,7 +688,8 @@ int distance(Key const& k)
 }
 
 // all canonical slices with at most nmax pieces; slices with more than dmax pieces are stored as WDL
-void build(int nmax, int threads, int dmax)
+// all canonical slices with nmin..nmax pieces, in dependency order
+std::vector<Job> make_jobs(int nmin, int nmax)
 {
         std::vector<Job> jobs;
         std::uint32_t const allowW = FULL & ~PROMO_WHITE, allowB = FULL & ~PROMO_BLACK;
@@ -697,7 +707,7 @@ void build(int nmax, int threads, int dmax)
                                 for (int nwk = 0; nwk <= rest; ++nwk)
                                         for (int nbk = 0; nwk + nbk <= rest; ++nbk) {
                                                 Key k{ wm, bm, nwk, nbk };
-                                                if (pieces(k) < 1 || !canonical_key(k)) continue;
+                                                if (pieces(k) < std::max(1, nmin) || !canonical_key(k)) continue;
                                                 Meta m = meta_of(k);
                                                 if (m.P == 0) continue;
                                                 jobs.push_back({ k.pack(), pieces(k), __builtin_popcount(wm | bm), distance(k), m.P });
@@ -708,6 +718,12 @@ void build(int nmax, int threads, int dmax)
         std::sort(jobs.begin(), jobs.end(), [](Job const& a, Job const& b) {
                 return std::tie(a.level_n, a.men, a.dist, a.key) < std::tie(b.level_n, b.men, b.dist, b.key);
         });
+        return jobs;
+}
+
+void build(int nmax, int threads, int dmax)
+{
+        std::vector<Job> jobs = make_jobs(1, nmax);
         std::size_t cap = 1;
         while (cap < 2 * jobs.size()) cap <<= 1;
         tab_key.assign(cap, 0);
@@ -761,6 +777,116 @@ void build(int nmax, int threads, int dmax)
                 }
                 g = h;
         }
+}
+
+// insert (key, offset) pairs into a fresh table with room for all of them
+void rebuild_table(std::vector<std::pair<std::uint64_t, std::uint64_t>> const& entries)
+{
+        std::size_t cap = 1;
+        while (cap < 2 * entries.size()) cap <<= 1;
+        tab_key.assign(cap, 0);
+        tab_off.assign(cap, 0);
+        for (auto const& [k, off] : entries) {
+                std::size_t i = tab_slot(k);
+                while (tab_key[i]) i = (i + 1) & (cap - 1);
+                tab_key[i] = k + 1;
+                tab_off[i] = off;
+        }
+}
+
+std::vector<std::pair<std::uint64_t, std::uint64_t>> table_entries()
+{
+        std::vector<std::pair<std::uint64_t, std::uint64_t>> e;
+        for (std::size_t i = 0; i < tab_key.size(); ++i)
+                if (tab_key[i]) e.push_back({ tab_key[i] - 1, tab_off[i] });
+        return e;
+}
+
+bool map_file(std::string const& path, std::size_t size, bool create)
+{
+        int fd = ::open(path.c_str(), create ? (O_RDWR | O_CREAT | O_TRUNC) : O_RDONLY, 0644);
+        if (fd < 0) return false;
+        if (create && ::ftruncate(fd, off_t(size)) != 0) { ::close(fd); return false; }
+        void* p = ::mmap(nullptr, size, create ? (PROT_READ | PROT_WRITE) : PROT_READ, MAP_SHARED, fd, 0);
+        ::close(fd);
+        if (p == MAP_FAILED) return false;
+        db2 = static_cast<std::uint8_t*>(p);
+        db2_size = size;
+        return true;
+}
+
+// add the layer of all slices with n pieces, with one byte of DTM per position, in a memory-mapped file
+// (path) with an index (path.idx); the layers below must be prebuilt with DTM
+bool extend(int n, int threads, std::string const& path)
+{
+        if (built_max != n - 1 || dtm_max < n - 1) { std::cerr << "extend: need DTM slices up to " << n - 1 << std::endl; return false; }
+        std::vector<Job> jobs = make_jobs(n, n);
+        std::sort(jobs.begin(), jobs.end(), [](Job const& a, Job const& b) {
+                return std::tie(a.level_n, a.men, a.dist, a.key) < std::tie(b.level_n, b.men, b.dist, b.key);
+        });
+        auto entries = table_entries();
+        std::vector<std::pair<std::uint64_t, std::uint64_t>> layer;
+        std::uint64_t total = 0;
+        for (auto const& j : jobs) { layer.push_back({ j.key, DB2_FLAG | total }); total += 2 * j.P; }
+        std::cerr << "extend: " << jobs.size() << " slices, " << total << " positions (" << total / 1e9 << " GB) in " << path << std::endl;
+        if (!map_file(path, total, true)) { std::cerr << "extend: cannot map " << path << std::endl; return false; }
+        entries.insert(entries.end(), layer.begin(), layer.end());
+        rebuild_table(entries);
+        built_max = n;
+        dtm_max = n;
+        slice_max = std::max(slice_max, n);
+        auto t0 = std::chrono::steady_clock::now();
+        std::uint64_t done = 0;
+        for (std::size_t g = 0; g < jobs.size();) {
+                std::size_t h = g;
+                while (h < jobs.size() && jobs[h].men == jobs[g].men && jobs[h].dist == jobs[g].dist) ++h;
+                #pragma omp parallel for schedule(dynamic, 1) num_threads(threads)
+                for (std::size_t i = g; i < h; ++i) {
+                        Meta m = meta_of(Key::unpack(jobs[i].key));
+                        std::vector<std::uint16_t> tmp(2 * m.P);
+                        solve_slice(m, tmp.data());
+                        SliceRef r;
+                        find_prebuilt(jobs[i].key, r);
+                        for (std::uint64_t x = 0; x < tmp.size(); ++x) {
+                                if (tmp[x] != DRAW && tmp[x] > MAXDTM8) { std::cerr << "DTM overflow (" << tmp[x] << ")" << std::endl; std::abort(); }
+                                r.dtm[x] = tmp[x] == DRAW ? DRAW8 : std::uint8_t(tmp[x]);
+                        }
+                }
+                for (std::size_t i = g; i < h; ++i) done += 2 * jobs[i].P;
+                if (h == jobs.size() || jobs[h].men != jobs[g].men) {
+                        double sec = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+                        std::cerr << "extend: " << jobs[g].men << " men done, " << done << " / " << total << " positions, " << sec << " s" << std::endl;
+                        ::msync(db2, db2_size, MS_ASYNC);
+                }
+                g = h;
+        }
+        ::msync(db2, db2_size, MS_SYNC);
+        std::FILE* f = std::fopen((path + ".idx").c_str(), "wb");
+        if (!f) return false;
+        std::uint64_t hdr[4] = { 0x3678364244424747ull, std::uint64_t(n), layer.size(), total };
+        std::fwrite(hdr, sizeof hdr, 1, f);
+        std::fwrite(layer.data(), sizeof layer[0], layer.size(), f);
+        return std::fclose(f) == 0;
+}
+
+// attach a layer made by extend (after loading the layers below)
+bool attach(std::string const& path)
+{
+        std::FILE* f = std::fopen((path + ".idx").c_str(), "rb");
+        if (!f) return false;
+        std::uint64_t hdr[4];
+        bool ok = std::fread(hdr, sizeof hdr, 1, f) == 1 && hdr[0] == 0x3678364244424747ull && built_max == int(hdr[1]) - 1;
+        std::vector<std::pair<std::uint64_t, std::uint64_t>> layer(ok ? hdr[2] : 0);
+        if (ok) ok = std::fread(layer.data(), sizeof layer[0], layer.size(), f) == layer.size();
+        std::fclose(f);
+        if (!ok || !map_file(path, hdr[3], false)) return false;
+        auto entries = table_entries();
+        entries.insert(entries.end(), layer.begin(), layer.end());
+        rebuild_table(entries);
+        built_max = int(hdr[1]);
+        dtm_max = std::max(dtm_max, built_max);
+        slice_max = std::max(slice_max, built_max);
+        return true;
 }
 
 // file format v2: magic, built_max, dtm_max, table size, db size, wdlbits words, table keys, table offsets, db, wdlbits
@@ -908,6 +1034,15 @@ int main()
                         rs >> n >> threads >> dmax;
                         build(n, threads, dmax);
                         std::cout << "built " << built_max << "\nend" << std::endl;
+                        continue;
+                }
+                if (cmd == "extend" || cmd == "attach") {
+                        int n = 10, threads = 4;
+                        std::string path;
+                        if (cmd == "extend") rs >> n >> threads;
+                        rs >> path;
+                        bool ok = cmd == "extend" ? extend(n, threads, path) : attach(path);
+                        std::cout << (ok ? cmd + " ok " : "error " + cmd + " failed ") << path << " built " << built_max << "\nend" << std::endl;
                         continue;
                 }
                 if (cmd == "save" || cmd == "load") {

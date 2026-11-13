@@ -30,8 +30,12 @@ in het boek: veld 1 = b6, veld 16 = a1, en de lange lijn is 16-13-11-8-6-3. Wit 
 * **Boven de vooraf gebouwde grens.**
   * Stellingen met dammen aan beide kanten gaan naar slices die op verzoek worden berekend.
   * Alle andere stellingen kunnen zich niet herhalen: wie geen dam heeft, moet elke zet een schijf
-    verzetten of slaan. Hun exacte waarde, inclusief DTM, volgt uit de opvolgers met gememoriseerde
-    minimax. Er zijn dus geen graph-history-problemen.
+    verzetten of slaan. Die stellingen worden met een forward alpha-beta-zoektocht tot in de database
+    opgelost. De zoektocht rekent op mate-scores (winst in n = 30000 − n): een kindwaarde wordt één ply
+    langer voor de ouder, en de zoekgrenzen gaan met de inverse afbeelding naar het kind. De
+    transpositietabel bewaart grenzen relatief aan de stelling zelf. Omdat de boom acyclisch is en de
+    bladeren exact zijn, levert een volledig venster de exacte DTM. Er zijn dus geen
+    graph-history-problemen.
 
 ### Validatie
 
@@ -40,10 +44,13 @@ in het boek: veld 1 = b6, veld 16 = a1, en de lange lijn is 16-13-11-8-6-3. Wit 
   zijn remise.
 * De verificatiepass berekent elke opgeslagen waarde opnieuw uit de waarden van alle opvolgers. Over
   alle 1,725 miljard stellingen tot en met 8 stukken geeft dat 0 fouten.
-* Drie onafhankelijke implementaties geven dezelfde waarden, inclusief DTM:
-  * de oude solver met tellers;
+* Onafhankelijke implementaties geven dezelfde waarden, inclusief DTM:
+  * de eerste solver met tellers;
   * retrograde analyse over de bereikbare graaf;
-  * de memo-minimax tegen slices.
+  * memo-minimax.
+* De alpha-beta-zoektocht, met de database maar tot 6 stukken, geeft op 20 stellingen met 7 en 8
+  stukken uit hoofdstuk 6 en 7 exact dezelfde waarden en DTM's voor elke zet (125 waarden) als de
+  database tot 8 stukken.
 
 ### Diagrammen en claims
 

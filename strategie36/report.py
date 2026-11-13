@@ -4,7 +4,7 @@
 #    (See accompanying file LICENSE_1_0.txt or copy at
 #          http://www.boost.org/LICENSE_1_0.txt)
 
-"""Turn results.json (from check.py) into the tables of RAPPORT.md (Dutch)."""
+"""Assemble RAPPORT.md (Dutch): bevindingen.md, methode.md and the tables generated from results.json."""
 
 import json
 import sys
@@ -30,7 +30,8 @@ def mark(ok):
 
 
 def diagram_table(diagrams):
-    out = ['| diagram | stelling | boek, wit aan zet | database | boek, zwart aan zet | database | behoudende zetten (wit aan zet) |',
+    out = ['Tussen haakjes: de afstand tot het einde van de partij in ply (DTM) bij perfect spel.', '',
+           '| diagram | stelling | boek, wit aan zet | database | boek, zwart aan zet | database | behoudende zetten (wit aan zet) |',
            '|---|---|---|---|---|---|---|']
     for d in diagrams:
         w, b = d['sides'].get('W', {}), d['sides'].get('B', {})
@@ -40,9 +41,11 @@ def diagram_table(diagrams):
         def cell(s):
             if 'error' in s:
                 return 'n.v.t.'
-            return f"{res_nl(s['result'])}, {fmt_val(s['val'])} {mark(s['ok'])}"
-        keep = ', '.join(f'{m} ({fmt_val(v)})' for m, v in w.get('keeping', [])[:6]) if w.get('result') != '=' else ''
-        if len(w.get('keeping', [])) > 6:
+            n = '' if s['val'] == 'D' else f" ({s['val'][1:]})"
+            return f"{res_nl(s['result'])}{n} {mark(s['ok'])}"
+        kw = w.get('keeping', [])
+        keep = ', '.join(m + ('' if v == 'D' else f' ({v[1:]})') for m, v in kw[:6])
+        if len(kw) > 6:
             keep += ', …'
         out.append(f"| {d['id']} | `{d['fen'][2:]}` | {res_nl(w.get('claim'))} | {cell(w)} | {res_nl(b.get('claim'))} | {cell(b)} | {keep} |")
     return '\n'.join(out)
@@ -64,7 +67,7 @@ def lines_table(lines):
         notes += r['issues']
         notes += [f'bevestigd: {c}' for c in r.get('confirmed', [])]
         notes += r.get('info', [])
-        res = f"{res_nl(r['end_result'])} ({fmt_val(r['end_val'])})" if 'illegal' not in r else '–'
+        res = (res_nl(r['end_result']) + ('' if r['end_val'] == 'D' else f" ({r['end_val'][1:]})")) if 'illegal' not in r else '–'
         text = r['text'].replace('|', '\\|')
         out.append(f"| {STATUS[r['status']]} | {r['start']} | {text} | {res_nl(r['claim'])} | {res} | {'<br>'.join(notes)} |")
     return '\n'.join(out)
@@ -88,11 +91,11 @@ def main():
         '', '### Diagrammen', '', diagram_table(data['diagrams']), '', '### Varianten', lines_table(data['lines']), '',
         f"Database-statistiek: `{' '.join(data['stats'])}`", ''
     ]
-    out = '\n'.join(parts)
-    if len(sys.argv) > 1:
-        Path(sys.argv[1]).write_text(out)
-    else:
-        print(out)
+    tables = '\n'.join(parts)
+    doc = '\n'.join([(HERE / 'bevindingen.md').read_text(), (HERE / 'methode.md').read_text(),
+                     '## Resultaten per diagram en variant', '', tables])
+    out = Path(sys.argv[1]) if len(sys.argv) > 1 else HERE / 'RAPPORT.md'
+    out.write_text(doc)
 
 
 if __name__ == '__main__':

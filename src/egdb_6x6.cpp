@@ -386,6 +386,8 @@ std::uint8_t const* slice_values(Key const& key)
         std::vector<std::uint8_t> val(2 * s.P);
         solve_slice(s, val.data());
         extra_positions += 2 * s.P;
+        if ((extra.size() + 1) % 10000 == 0)
+                std::cerr << "on demand: " << extra.size() + 1 << " slices, " << extra_positions << " positions" << std::endl;
         return extra.emplace(k, std::move(val)).first->second.data();
 }
 

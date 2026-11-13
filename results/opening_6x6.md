@@ -2,7 +2,7 @@
 
 Beginstand, wit aan zet: **D**.
 
-Notatie vanuit wit: D = remise, Wn = wit wint, Ln = wit verliest, met n de ply (geteld vanaf de beginstand) waarna de partij bij perfect spel eindigt; een witte winst eindigt dus altijd op een oneven ply, een zwarte op een even ply. Waar n ontbreekt, is het resultaat exact maar de afstand onbekend.
+Notatie vanuit wit: D = remise, Wn = wit wint, Ln = wit verliest, met n het aantal ply tot het einde van de partij bij perfect spel. Bij de beginstand telt n vanaf de beginstand (W oneven, L even); bij een zet telt n vanaf de stelling vóór de zet, de zet meegeteld: na een witte zet W oneven en L even, na een zwarte zet W even en L oneven. In de tabel geldt het label voor de laatste zet van de opening. Waar n ontbreekt, is het resultaat exact maar de afstand onbekend.
 
 Methode: de volledige openings-DAG (transposities samengevoegd), uitgebreid zolang een stelling meer dan 10 stukken heeft en hoogstens één kant dammen. Bladeren: databasestellingen (exact), stellingen zonder zetten (verloren) en stellingen met meer stukken en dammen aan beide kanten (onbekend). Waarden zijn als intervallen teruggerekend, vanuit wit gezien.
 
@@ -27,7 +27,7 @@ Beginstand, wit aan zet: **D**
       a b c d e f
 ```
 
-Na 1. 13-10, zwart aan zet: **D**
+1. 13-10 (zwart aan zet): **D**
 
 ```
     +-------------+     +-------------------+
@@ -41,7 +41,7 @@ Na 1. 13-10, zwart aan zet: **D**
       a b c d e f
 ```
 
-Na 1. 13-11, zwart aan zet: **D**
+1. 13-11 (zwart aan zet): **D**
 
 ```
     +-------------+     +-------------------+
@@ -55,7 +55,7 @@ Na 1. 13-11, zwart aan zet: **D**
       a b c d e f
 ```
 
-Na 1. 14-11, zwart aan zet: **D**
+1. 14-11 (zwart aan zet): **D**
 
 ```
     +-------------+     +-------------------+
@@ -69,7 +69,7 @@ Na 1. 14-11, zwart aan zet: **D**
       a b c d e f
 ```
 
-Na 1. 14-12, zwart aan zet: **D**
+1. 14-12 (zwart aan zet): **D**
 
 ```
     +-------------+     +-------------------+
@@ -83,7 +83,7 @@ Na 1. 14-12, zwart aan zet: **D**
       a b c d e f
 ```
 
-Na 1. 15-12, zwart aan zet: **D**
+1. 15-12 (zwart aan zet): **D**
 
 ```
     +-------------+     +-------------------+
@@ -103,7 +103,7 @@ Na 1. 15-12, zwart aan zet: **D**
 beginstand  D
     wit 13-10  D
         zwart 4-7  W
-            wit 14-11  L46
+            wit 14-11  L44
             wit 14-12  W
             wit 15-12  L
             wit 16-13  D
@@ -111,23 +111,23 @@ beginstand  D
         zwart 5-7  D
             wit 10x5  D
         zwart 5-8  D
-            wit 10-7  L24
-            wit 14-11  L44
+            wit 10-7  L22
+            wit 14-11  L42
             wit 14-12  D
             wit 15-12  L
             wit 16-13  D
             wit 17-13  L
         zwart 6-8  D
-            wit 10-7  L24
-            wit 14-11  L28
+            wit 10-7  L22
+            wit 14-11  L26
             wit 14-12  L
             wit 15-12  L
             wit 16-13  D
             wit 17-13  D
         zwart 6-9  D
-            wit 10-7  L24
+            wit 10-7  L22
             wit 14-11  D
-            wit 14-12  L32
+            wit 14-12  L30
             wit 15-12  L
             wit 16-13  D
             wit 17-13  D
@@ -136,21 +136,21 @@ beginstand  D
             wit 11x4  W
         zwart 5-7  D
             wit 11-8  L
-            wit 14-12  L20
+            wit 14-12  L18
             wit 15-12  D
             wit 16-13  D
             wit 17-13  L
         zwart 5-8  D
-            wit 11-7  L24
+            wit 11-7  L22
             wit 14-12  D
-            wit 15-12  L30
+            wit 15-12  L28
             wit 16-13  D
             wit 17-13  D
         zwart 6-8  D
             wit 11x6  D
         zwart 6-9  W
-            wit 11-7  L24
-            wit 11-8  W27
+            wit 11-7  L22
+            wit 11-8  W25
             wit 14-12  L
             wit 15-12  D
             wit 16-13  D
@@ -160,13 +160,13 @@ beginstand  D
             wit 11x4  W
         zwart 5-7  D
             wit 11-8  D
-            wit 13-10  L28
-            wit 15-12  L20
+            wit 13-10  L26
+            wit 15-12  L18
             wit 17-14  L
             wit 18-14  L
         zwart 5-8  D
             wit 11-7  L
-            wit 13-10  L44
+            wit 13-10  L42
             wit 15-12  L
             wit 17-14  D
             wit 18-14  L
@@ -176,22 +176,22 @@ beginstand  D
             wit 11-7  L
             wit 11-8  D
             wit 13-10  D
-            wit 15-12  L20
+            wit 15-12  L18
             wit 17-14  D
             wit 18-14  L
     wit 14-12  D
         zwart 4-7  W
-            wit 12-8  W27
+            wit 12-8  W25
             wit 12-9  L
             wit 13-10  W
-            wit 13-11  L20
+            wit 13-11  L18
             wit 17-14  L
             wit 18-14  L
         zwart 5-7  D
             wit 12-8  D
             wit 12-9  D
             wit 13-10  D
-            wit 13-11  L20
+            wit 13-11  L18
             wit 17-14  L
             wit 18-14  L
         zwart 5-8  D
@@ -204,7 +204,7 @@ beginstand  D
             wit 18-14  D
         zwart 6-9  D
             wit 12-8  D
-            wit 13-10  L32
+            wit 13-10  L30
             wit 13-11  L
             wit 17-14  L
             wit 18-14  L
@@ -221,10 +221,10 @@ beginstand  D
             wit 12-9  W
             wit 13-10  L
             wit 13-11  D
-            wit 14-11  L20
+            wit 14-11  L18
             wit 18-15  L
-        zwart 5-8  W35
-            wit 12x5  W35
+        zwart 5-8  W34
+            wit 12x5  W33
         zwart 6-8  D
             wit 12-9  D
             wit 13-10  L
@@ -235,7 +235,7 @@ beginstand  D
             wit 12-8  L
             wit 13-10  L
             wit 13-11  D
-            wit 14-11  L20
+            wit 14-11  L18
             wit 18-15  L
 ```
 
@@ -245,56 +245,56 @@ beginstand  D
 
 | # | opening | resultaat |
 |---|---|---|
-| 1 | 13-10 4-7 14-11 | L46 |
+| 1 | 13-10 4-7 14-11 | L44 |
 | 2 | 13-10 4-7 14-12 | W |
 | 3 | 13-10 4-7 15-12 | L |
 | 4 | 13-10 4-7 16-13 | D |
 | 5 | 13-10 4-7 17-13 | D |
 | 6 | 13-10 5-7 10x5 | D |
-| 7 | 13-10 5-8 10-7 | L24 |
-| 8 | 13-10 5-8 14-11 | L44 |
+| 7 | 13-10 5-8 10-7 | L22 |
+| 8 | 13-10 5-8 14-11 | L42 |
 | 9 | 13-10 5-8 14-12 | D |
 | 10 | 13-10 5-8 15-12 | L |
 | 11 | 13-10 5-8 16-13 | D |
 | 12 | 13-10 5-8 17-13 | L |
-| 13 | 13-10 6-8 10-7 | L24 |
-| 14 | 13-10 6-8 14-11 | L28 |
+| 13 | 13-10 6-8 10-7 | L22 |
+| 14 | 13-10 6-8 14-11 | L26 |
 | 15 | 13-10 6-8 14-12 | L |
 | 16 | 13-10 6-8 15-12 | L |
 | 17 | 13-10 6-8 16-13 | D |
 | 18 | 13-10 6-8 17-13 | D |
-| 19 | 13-10 6-9 10-7 | L24 |
+| 19 | 13-10 6-9 10-7 | L22 |
 | 20 | 13-10 6-9 14-11 | D |
-| 21 | 13-10 6-9 14-12 | L32 |
+| 21 | 13-10 6-9 14-12 | L30 |
 | 22 | 13-10 6-9 15-12 | L |
 | 23 | 13-10 6-9 16-13 | D |
 | 24 | 13-10 6-9 17-13 | D |
 | 25 | 13-11 4-7 11x4 | W |
 | 26 | 13-11 5-7 11-8 | L |
-| 27 | 13-11 5-7 14-12 | L20 |
+| 27 | 13-11 5-7 14-12 | L18 |
 | 28 | 13-11 5-7 15-12 | D |
 | 29 | 13-11 5-7 16-13 | D |
 | 30 | 13-11 5-7 17-13 | L |
-| 31 | 13-11 5-8 11-7 | L24 |
+| 31 | 13-11 5-8 11-7 | L22 |
 | 32 | 13-11 5-8 14-12 | D |
-| 33 | 13-11 5-8 15-12 | L30 |
+| 33 | 13-11 5-8 15-12 | L28 |
 | 34 | 13-11 5-8 16-13 | D |
 | 35 | 13-11 5-8 17-13 | D |
 | 36 | 13-11 6-8 11x6 | D |
-| 37 | 13-11 6-9 11-7 | L24 |
-| 38 | 13-11 6-9 11-8 | W27 |
+| 37 | 13-11 6-9 11-7 | L22 |
+| 38 | 13-11 6-9 11-8 | W25 |
 | 39 | 13-11 6-9 14-12 | L |
 | 40 | 13-11 6-9 15-12 | D |
 | 41 | 13-11 6-9 16-13 | D |
 | 42 | 13-11 6-9 17-13 | D |
 | 43 | 14-11 4-7 11x4 | W |
 | 44 | 14-11 5-7 11-8 | D |
-| 45 | 14-11 5-7 13-10 | L28 |
-| 46 | 14-11 5-7 15-12 | L20 |
+| 45 | 14-11 5-7 13-10 | L26 |
+| 46 | 14-11 5-7 15-12 | L18 |
 | 47 | 14-11 5-7 17-14 | L |
 | 48 | 14-11 5-7 18-14 | L |
 | 49 | 14-11 5-8 11-7 | L |
-| 50 | 14-11 5-8 13-10 | L44 |
+| 50 | 14-11 5-8 13-10 | L42 |
 | 51 | 14-11 5-8 15-12 | L |
 | 52 | 14-11 5-8 17-14 | D |
 | 53 | 14-11 5-8 18-14 | L |
@@ -302,19 +302,19 @@ beginstand  D
 | 55 | 14-11 6-9 11-7 | L |
 | 56 | 14-11 6-9 11-8 | D |
 | 57 | 14-11 6-9 13-10 | D |
-| 58 | 14-11 6-9 15-12 | L20 |
+| 58 | 14-11 6-9 15-12 | L18 |
 | 59 | 14-11 6-9 17-14 | D |
 | 60 | 14-11 6-9 18-14 | L |
-| 61 | 14-12 4-7 12-8 | W27 |
+| 61 | 14-12 4-7 12-8 | W25 |
 | 62 | 14-12 4-7 12-9 | L |
 | 63 | 14-12 4-7 13-10 | W |
-| 64 | 14-12 4-7 13-11 | L20 |
+| 64 | 14-12 4-7 13-11 | L18 |
 | 65 | 14-12 4-7 17-14 | L |
 | 66 | 14-12 4-7 18-14 | L |
 | 67 | 14-12 5-7 12-8 | D |
 | 68 | 14-12 5-7 12-9 | D |
 | 69 | 14-12 5-7 13-10 | D |
-| 70 | 14-12 5-7 13-11 | L20 |
+| 70 | 14-12 5-7 13-11 | L18 |
 | 71 | 14-12 5-7 17-14 | L |
 | 72 | 14-12 5-7 18-14 | L |
 | 73 | 14-12 5-8 12x5 | D |
@@ -324,7 +324,7 @@ beginstand  D
 | 77 | 14-12 6-8 17-14 | L |
 | 78 | 14-12 6-8 18-14 | D |
 | 79 | 14-12 6-9 12-8 | D |
-| 80 | 14-12 6-9 13-10 | L32 |
+| 80 | 14-12 6-9 13-10 | L30 |
 | 81 | 14-12 6-9 13-11 | L |
 | 82 | 14-12 6-9 17-14 | L |
 | 83 | 14-12 6-9 18-14 | L |
@@ -338,9 +338,9 @@ beginstand  D
 | 91 | 15-12 5-7 12-9 | W |
 | 92 | 15-12 5-7 13-10 | L |
 | 93 | 15-12 5-7 13-11 | D |
-| 94 | 15-12 5-7 14-11 | L20 |
+| 94 | 15-12 5-7 14-11 | L18 |
 | 95 | 15-12 5-7 18-15 | L |
-| 96 | 15-12 5-8 12x5 | W35 |
+| 96 | 15-12 5-8 12x5 | W33 |
 | 97 | 15-12 6-8 12-9 | D |
 | 98 | 15-12 6-8 13-10 | L |
 | 99 | 15-12 6-8 13-11 | L |
@@ -349,5 +349,5 @@ beginstand  D
 | 102 | 15-12 6-9 12-8 | L |
 | 103 | 15-12 6-9 13-10 | L |
 | 104 | 15-12 6-9 13-11 | D |
-| 105 | 15-12 6-9 14-11 | L20 |
+| 105 | 15-12 6-9 14-11 | L18 |
 | 106 | 15-12 6-9 18-15 | L |

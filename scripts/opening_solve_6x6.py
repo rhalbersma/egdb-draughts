@@ -17,10 +17,12 @@ Values are backed up as intervals [lo, hi] (-1 loss, 0 draw, 1 win, for the side
 is not decided, the unknown leaves that matter are listed.
 
 usage: opening_solve_6x6.py path/to/egdb_6x6 [--db data/6x6_le10.db] [--table 3] [--out results/opening_6x6]
+                            [--dtm-db data/6x6_le9.db]
 """
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 import time
@@ -61,13 +63,14 @@ def info(fen):
     return len(W) + len(B), any(x[0] == 'K' for x in W), any(x[0] == 'K' for x in B)
 
 
-def label(lo, hi, stm):
-    """Interval for the side to move -> text for white."""
+def label(lo, hi, stm, dtm=None):
+    """Interval for the side to move -> D, Wn or Ln for white (n = plies to the end with perfect play,
+    when known), or >=D, <=D, ? when not decided."""
     if stm == 'B':
         lo, hi = -hi, -lo
-    if lo == hi:
-        return {1: 'wit wint', 0: 'remise', -1: 'zwart wint'}[lo]
-    return {(0, 1): 'wit wint of remise (≥ =)', (-1, 0): 'remise of zwart wint (≤ =)', (-1, 1): 'onbeslist'}[(lo, hi)]
+    if lo != hi:
+        return {(0, 1): '≥D', (-1, 0): '≤D', (-1, 1): '?'}[(lo, hi)]
+    return {1: 'W', 0: 'D', -1: 'L'}[lo] + (str(dtm) if dtm is not None and lo != 0 else '')
 
 
 def main():
@@ -76,6 +79,7 @@ def main():
     ap.add_argument('--db', default='data/6x6_le10.db')
     ap.add_argument('--table', type=int, default=3)
     ap.add_argument('--out', default='results/opening_6x6')
+    ap.add_argument('--dtm-db', default=None, help='database with exact DTM (e.g. data/6x6_le9.db) for the distances')
     args = ap.parse_args()
     t0 = time.time()
     log = lambda m: print(f'[{time.time() - t0:7.1f}s] {m}', file=sys.stderr, flush=True)
@@ -172,6 +176,38 @@ def main():
                 seen.add(c)
                 stack.append(c)
 
+    # distances: a second engine with exact DTM below its database limit and alpha-beta above it, without
+    # solving slices on demand; nodes whose search would need such a slice keep their result without n
+    dtm = {}
+    tree_nodes = {}
+
+    def collect(fen, depth):
+        if fen in tree_nodes and tree_nodes[fen] <= depth:
+            return
+        tree_nodes[fen] = depth
+        if depth < args.table and fen in children:
+            for _, c in children[fen]:
+                collect(c, depth + 1)
+    collect(START, 0)
+    if args.dtm_db:
+        eng.p.stdin.close()
+        eng.p.wait()
+        deng = Engine(args.engine, args.dtm_db)
+        deng.cmd('ondemand 0')
+        log(f'DTM database loaded, built_max {deng.built}')
+        for fen in sorted(tree_nodes, key=lambda f: -tree_nodes[f]):
+            lo, hi = iv[fen]
+            if lo != hi or lo == 0:
+                continue
+            t = time.time()
+            out = deng.cmd('dtm ' + fen)[0]
+            if out.startswith('val '):
+                v = out.split()[1]
+                if (v[0] == 'W') != (lo == 1):
+                    raise RuntimeError(f'DTM and WDL disagree for {fen}: {v} vs {lo}')
+                dtm[fen] = int(v[1:])
+            log(f'dtm ply {tree_nodes[fen]} {fen}: {out} ({time.time() - t:.1f} s)')
+
     rows = []
 
     def walk(fen, path):
@@ -185,29 +221,39 @@ def main():
 
     def walk_tree(fen, path):
         name = 'beginstand' if not path else ('wit ' if len(path) % 2 else 'zwart ') + path[-1]
-        tree.append('    ' * len(path) + f'{name}  {label(*iv[fen], fen[0])}')
+        tree.append('    ' * len(path) + f'{name}  {label(*iv[fen], fen[0], dtm.get(fen))}')
         if len(path) < args.table and fen in children:
             for nota, c in children[fen]:
                 walk_tree(c, path + [nota])
     walk_tree(START, [])
-    res = Counter(label(*iv[f], f[0]) for _, f in rows)
+    res = Counter(label(*iv[f], f[0])[:1] for _, f in rows)
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'strategie36'))
+    from board import diagram
+    diagrams = ['## Diagrammen', '', 'w/b = witte/zwarte schijf, W/B = dam.', '',
+                f'Beginstand, wit aan zet: **{label(*root, "W", dtm.get(START))}**', '', '```', diagram(START), '```', '']
+    for nota, c in children[START]:
+        diagrams += [f'Na 1. {nota}, zwart aan zet: **{label(*iv[c], c[0], dtm.get(c))}**', '', '```', diagram(c), '```', '']
     md = ['# Openingen van 6×6-dammen', '',
-          f'Beginstand, wit aan zet: **{label(*root, "W")}**.', '',
+          f'Beginstand, wit aan zet: **{label(*root, "W", dtm.get(START))}**.', '',
+          'Notatie vanuit wit: D = remise, Wn = wit wint, Ln = wit verliest, met n het aantal ply tot het einde '
+          'van de partij bij perfect spel (DTM). Waar n ontbreekt, is het resultaat exact maar de afstand onbekend '
+          '(de 10-stukkendatabase bevat alleen winst/remise/verlies).', '',
           'Methode: de volledige openings-DAG (transposities samengevoegd), uitgebreid zolang een stelling meer dan '
           f'{eng.built} stukken heeft en hoogstens één kant dammen. Bladeren: databasestellingen (exact), stellingen '
           'zonder zetten (verloren) en stellingen met meer stukken en dammen aan beide kanten (onbekend). Waarden zijn '
           'als intervallen teruggerekend, vanuit wit gezien.', '',
           f'DAG: {len(children)} inwendige stellingen, bladeren: ' + ', '.join(f'{k} {v}' for k, v in kinds.items()) + '.',
           f'Onbekende bladeren die de beginstand nog kunnen beïnvloeden: {len(relevant)}.', '',
-          '## Boom', '', '```', *tree, '```', '', f'## Alle openingen van {args.table} ply', '',
-          f'{len(rows)} openingen: ' + ', '.join(f'{k}: {v}' for k, v in res.items()) + '.', '',
+          *diagrams, '## Boom', '', '```', *tree, '```', '', f'## Alle openingen van {args.table} ply', '',
+          f"{len(rows)} openingen: W {res['W']}, D {res['D']}, L {res['L']}.", '',
           '| # | opening | resultaat |', '|---|---|---|']
-    md += [f"| {i} | {' '.join(p)} | {label(*iv[f], f[0])} |" for i, (p, f) in enumerate(rows, 1)]
+    md += [f"| {i} | {' '.join(p)} | {label(*iv[f], f[0], dtm.get(f))} |" for i, (p, f) in enumerate(rows, 1)]
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     Path(args.out + '.md').write_text('\n'.join(md) + '\n')
     Path(args.out + '.json').write_text(json.dumps({
         'start': START, 'root': root, 'leaf_kinds': kinds, 'relevant_unknown': sorted(relevant),
-        'openings': [{'moves': p, 'fen': f, 'interval': iv[f]} for p, f in rows]}, indent=0))
+        'openings': [{'moves': p, 'fen': f, 'interval': iv[f], 'dtm': dtm.get(f)} for p, f in rows],
+        'tree': {f: {'ply': d, 'interval': iv[f], 'dtm': dtm.get(f)} for f, d in tree_nodes.items()}}, indent=0))
     log('done')
 
 

@@ -34,6 +34,9 @@
 //   posw <FEN>      win / draw / loss of the position and of every legal move (faster above the slices)
 //   wdl <FEN>       win / draw / loss of the position
 //   moves <FEN>     legal moves with the resulting positions (no values)
+//   dtm <FEN>       value of the position only
+//   ondemand <0|1>  allow solving slices that are not prebuilt (default 1); with 0 such a query
+//                   answers "error not in database"
 //   pv <FEN>        principal variation
 //   slice <FEN>     statistics of the slice containing the position
 //   slicemax <n>    largest number of pieces for which every position comes from the slices
@@ -364,6 +367,8 @@ constexpr std::uint64_t WDL_FLAG = 1ull << 63;
 std::vector<std::uint64_t> tab_key, tab_off;      // tab_key = pack + 1 (0 = empty); tab_off = byte offset or WDL_FLAG | position offset
 std::unordered_map<std::uint64_t, std::vector<std::uint16_t>> extra;
 std::uint64_t extra_positions = 0;
+bool allow_on_demand = true;   // false: a slice that is not prebuilt is an error (no on-demand solving)
+struct NotInDatabase {};
 
 struct SliceRef {
         std::uint8_t* dtm = nullptr;          // DTM bytes
@@ -408,6 +413,7 @@ SliceRef slice_values(Key const& key)
         if (pieces(key) <= built_max && find_prebuilt(k, r)) return r;
         auto it = extra.find(k);
         if (it == extra.end()) {
+                if (!allow_on_demand) throw NotInDatabase{};
                 Meta s = meta_of(key);
                 std::vector<std::uint16_t> val(2 * s.P);
                 solve_slice(s, val.data());
@@ -911,6 +917,13 @@ int main()
                         std::cout << (ok ? cmd + " ok " : "error " + cmd + " failed ") << path << " built " << built_max << "\nend" << std::endl;
                         continue;
                 }
+                if (cmd == "ondemand") {
+                        int on = 1;
+                        rs >> on;
+                        allow_on_demand = on != 0;
+                        std::cout << "ondemand " << allow_on_demand << "\nend" << std::endl;
+                        continue;
+                }
                 if (cmd == "slicemax") {
                         rs >> slice_max;
                         slice_max = std::max(slice_max, built_max);
@@ -933,7 +946,11 @@ int main()
                 }
                 Pos p;
                 if (!parse_fen(rest, p)) { std::cout << "error bad fen\nend" << std::endl; continue; }
-                if (cmd == "pos") {
+                try {
+                if (cmd == "dtm") {
+                        std::uint16_t const v = lookup(p);
+                        std::cout << "val " << show(v) << "\nend" << std::endl;
+                } else if (cmd == "pos") {
                         std::cout << "val " << show(lookup(p)) << '\n';
                         auto ms = moves(p);
                         std::vector<std::pair<int, std::string>> rows;
@@ -993,6 +1010,9 @@ int main()
                         std::cout << "\nend" << std::endl;
                 } else {
                         std::cout << "error unknown command\nend" << std::endl;
+                }
+                } catch (NotInDatabase const&) {
+                        std::cout << "error not in database\nend" << std::endl;
                 }
         }
 }

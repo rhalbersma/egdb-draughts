@@ -66,15 +66,16 @@ def main():
 
     def walk(fen, path):
         ply = len(path)
-        ms = sorted(moves(fen), key=key) if ply < 3 else []
+        ms = sorted(moves(fen), key=key) if all(c in tree for _, c in moves(fen)) else []
         if ply in plies:
             lo, hi = tree[fen]['interval']
             side = 'wit' if fen[0] == 'W' else 'zwart'
             title = 'Beginstand' if not path else ' '.join(
                 (f'{i // 2 + 1}. ' if i % 2 == 0 else '') + m for i, m in enumerate(path))
             value = label(lo, hi, fen[0], tree[fen]['dtm'])
+            num = f'{ply // 2 + 1}.' if fen[0] == 'W' else f'{ply // 2 + 1}…'
             notes = [f'{side} aan zet: {value}', ''] + [
-                f'  {nota:6} {label(*tree[c]["interval"], c[0], tree[c]["dtm"], True)}' for nota, c in ms]
+                f'  {num} {nota:6} {label(*tree[c]["interval"], c[0], tree[c]["dtm"], True)}' for nota, c in ms]
             board = diagram(fen).split('\n')
             board += [''] * (len(notes) - len(board))
             width = max(len(b) for b in board)

@@ -18,6 +18,7 @@ is not decided, the unknown leaves that matter are listed.
 
 usage: opening_solve_6x6.py path/to/egdb_6x6 [--db data/6x6_le10.db] [--table 3] [--out results/opening_6x6]
                             [--dtm-db data/6x6_le9.db]
+       opening_solve_6x6.py path/to/egdb_6x6 --db data/6x6_le9.db --attach data/6x6_10.dtm --dtm [--table 4]
 """
 
 import argparse
@@ -34,11 +35,15 @@ VAL = {'L': -1, 'D': 0, 'W': 1}
 
 
 class Engine:
-    def __init__(self, exe, db):
+    def __init__(self, exe, db, attach=None):
         self.p = subprocess.Popen([exe], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, bufsize=1)
         out = self.cmd(f'load {db}')
         if not out[0].startswith('load ok'):
             raise RuntimeError(out)
+        if attach:
+            out = self.cmd(f'attach {attach}')
+            if not out[0].startswith('attach ok'):
+                raise RuntimeError(out)
         self.built = int(out[0].split()[-1])
 
     def cmd(self, line):
@@ -81,11 +86,13 @@ def main():
     ap.add_argument('--db', default='data/6x6_le10.db')
     ap.add_argument('--table', type=int, default=3)
     ap.add_argument('--out', default='results/opening_6x6')
+    ap.add_argument('--attach', default=None, help='layer to attach after loading --db (e.g. data/6x6_10.dtm)')
+    ap.add_argument('--dtm', action='store_true', help='the databases have exact DTM: compute the distances with the same engine')
     ap.add_argument('--dtm-db', default=None, help='database with exact DTM (e.g. data/6x6_le9.db) for the distances')
     args = ap.parse_args()
     t0 = time.time()
     log = lambda m: print(f'[{time.time() - t0:7.1f}s] {m}', file=sys.stderr, flush=True)
-    eng = Engine(args.engine, args.db)
+    eng = Engine(args.engine, args.db, args.attach)
     log(f'database loaded, built_max {eng.built}')
 
     # the complete opening DAG
@@ -191,10 +198,13 @@ def main():
             for _, c in children[fen]:
                 collect(c, depth + 1)
     collect(START, 0)
-    if args.dtm_db:
-        eng.p.stdin.close()
-        eng.p.wait()
-        deng = Engine(args.engine, args.dtm_db)
+    if args.dtm_db or args.dtm:
+        if args.dtm:
+            deng = eng
+        else:
+            eng.p.stdin.close()
+            eng.p.wait()
+            deng = Engine(args.engine, args.dtm_db)
         deng.cmd('ondemand 0')
         log(f'DTM database loaded, built_max {deng.built}')
         for fen in sorted(tree_nodes, key=lambda f: -tree_nodes[f]):

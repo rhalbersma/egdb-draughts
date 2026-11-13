@@ -136,14 +136,20 @@ def main():
     kinds = Counter(k for _, _, k in leaf.values())
     log(f'one-ply bounds sharpened {sharpened} unknown leaves; leaves {dict(kinds)}')
 
-    # back up intervals, deepest layer first
+    # back up intervals in post-order (the DAG is acyclic, but a position can be reached after different
+    # numbers of plies, because men also capture backwards, so the layers are not a topological order)
     iv = {f: (lo, hi) for f, (lo, hi, _) in leaf.items()}
-    for layer in reversed(layers):
-        for fen in layer:
-            if fen in iv:
-                continue
-            cs = [iv[c] for _, c in children[fen]]
-            iv[fen] = (max(-hi for _, hi in cs), max(-lo for lo, _ in cs))
+    stack = [(START, False)]
+    while stack:
+        fen, expanded = stack.pop()
+        if fen in iv:
+            continue
+        if not expanded:
+            stack.append((fen, True))
+            stack.extend((c, False) for _, c in children[fen] if c not in iv)
+            continue
+        cs = [iv[c] for _, c in children[fen]]
+        iv[fen] = (max(-hi for _, hi in cs), max(-lo for lo, _ in cs))
     root = iv[START]
     log(f'start position: {label(*root, "W")}')
 

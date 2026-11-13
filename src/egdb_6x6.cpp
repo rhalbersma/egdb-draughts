@@ -31,6 +31,7 @@
 //   build <n> [t] [d]  build all slices with at most n pieces, with t threads; above d pieces WDL only
 //   save <file>     save the prebuilt slices;  load <file>  load them
 //   extend <n> [t] <file>  add the layer of n-piece slices with DTM in a memory-mapped file (+ .idx)
+//   resume <n> [t] <file>  continue an interrupted extend from its last checkpoint
 //   attach <file>   attach such a layer after loading the layers below
 //   pos <FEN>       value of the position and of every legal move (exact DTM)
 //   posw <FEN>      win / draw / loss of the position and of every legal move (faster above the slices)
@@ -59,6 +60,7 @@
 #include <tuple>
 #include <fcntl.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <unordered_map>
 #include <vector>
@@ -802,12 +804,17 @@ std::vector<std::pair<std::uint64_t, std::uint64_t>> table_entries()
         return e;
 }
 
-bool map_file(std::string const& path, std::size_t size, bool create)
+// mode 0: read only; 1: create (truncate) for writing; 2: open existing for writing (resume)
+bool map_file(std::string const& path, std::size_t size, int mode)
 {
-        int fd = ::open(path.c_str(), create ? (O_RDWR | O_CREAT | O_TRUNC) : O_RDONLY, 0644);
+        int fd = ::open(path.c_str(), mode == 0 ? O_RDONLY : mode == 1 ? (O_RDWR | O_CREAT | O_TRUNC) : O_RDWR, 0644);
         if (fd < 0) return false;
-        if (create && ::ftruncate(fd, off_t(size)) != 0) { ::close(fd); return false; }
-        void* p = ::mmap(nullptr, size, create ? (PROT_READ | PROT_WRITE) : PROT_READ, MAP_SHARED, fd, 0);
+        if (mode == 1 && ::ftruncate(fd, off_t(size)) != 0) { ::close(fd); return false; }
+        if (mode == 2) {
+                struct stat st;
+                if (::fstat(fd, &st) != 0 || std::size_t(st.st_size) != size) { ::close(fd); return false; }
+        }
+        void* p = ::mmap(nullptr, size, mode == 0 ? PROT_READ : (PROT_READ | PROT_WRITE), MAP_SHARED, fd, 0);
         ::close(fd);
         if (p == MAP_FAILED) return false;
         db2 = static_cast<std::uint8_t*>(p);
@@ -816,8 +823,10 @@ bool map_file(std::string const& path, std::size_t size, bool create)
 }
 
 // add the layer of all slices with n pieces, with one byte of DTM per position, in a memory-mapped file
-// (path) with an index (path.idx); the layers below must be prebuilt with DTM
-bool extend(int n, int threads, std::string const& path)
+// (path) with an index (path.idx); the layers below must be prebuilt with DTM. After every group of
+// slices the file is synced and the group is recorded in path.progress, so that a run that is
+// interrupted can continue where it stopped (resume = true).
+bool extend(int n, int threads, std::string const& path, bool resume = false)
 {
         if (built_max != n - 1 || dtm_max < n - 1) { std::cerr << "extend: need DTM slices up to " << n - 1 << std::endl; return false; }
         std::vector<Job> jobs = make_jobs(n, n);
@@ -829,7 +838,15 @@ bool extend(int n, int threads, std::string const& path)
         std::uint64_t total = 0;
         for (auto const& j : jobs) { layer.push_back({ j.key, DB2_FLAG | total }); total += 2 * j.P; }
         std::cerr << "extend: " << jobs.size() << " slices, " << total << " positions (" << total / 1e9 << " GB) in " << path << std::endl;
-        if (!map_file(path, total, true)) { std::cerr << "extend: cannot map " << path << std::endl; return false; }
+        std::size_t start_job = 0;
+        if (resume) {
+                std::FILE* pf = std::fopen((path + ".progress").c_str(), "r");
+                unsigned long long done_jobs = 0;
+                if (pf) { if (std::fscanf(pf, "%llu", &done_jobs) != 1) done_jobs = 0; std::fclose(pf); }
+                start_job = std::size_t(done_jobs);
+                if (!map_file(path, total, 2)) { std::cerr << "extend: cannot reopen " << path << std::endl; return false; }
+                std::cerr << "extend: resuming after " << start_job << " of " << jobs.size() << " slices" << std::endl;
+        } else if (!map_file(path, total, 1)) { std::cerr << "extend: cannot map " << path << std::endl; return false; }
         entries.insert(entries.end(), layer.begin(), layer.end());
         rebuild_table(entries);
         built_max = n;
@@ -837,7 +854,8 @@ bool extend(int n, int threads, std::string const& path)
         slice_max = std::max(slice_max, n);
         auto t0 = std::chrono::steady_clock::now();
         std::uint64_t done = 0;
-        for (std::size_t g = 0; g < jobs.size();) {
+        for (std::size_t i = 0; i < start_job; ++i) done += 2 * jobs[i].P;
+        for (std::size_t g = start_job; g < jobs.size();) {
                 std::size_t h = g;
                 while (h < jobs.size() && jobs[h].men == jobs[g].men && jobs[h].dist == jobs[g].dist) ++h;
                 #pragma omp parallel for schedule(dynamic, 1) num_threads(threads)
@@ -853,10 +871,18 @@ bool extend(int n, int threads, std::string const& path)
                         }
                 }
                 for (std::size_t i = g; i < h; ++i) done += 2 * jobs[i].P;
+                // checkpoint: the slices of this group are on disk before the progress file says so
+                ::msync(db2, db2_size, MS_SYNC);
+                if (std::FILE* pf = std::fopen((path + ".progress.tmp").c_str(), "w")) {
+                        std::fprintf(pf, "%llu\n", (unsigned long long)h);
+                        std::fflush(pf);
+                        ::fsync(::fileno(pf));
+                        std::fclose(pf);
+                        std::rename((path + ".progress.tmp").c_str(), (path + ".progress").c_str());
+                }
                 if (h == jobs.size() || jobs[h].men != jobs[g].men) {
                         double sec = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
                         std::cerr << "extend: " << jobs[g].men << " men done, " << done << " / " << total << " positions, " << sec << " s" << std::endl;
-                        ::msync(db2, db2_size, MS_ASYNC);
                 }
                 g = h;
         }
@@ -879,7 +905,7 @@ bool attach(std::string const& path)
         std::vector<std::pair<std::uint64_t, std::uint64_t>> layer(ok ? hdr[2] : 0);
         if (ok) ok = std::fread(layer.data(), sizeof layer[0], layer.size(), f) == layer.size();
         std::fclose(f);
-        if (!ok || !map_file(path, hdr[3], false)) return false;
+        if (!ok || !map_file(path, hdr[3], 0)) return false;
         auto entries = table_entries();
         entries.insert(entries.end(), layer.begin(), layer.end());
         rebuild_table(entries);
@@ -1036,12 +1062,12 @@ int main()
                         std::cout << "built " << built_max << "\nend" << std::endl;
                         continue;
                 }
-                if (cmd == "extend" || cmd == "attach") {
+                if (cmd == "extend" || cmd == "resume" || cmd == "attach") {
                         int n = 10, threads = 4;
                         std::string path;
-                        if (cmd == "extend") rs >> n >> threads;
+                        if (cmd != "attach") rs >> n >> threads;
                         rs >> path;
-                        bool ok = cmd == "extend" ? extend(n, threads, path) : attach(path);
+                        bool ok = cmd == "attach" ? attach(path) : extend(n, threads, path, cmd == "resume");
                         std::cout << (ok ? cmd + " ok " : "error " + cmd + " failed ") << path << " built " << built_max << "\nend" << std::endl;
                         continue;
                 }

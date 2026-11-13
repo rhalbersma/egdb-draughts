@@ -2,7 +2,7 @@
 
 Beginstand, wit aan zet: **D**.
 
-Notatie vanuit wit: D = remise, Wn = wit wint, Ln = wit verliest, met n het aantal ply tot het einde van de partij bij perfect spel. Bij de beginstand telt n vanaf de beginstand (W oneven, L even); bij een zet telt n vanaf de stelling vóór de zet, de zet meegeteld: na een witte zet W oneven en L even, na een zwarte zet W even en L oneven. In de tabel geldt het label voor de laatste zet van de opening. Waar n ontbreekt, is het resultaat exact maar de afstand onbekend.
+Notatie: D = remise, Wn = winst, Ln = verlies, met n het aantal ply tot het einde van de partij bij perfect spel. Bij de beginstand geldt de waarde voor wit (aan zet). Bij een zet geldt de waarde voor wie de zet doet, en telt n vanaf de stelling vóór de zet, de zet meegeteld. Een winst heeft dus altijd een oneven n, een verlies een even n. In de tabel geldt het label voor de laatste (witte) zet van de opening. Waar n ontbreekt, is het resultaat exact maar de afstand onbekend.
 
 Methode: de volledige openings-DAG (transposities samengevoegd), uitgebreid zolang een stelling meer dan 10 stukken heeft en hoogstens één kant dammen. Bladeren: databasestellingen (exact), stellingen zonder zetten (verloren) en stellingen met meer stukken en dammen aan beide kanten (onbekend). Waarden zijn als intervallen teruggerekend, vanuit wit gezien.
 
@@ -102,7 +102,7 @@ Beginstand, wit aan zet: **D**
 ```
 beginstand  D
     wit 13-10  D
-        zwart 4-7  W
+        zwart 4-7  L
             wit 14-11  L44
             wit 14-12  W
             wit 15-12  L
@@ -132,7 +132,7 @@ beginstand  D
             wit 16-13  D
             wit 17-13  D
     wit 13-11  D
-        zwart 4-7  W
+        zwart 4-7  L
             wit 11x4  W
         zwart 5-7  D
             wit 11-8  L
@@ -148,7 +148,7 @@ beginstand  D
             wit 17-13  D
         zwart 6-8  D
             wit 11x6  D
-        zwart 6-9  W
+        zwart 6-9  L
             wit 11-7  L22
             wit 11-8  W25
             wit 14-12  L
@@ -156,7 +156,7 @@ beginstand  D
             wit 16-13  D
             wit 17-13  D
     wit 14-11  D
-        zwart 4-7  W
+        zwart 4-7  L
             wit 11x4  W
         zwart 5-7  D
             wit 11-8  D
@@ -180,7 +180,7 @@ beginstand  D
             wit 17-14  D
             wit 18-14  L
     wit 14-12  D
-        zwart 4-7  W
+        zwart 4-7  L
             wit 12-8  W25
             wit 12-9  L
             wit 13-10  W
@@ -216,14 +216,14 @@ beginstand  D
             wit 13-11  L
             wit 14-11  L
             wit 18-15  L
-        zwart 5-7  W
+        zwart 5-7  L
             wit 12-8  D
             wit 12-9  W
             wit 13-10  L
             wit 13-11  D
             wit 14-11  L18
             wit 18-15  L
-        zwart 5-8  W34
+        zwart 5-8  L34
             wit 12x5  W33
         zwart 6-8  D
             wit 12-9  D

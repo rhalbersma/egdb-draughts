@@ -64,11 +64,11 @@ def info(fen):
 
 
 def label(lo, hi, stm, dtm=None, move=False):
-    """Interval for the side to move -> D, Wn or Ln for white, or >=D, <=D, ? when not decided. For a
-    position n is its distance to mate (plies until the side to move has no move left); for a move
-    (move=True, the node is the position after the move) n counts from the position before the move,
-    the move included."""
-    if stm == 'B':
+    """D, Wn or Ln (or >=D, <=D, ? when not decided). For a position (the start position) the value is for
+    the side to move and n is its distance to mate. For a move (move=True; the node is the position after
+    the move) the value is for the side that made the move and n counts from the position before the
+    move, the move included. Either way a win has an odd n and a loss an even n."""
+    if move:
         lo, hi = -hi, -lo
     if lo != hi:
         return {(0, 1): '≥D', (-1, 0): '≤D', (-1, 1): '?'}[(lo, hi)]
@@ -228,7 +228,7 @@ def main():
             for nota, c in children[fen]:
                 walk_tree(c, path + [nota])
     walk_tree(START, [])
-    res = Counter(label(*iv[f], f[0])[:1] for _, f in rows)
+    res = Counter(label(*iv[f], f[0], None, True)[:1] for _, f in rows)
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'strategie36'))
     from board import diagram
     diagrams = ['## Diagrammen', '', 'w/b = witte/zwarte schijf, W/B = dam.', '',
@@ -237,11 +237,11 @@ def main():
         diagrams += [f'1. {nota} (zwart aan zet): **{label(*iv[c], c[0], dtm.get(c), True)}**', '', '```', diagram(c), '```', '']
     md = ['# Openingen van 6×6-dammen', '',
           f'Beginstand, wit aan zet: **{label(*root, "W", dtm.get(START))}**.', '',
-          'Notatie vanuit wit: D = remise, Wn = wit wint, Ln = wit verliest, met n het aantal ply tot het einde van de '
-          'partij bij perfect spel. Bij de beginstand telt n vanaf de beginstand (W oneven, L even); bij een zet telt n '
-          'vanaf de stelling vóór de zet, de zet meegeteld: na een witte zet W oneven en L even, na een zwarte zet '
-          'W even en L oneven. In de tabel geldt het label voor de laatste zet van de opening. Waar n ontbreekt, is '
-          'het resultaat exact maar de afstand onbekend.', '',
+          'Notatie: D = remise, Wn = winst, Ln = verlies, met n het aantal ply tot het einde van de partij bij perfect '
+          'spel. Bij de beginstand geldt de waarde voor wit (aan zet). Bij een zet geldt de waarde voor wie de zet doet, '
+          'en telt n vanaf de stelling vóór de zet, de zet meegeteld. Een winst heeft dus altijd een oneven n, een '
+          'verlies een even n. In de tabel geldt het label voor de laatste (witte) zet van de opening. Waar n '
+          'ontbreekt, is het resultaat exact maar de afstand onbekend.', '',
           'Methode: de volledige openings-DAG (transposities samengevoegd), uitgebreid zolang een stelling meer dan '
           f'{eng.built} stukken heeft en hoogstens één kant dammen. Bladeren: databasestellingen (exact), stellingen '
           'zonder zetten (verloren) en stellingen met meer stukken en dammen aan beide kanten (onbekend). Waarden zijn '

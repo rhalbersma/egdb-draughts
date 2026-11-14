@@ -287,10 +287,10 @@ class Site:
                 fig, i0 = pg.diagram(fen, f'diagram {did}, {self.side(stm)} {self.t("aan zet", "to move")}')
                 out.append(fig)
                 if 'error' in sd:
-                    out.append(f'<p class="claim">{esc(d["note"])}: {esc(sd["error"])}</p>')
+                    out.append(f'<p class="claim">{pg.prose(d['note'], '6x6')}: {pg.prose(sd['error'], '6x6')}</p>')
                     continue
                 v, legal = self.o.analyse(fen)
-                cl = f' · boek: <em>{esc(d["note"])}</em>' if sd['claim'] else ''
+                cl = f' · boek: <em>{pg.prose(d['note'], '6x6')}</em>' if sd['claim'] else ''
                 ok = sd['ok']
                 b = (badge(ok, f'{self.t("boek", "book")}: {claim_label(sd["claim"], stm)} {"✓" if ok else "✗"}')
                      if sd['claim'] else '')
@@ -304,7 +304,7 @@ class Site:
                 if ok is False:
                     out.append(f'<p class="var">{self.claim_refutation(pg, fen, i0, did)}</p>')
             if d['note']:
-                out.insert(1, f'<p class="note">{esc(d["note"])}</p>')
+                out.insert(1, f'<p class="note">{pg.prose(d['note'], '6x6')}</p>')
         elif mylines:
             r0 = mylines[0]
             fig, _ = pg.diagram(r0['start_fen'], f'diagram {did}, {self.side(r0["start_fen"][0])} '
@@ -331,7 +331,7 @@ class Site:
         number = int(m0.group(1)) if m0 else 1
         tail = ''
         if 'illegal' in r:
-            body = f'<em>{esc(r["text"])}</em>'
+            body = f'<em>{pg.prose(r['text'], '6x6')}</em>'
             verdict = badge(None, self.t('✏️ notatiefout', '✏️ notation error'))
         else:
             asides = {}
@@ -359,10 +359,10 @@ class Site:
                 verdict = badge(None, f'{icon} database: {self.side(e)} {self.t("aan zet", "to move")} {r["end_val"]}')
         out = [f'<p class="var">{body}{tail} {verdict}']
         if r['note']:
-            out.append(f'<br><span class="note">{esc(r["note"])}</span>')
+            out.append(f'<br><span class="note">{pg.prose(r['note'], '6x6')}</span>')
         out.append('</p>')
         if notes:
-            out.append('<ul class="issues">' + ''.join(f'<li>{esc(self.note(x))}</li>' for x in notes) + '</ul>')
+            out.append('<ul class="issues">' + ''.join(f'<li>{pg.prose(self.note(x), '6x6')}</li>' for x in notes) + '</ul>')
         return '\n'.join(out)
 
     def continuation(self, pg, ref, k, prev, fen, mnum, black, mark, cls='m3'):
@@ -448,7 +448,7 @@ class Site:
         rows = ''.join(f'<tr><td>{esc(self.lab(lab))}</td><td><a href="{pid}.html">{esc(title)}</a></td><td>{self.counts(pid)}</td></tr>'
                        for pid, lab, title, *_ in PAGES)
         t = self.t
-        body = ['<h1>Strategie der 36 velden</h1>', fig, md(lead, 'strategie_der_36_velden/'),
+        body = ['<h1>Strategie der 36 velden</h1>', fig, md(lead, 'strategie_der_36_velden/', lambda h: pg.prose_html(h, '6x6')),
                 t('<h2>Hoofdstukken</h2>', '<h2>Chapters</h2>'),
                 t('<p>In de volgorde van de website van het boek. Elk hoofdstuk toont de diagrammen met de claims van '
                   'het boek, de varianten en de weerleggingen; het menu <em>Hoofdstukken</em> bovenaan brengt je overal '
@@ -463,7 +463,7 @@ class Site:
                 t('<h2>Achtergrond</h2>', '<h2>Background</h2>')]
         for head, rest in sections:
             body.append(f'<details class="more"><summary>{esc(head.strip())}</summary><div>'
-                        f'{md(rest, "strategie_der_36_velden/")}</div></details>')
+                        f'{md(rest, "strategie_der_36_velden/", lambda h: pg.prose_html(h, "6x6"))}</div></details>')
         body.append('<details class="more"><summary>' + t('Resultaten per hoofdstuk', 'Results per chapter')
                     + '</summary><div><p>' + t('✅ bevestigd, ❌ onjuist; bij de varianten ook ⚠️ opmerking, ✏️ '
                                                'notatiefout, ℹ️ informatief.',

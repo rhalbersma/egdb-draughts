@@ -98,7 +98,9 @@ class Site:
             pg.use(gid, eng, eng.g)
         return pg
 
-    def write(self, name, title, body, pg):
+    def write(self, name, title, body, pg, gid=None):
+        if gid is not None:              # algebraic moves in the running text follow the notation switch
+            body = pg.prose_html(body, gid, 'alg')
         k = [p[0] for p in PAGES].index(name)
         prev = f'<a href="{PAGES[k - 1][0]}">← {esc(self.title(k - 1))}</a>' if k > 0 else '<span></span>'
         nxt = f'<a href="{PAGES[k + 1][0]}">{esc(self.title(k + 1))} →</a>' if k + 1 < len(PAGES) else '<span></span>'
@@ -229,7 +231,7 @@ board size.</li>
         body += [t('<h2>5×7 p1: hetzelfde slotmotief</h2>', '<h2>5×7 p1: the same final motif</h2>'), fig,
                  t('<p>Op 5×7 p1 verschijnt hetzelfde slotmotief na 15 ply:</p>',
                    '<p>On 5×7 p1 the same final motif appears after 15 plies:</p>'), f'<p class="var">{h}</p>']
-        self.write('twee-tegen-een.html', '2 dammen tegen 1', '\n'.join(body), pg)
+        self.write('twee-tegen-een.html', '2 dammen tegen 1', '\n'.join(body), pg, '5x6')
 
     def drie(self):
         e = self.engine('8x8', '--width', 8, '--height', 8, '--parity', 1)
@@ -322,7 +324,7 @@ both.</p>''')]
                      t(f'<p>Met wit op de lange lijn wint wit altijd. Een van de langste winsten ({v[1:]} ply):</p>',
                        f'<p>With white on the long diagonal white always wins. One of the longest wins ({v[1:]} plies):</p>'),
                      f'<p class="var">{h}</p>']
-        self.write('drie-tegen-een.html', '3 dammen tegen 1', '\n'.join(body), pg)
+        self.write('drie-tegen-een.html', '3 dammen tegen 1', '\n'.join(body), pg, '8x8')
 
     @staticmethod
     def longest(e, nw, nb):
@@ -494,7 +496,7 @@ capture.</p>''')]
                   f'h10 allows a double capture (1. h10-g9 j8×h10×f8), and 1-1 is drawn. All moves: {mv}.</p>'),
                 figb, t(f'<p>Met zwart aan zet is dezelfde stelling verloren in {vb[1:]} ply:</p>',
                         f'<p>With black to move the same position is lost in {vb[1:]} plies:</p>'), f'<p class="var">{hb}</p>']
-        self.write('tien-zonder-veld.html', '10×10 met één veld weg', '\n'.join(body), pg)
+        self.write('tien-zonder-veld.html', '10×10 met één veld weg', '\n'.join(body), pg, 'h8')
 
 
 def main():

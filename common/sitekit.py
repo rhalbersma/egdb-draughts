@@ -151,6 +151,58 @@ class Page:
         pref = self.geoms[gid].get('pref', 'num')
         return f'<span class="mv" data-g="{gid}" data-n="{num}" data-a="{alg}">{num if pref == "num" else alg}</span>'
 
+    # ---- moves in running text: 13-10, 11×6, 2×9 (numeric) or c3-d4, j8×h10×f8 (algebraic) ----------------
+
+    MOVE_RE = re.compile(r'(?<![\w.,/])(\d{1,3}(?:[-x×]\d{1,3})+|[a-z]\d{1,2}(?:[-x×][a-z]\d{1,2})+)(?![\w/]|\.\d)')
+
+    def _token(self, tok, gid):
+        """a move in running text -> notation element, or None if it is not a move on this board"""
+        sq = self.geoms[gid]['sq']
+        name = {int(n): f'{chr(97 + f)}{r + 1}' for n, (f, r) in sq.items()}
+        num_of = {v: k for k, v in name.items()}
+        parts = re.split(r'[-x×]', tok)
+        seps = re.findall(r'[-x×]', tok)
+        if tok[0].isdigit():
+            nums = [int(x) for x in parts]
+            if any(n not in name for n in nums) or len(set(nums)) < 2:   # 6×6, 10×10: board sizes, not moves
+                return None
+            algs = [name[n] for n in nums]
+        else:
+            if any(x not in num_of for x in parts):
+                return None
+            algs, nums = parts, [num_of[x] for x in parts]
+        join = lambda xs: ''.join(str(x) + (seps[i].replace('x', '×') if i < len(seps) else '') for i, x in enumerate(xs))
+        num, alg = join(nums), join(algs)
+        pref = self.geoms[gid].get('pref', 'num')
+        return f'<span class="mv" data-g="{gid}" data-n="{num}" data-a="{alg}">{num if pref == "num" else alg}</span>'
+
+    def _convert(self, text, gid, authored='num'):
+        """authored: the notation the text is written in; only moves in that notation are converted (so that
+        material like 3-1 in a text with algebraic moves stays as it is)"""
+        def sub(m):
+            if m.group(1)[0].isdigit() != (authored == 'num'):
+                return m.group(0)
+            return self._token(m.group(1), gid) or m.group(0)
+        return self.MOVE_RE.sub(sub, text)
+
+    def prose(self, text, gid, authored='num'):
+        """plain text -> HTML in which the moves follow the notation switch"""
+        return self._convert(esc(text), gid, authored)
+
+    def prose_html(self, html_, gid, authored='num'):
+        """the same for an HTML fragment: only text outside tags, not inside notation elements, code or pre"""
+        out, skip = [], 0
+        for part in re.split(r'(<[^>]+>)', html_):
+            if part.startswith('<'):
+                if re.match(r'<(span class="mv"|code|pre)[\s>]', part):
+                    skip += 1
+                elif skip and re.match(r'</(span|code|pre)>', part):
+                    skip -= 1
+                out.append(part)
+            else:
+                out.append(part if skip else self._convert(part, gid, authored))
+        return ''.join(out)
+
     def child(self, prev, mv):
         return self.add(mv[2], squares(mv[3] if len(mv) > 3 else mv[0]), prev)
 
@@ -295,8 +347,9 @@ def write_page(path, title, nav, body, page, site_title, lang='nl'):
     Path(path).write_text(out)
 
 
-def md(text, base=''):
-    """the small part of Markdown used in the reports -> HTML; relative links point into the repository"""
+def md(text, base='', conv=None):
+    """the small part of Markdown used in the reports -> HTML; relative links point into the repository; conv
+    (optional) post-processes the HTML of every paragraph, e.g. Page.prose_html for the moves"""
     def link(m):
         url = m.group(2)
         if not re.match(r'https?:|#', url):
@@ -309,7 +362,7 @@ def md(text, base=''):
         s = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', s)
         s = re.sub(r'\*(.+?)\*', r'<em>\1</em>', s)
         s = re.sub(r'`(.+?)`', r'<code>\1</code>', s)
-        return s
+        return conv(s) if conv else s
     out, para, items = [], [], []
 
     def flush():

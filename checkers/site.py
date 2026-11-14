@@ -63,7 +63,9 @@ class Site:
             pg.use(gid, eng, eng.g)
         return pg
 
-    def write(self, name, title, body, pg):
+    def write(self, name, title, body, pg, gid=None):
+        if gid is not None:              # algebraic moves in the running text follow the notation switch
+            body = pg.prose_html(body, gid, 'alg')
         k = [p[0] for p in PAGES].index(name)
         prev = f'<a href="{PAGES[k - 1][0]}">← {esc(self.title(k - 1))}</a>' if k > 0 else '<span></span>'
         nxt = f'<a href="{PAGES[k + 1][0]}">{esc(self.title(k + 1))} →</a>' if k + 1 < len(PAGES) else '<span></span>'
@@ -190,7 +192,7 @@ rate 0.0% with no white king on the edge, 0.5% with three), and black holding bo
                    '901.577 stellingen die zonder slag bereikbaar zijn een slag afdwingen.</p>',
                    '<p>After 1. … e5-d4 white can keep its kings forever but never breaks out: black cannot force a '
                    'capture in any of the 901,577 positions reachable without captures.</p>')]
-        self.write('index.html', 'Overzicht', '\n'.join(body), pg)
+        self.write('index.html', 'Overzicht', '\n'.join(body), pg, k78)
 
     def vesting(self):
         k89, e89 = self.engine(9, 8, 1)
@@ -274,7 +276,7 @@ same side:</p>
                   f'<p>On 9×9 p0, freezing one corner already takes all three white kings (one on the shuttle square, one '
                   f'blocking the exit, one guarding the blocker), so the other black king simply shuttles ({v9}): ')
                 + f'{self.moves_list(pg, i9, legal9, "1. ")}.</p>']
-        self.write('vesting.html', 'De vesting in de dubbele hoek', '\n'.join(body), pg)
+        self.write('vesting.html', 'De vesting in de dubbele hoek', '\n'.join(body), pg, k89)
 
 
 def main():

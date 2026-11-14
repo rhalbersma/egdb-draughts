@@ -75,16 +75,15 @@ waard zijn.
 
 Op 5 november 2009 publiceerde Rein Halbersma de eerste perft-getallen voor het 6×6-bord (draad *Perft for arbitrary
 board sizes*, [damforum.nl/viewtopic.php?p=76677](https://damforum.nl/viewtopic.php?p=76677#p76677)); onze
-zettengenerator geeft precies dezelfde getallen tot diepte 11. In oktober 2011 loste hij alle 6×6-varianten zwak op (gewoon en *suicide*), met alpha-beta (PVS,
-iterative deepening en een transpositietabel) zonder eindspeldatabases, in minder dan een kwartier per variant.
-Internationaal 6×6 kwam uit op remise. Die remise werd gecontroleerd met twee zoektochten: met herhaling als winst
-voor wit gaf de beginstand W35, met herhaling als winst voor zwart L36, dus beide kanten kunnen een herhaling
-afdwingen. Omdat de zoektocht graph-history-interactie negeert, was dat geen sluitend bewijs. Het resultaat werd
+zettengenerator geeft precies dezelfde getallen tot diepte 11. In oktober 2011 deed een zoektocht met alpha-beta vanuit de beginstand, zonder databases
+en zonder filter voor graph-history-interactie, vermoeden dat de beginstand remise is (met herhaling als winst voor
+wit gaf de zoektocht W35, met herhaling als winst voor zwart L36). Een bewijs van de juistheid was er nog niet. Het
+resultaat werd
 op 19 oktober 2011 privé gedeeld met Ed Gilbert en voor het eerst gepubliceerd op 8 april 2017, op het World Draughts
 Forum (damforum.nl, voorheen laatste.info) in de draad *Search Algorithm*:
 [damforum.nl/viewtopic.php?p=118055](https://damforum.nl/viewtopic.php?p=118055#p118055).
 
-Jan-Jaap van Horssen loste 6×6 in 2016 opnieuw zwak op, nu wel sluitend. Hij meldde dat op 7 augustus 2017 op het
+Jan-Jaap van Horssen loste 6×6 in 2016 als eerste sluitend zwak op. Hij meldde dat op 7 augustus 2017 op het
 forum, in de draad *Breakthrough Draughts* ([damforum.nl/viewtopic.php?p=120014](https://damforum.nl/viewtopic.php?p=120014#p120014)),
 beschreef het op 13 augustus 2017 in de draad *Complexity of Checkers and Draughts on board sizes 6x6/8x8/10x10/12x12/14x14*
 ([damforum.nl/viewtopic.php?p=120080](https://damforum.nl/viewtopic.php?p=120080#p120080)) en publiceerde het in: *Complexity of checkers and draughts on different board sizes*,

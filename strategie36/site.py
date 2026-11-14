@@ -7,7 +7,13 @@
 """Static companion pages (GitHub Pages, docs/) for the check of "Strategie der 36 velden": text with
 clickable moves, a large board that follows them, and for every position the database value and all moves.
 
-usage: site.py path/to/egdb_6x6 [--out docs]
+The pages are generated locally (the databases are needed) into site/ (not tracked) and published on the
+gh-pages branch:
+
+    python3 strategie36/site.py data/egdb_6x6
+    git worktree add ../gh-pages gh-pages && cp site/* ../gh-pages/ && cd ../gh-pages && git add -A && git commit
+
+usage: site.py path/to/egdb_6x6 [--out site]
 """
 
 import argparse
@@ -213,7 +219,7 @@ def main():
     ap.add_argument('engine')
     ap.add_argument('--db', default=str(ROOT / 'data' / '6x6_le9.db'))
     ap.add_argument('--attach', default=str(ROOT / 'data' / '6x6_10.dtm'))
-    ap.add_argument('--out', default=str(ROOT / 'docs'))
+    ap.add_argument('--out', default=str(ROOT / 'site'))
     args = ap.parse_args()
     o = Oracle(Engine(args.engine, 10, args.db, args.attach))
     out = Path(args.out)
@@ -222,6 +228,15 @@ def main():
     page = (TEMPLATE.read_text().replace('{{TITLE}}', '7.7 Conclusie').replace('{{BODY}}', body)
             .replace('{{DATA}}', pg.data()))
     (out / 'voorbeeld-7-22.html').write_text(page)
+    (out / '.nojekyll').write_text('')
+    index = ('<h1>Strategie der 36 velden</h1><p>Herm Jan Brascamp, <em>Strategie der 36 velden</em> '
+             '(<a href="https://www.hijkendtc.nl/strategie-der-36-velden-hjb/">hijkendtc.nl</a>), nagerekend met exacte '
+             'eindspeldatabases voor het 6×6-bord.</p><ul><li><a href="voorbeeld-7-22.html">7.7 Conclusie: diagram '
+             '7.22</a></li></ul>')
+    ipg = Page(o)
+    fig, _ = ipg.diagram(START, 'de beginstand')
+    (out / 'index.html').write_text(TEMPLATE.read_text().replace('{{TITLE}}', 'Overzicht')
+                                    .replace('{{BODY}}', fig + index).replace('{{DATA}}', ipg.data()))
     print(f'{len(pg.pos)} positions', file=sys.stderr)
 
 

@@ -220,23 +220,26 @@ class Site:
     def write(self, name, title, body, pg, orig=ORIGINAL):
         write_page(self.out / name, title, self.nav(orig, name), body, pg, TITLE)
 
-    def refutation_html(self, pg, fen, start, cont, number, own, refute_at=None, stop_on_book=True):
-        r = refutation(self.eng, fen, cont, number, self.known, own, refute_at=refute_at, stop_on_book=stop_on_book)
-        plan = [((m[0],), '!' if i == r['refute'] else '') for i, m in enumerate(r['seq'])]
-        nbook = r['refute'] if r['refute'] is not None else r['nbook']
-        h, _, _, _ = pg.moves(fen, plan, number, fen[0] == 'B', 'm1', start, nbook=nbook)
-        if r['reached']:
-            d = r['reached'][0]
-            h += f' → <a href="{self.home[d]}.html#d{d}">diagram {d}</a> ({r["reached"][1]})'
-        elif r['ending'] == 'draw':
-            h += ' … D'
+    def claim_refutation(self, pg, fen, i0, did):
+        """the refutation of a wrong diagram claim, as in an annotated game: the book's line as the main line with
+        "?" at its first move that changes the result and the refutation as an aside; without such a move of the
+        book the refutation itself is the main line"""
+        cont, number = self.book.get(fen, ([], 1))
+        r = refutation(self.eng, fen, cont, number, self.known, did)
+        k = r['refute']
+        if k is None or k == 0:
+            return self.continuation(pg, r, 0, i0, fen, number, fen[0] == 'B', '!' if k == 0 else '', 'm1')
+        plan = [((m,), '') for m in cont[:k + 1]]
+        h, *_ = pg.moves(fen, plan, number, fen[0] == 'B', 'm1', i0, asides={
+            k: lambda prev, f, mnum, black: self.continuation(pg, r, k, prev, f, mnum, black, '!')})
         return h
 
     def diagram_block(self, pg, did, pid):
         d = self.diag[did]
         out = [f'<section class="diag" id="d{did}"><h3>Diagram {did}</h3>']
         home = self.home[did] == pid
-        mylines = [r for r in self.lines[pid] if r['start'] == did]
+        # lines added from the database (not from the book) are shown as refutations instead
+        mylines = [r for r in self.lines[pid] if r['start'] == did and not (r['note'] or '').startswith('database:')]
         if home:
             for stm in sides_to_show(did):
                 fen = stm + d['fen'][1:]
@@ -258,9 +261,7 @@ class Site:
                                f'<span class="val">{m[1]}</span>' for m in legal)
                 out.append(f'<p class="moves">{mv or "geen zetten"}</p>')
                 if ok is False:
-                    cont, number = self.book.get(fen, ([], 1))
-                    h = self.refutation_html(pg, fen, i0, cont, number, did)
-                    out.append(f'<div class="refute"><span class="t">weerlegging</span><br>{h}</div>')
+                    out.append(f'<p class="var">{self.claim_refutation(pg, fen, i0, did)}</p>')
             if d['note']:
                 out.insert(1, f'<p class="note">{esc(d["note"])}</p>')
         elif mylines:
@@ -305,8 +306,8 @@ class Site:
             body, last, end, n = book_line(pg, fen, r['text'], 'm2', i0, asides)
             if r['status'] == 'onjuist' and ref['refute'] is None:
                 b = (number + (n + (1 if fen[0] == 'B' else 0)) // 2)
-                tail = ' ' + pg.aside(last, self.continuation(pg, ref, ref['nbook'], last, end, b,
-                                                              (n + (1 if fen[0] == 'B' else 0)) % 2 == 1, ''))
+                h = self.continuation(pg, ref, ref['nbook'], last, end, b, (n + (1 if fen[0] == 'B' else 0)) % 2 == 1, '')
+                tail = ' ' + (h if h.startswith(' →') or h.startswith(' …') else pg.aside(last, h))
             e = r['end_fen'][0]
             if r['claim']:
                 ok = r.get('claim_ok')
@@ -322,10 +323,10 @@ class Site:
             out.append('<ul class="issues">' + ''.join(f'<li>{esc(x)}</li>' for x in notes) + '</ul>')
         return '\n'.join(out)
 
-    def continuation(self, pg, ref, k, prev, fen, mnum, black, mark):
-        """the database's line from ply k of a refutation as moves of an aside"""
+    def continuation(self, pg, ref, k, prev, fen, mnum, black, mark, cls='m3'):
+        """the database's line from ply k of a refutation as moves of an aside (or of the main line)"""
         plan = [((m[0],), mark if i == 0 else '') for i, m in enumerate(ref['seq'][k:])]
-        h, *_ = pg.moves(fen, plan, mnum, black, 'm3', prev, nbook=0, auto_aside=False)
+        h, *_ = pg.moves(fen, plan, mnum, black, cls, prev, nbook=0, auto_aside=False)
         if ref['reached']:
             d = ref['reached'][0]
             h += f' → <a href="{self.home[d]}.html#d{d}">diagram {d}</a> ({ref["reached"][1]})'

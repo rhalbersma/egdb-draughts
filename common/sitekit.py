@@ -181,6 +181,7 @@ class Page:
                        f'{num + " " if num else ""}{nota}</a>')
             if err and n < nbook:
                 if n in asides:
+                    self.seen.add((g, fen, mv[0]))
                     out.append(self.aside(prev, asides[n](prev, fen, mnum, black)))
                 elif auto_aside and (g, fen, mv[0]) not in self.seen:
                     self.seen.add((g, fen, mv[0]))

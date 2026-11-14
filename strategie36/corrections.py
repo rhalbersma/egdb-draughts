@@ -146,7 +146,22 @@ def render(r, stm, fen):
         head = f"variant naar diagram {r['reached'][0]} ({r['reached'][1]})"
     else:
         head = 'voortzetting na het boek'
-    return head, col, pos, prefix
+    refnum = f"{number(refute)}. {'… ' if black(refute) else ''}" if refute is not None else ''
+    return head, col, pos, prefix, refnum
+
+
+def book_lines(eng, pos, r, cont, refnum, claim, diagram):
+    """Diagrams: the book's claim for the position, and the book's move at the refutation with its value.
+    Variations (the claim is about the result after the book's move): the book's move with the claimed
+    result and with its value in the database. Values of a move are for the side that makes it."""
+    k = r['refute']
+    if k is None or k >= len(cont):
+        return [f'boek:  {claim} ❌']
+    mv = [m for m in eng.analyse(pos)[1] if m[0] == cont[k]][0]
+    nota = mv[0].replace('x', '×')
+    if diagram:
+        return [f'boek:  {claim} ❌', f"boekzet: {refnum}{nota}? {mv[1]}"]
+    return [f'boek:      {refnum}{nota:7} {claim} ❌', f"database:  {refnum}{nota + '?':7} {mv[1]}"]
 
 
 def side(stm):
@@ -210,9 +225,10 @@ def main():
             fen = stm + d['fen'][1:]
             cont, number = book.get(fen, ([], 1))
             r = refutation(eng, fen, cont, number, known, d['id'])
-            head, col, pos, prefix = render(r, stm, fen)
+            head, col, pos, prefix, refnum = render(r, stm, fen)
             ps = pos[0]
-            col = [f"{side(ps)} aan zet: {eng.analyse(pos)[0]}", f"boek:  {claim_label(sd['claim'], ps)} ❌", ''] + col
+            col = [f"{side(ps)} aan zet: {eng.analyse(pos)[0]}"] + book_lines(eng, pos, r, cont, refnum,
+                                                                        claim_label(sd['claim'], ps), True) + [''] + col
             note = f"*{d['note']}*" + (f"; boek: {prefix}" if prefix else '')
             out += [f"#### Diagram {d['id']}, {side(stm)} aan zet: {head}", '', note, '',
                     '```text', with_columns(pos, [col]), '```', '']
@@ -235,15 +251,15 @@ def main():
         m0 = re.match(r'\s*(\d+)\.', ln['text'])
         number = int(m0.group(1)) if m0 else 1
         r = refutation(eng, fen, cont, number, known, ln['start'], refute_at=refute_at, stop_on_book=False)
-        head, col, pos, prefix = render(r, stm, fen)
+        head, col, pos, prefix, refnum = render(r, stm, fen)
         e = ln['end_fen'][0]
         ps = pos[0]
         if r['refute'] is None and not r['reached']:
             head += f": {side(e)} aan zet {ln['end_val']}"
             col = [f"{side(e)} aan zet: {ln['end_val']}", f"boek:  {claim_label(ln['claim'], e)} ❌", ''] + col
         else:
-            col = [f"{side(ps)} aan zet: {eng.analyse(pos)[0]}", f"einde boek: {side(e)} aan zet {ln['end_val']}",
-                   f"boek:  {claim_label(ln['claim'], e)} ❌", ''] + col
+            col = [f"{side(ps)} aan zet: {eng.analyse(pos)[0]}"] + book_lines(eng, pos, r, cont, refnum,
+                                                                        claim_label(ln['claim'], ps), False) + [''] + col
         text = ln['text'] + (f" — {ln['note']}" if ln['note'] else '')
         out += [f"#### Sectie {ln['section']}, vanaf diagram {ln['start']}: {head}", '', f'*{text}*', '',
                 '```text', with_columns(pos, [col]), '```', '']

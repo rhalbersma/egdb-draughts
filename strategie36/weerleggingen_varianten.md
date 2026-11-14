@@ -6,8 +6,8 @@ Voor elke variant waarvan de eindclaim niet klopt: de claim van het boek gaat ov
 
 ```text
     +-------------+     +-------------------+     wit aan zet: W7
-  6 |   .   .   b |     |     1     2     3 |     einde boek: zwart aan zet D
-  5 | .   .   .   |     |  4     5     6    |     boek:  L ❌
+  6 |   .   .   b |     |     1     2     3 |     boek:      2. 7-4     W ❌
+  5 | .   .   .   |     |  4     5     6    |     database:  2. 7-4?    D
   4 |   w   .   . |     |     7     8     9 |
   3 | .   B   .   |     | 10    11    12    |       2.  15-18!*    11×4
   2 |   .   w   W |     |    13    14    15 |       3.  14-11*     4×14
@@ -38,8 +38,8 @@ Voor elke variant waarvan de eindclaim niet klopt: de claim van het boek gaat ov
 
 ```text
     +-------------+     +-------------------+     wit aan zet: W35
-  6 |   .   .   . |     |     1     2     3 |     einde boek: zwart aan zet D
-  5 | b   b   .   |     |  4     5     6    |     boek:  L ❌
+  6 |   .   .   . |     |     1     2     3 |     boek:      6. 17-14   W ❌
+  5 | b   b   .   |     |  4     5     6    |     database:  6. 17-14?  D
   4 |   .   b   b |     |     7     8     9 |
   3 | .   .   .   |     | 10    11    12    |       6.  18-14!*    9-12
   2 |   w   .   w |     |    13    14    15 |       7.  14×9*      4-7
@@ -71,11 +71,11 @@ Voor elke variant waarvan de eindclaim niet klopt: de claim van het boek gaat ov
 
 ```text
     +-------------+     +-------------------+     zwart aan zet: L52
-  6 |   b   .   b |     |     1     2     3 |     einde boek: wit aan zet W51
-  5 | b   b   .   |     |  4     5     6    |     boek:  D ❌
-  4 |   .   .   b |     |     7     8     9 |
-  3 | .   .   .   |     | 10    11    12    |       3.  …          5-8
-  2 |   w   w   w |     |    13    14    15 |       → diagram 7.4 (W51)
+  6 |   b   .   b |     |     1     2     3 |     boek:  D ❌
+  5 | b   b   .   |     |  4     5     6    |
+  4 |   .   .   b |     |     7     8     9 |       3.  …          5-8
+  3 | .   .   .   |     | 10    11    12    |       → diagram 7.4 (W51)
+  2 |   w   w   w |     |    13    14    15 |
   1 | .   w   w   |     | 16    17    18    |
     +-------------+     +-------------------+
       a b c d e f
@@ -104,8 +104,8 @@ Voor elke variant waarvan de eindclaim niet klopt: de claim van het boek gaat ov
 
 ```text
     +-------------+     +-------------------+     zwart aan zet: D
-  6 |   .   .   . |     |     1     2     3 |     einde boek: wit aan zet W13
-  5 | b   b   .   |     |  4     5     6    |     boek:  D ❌
+  6 |   .   .   . |     |     1     2     3 |     boek:      7. … 5-7     D ❌
+  5 | b   b   .   |     |  4     5     6    |     database:  7. … 5-7?    L14
   4 |   .   b   w |     |     7     8     9 |
   3 | .   .   .   |     | 10    11    12    |       7.  …          4-7!*
   2 |   w   .   w |     |    13    14    15 |       → diagram 7.14 (D)

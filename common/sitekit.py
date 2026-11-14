@@ -320,7 +320,8 @@ class Page:
 
 
 UI = {
-    'nl': {'back': 'Vorige stelling (←)', 'play': 'Variant afspelen / pauzeren', 'fwd': 'Volgende stelling (→)',
+    'nl': {'credit': 'De vorm van de analyses is ontleend aan die van Wieger Wesselink op <a href="https://10x10.org">10x10.org</a>.',
+           'back': 'Vorige stelling (←)', 'play': 'Variant afspelen / pauzeren', 'fwd': 'Volgende stelling (→)',
            'start': 'Begin van de variant (Home)', 'end': 'Einde van de variant (End)',
            'nums': 'Veldnamen op het bord aan/uit', 'nota': 'Wissel tussen numerieke (1, 2, …) en algebraïsche (a1, b2, …) notatie',
            'js': {'white': 'wit', 'black': 'zwart', 'tomove': 'aan zet', 'nomoves': 'geen zetten: verloren'},
@@ -334,7 +335,8 @@ UI = {
                      'stelling vóór die zet), <span style="color:var(--only)">*</span> = enige zet die de winst of de '
                      'remise behoudt. De knop # zet de veldnamen op het grote bord aan of uit; de knop met het bereik van de veldnamen (bv. 1…18 of '
                      'a1…f6 op 6×6) wisselt tussen numerieke en algebraïsche notatie, ook in de tekst.'},
-    'en': {'back': 'Previous position (←)', 'play': 'Play / pause the line', 'fwd': 'Next position (→)',
+    'en': {'credit': 'The form of the analyses is taken from those by Wieger Wesselink on <a href="https://10x10.org">10x10.org</a>.',
+           'back': 'Previous position (←)', 'play': 'Play / pause the line', 'fwd': 'Next position (→)',
            'start': 'Start of the line (Home)', 'end': 'End of the line (End)',
            'nums': 'Square names on the board on/off', 'nota': 'Switch between numeric (1, 2, …) and algebraic (a1, b2, …) notation',
            'js': {'white': 'white', 'black': 'black', 'tomove': 'to move', 'nomoves': 'no moves: lost'},
@@ -399,7 +401,7 @@ def write_page(path, title, nav, body, page, site_title, lang='nl'):
     alt = re.search(r'class="flag" href="([^"]+)"', nav)
     tpl = tpl.replace('{{STICKY}}', sticky_lang(site_key, lang, alt.group(1) if alt else ''))
     tpl = (tpl.replace('{{LANG}}', lang).replace('{{T_BACK}}', u['back']).replace('{{T_PLAY}}', u['play'])
-           .replace('{{T_FWD}}', u['fwd']).replace('{{T_START}}', u['start']).replace('{{T_END}}', u['end']).replace('{{T_NUMS}}', u['nums']).replace('{{T_NOTA}}', u['nota'])
+           .replace('{{T_FWD}}', u['fwd']).replace('{{CREDIT}}', u['credit']).replace('{{T_START}}', u['start']).replace('{{T_END}}', u['end']).replace('{{T_NUMS}}', u['nums']).replace('{{T_NOTA}}', u['nota'])
            .replace('{{LEGEND}}', u['legend']).replace('{{UI}}', json.dumps(u['js'], ensure_ascii=False)))
     geoms = json.dumps(page.geoms, separators=(',', ':'))
     out = (tpl.replace('{{TITLE}}', esc(title)).replace('{{SITE}}', esc(site_title)).replace('{{NAV}}', nav)

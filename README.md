@@ -12,7 +12,8 @@ This page collects the programs, the tables and the most interesting findings.
 
 > **Companion sites** with clickable diagrams: [Strategie der 36 velden](https://rhalbersma.github.io/egdb-draughts/strategie_der_36_velden/) ·
 > [Drie tegen een is gemeen](https://rhalbersma.github.io/egdb-draughts/drie_tegen_een_is_gemeen/) ·
-> [English checkers 3 vs 2](https://rhalbersma.github.io/egdb-draughts/checkers/)
+> [English checkers 3 vs 2](https://rhalbersma.github.io/egdb-draughts/checkers/).
+> The form of the analyses is taken from those by Wieger Wesselink on [10x10.org](https://10x10.org).
 >
 > **6×6 with men and kings**
 >

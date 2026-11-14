@@ -55,6 +55,9 @@ TEXT = {
            'The programs, databases and reports', 'nl/index.html', 'Nederlands'),
 }
 
+CREDIT = {'nl': 'De vorm van de analyses is ontleend aan die van Wieger Wesselink op <a href="https://10x10.org">10x10.org</a>.',
+          'en': 'The form of the analyses is taken from those by Wieger Wesselink on <a href="https://10x10.org">10x10.org</a>.'}
+
 OLD = ['index.html', 'opening.html', 'voorbeeld-7-22.html'] + [f'{p}.html' for p in (
     'h1', 'h2', 'h3', 'h3-3', 'h4', 'h5a', 'h5b', 'h5c', 'h5d', 'h6a', 'h6b', 'h7', 'h6a-opl', 'h6-opl1', 'h6-opl2',
     'h6-opl3', 'h7-2', 'h7-3', 'h7-4', 'h7-5', 'h7-6', 'h7-7', 'h8', 'h9')]
@@ -99,7 +102,7 @@ a.flag:hover, a.flag:focus-visible { opacity: 1; }
 <div class="hub">
 {cards}
 </div>
-<p class="src">{src}: <a href="https://github.com/rhalbersma/egdb-draughts">github.com/rhalbersma/egdb-draughts</a>.</p>
+<p class="src">{src}: <a href="https://github.com/rhalbersma/egdb-draughts">github.com/rhalbersma/egdb-draughts</a>. {credit}</p>
 </main>
 </body>
 </html>
@@ -120,7 +123,7 @@ def main():
         cards = '\n'.join(f'<a href="{u}"><strong>{t}</strong><span>{d}</span></a>' for u, t, d in SITES[lang])
         page = PAGE
         for k, v in (('{cards}', cards), ('{lang}', lang), ('{h1}', h1), ('{intro}', intro), ('{src}', src),
-                     ('{langs}', lang_link(lang, alt)), ('{sticky}', sticky_lang('hub', lang, alt))):
+                     ('{langs}', lang_link(lang, alt)), ('{credit}', CREDIT[lang]), ('{sticky}', sticky_lang('hub', lang, alt))):
             page = page.replace(k, v)
         d = out if lang == 'en' else out / 'nl'          # English by default, Dutch in nl/
         d.mkdir(parents=True, exist_ok=True)

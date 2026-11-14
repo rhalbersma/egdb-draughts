@@ -125,6 +125,7 @@ section.diag h3 { font-size: 19px; margin: 6px 0 4px; }
 @media (max-width: 760px) { .toc .h { display: block; } }
 .toc .cnt { font: 13px system-ui, sans-serif; color: var(--muted); margin-left: 8px; }
 .toc .orig { font: 13px system-ui, sans-serif; margin-left: 8px; }
+.credit { margin-top: 32px; }
 .pager { display: flex; justify-content: space-between; font: 14px system-ui, sans-serif; margin-top: 40px; clear: both; }
 .pager a, .toc a, .src a, main p a:not(.m1):not(.m2) { color: var(--link); }
 .optree h3 { font-size: 18px; margin: 22px 0 4px; }
@@ -176,6 +177,7 @@ table.tbl th { color: var(--muted); font-weight: 600; }
   </aside>
   <main>
 {{BODY}}
+<p class="src credit">{{CREDIT}}</p>
 <p class="legend">{{LEGEND}}</p>
   </main>
 </div>

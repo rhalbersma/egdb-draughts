@@ -223,8 +223,8 @@ def main():
         e = ln['end_fen'][0]
         if r['refute'] is None and not r['reached']:
             head += f": {side(e)} aan zet {ln['end_val']}"
-        col = [f"{side(stm)} aan zet: {ln['plies'][0]['val_before']}", f"einde: {side(e)} aan zet {ln['end_val']}  "
-               f"(boek: {claim_label(ln['claim'], e)} ❌)", ''] + col
+        col = [f"{side(stm)} aan zet: {ln['plies'][0]['val_before']}", f"einde: {side(e)} aan zet {ln['end_val']}",
+               f"boek:  {claim_label(ln['claim'], e)} ❌", ''] + col
         text = ln['text'] + (f" — {ln['note']}" if ln['note'] else '')
         out += [f"#### Sectie {ln['section']}, vanaf diagram {ln['start']}: {head}", '', f'*{text}*', '',
                 '```text', with_columns(r['after'], [col]), '```', '']

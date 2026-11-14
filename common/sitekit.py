@@ -256,9 +256,25 @@ UI = {
 }
 
 
+FLAG_NL = ('<svg viewBox="0 0 9 6" aria-hidden="true"><rect width="9" height="6" fill="#21468B"/>'
+           '<rect width="9" height="4" fill="#fff"/><rect width="9" height="2" fill="#AE1C28"/></svg>')
+FLAG_UK = ('<svg viewBox="0 0 60 30" aria-hidden="true"><clipPath id="uk-t"><path d="M30,15h30v15zv15h-30zh-30v-15zv-15h30z"/>'
+           '</clipPath><path d="M0,0v30h60v-30z" fill="#012169"/><path d="M0,0L60,30M60,0L0,30" stroke="#fff" '
+           'stroke-width="6"/><path d="M0,0L60,30M60,0L0,30" clip-path="url(#uk-t)" stroke="#C8102E" stroke-width="4"/>'
+           '<path d="M30,0v30M0,15h60" stroke="#fff" stroke-width="10"/><path d="M30,0v30M0,15h60" stroke="#C8102E" '
+           'stroke-width="6"/></svg>')
+
+
 def lang_link(lang, alt):
-    """the switch to the same page in the other language"""
-    return f'<a class="lang" href="{alt}" hreflang="{"en" if lang == "nl" else "nl"}">{"English" if lang == "nl" else "Nederlands"}</a>'
+    """the language switch: two flags, the current language marked, the other one a link to the same page"""
+    flags = []
+    for code, name, flag in (('nl', 'Nederlands', FLAG_NL), ('en', 'English', FLAG_UK)):
+        if code == lang:
+            flags.append(f'<span class="flag cur" title="{name}" aria-current="true">{flag}</span>')
+        else:
+            flags.append(f'<a class="flag" href="{alt}" hreflang="{code}" lang="{code}" title="{name}" '
+                         f'aria-label="{name}">{flag}</a>')
+    return f'<span class="langs">{"".join(flags)}</span>'
 
 
 def write_page(path, title, nav, body, page, site_title, lang='nl'):

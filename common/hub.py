@@ -11,7 +11,11 @@ usage: hub.py [--out _site]
 """
 
 import argparse
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from sitekit import lang_link   # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -79,13 +83,16 @@ a { color: var(--link); }
 .hub strong { display: block; font-size: 20px; margin-bottom: 6px; color: var(--link); }
 .hub span { font-size: 15px; color: var(--muted); }
 .src { font: 14px system-ui, sans-serif; color: var(--muted); }
-.lang { float: right; font: 14px system-ui, sans-serif; color: var(--muted); border: 1px solid var(--rule); border-radius: 6px;
-  padding: 2px 8px; text-decoration: none; }
+.langs { float: right; display: flex; gap: 6px; }
+.flag { display: inline-flex; width: 26px; height: 17px; border-radius: 3px; overflow: hidden; opacity: .45; outline: 1px solid var(--rule); }
+.flag svg { width: 100%; height: 100%; display: block; }
+a.flag:hover, a.flag:focus-visible { opacity: 1; }
+.flag.cur { opacity: 1; outline: 2px solid var(--muted); outline-offset: 1px; }
 </style>
 </head>
 <body>
 <main>
-<a class="lang" href="{alt}">{altname}</a>
+{langs}
 <h1>{h1}</h1>
 <p>{intro}</p>
 <div class="hub">
@@ -112,7 +119,7 @@ def main():
         cards = '\n'.join(f'<a href="{u}"><strong>{t}</strong><span>{d}</span></a>' for u, t, d in SITES[lang])
         page = PAGE
         for k, v in (('{cards}', cards), ('{lang}', lang), ('{h1}', h1), ('{intro}', intro), ('{src}', src),
-                     ('{alt}', alt), ('{altname}', altname)):
+                     ('{langs}', lang_link(lang, alt))):
             page = page.replace(k, v)
         d = out if lang == 'nl' else out / 'en'
         d.mkdir(parents=True, exist_ok=True)

@@ -22,13 +22,17 @@ from claims import DIAGRAMS, LINES  # noqa: E402
 
 
 class Engine:
-    def __init__(self, exe, slicemax, db=None):
+    def __init__(self, exe, slicemax, db=None, attach=None):
         self.p = subprocess.Popen([exe], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, bufsize=1)
         self.cache = {}
         if db:
             out = self.cmd(f'load {db}')
             if not out or not out[0].startswith('load ok'):
                 raise RuntimeError(f'cannot load {db}: {out}')
+        if attach:
+            out = self.cmd(f'attach {attach}')
+            if not out or not out[0].startswith('attach ok'):
+                raise RuntimeError(f'cannot attach {attach}: {out}')
         self.cmd(f'slicemax {slicemax}')
 
     def cmd(self, line):
@@ -105,10 +109,7 @@ def parse_line(text):
 
 
 def fmt_val(v):
-    if v == 'D':
-        return 'remise'
-    n = int(v[1:])
-    return ('winst' if v[0] == 'W' else 'verlies') + f' in {n}'
+    return v
 
 
 def check_line(eng, sec, start, text, claim, note):
@@ -206,7 +207,7 @@ def check_diagram(eng, did):
         best = outcome(val)
         keeping = [(m[0], m[1]) for m in legal if outcome(m[1]) == best]
         rec['sides'][stm] = {'claim': claim, 'val': val, 'result': res, 'ok': claim_ok(claim, res),
-                             'keeping': keeping, 'nmoves': len(legal)}
+                             'keeping': keeping, 'moves': [(m[0], m[1]) for m in legal], 'nmoves': len(legal)}
     return rec
 
 
@@ -214,11 +215,13 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('engine')
     ap.add_argument('--slicemax', type=int, default=8)
-    ap.add_argument('--db', default=str(Path(__file__).resolve().parent.parent / 'data' / '6x6_le8.db'))
+    ap.add_argument('--db', default=str(Path(__file__).resolve().parent.parent / 'data' / '6x6_le9.db'))
+    ap.add_argument('--attach', default=str(Path(__file__).resolve().parent.parent / 'data' / '6x6_10.dtm'))
     ap.add_argument('--json', default=str(Path(__file__).resolve().parent / 'results.json'))
     ap.add_argument('--maxpieces', type=int, default=12, help='skip diagrams and lines that start with more pieces')
     args = ap.parse_args()
-    eng = Engine(args.engine, args.slicemax, args.db if Path(args.db).exists() else None)
+    eng = Engine(args.engine, args.slicemax, args.db if Path(args.db).exists() else None,
+                 args.attach if Path(args.attach).exists() else None)
     t0 = time.time()
     diagrams = []
     def npieces(fen):

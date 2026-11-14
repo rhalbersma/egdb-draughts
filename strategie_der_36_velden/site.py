@@ -514,6 +514,10 @@ class Site:
         tbl = ''.join(f'<tr><td>{a}</td><td>{pg.prose(b, "6x6")}</td><td>{pg.prose(c, "6x6")}</td></tr>' for a, b, c in rows)
         body.append(self.t('<h2>Eerdere oplossingen</h2>', '<h2>Earlier solutions</h2>'))
         body.append(pg.prose_html(self.t(
+            '<p>Op 5 november 2009 publiceerde Rein Halbersma de eerste perft-getallen voor het 6×6-bord (draad '
+            '<a href="https://damforum.nl/viewtopic.php?p=76677#p76677"><em>Perft for arbitrary board sizes</em></a>: 5, 25, '
+            '106, 369, 1.301, 4.214, 12.912, 39.526, 113.614, 329.982, 933.564 tot diepte 11); onze zettengenerator geeft '
+            'precies dezelfde getallen.</p>'
             '<p>In oktober 2011 loste Rein Halbersma alle 6×6-varianten zwak op, met alpha-beta en een transpositietabel '
             'maar zonder eindspeldatabases: internationaal 6×6 is remise. Met herhaling als winst voor wit gaf de '
             'beginstand W35, met herhaling als winst voor zwart L36, dus beide kanten kunnen een herhaling afdwingen; '
@@ -521,6 +525,10 @@ class Site:
             'Ed Gilbert (19 oktober 2011) en voor het eerst gepubliceerd op 8 april 2017, op het World Draughts Forum '
             '(damforum.nl, voorheen laatste.info) in de draad <a href="https://damforum.nl/viewtopic.php?p=118055#p118055">'
             '<em>Search Algorithm</em></a>.</p>',
+            '<p>On November 5, 2009 Rein Halbersma published the first perft numbers for the 6×6 board (thread '
+            '<a href="https://damforum.nl/viewtopic.php?p=76677#p76677"><em>Perft for arbitrary board sizes</em></a>: 5, 25, '
+            '106, 369, 1,301, 4,214, 12,912, 39,526, 113,614, 329,982, 933,564 up to depth 11); our move generator gives '
+            'exactly the same numbers.</p>'
             '<p>In October 2011 Rein Halbersma weakly solved all 6×6 variants, with alpha-beta and a transposition table '
             'but without endgame databases: international 6×6 is a draw. Scoring a repetition as a white win gave W35 '
             'for the start position, scoring it as a black win gave L36, so both sides can force a repetition; since '

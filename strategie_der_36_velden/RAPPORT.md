@@ -73,7 +73,9 @@ waard zijn.
 
 ### Eerdere oplossingen: Halbersma (2011) en Van Horssen (2018)
 
-In oktober 2011 loste Rein Halbersma alle 6×6-varianten zwak op (gewoon en *suicide*), met alpha-beta (PVS,
+Op 5 november 2009 publiceerde Rein Halbersma de eerste perft-getallen voor het 6×6-bord (draad *Perft for arbitrary
+board sizes*, [damforum.nl/viewtopic.php?p=76677](https://damforum.nl/viewtopic.php?p=76677#p76677)); onze
+zettengenerator geeft precies dezelfde getallen tot diepte 11. In oktober 2011 loste hij alle 6×6-varianten zwak op (gewoon en *suicide*), met alpha-beta (PVS,
 iterative deepening en een transpositietabel) zonder eindspeldatabases, in minder dan een kwartier per variant.
 Internationaal 6×6 kwam uit op remise. Die remise werd gecontroleerd met twee zoektochten: met herhaling als winst
 voor wit gaf de beginstand W35, met herhaling als winst voor zwart L36, dus beide kanten kunnen een herhaling
@@ -300,6 +302,11 @@ in het boek: veld 1 = b6, veld 16 = a1, en de lange lijn is 16-13-11-8-6-3. Wit 
     graph-history-problemen.
 
 ### Validatie
+
+* De zettengenerator geeft vanuit de beginstand exact de perft-getallen tot diepte 11 die Rein Halbersma op 5 november
+  2009 op het World Draughts Forum publiceerde (draad *Perft for arbitrary board sizes*,
+  [damforum.nl/viewtopic.php?p=76677](https://damforum.nl/viewtopic.php?p=76677#p76677)): 5, 25, 106, 369, 1.301,
+  4.214, 12.912, 39.526, 113.614, 329.982 en 933.564.
 
 * De aantallen stellingen tot en met 3, 4, 5, 6 en 7 stukken komen exact overeen met die van Van Horssen (ICGA
   Journal 40, 2018); tot en met 8 stukken op de 7-tegen-1-stellingen na, die hij terecht weglaat.

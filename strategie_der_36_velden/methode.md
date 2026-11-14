@@ -43,6 +43,11 @@ in het boek: veld 1 = b6, veld 16 = a1, en de lange lijn is 16-13-11-8-6-3. Wit 
 
 ### Validatie
 
+* De zettengenerator geeft vanuit de beginstand exact de perft-getallen tot diepte 11 die Rein Halbersma op 5 november
+  2009 op het World Draughts Forum publiceerde (draad *Perft for arbitrary board sizes*,
+  [damforum.nl/viewtopic.php?p=76677](https://damforum.nl/viewtopic.php?p=76677#p76677)): 5, 25, 106, 369, 1.301,
+  4.214, 12.912, 39.526, 113.614, 329.982 en 933.564.
+
 * De aantallen stellingen tot en met 3, 4, 5, 6 en 7 stukken komen exact overeen met die van Van Horssen (ICGA
   Journal 40, 2018); tot en met 8 stukken op de 7-tegen-1-stellingen na, die hij terecht weglaat.
 

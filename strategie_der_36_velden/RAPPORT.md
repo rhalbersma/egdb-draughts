@@ -78,8 +78,8 @@ iterative deepening en een transpositietabel) zonder eindspeldatabases, in minde
 Internationaal 6×6 kwam uit op remise. Die remise werd gecontroleerd met twee zoektochten: met herhaling als winst
 voor wit gaf de beginstand W35, met herhaling als winst voor zwart L36, dus beide kanten kunnen een herhaling
 afdwingen. Omdat de zoektocht graph-history-interactie negeert, was dat geen sluitend bewijs. Het resultaat werd
-op 19 oktober 2011 gedeeld met Ed Gilbert en op het forum gemeld. Op het World Draughts Forum (damforum.nl, voorheen
-laatste.info) staat de tekst in het bericht van 8 april 2017 in de draad *Search Algorithm*:
+op 19 oktober 2011 privé gedeeld met Ed Gilbert en voor het eerst gepubliceerd op 8 april 2017, op het World Draughts
+Forum (damforum.nl, voorheen laatste.info) in de draad *Search Algorithm*:
 [damforum.nl/viewtopic.php?p=118055](https://damforum.nl/viewtopic.php?p=118055#p118055).
 
 Jan-Jaap van Horssen loste 6×6 daarna opnieuw zwak op, nu wel sluitend: *Complexity of checkers and draughts on different board sizes*,

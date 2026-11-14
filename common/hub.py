@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from sitekit import lang_link   # noqa: E402
+from sitekit import lang_link, sticky_lang   # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -27,14 +27,14 @@ SITES = {
         ('../drie_tegen_een_is_gemeen/', 'Drie tegen een is gemeen',
          'Twee en drie dammen tegen één op borden van elke afmeting: de winst op 5×6, de families, de vangstellingen en '
          '10×10 met één veld weg.'),
-        ('../checkers/nl/', 'Checkers: 3 dammen tegen 2',
+        ('../checkers/', 'Checkers: 3 dammen tegen 2',
          'Korte dammen op borden van elke afmeting: blokkades, de vesting in de dubbele hoek en de oppositie.'),
     ],
     'en': [
-        ('strategie_der_36_velden/en/', 'Strategie der 36 velden',
+        ('strategie_der_36_velden/', 'Strategie der 36 velden',
          'Herm Jan Brascamp\'s series on the 6×6 board (2016), checked chapter by chapter with exact databases up to 10 '
          'pieces; plus the solution of the start position: a draw.'),
-        ('drie_tegen_een_is_gemeen/en/', 'Drie tegen een is gemeen',
+        ('drie_tegen_een_is_gemeen/', 'Drie tegen een is gemeen',
          'Two and three kings against one on boards of any size: the win on 5×6, the families, the trapping positions '
          'and 10×10 with one square removed.'),
         ('checkers/', 'Checkers: 3 kings against 2',
@@ -64,6 +64,7 @@ PAGE = '''<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+{sticky}
 <title>egdb-draughts · {h1}</title>
 <style>
 :root { --bg: #fbfaf7; --fg: #1d1d1b; --muted: #6b6a66; --rule: #e3e0d8; --panel: #f3f1ec; --link: #1f5f8b; }
@@ -119,7 +120,7 @@ def main():
         cards = '\n'.join(f'<a href="{u}"><strong>{t}</strong><span>{d}</span></a>' for u, t, d in SITES[lang])
         page = PAGE
         for k, v in (('{cards}', cards), ('{lang}', lang), ('{h1}', h1), ('{intro}', intro), ('{src}', src),
-                     ('{langs}', lang_link(lang, alt))):
+                     ('{langs}', lang_link(lang, alt)), ('{sticky}', sticky_lang('hub', lang, alt))):
             page = page.replace(k, v)
         d = out if lang == 'en' else out / 'nl'          # English by default, Dutch in nl/
         d.mkdir(parents=True, exist_ok=True)

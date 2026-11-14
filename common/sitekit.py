@@ -365,14 +365,37 @@ def lang_link(lang, alt):
         if code == lang:
             flags.append(f'<span class="flag cur" title="{name}" aria-current="true">{flag}</span>')
         else:
-            flags.append(f'<a class="flag" href="{alt}" hreflang="{code}" lang="{code}" title="{name}" '
-                         f'aria-label="{name}">{flag}</a>')
+            flags.append(f'<a class="flag" href="{alt}" hreflang="{code}" lang="{code}" data-setlang="{code}" '
+                         f'title="{name}" aria-label="{name}">{flag}</a>')
     return f'<span class="langs">{"".join(flags)}</span>'
+
+
+STICKY_LANG = """<script>
+// the language of a site: its default, unless the visitor chose the other one on that site (remembered per site)
+(function () {
+  const key = 'lang:' + SITEKEY;
+  try { const pref = localStorage.getItem(key); if (pref && pref !== PAGELANG && ALTLANG) location.replace(ALTLANG + location.hash); } catch (e) {}
+  document.addEventListener('click', function (e) {
+    const a = e.target.closest && e.target.closest('a[data-setlang]');
+    if (a) { try { localStorage.setItem(key, a.dataset.setlang); } catch (err) {} }
+  });
+})();
+</script>"""
+
+
+def sticky_lang(site_key, lang, alt):
+    """the script that keeps the visitor's choice of language within a site"""
+    return (STICKY_LANG.replace('SITEKEY', json.dumps(site_key)).replace('PAGELANG', json.dumps(lang))
+            .replace('ALTLANG', json.dumps(alt)))
 
 
 def write_page(path, title, nav, body, page, site_title, lang='nl'):
     tpl = TEMPLATE.read_text()
     u = UI[lang]
+    path = Path(path)
+    site_key = path.parent.parent.name if path.parent.name in ('en', 'nl') else path.parent.name
+    alt = re.search(r'class="flag" href="([^"]+)"', nav)
+    tpl = tpl.replace('{{STICKY}}', sticky_lang(site_key, lang, alt.group(1) if alt else ''))
     tpl = (tpl.replace('{{LANG}}', lang).replace('{{T_BACK}}', u['back']).replace('{{T_PLAY}}', u['play'])
            .replace('{{T_FWD}}', u['fwd']).replace('{{T_NUMS}}', u['nums']).replace('{{T_NOTA}}', u['nota'])
            .replace('{{LEGEND}}', u['legend']).replace('{{UI}}', json.dumps(u['js'], ensure_ascii=False)))

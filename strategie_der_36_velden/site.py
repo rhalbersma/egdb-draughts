@@ -159,12 +159,12 @@ class Oracle:
         return None
 
 
-def book_line(pg, fen, text, cls='m1', start=None):
+def book_line(pg, fen, text, cls='m1', start=None, asides=None):
     """the moves of a line of the book (book notation) from fen as links"""
     black_first, mv = parse_line(text)
     m0 = re.match(r'\s*(\d+)\.', text)
     plan = [((f'{f}-{t}', f'{f}x{t}'), marks) for f, t, cap, marks, only in mv]
-    return pg.moves(fen, plan, int(m0.group(1)) if m0 else 1, black_first, cls, start)
+    return pg.moves(fen, plan, int(m0.group(1)) if m0 else 1, black_first, cls, start, asides=asides)
 
 
 def claim_label(claim, stm):
@@ -280,12 +280,33 @@ class Site:
             starts[fen] = pg.add(fen)
         i0 = starts[fen]
         icon = STATUS[r['status']]
-        notes = r['issues'] + r.get('info', []) + [f'bevestigd: {c}' for c in r.get('confirmed', [])]
+        # remarks about moves that change the result are shown in the line itself ("?" and an aside)
+        notes = [x for x in r['issues'] + r.get('info', []) if 'behoudend' not in x and 'verliest zelfs' not in x]
+        notes += [f'bevestigd: {c}' for c in r.get('confirmed', [])
+                  if 'terecht als fout gemarkeerd' not in c and 'inderdaad de enige' not in c]
+        m0 = re.match(r'\s*(\d+)\.', r['text'])
+        number = int(m0.group(1)) if m0 else 1
+        tail = ''
         if 'illegal' in r:
             body = f'<em>{esc(r["text"])}</em>'
             verdict = badge(None, '✏️ notatiefout')
         else:
-            body, _, end, _ = book_line(pg, fen, r['text'], 'm2', i0)
+            asides = {}
+            if r['status'] == 'onjuist':
+                cont = [p['move'] for p in r['plies']]
+                absv = [absolute(p['fen'], p['val_before']) for p in r['plies']]
+                okk = [i for i, a in enumerate(absv) if agrees(r['claim'], a)]
+                ref = refutation(self.eng, fen, cont, number, self.known, r['start'],
+                                 refute_at=okk[-1] if okk else len(cont), stop_on_book=False)
+                k = ref['refute']
+                if k is not None:
+                    asides[k] = lambda prev, f, mnum, black, ref=ref, k=k: self.continuation(pg, ref, k, prev, f, mnum,
+                                                                                         black, '!')
+            body, last, end, n = book_line(pg, fen, r['text'], 'm2', i0, asides)
+            if r['status'] == 'onjuist' and ref['refute'] is None:
+                b = (number + (n + (1 if fen[0] == 'B' else 0)) // 2)
+                tail = ' ' + pg.aside(last, self.continuation(pg, ref, ref['nbook'], last, end, b,
+                                                              (n + (1 if fen[0] == 'B' else 0)) % 2 == 1, ''))
             e = r['end_fen'][0]
             if r['claim']:
                 ok = r.get('claim_ok')
@@ -293,21 +314,24 @@ class Site:
                                     f'{r["end_val"]}')
             else:
                 verdict = badge(None, f'{icon} database: {side(e)} aan zet {r["end_val"]}')
-        out = [f'<p class="var">{body} {verdict}']
+        out = [f'<p class="var">{body}{tail} {verdict}']
         if r['note']:
             out.append(f'<br><span class="note">{esc(r["note"])}</span>')
         out.append('</p>')
         if notes:
             out.append('<ul class="issues">' + ''.join(f'<li>{esc(x)}</li>' for x in notes) + '</ul>')
-        if r['status'] == 'onjuist':
-            cont = [p['move'] for p in r['plies']]
-            absv = [absolute(p['fen'], p['val_before']) for p in r['plies']]
-            okk = [i for i, a in enumerate(absv) if agrees(r['claim'], a)]
-            m0 = re.match(r'\s*(\d+)\.', r['text'])
-            h = self.refutation_html(pg, fen, i0, cont, int(m0.group(1)) if m0 else 1, r['start'],
-                                     refute_at=okk[-1] if okk else len(cont), stop_on_book=False)
-            out.append(f'<div class="refute"><span class="t">weerlegging</span><br>{h}</div>')
         return '\n'.join(out)
+
+    def continuation(self, pg, ref, k, prev, fen, mnum, black, mark):
+        """the database's line from ply k of a refutation as moves of an aside"""
+        plan = [((m[0],), mark if i == 0 else '') for i, m in enumerate(ref['seq'][k:])]
+        h, *_ = pg.moves(fen, plan, mnum, black, 'm3', prev, nbook=0, auto_aside=False)
+        if ref['reached']:
+            d = ref['reached'][0]
+            h += f' → <a href="{self.home[d]}.html#d{d}">diagram {d}</a> ({ref["reached"][1]})'
+        elif ref['ending'] == 'draw':
+            h += ' … D'
+        return h
 
     def chapter_page(self, k):
         pid, lab, title, orig, sections, listed = PAGES[k]

@@ -111,6 +111,7 @@ class Page:
         self.index = {}
         self.geoms = {}
         self.oracles = {}
+        self.seen = set()
 
     def use(self, gid, oracle, geom):
         self.geoms[gid] = geom
@@ -138,10 +139,16 @@ class Page:
         return (f'<figure><a class="diagram" href="#" data-i="{i}"><div class="smallboard" data-g="{g}" '
                 f'data-fen="{fen}"></div></a><figcaption>{caption}</figcaption></figure>'), i
 
-    def moves(self, fen, plan, number, black_first, cls='m1', start=None, extend=0, nbook=None, gid=None):
+    def moves(self, fen, plan, number, black_first, cls='m1', start=None, extend=0, nbook=None, gid=None,
+              asides=None, auto_aside=True):
         """plan: [(notations, marks)] from fen as links, then at most extend best moves (to the end of the
-        game); moves from index nbook on are the database's. Returns (html, last index, end fen, plies)."""
+        game); moves from index nbook on are the database's. A move of the plan that changes the result gets a
+        red "?" and an aside in brackets, as in the analyses on 10x10.org: a "≡" link back to the position
+        before the move, then the better line. asides: {plan index: f(prev, fen, number, black) -> html} for a
+        full refutation; otherwise the best move with its value (once per page for the same position and move).
+        Returns (html, last index, end fen, plies)."""
         nbook = len(plan) if nbook is None else nbook
+        asides = asides or {}
         prev = self.add(fen, gid=gid) if start is None else start
         g = self.pos[prev]['g']
         out, k, n = [], (1 if black_first else 0), 0
@@ -158,22 +165,35 @@ class Page:
                 mv, marks = legal[0], ''
             best = legal[0][1][0]
             keeping = [m for m in legal if m[1][0] == best]
+            err = mv[1][0] != best and best != '?'
             flags = []
-            if mv[1][0] != best and best != '?':
-                flags.append('err')
-            elif len(keeping) == 1 and best in 'WD':
+            if not err and len(keeping) == 1 and best in 'WD':
                 flags.append('only')
             if n >= nbook:
                 flags.append('db')
             i = self.child(prev, mv)
-            num = f'{number + k // 2}.' if k % 2 == 0 else (f'{number + k // 2}. …' if n == 0 else '')
+            mnum, black = number + k // 2, k % 2 == 1
+            num = f'{mnum}.' if not black else (f'{mnum}. …' if n == 0 else '')
             nota = mv[0].replace('x', '×') + marks
+            if err and '?' not in marks:      # a "!" of the book that the database contradicts goes in parentheses
+                nota = mv[0].replace('x', '×') + (f'({marks})' if marks else '') + '<span class="q">?</span>'
             out.append(f'<a class="{cls} {" ".join(flags)}" href="#" data-i="{i}" title="{mv[1]}">'
                        f'{num + " " if num else ""}{nota}</a>')
+            if err and n < nbook:
+                if n in asides:
+                    out.append(self.aside(prev, asides[n](prev, fen, mnum, black)))
+                elif auto_aside and (g, fen, mv[0]) not in self.seen:
+                    self.seen.add((g, fen, mv[0]))
+                    h, *_ = self.moves(fen, [((legal[0][0],), '!')], mnum, black, 'm3', prev, gid=g, auto_aside=False)
+                    out.append(self.aside(prev, f'{h} <span class="val">{legal[0][1]}</span>'))
             prev, fen, k, n = i, mv[2], k + 1, n + 1
         if out and not self.analyse(g, fen)[1]:
             out[-1] = out[-1].replace('</a>', '+</a>')
         return ' '.join(out), prev, fen, n
+
+    @staticmethod
+    def aside(prev, html_):
+        return f'<span class="aside">[<a class="m3 eq" href="#" data-i="{prev}" title="terug naar de stelling">≡</a> {html_}]</span>'
 
     def best_line(self, fen, plies, cls='m1', start=None, gid=None, number=1, stop_draw=12):
         """the database's main line from fen (fastest win, longest defence), at most plies long"""

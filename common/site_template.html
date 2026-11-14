@@ -66,6 +66,19 @@ details.onpage a { margin-right: 12px; white-space: nowrap; }
 .buttons button { flex: 1; padding: 6px 0; font: 16px system-ui, sans-serif; color: var(--fg); background: var(--panel);
   border: 1px solid var(--rule); border-radius: 6px; cursor: pointer; }
 .buttons button:hover { border-color: var(--muted); }
+/* tooltips above the buttons, in the language of the page */
+.buttons button { position: relative; }
+.buttons button[data-tip]::after { content: attr(data-tip); position: absolute; bottom: calc(100% + 8px); left: 50%;
+  transform: translateX(-50%); background: var(--fg); color: var(--bg); font: 12px/1.35 system-ui, sans-serif;
+  padding: 5px 8px; border-radius: 5px; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity .12s;
+  z-index: 10; }
+.buttons button[data-tip]::before { content: ""; position: absolute; bottom: calc(100% + 3px); left: 50%;
+  transform: translateX(-50%); border: 5px solid transparent; border-top-color: var(--fg); opacity: 0;
+  transition: opacity .12s; pointer-events: none; z-index: 10; }
+.buttons button:hover::after, .buttons button:focus-visible::after,
+.buttons button:hover::before, .buttons button:focus-visible::before { opacity: 1; transition-delay: .25s; }
+.buttons button:first-child[data-tip]::after { left: 0; transform: none; }
+.buttons button:last-child[data-tip]::after { left: auto; right: 0; transform: none; }
 .panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px;
   font: 14px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
 .panel .stm { font-weight: 600; margin-bottom: 4px; }
@@ -149,11 +162,11 @@ table.tbl th { color: var(--muted); font-weight: 600; }
   <aside class="side">
     <div id="board"></div>
     <div class="buttons">
-      <button id="back" title="{{T_BACK}}">◀</button>
-      <button id="play" title="{{T_PLAY}}">▶︎▶︎</button>
-      <button id="fwd" title="{{T_FWD}}">▶</button>
-      <button id="nums" title="{{T_NUMS}}">#</button>
-      <button id="nota" title="{{T_NOTA}}">1-2</button>
+      <button id="back" data-tip="{{T_BACK}}" aria-label="{{T_BACK}}">◀</button>
+      <button id="play" data-tip="{{T_PLAY}}" aria-label="{{T_PLAY}}">▶︎▶︎</button>
+      <button id="fwd" data-tip="{{T_FWD}}" aria-label="{{T_FWD}}">▶</button>
+      <button id="nums" data-tip="{{T_NUMS}}" aria-label="{{T_NUMS}}">#</button>
+      <button id="nota" data-tip="{{T_NOTA}}" aria-label="{{T_NOTA}}">1-2</button>
     </div>
     <div class="panel" id="panel"></div>
   </aside>

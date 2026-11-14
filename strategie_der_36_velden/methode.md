@@ -43,6 +43,9 @@ in het boek: veld 1 = b6, veld 16 = a1, en de lange lijn is 16-13-11-8-6-3. Wit 
 
 ### Validatie
 
+* De aantallen stellingen tot en met 3, 4, 5, 6 en 7 stukken komen exact overeen met die van Van Horssen (ICGA
+  Journal 40, 2018); tot en met 8 stukken op de 7-tegen-1-stellingen na, die hij terecht weglaat.
+
 * De 6×6-cijfers voor drie dammen tegen één komen exact overeen met de bestaande kings-only-databases
   van deze repository: langste winst 17 ply, en 784 van de 4782 rustige stellingen met wit aan zet
   zijn remise.

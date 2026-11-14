@@ -497,6 +497,41 @@ class Site:
                 body.append(f'<p><a class="m1" href="#" data-i="{i2}">1. … {pg.label('6x6', m2)}</a> '
                             f'<span class="val">{m2[1]}</span> — ' + ', '.join(rep) + '</p>')
         body.append('</div>')
+        rows = [(self.t('Beginstand', 'Start position'), self.t('remise', 'draw'), self.t('remise', 'draw')),
+                (self.t('Eerste zetten van wit', 'First moves of white'), self.t('alle remise', 'all draw'),
+                 self.t('alle vijf remise', 'all five draw')),
+                (self.t('Antwoorden van zwart', 'Replies of black'),
+                 self.t('direct verliezende antwoorden', 'immediately losing replies'),
+                 self.t('idem, bv. 1. 13-10 4-7 (L60)', 'likewise, e.g. 1. 13-10 4-7 (L60)')),
+                (self.t('Diepste verlies van zwart vanaf de beginstand', 'Deepest loss of black from the start position'),
+                 '61 ply', self.t('61 ply (2 + 59 na 1. 13-10 4-7)', '61 plies (2 + 59 after 1. 13-10 4-7)')),
+                (self.t('Stellingen t/m 3, 4, 5, 6, 7 stukken', 'Positions up to 3, 4, 5, 6, 7 pieces'),
+                 '31,155 · 512,910 · 5,789,784 · 48,881,249 · 322,389,233' if self.lang == 'en' else
+                 '31.155 · 512.910 · 5.789.784 · 48.881.249 · 322.389.233',
+                 self.t('precies dezelfde aantallen', 'exactly the same numbers')),
+                (self.t('Stellingen t/m 8 stukken', 'Positions up to 8 pieces'),
+                 self.t('1.617.366.257', '1,617,366,257'), self.t('1.702.191.569 (incl. 7 tegen 1)', '1,702,191,569 (incl. 7 against 1)'))]
+        tbl = ''.join(f'<tr><td>{a}</td><td>{pg.prose(b, "6x6")}</td><td>{pg.prose(c, "6x6")}</td></tr>' for a, b, c in rows)
+        body.append(self.t('<h2>Vergelijking met Van Horssen (2018)</h2>', '<h2>Comparison with Van Horssen (2018)</h2>'))
+        body.append(self.t(
+            '<p>Jan-Jaap van Horssen loste 6×6 al eerder zwak op, in <em>Complexity of checkers and draughts on different '
+            'board sizes</em>, ICGA Journal 40 (2018) 341–352: een database met winst/remise/verlies tot en met 8 stukken '
+            'en proof-number search vanuit de beginstand. Onze databases en openingsboom zijn daar onafhankelijk van, en '
+            'komen op alle punten met hem overeen:</p>',
+            '<p>Jan-Jaap van Horssen weakly solved 6×6 earlier, in <em>Complexity of checkers and draughts on different '
+            'board sizes</em>, ICGA Journal 40 (2018) 341–352: a win/draw/loss database up to 8 pieces and proof-number '
+            'search from the start position. Our databases and opening tree are independent of his, and agree with him on '
+            'every point:</p>'))
+        body.append(f'<table class="tbl"><tr><th></th><th>Van Horssen (2018)</th><th>{self.t("Hier", "Here")}</th></tr>{tbl}</table>')
+        body.append(self.t(
+            '<p>Het verschil bij 8 stukken is precies 84.825.312: de stellingen met 7 stukken tegen 1, die Van Horssen '
+            'terecht weglaat, want elke kant begint met 6 stukken. Hij bewijst de waarde van de beginstand (zonder '
+            'transpositietabel, om graph-history-problemen te vermijden); hier zijn de afstanden tot het einde exact voor '
+            'de hele boom tot en met ply 4.</p>',
+            '<p>The difference at 8 pieces is exactly 84,825,312: the positions with 7 pieces against 1, which Van Horssen '
+            'rightly leaves out, since each side starts with 6 pieces. He proves the value of the start position (without '
+            'a transposition table, to avoid graph-history problems); here the distances to the end are exact for the '
+            'whole tree up to ply 4.</p>'))
         self.write('opening.html', self.t('De opening', 'The opening'), '\n'.join(body), pg)
 
 

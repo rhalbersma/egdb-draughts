@@ -71,6 +71,32 @@ bovengrenzen over de hele boom teruggerekend. Voor de beginstand en voor alle st
 inclusief hun afstanden, vallen de grenzen samen: die waarden zijn bewezen, wat die onbekende stellingen ook
 waard zijn.
 
+### Vergelijking met Van Horssen (2018)
+
+Jan-Jaap van Horssen loste 6×6 al eerder zwak op: *Complexity of checkers and draughts on different board sizes*,
+ICGA Journal 40 (2018) 341–352. Hij bouwde een database met winst/remise/verlies voor alle stellingen tot en met
+8 stukken en bewees met proof-number search vanuit de beginstand dat 6×6 remise is. Onze databases en openingsboom
+zijn onafhankelijk daarvan gemaakt en komen op alle punten met hem overeen:
+
+| | Van Horssen (2018) | Hier |
+|---|---|---|
+| Beginstand | remise | remise |
+| Eerste zetten van wit | alle remise | alle vijf remise |
+| Antwoorden van zwart | direct verliezende antwoorden | idem, bijvoorbeeld 1. 13-10 4-7 (L60) |
+| Diepste verlies van zwart vanaf de beginstand | 61 ply | 61 ply (2 ply + 59 na 1. 13-10 4-7) |
+| Stellingen t/m 3, 4, 5, 6, 7 stukken (één kant aan zet) | 31.155 · 512.910 · 5.789.784 · 48.881.249 · 322.389.233 | precies dezelfde aantallen |
+| Stellingen t/m 8 stukken | 1.617.366.257 | 1.702.191.569 |
+
+Het verschil bij 8 stukken is precies 84.825.312: de stellingen met 7 stukken tegen 1. Van Horssen laat die
+terecht weg, want elke kant begint met 6 stukken. Onze databases rekenen ze (en bij 9 en 10 stukken 7-2, 7-3, 8-2,
+9-1, …) overbodig toch uit; aan de resultaten verandert dat niets. Hij noemt 83 ply als langste winst in zijn
+8-stukkendatabase (afstand tot de winst); hier is de langste winst tot en met 9 stukken 100 ply.
+
+Het verschil in aanpak: Van Horssen bewijst de waarde van de beginstand (proof-number search zonder
+transpositietabel, om graph-history-problemen te vermijden; met de 8-stukkendatabase in een fractie van een
+seconde). Hier zijn de afstanden tot het einde exact voor de hele openingsboom tot en met ply 4, en voor elke
+stelling uit het boek.
+
 ### Hoofdstuk 6/7: de randslag-opening 1. 13-11 6-8 2. 11×6 2×9
 
 * **3. 15-12 wint snel (bevestigd):** winst in 25 ply.

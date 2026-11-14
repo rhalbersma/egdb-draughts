@@ -43,3 +43,12 @@ target_compile_features(egdb_fast PRIVATE cxx_std_23)
 target_compile_options(egdb_fast PRIVATE
     $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -Wshadow -march=native>
 )
+
+# 6x6 international draughts with men and kings: slice databases built with leapfrog retrograde analysis
+# (used to check "Strategie der 36 velden", see strategie36/)
+add_executable(egdb_6x6 src/egdb_6x6.cpp)
+target_link_libraries(egdb_6x6 PRIVATE OpenMP::OpenMP_CXX)
+target_compile_features(egdb_6x6 PRIVATE cxx_std_20)
+target_compile_options(egdb_6x6 PRIVATE
+    $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -march=native>
+)

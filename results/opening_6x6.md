@@ -2,7 +2,7 @@
 
 Beginstand, wit aan zet: **D**.
 
-Notatie: D = remise, Wn = winst, Ln = verlies, met n het aantal ply tot het einde van de partij bij perfect spel. Bij de beginstand geldt de waarde voor wit (aan zet). Bij een zet geldt de waarde voor wie de zet doet, en telt n vanaf de stelling vóór de zet, de zet meegeteld. Een winst heeft dus altijd een oneven n, een verlies een even n. In de tabel geldt het label voor de laatste (witte) zet van de opening. Waar n ontbreekt, is het resultaat exact maar de afstand onbekend.
+Notatie: D = remise, Wn = winst, Ln = verlies, met n het aantal ply tot het einde van de partij bij perfect spel. Bij de beginstand geldt de waarde voor wit (aan zet). Bij een zet geldt de waarde voor wie de zet doet, en telt n vanaf de stelling vóór de zet, de zet meegeteld. Een winst heeft dus altijd een oneven n, een verlies een even n. In de tabel geldt het label voor de laatste (witte) zet van de opening. Waar de exacte afstand niet vastligt (doordat een variant via een stelling met 11 of 12 stukken en dammen aan beide kanten loopt, waarvoor geen database bestaat), staat een grens: ≥Wn = wint uiterlijk na n ply, ≤Ln = verliest uiterlijk na n ply.
 
 Methode: de volledige openings-DAG (transposities samengevoegd), uitgebreid zolang een stelling meer dan 10 stukken heeft en hoogstens één kant dammen. Bladeren: databasestellingen (exact), stellingen zonder zetten (verloren) en stellingen met meer stukken en dammen aan beide kanten (onbekend). Waarden zijn als intervallen teruggerekend, vanuit wit gezien.
 
@@ -137,9 +137,9 @@ beginstand  D
         zwart 5-7  D
             wit 15-12  D
             wit 16-13  D
+            wit 17-13  L24
+            wit 11-8  L22
             wit 14-12  L18
-            wit 11-8  L
-            wit 17-13  L
         zwart 5-8  D
             wit 14-12  D
             wit 16-13  D
@@ -161,9 +161,9 @@ beginstand  D
         zwart 5-7  D
             wit 11-8  D
             wit 13-10  L26
+            wit 17-14  L24
             wit 18-14  L24
             wit 15-12  L18
-            wit 17-14  L
         zwart 5-8  D
             wit 17-14  D
             wit 13-10  L42
@@ -186,9 +186,9 @@ beginstand  D
             wit 12-8  D
             wit 12-9  D
             wit 13-10  D
+            wit 18-14  L28
             wit 17-14  L22
             wit 13-11  L18
-            wit 18-14  L
         zwart 5-8  D
             wit 12x5  D
         zwart 6-8  D
@@ -201,23 +201,23 @@ beginstand  D
             wit 12-8  D
             wit 18-14  L32
             wit 13-10  L30
+            wit 17-14  L26
             wit 13-11  L18
-            wit 17-14  L
         zwart 4-7  L26
             wit 12-8  W25
             wit 13-10  W59
+            wit 12-9  L26
+            wit 18-14  L26
+            wit 17-14  L22
             wit 13-11  L18
-            wit 12-9  L
-            wit 17-14  L
-            wit 18-14  L
     wit 15-12  D
         zwart 4-7  D
             wit 12-8  D
             wit 12-9  D
             wit 13-10  L32
+            wit 13-11  L32
+            wit 18-15  L26
             wit 14-11  L18
-            wit 13-11  L
-            wit 18-15  L
         zwart 6-8  D
             wit 12-9  D
             wit 18-15  D
@@ -232,13 +232,13 @@ beginstand  D
             wit 14-11  L18
         zwart 5-8  L34
             wit 12x5  W33
-        zwart 5-7  L
-            wit 12-9  W
+        zwart 5-7  L30
+            wit 12-9  W29
             wit 12-8  D
             wit 13-11  D
+            wit 18-15  L28
             wit 13-10  L26
             wit 14-11  L18
-            wit 18-15  L
 ```
 
 ## Alle openingen van 3 ply
@@ -274,11 +274,11 @@ Numeriek gesorteerd.
 | 23 | 13-10 6-9 16-13 | D |
 | 24 | 13-10 6-9 17-13 | D |
 | 25 | 13-11 4-7 11x4 | W23 |
-| 26 | 13-11 5-7 11-8 | L |
+| 26 | 13-11 5-7 11-8 | L22 |
 | 27 | 13-11 5-7 14-12 | L18 |
 | 28 | 13-11 5-7 15-12 | D |
 | 29 | 13-11 5-7 16-13 | D |
-| 30 | 13-11 5-7 17-13 | L |
+| 30 | 13-11 5-7 17-13 | L24 |
 | 31 | 13-11 5-8 11-7 | L22 |
 | 32 | 13-11 5-8 14-12 | D |
 | 33 | 13-11 5-8 15-12 | L28 |
@@ -295,7 +295,7 @@ Numeriek gesorteerd.
 | 44 | 14-11 5-7 11-8 | D |
 | 45 | 14-11 5-7 13-10 | L26 |
 | 46 | 14-11 5-7 15-12 | L18 |
-| 47 | 14-11 5-7 17-14 | L |
+| 47 | 14-11 5-7 17-14 | L24 |
 | 48 | 14-11 5-7 18-14 | L24 |
 | 49 | 14-11 5-8 11-7 | L22 |
 | 50 | 14-11 5-8 13-10 | L42 |
@@ -310,17 +310,17 @@ Numeriek gesorteerd.
 | 59 | 14-11 6-9 17-14 | D |
 | 60 | 14-11 6-9 18-14 | L24 |
 | 61 | 14-12 4-7 12-8 | W25 |
-| 62 | 14-12 4-7 12-9 | L |
+| 62 | 14-12 4-7 12-9 | L26 |
 | 63 | 14-12 4-7 13-10 | W59 |
 | 64 | 14-12 4-7 13-11 | L18 |
-| 65 | 14-12 4-7 17-14 | L |
-| 66 | 14-12 4-7 18-14 | L |
+| 65 | 14-12 4-7 17-14 | L22 |
+| 66 | 14-12 4-7 18-14 | L26 |
 | 67 | 14-12 5-7 12-8 | D |
 | 68 | 14-12 5-7 12-9 | D |
 | 69 | 14-12 5-7 13-10 | D |
 | 70 | 14-12 5-7 13-11 | L18 |
 | 71 | 14-12 5-7 17-14 | L22 |
-| 72 | 14-12 5-7 18-14 | L |
+| 72 | 14-12 5-7 18-14 | L28 |
 | 73 | 14-12 5-8 12x5 | D |
 | 74 | 14-12 6-8 12-9 | D |
 | 75 | 14-12 6-8 13-10 | L32 |
@@ -330,20 +330,20 @@ Numeriek gesorteerd.
 | 79 | 14-12 6-9 12-8 | D |
 | 80 | 14-12 6-9 13-10 | L30 |
 | 81 | 14-12 6-9 13-11 | L18 |
-| 82 | 14-12 6-9 17-14 | L |
+| 82 | 14-12 6-9 17-14 | L26 |
 | 83 | 14-12 6-9 18-14 | L32 |
 | 84 | 15-12 4-7 12-8 | D |
 | 85 | 15-12 4-7 12-9 | D |
 | 86 | 15-12 4-7 13-10 | L32 |
-| 87 | 15-12 4-7 13-11 | L |
+| 87 | 15-12 4-7 13-11 | L32 |
 | 88 | 15-12 4-7 14-11 | L18 |
-| 89 | 15-12 4-7 18-15 | L |
+| 89 | 15-12 4-7 18-15 | L26 |
 | 90 | 15-12 5-7 12-8 | D |
-| 91 | 15-12 5-7 12-9 | W |
+| 91 | 15-12 5-7 12-9 | W29 |
 | 92 | 15-12 5-7 13-10 | L26 |
 | 93 | 15-12 5-7 13-11 | D |
 | 94 | 15-12 5-7 14-11 | L18 |
-| 95 | 15-12 5-7 18-15 | L |
+| 95 | 15-12 5-7 18-15 | L28 |
 | 96 | 15-12 5-8 12x5 | W33 |
 | 97 | 15-12 6-8 12-9 | D |
 | 98 | 15-12 6-8 13-10 | L22 |

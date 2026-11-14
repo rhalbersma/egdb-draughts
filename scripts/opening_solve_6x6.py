@@ -80,6 +80,38 @@ def label(lo, hi, stm, dtm=None, move=False):
     return {1: 'W', 0: 'D', -1: 'L'}[lo] + (str(dtm + (1 if move else 0)) if dtm is not None and lo != 0 else '')
 
 
+# mate-distance scores for the side to move: win in n = WSC - n, loss in n = -(WSC - n), draw = 0
+WSC = 30000
+
+
+def to_score(v):
+    return 0 if v == 'D' else (WSC - int(v[1:]) if v[0] == 'W' else -(WSC - int(v[1:])))
+
+
+def up(s):
+    """score of a position -> score of the move into it, for the side that made the move (one ply more)"""
+    return 1 - s if s > 0 else -s - 1 if s < 0 else 0
+
+
+def score_label(lo, hi, move=False):
+    """Score interval for the side to move (of a position, or of the position after a move) -> D, Wn, Ln,
+    or a bound: >=Wn (a win in at most n plies), <=Ln (a loss in at most n plies), >=D, <=D, ?. For a move
+    the value is for the side that made it and n counts from the position before the move, the move included."""
+    if move:
+        lo, hi = up(hi), up(lo)
+    if lo == hi:
+        return 'D' if lo == 0 else f'W{WSC - lo}' if lo > 0 else f'L{WSC + lo}'
+    if lo > 0:
+        return f'≥W{WSC - lo}'
+    if hi < 0:
+        return f'≤L{WSC + hi}'
+    if lo == 0:
+        return '≥D'
+    if hi == 0:
+        return '≤D'
+    return '?'
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('engine')
@@ -199,13 +231,50 @@ def main():
             for _, c in children[fen]:
                 collect(c, depth + 1)
     collect(START, 0)
-    if args.dtm_db or args.dtm:
-        if args.dtm:
-            deng = eng
-        else:
-            eng.p.stdin.close()
-            eng.p.wait()
-            deng = Engine(args.engine, args.dtm_db)
+    sc = None
+    if args.dtm:
+        # exact distances (or bounds) through the DAG: database leaves exact, unknown leaves bounded by
+        # their own moves (captures lead into the databases), backed up in post-order like the WDL values
+        full = (-WSC, WSC - 1)
+        sc = {}
+        for fen, (lo, hi, kind) in leaf.items():
+            if kind == 'database':
+                v = to_score(eng.cmd('dtm ' + fen)[0].split()[1])
+                sc[fen] = (v, v)
+            elif kind == 'no moves':
+                sc[fen] = (-WSC, -WSC)
+            else:
+                cs = []
+                for _, c in eng.moves(fen):
+                    n, wk, bk = info(c)
+                    if n <= eng.built:
+                        v = to_score(eng.cmd('dtm ' + c)[0].split()[1])
+                        cs.append((v, v))
+                    else:
+                        cs.append(full)
+                sc[fen] = (max(up(h) for _, h in cs), max(up(l) for l, _ in cs))
+        log(f'distances of {len(sc)} leaves')
+        stack = [(START, False)]
+        while stack:
+            fen, expanded = stack.pop()
+            if fen in sc:
+                continue
+            if not expanded:
+                stack.append((fen, True))
+                stack.extend((c, False) for _, c in children[fen] if c not in sc)
+                continue
+            cs = [sc[c] for _, c in children[fen]]
+            sc[fen] = (max(up(h) for _, h in cs), max(up(l) for l, _ in cs))
+        for f, (lo, hi) in iv.items():          # consistency with the win/draw/loss values
+            a, b = sc[f]
+            if (lo == hi) and not ((lo == 1 and a > 0) or (lo == 0 and a == b == 0) or (lo == -1 and b < 0)):
+                raise RuntimeError(f'distance and WDL disagree for {f}: {sc[f]} vs {iv[f]}')
+        log(f'start position: {score_label(*sc[START])}')
+    if args.dtm_db:
+        # older route: distances by exact-DTM search in a second engine (no on-demand slices)
+        eng.p.stdin.close()
+        eng.p.wait()
+        deng = Engine(args.engine, args.dtm_db)
         deng.cmd('ondemand 0')
         log(f'DTM database loaded, built_max {deng.built}')
         for fen in sorted(tree_nodes, key=lambda f: -tree_nodes[f]):
@@ -220,6 +289,11 @@ def main():
                     raise RuntimeError(f'DTM and WDL disagree for {fen}: {v} vs {lo}')
                 dtm[fen] = int(v[1:])
             log(f'dtm ply {tree_nodes[fen]} {fen}: {out} ({time.time() - t:.1f} s)')
+
+    def lab(fen, move):
+        if sc is not None:
+            return score_label(*sc[fen], move)
+        return label(*iv[fen], fen[0], dtm.get(fen), move)
 
     rows = []
 
@@ -240,6 +314,9 @@ def main():
         undecided, losses (slowest first); unknown distances last within their class; then by move."""
         def key(m):
             nota, c = m
+            if sc is not None:                  # the mover's score, best first
+                a, b = up(sc[c][1]), up(sc[c][0])
+                return (-a, -b) + numeric(nota)
             lo, hi = iv[c]
             n = dtm.get(c)
             if lo != hi:
@@ -255,7 +332,7 @@ def main():
 
     def walk_tree(fen, path):
         name = 'beginstand' if not path else ('wit ' if len(path) % 2 else 'zwart ') + path[-1]
-        tree.append('    ' * len(path) + f'{name}  {label(*iv[fen], fen[0], dtm.get(fen), bool(path))}')
+        tree.append('    ' * len(path) + f'{name}  {lab(fen, bool(path))}')
         if len(path) < args.table and fen in children:
             for nota, c in best_first(children[fen]):
                 walk_tree(c, path + [nota])
@@ -265,16 +342,18 @@ def main():
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'strategie36'))
     from board import diagram
     diagrams = ['## Diagrammen', '', 'w/b = witte/zwarte schijf, W/B = dam.', '',
-                f'Beginstand, wit aan zet: **{label(*root, "W", dtm.get(START))}**', '', '```text', diagram(START), '```', '']
+                f'Beginstand, wit aan zet: **{lab(START, False)}**', '', '```text', diagram(START), '```', '']
     for nota, c in best_first(children[START]):
-        diagrams += [f'1. {nota} (zwart aan zet): **{label(*iv[c], c[0], dtm.get(c), True)}**', '', '```text', diagram(c), '```', '']
+        diagrams += [f'1. {nota} (zwart aan zet): **{lab(c, True)}**', '', '```text', diagram(c), '```', '']
     md = ['# Openingen van 6×6-dammen', '',
-          f'Beginstand, wit aan zet: **{label(*root, "W", dtm.get(START))}**.', '',
+          f'Beginstand, wit aan zet: **{lab(START, False)}**.', '',
           'Notatie: D = remise, Wn = winst, Ln = verlies, met n het aantal ply tot het einde van de partij bij perfect '
           'spel. Bij de beginstand geldt de waarde voor wit (aan zet). Bij een zet geldt de waarde voor wie de zet doet, '
           'en telt n vanaf de stelling vóór de zet, de zet meegeteld. Een winst heeft dus altijd een oneven n, een '
-          'verlies een even n. In de tabel geldt het label voor de laatste (witte) zet van de opening. Waar n '
-          'ontbreekt, is het resultaat exact maar de afstand onbekend.', '',
+          'verlies een even n. In de tabel geldt het label voor de laatste (witte) zet van de opening. Waar de exacte '
+          'afstand niet vastligt (doordat een variant via een stelling met 11 of 12 stukken en dammen aan beide kanten '
+          'loopt, waarvoor geen database bestaat), staat een grens: ≥Wn = wint uiterlijk na n ply, ≤Ln = verliest '
+          'uiterlijk na n ply.', '',
           'Methode: de volledige openings-DAG (transposities samengevoegd), uitgebreid zolang een stelling meer dan '
           f'{eng.built} stukken heeft en hoogstens één kant dammen. Bladeren: databasestellingen (exact), stellingen '
           'zonder zetten (verloren) en stellingen met meer stukken en dammen aan beide kanten (onbekend). Waarden zijn '
@@ -286,13 +365,14 @@ def main():
           f'## Alle openingen van {args.table} ply', '', 'Numeriek gesorteerd.', '',
           f"{len(rows)} openingen: W {res['W']}, D {res['D']}, L {res['L']}.", '',
           '| # | opening | resultaat |', '|---|---|---|']
-    md += [f"| {i} | {' '.join(p)} | {label(*iv[f], f[0], dtm.get(f), bool(p))} |" for i, (p, f) in enumerate(rows, 1)]
+    md += [f"| {i} | {' '.join(p)} | {lab(f, bool(p))} |" for i, (p, f) in enumerate(rows, 1)]
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     Path(args.out + '.md').write_text('\n'.join(md) + '\n')
     Path(args.out + '.json').write_text(json.dumps({
         'start': START, 'root': root, 'leaf_kinds': kinds, 'relevant_unknown': sorted(relevant),
         'openings': [{'moves': p, 'fen': f, 'interval': iv[f], 'dtm': dtm.get(f)} for p, f in rows],
-        'tree': {f: {'ply': d, 'interval': iv[f], 'dtm': dtm.get(f)} for f, d in tree_nodes.items()}}, indent=0))
+        'tree': {f: {'ply': d, 'interval': iv[f], 'dtm': dtm.get(f), 'score': sc[f] if sc else None}
+                 for f, d in tree_nodes.items()}}, indent=0))
     log('done')
 
 

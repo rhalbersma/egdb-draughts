@@ -22,7 +22,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / 'strategie36'))
 from board import diagram                      # noqa: E402
-from opening_solve_6x6 import label             # noqa: E402
+from opening_solve_6x6 import label, score_label, up   # noqa: E402
 
 
 def main():
@@ -49,6 +49,9 @@ def main():
 
     def key(m):
         nota, c = m
+        if tree[c].get('score'):
+            a, b = up(tree[c]['score'][1]), up(tree[c]['score'][0])
+            return (-a, -b) + numeric(nota)
         lo, hi = tree[c]['interval']
         n = tree[c]['dtm']
         if lo != hi:
@@ -72,10 +75,11 @@ def main():
             side = 'wit' if fen[0] == 'W' else 'zwart'
             title = 'Beginstand' if not path else ' '.join(
                 (f'{i // 2 + 1}. ' if i % 2 == 0 else '') + m for i, m in enumerate(path))
-            value = label(lo, hi, fen[0], tree[fen]['dtm'])
+            value = score_label(*tree[fen]['score']) if tree[fen].get('score') else label(lo, hi, fen[0], tree[fen]['dtm'])
             num = f'{ply // 2 + 1}.' if fen[0] == 'W' else f'{ply // 2 + 1}…'
             notes = [f'{side} aan zet: {value}', ''] + [
-                f'  {num} {nota:6} {label(*tree[c]["interval"], c[0], tree[c]["dtm"], True)}' for nota, c in ms]
+                f'  {num} {nota:6} ' + (score_label(*tree[c]['score'], True) if tree[c].get('score')
+                                         else label(*tree[c]['interval'], c[0], tree[c]['dtm'], True)) for nota, c in ms]
             board = diagram(fen).split('\n')
             board += [''] * (len(notes) - len(board))
             width = max(len(b) for b in board)

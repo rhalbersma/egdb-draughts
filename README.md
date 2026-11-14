@@ -10,6 +10,14 @@ The databases were used to check, extend and refine the results of a 1988 Dutch 
 "three kings against one" on boards of every size, whose results were all found by hand.
 This page collects the programs, the tables and the most interesting findings.
 
+> **6×6 with men and kings: [Strategie der 36 velden, checked](https://rhalbersma.github.io/egdb-draughts/)**
+>
+> Exact databases up to 10 pieces for international draughts on the 6×6 board ([`src/egdb_6x6.cpp`](src/egdb_6x6.cpp))
+> solve the start position (a draw, [`results/opening_6x6.md`](results/opening_6x6.md)) and check every diagram and
+> variation of Herm Jan Brascamp's *Strategie der 36 velden* (2016). The companion site follows the chapters of the
+> book with clickable moves and the database value of every position; the full report (Dutch) is
+> [`strategie36/RAPPORT.md`](strategie36/RAPPORT.md).
+
 * [Programs](#programs)
 * [Conventions](#conventions)
 * [International draughts: 2 kings vs 1](#international-draughts-2-kings-vs-1)

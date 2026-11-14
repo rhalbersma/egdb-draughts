@@ -166,7 +166,7 @@ table.tbl th { color: var(--muted); font-weight: 600; }
       <button id="play" data-tip="{{T_PLAY}}" aria-label="{{T_PLAY}}">▶︎▶︎</button>
       <button id="fwd" data-tip="{{T_FWD}}" aria-label="{{T_FWD}}">▶</button>
       <button id="nums" data-tip="{{T_NUMS}}" aria-label="{{T_NUMS}}">#</button>
-      <button id="nota" data-tip="{{T_NOTA}}" aria-label="{{T_NOTA}}">1-2</button>
+      <button id="nota" data-tip="{{T_NOTA}}" aria-label="{{T_NOTA}}">1…18</button>
     </div>
     <div class="panel" id="panel"></div>
   </aside>
@@ -238,7 +238,7 @@ function go(i) {
   cur = i;
   const p = POS[i];
   document.getElementById('board').innerHTML = svg(p.f, p.last, showNums, p.g);
-  document.getElementById('nota').textContent = nt(p.g) === 'alg' ? 'a1' : '1-2';
+  document.getElementById('nota').textContent = notaLabel(p.g);
   document.querySelectorAll('a.cur').forEach(a => a.classList.remove('cur'));
   document.querySelectorAll(`a[data-i="${i}"]`).forEach(a => a.classList.add('cur'));
   const side = p.f[0] === 'W' ? UI.white : UI.black;
@@ -266,6 +266,12 @@ function stop() { if (timer) { clearInterval(timer); timer = null; document.getE
 document.getElementById('back').onclick = () => { stop(); go(POS[cur].prev); };
 document.getElementById('fwd').onclick = () => { stop(); go(POS[cur].next); };
 document.getElementById('nums').onclick = () => { showNums = !showNums; go(cur); };
+// the label of the notation button: the range of square names of the board on display, e.g. 1…18 or a1…f6
+function notaLabel(gid) {
+  const G = GEOMS[gid];
+  if (nt(gid) !== 'alg') return '1…' + Math.max(...Object.keys(G.sq).map(Number));
+  return 'a1…' + String.fromCharCode(96 + G.w) + G.h;
+}
 function setNotation(n, store) {
   notation = n;
   if (store) { try { localStorage.setItem('notation-v2', n); } catch (e) {} }

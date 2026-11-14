@@ -321,7 +321,7 @@ class Page:
 
 UI = {
     'nl': {'back': 'Vorige stelling (←)', 'play': 'Variant automatisch afspelen', 'fwd': 'Volgende stelling (→)',
-           'nums': 'Veldnamen op het bord aan/uit', 'nota': 'Wissel tussen numerieke (13-10) en algebraïsche (d3-e4) notatie',
+           'nums': 'Veldnamen op het bord aan/uit', 'nota': 'Wissel tussen numerieke (1, 2, …) en algebraïsche (a1, b2, …) notatie',
            'js': {'white': 'wit', 'black': 'zwart', 'tomove': 'aan zet', 'nomoves': 'geen zetten: verloren'},
            'legend': 'Klik op een zet om de stelling op het grote bord te zien; ◀ ▶ (of de pijltjestoetsen) lopen door '
                      'de variant. Waarden gelden voor de partij aan zet; bij een zet voor wie hem doet, met n het aantal '
@@ -331,10 +331,10 @@ UI = {
                      'database, <span class="q">?</span> = zet die volgens de database het resultaat verandert, met '
                      'tussen [ ] de betere zet of de weerlegging (<span style="color:var(--db)">≡</span> = terug naar de '
                      'stelling vóór die zet), <span style="color:var(--only)">*</span> = enige zet die de winst of de '
-                     'remise behoudt. De knop # zet de veldnamen op het grote bord aan of uit; de knop 1-2 / a1 '
-                     'wisselt tussen numerieke en algebraïsche notatie, ook in de tekst.'},
+                     'remise behoudt. De knop # zet de veldnamen op het grote bord aan of uit; de knop met het bereik van de veldnamen (bv. 1…18 of '
+                     'a1…f6 op 6×6) wisselt tussen numerieke en algebraïsche notatie, ook in de tekst.'},
     'en': {'back': 'Previous position (←)', 'play': 'Play the line automatically', 'fwd': 'Next position (→)',
-           'nums': 'Square names on the board on/off', 'nota': 'Switch between numeric (13-10) and algebraic (d3-e4) notation',
+           'nums': 'Square names on the board on/off', 'nota': 'Switch between numeric (1, 2, …) and algebraic (a1, b2, …) notation',
            'js': {'white': 'white', 'black': 'black', 'tomove': 'to move', 'nomoves': 'no moves: lost'},
            'legend': 'Click a move to see the position on the large board; ◀ ▶ (or the arrow keys) step through the '
                      'line. Values are for the side to move; for a move, for the side making it, with n the number of '
@@ -345,7 +345,7 @@ UI = {
                      'with the better move or the refutation in [ ] (<span style="color:var(--db)">≡</span> = back to '
                      'the position before that move), <span style="color:var(--only)">*</span> = the only move that '
                      'keeps the win or the draw. The # button turns the square names on the large board on or off; '
-                     'the 1-2 / a1 button switches between numeric and algebraic notation, in the text as well.'},
+                     'the button with the range of the square names (e.g. 1…18 or a1…f6 on 6×6) switches between numeric and algebraic notation, in the text as well.'},
 }
 
 

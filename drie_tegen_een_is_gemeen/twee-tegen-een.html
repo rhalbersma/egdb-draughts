@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>2 dammen tegen 1 · Drie tegen een is gemeen</title>
+<style>
+:root {
+  --bg: #fbfaf7; --fg: #1d1d1b; --muted: #6b6a66; --rule: #e3e0d8; --panel: #f3f1ec;
+  --light: #efe6d2; --dark: #9c7a54; --hl: #d8b24a; --num: rgba(255,255,255,.75);
+  --wpiece: #fbf8f1; --wstroke: #4a4440; --bpiece: #2a2623; --bstroke: #000;
+  --link: #1f5f8b; --m2: #5b7d3a; --err: #b3261e; --only: #8a5a00; --db: #6d4aa8;
+  --active: #fff1b8; --lake: #8fb3c9;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #161514; --fg: #e9e6df; --muted: #a29e95; --rule: #34312d; --panel: #201e1c;
+    --light: #c9b99a; --dark: #6e5236; --hl: #c79a2a; --num: rgba(255,255,255,.6);
+    --link: #7fb6dd; --m2: #9cc06e; --err: #f2766d; --only: #e0b04f; --db: #b79cf0; --active: #4a4020; --lake: #3d5a6c;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #161514; --fg: #e9e6df; --muted: #a29e95; --rule: #34312d; --panel: #201e1c;
+  --light: #c9b99a; --dark: #6e5236; --hl: #c79a2a; --num: rgba(255,255,255,.6);
+  --link: #7fb6dd; --m2: #9cc06e; --err: #f2766d; --only: #e0b04f; --db: #b79cf0; --active: #4a4020; --lake: #3d5a6c;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 17px/1.6 Charter, "Bitstream Charter", "Sitka Text", Cambria, Georgia, serif; }
+header { border-bottom: 1px solid var(--rule); padding: 10px 16px; font: 14px/1.4 system-ui, sans-serif; }
+header a { color: var(--muted); text-decoration: none; margin-right: 18px; }
+.wrap { display: grid; grid-template-columns: minmax(280px, 420px) minmax(0, 1fr); gap: 40px;
+  max-width: 1180px; margin: 0 auto; padding: 24px 16px 64px; }
+.side { position: sticky; top: 16px; align-self: start; }
+#board svg { width: 100%; height: auto; display: block; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+.buttons { display: flex; gap: 8px; margin: 10px 0; }
+.buttons button { flex: 1; padding: 6px 0; font: 16px system-ui, sans-serif; color: var(--fg); background: var(--panel);
+  border: 1px solid var(--rule); border-radius: 6px; cursor: pointer; }
+.buttons button:hover { border-color: var(--muted); }
+.panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px;
+  font: 14px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+.panel .stm { font-weight: 600; margin-bottom: 4px; }
+.panel table { border-collapse: collapse; width: 100%; }
+.panel td { padding: 1px 6px 1px 0; }
+.panel tr.played td { background: var(--active); }
+.panel a { color: var(--link); text-decoration: none; }
+main { min-width: 0; }
+h1 { font-size: 30px; line-height: 1.2; margin: 0 0 16px; }
+h2 { font-size: 22px; margin: 36px 0 8px; }
+a.m1, a.m2 { text-decoration: none; white-space: nowrap; border-radius: 3px; padding: 0 1px; }
+a.m1 { color: var(--link); font-weight: 600; }
+a.m2 { color: var(--m2); }
+a.db { font-style: italic; }
+a.err { text-decoration: underline wavy var(--err); text-underline-offset: 3px; }
+a.only::after { content: "*"; color: var(--only); }
+a.cur { background: var(--active); }
+.val { font: 14px ui-monospace, Menlo, Consolas, monospace; color: var(--muted); }
+blockquote { margin: 16px 0; padding: 4px 16px; border-left: 3px solid var(--dark); font-style: italic; }
+figure { float: right; margin: 4px 0 12px 20px; text-align: center; }
+figure .smallboard { width: 150px; }
+figcaption { font: 13px system-ui, sans-serif; color: var(--muted); margin-top: 4px; }
+p.var { margin: 10px 0; }
+.verdict { font: 13px system-ui, sans-serif; padding: 1px 7px; border-radius: 10px; margin-left: 6px; white-space: nowrap; }
+.verdict.ok { background: rgba(60,140,60,.15); }
+.verdict.bad { background: rgba(179,38,30,.15); }
+.note { font-size: 15px; color: var(--muted); }
+.legend { font: 13px/1.6 system-ui, sans-serif; color: var(--muted); border-top: 1px solid var(--rule); margin-top: 32px; padding-top: 12px; }
+.src { font-size: 14px; color: var(--muted); }
+section.diag { clear: both; border-top: 1px solid var(--rule); padding-top: 8px; margin-top: 28px; }
+section.diag h3 { font-size: 19px; margin: 6px 0 4px; }
+.claim { margin: 6px 0; }
+.moves { font-size: 15px; }
+.issues { font: 14px/1.5 system-ui, sans-serif; color: var(--muted); margin: 2px 0 0; padding-left: 18px; }
+.refute { display: flow-root; background: var(--panel); border-left: 3px solid var(--err); padding: 6px 12px; margin: 10px 0; border-radius: 0 6px 6px 0; }
+.refute .t { font: 13px system-ui, sans-serif; color: var(--muted); }
+.toc { list-style: none; padding: 0; }
+.toc li { padding: 5px 0; border-bottom: 1px solid var(--rule); }
+.toc .h { color: var(--muted); font: 14px system-ui, sans-serif; display: inline-block; min-width: 150px; }
+.toc .cnt { font: 13px system-ui, sans-serif; color: var(--muted); margin-left: 8px; }
+.toc .orig { font: 13px system-ui, sans-serif; margin-left: 8px; }
+.pager { display: flex; justify-content: space-between; font: 14px system-ui, sans-serif; margin-top: 40px; clear: both; }
+.pager a, .toc a, .src a, main p a:not(.m1):not(.m2) { color: var(--link); }
+.optree h3 { font-size: 18px; margin: 22px 0 4px; }
+.optree p { margin: 4px 0 4px 18px; }
+pre.tbl { font: 13px/1.45 ui-monospace, Menlo, Consolas, monospace; background: var(--panel); border: 1px solid var(--rule);
+  border-radius: 6px; padding: 10px 12px; overflow-x: auto; }
+table.tbl { border-collapse: collapse; font: 14px/1.4 system-ui, sans-serif; margin: 10px 0; }
+table.tbl th, table.tbl td { border-bottom: 1px solid var(--rule); padding: 4px 10px 4px 0; text-align: left; vertical-align: top; }
+table.tbl th { color: var(--muted); font-weight: 600; }
+.hub { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin: 20px 0; }
+.hub a.card { display: block; border: 1px solid var(--rule); border-radius: 8px; padding: 14px 16px; background: var(--panel);
+  color: var(--fg); text-decoration: none; }
+.hub a.card:hover { border-color: var(--muted); }
+.hub a.card strong { display: block; font-size: 19px; margin-bottom: 4px; color: var(--link); }
+.hub a.card span { font-size: 15px; color: var(--muted); }
+@media (max-width: 760px) {
+  .wrap { grid-template-columns: 1fr; gap: 16px; }
+  .side { position: sticky; top: 0; background: var(--bg); padding-bottom: 6px; z-index: 2; }
+  #board { max-width: 300px; margin: 0 auto; }
+  .panel { display: none; }
+  figure { float: none; margin: 8px 0; }
+}
+</style>
+</head>
+<body>
+<header><a href="../index.html">egdb-draughts</a><a href="index.html">Drie tegen een is gemeen</a><a href="twee-tegen-een.html">2 dammen tegen 1</a><a href="drie-tegen-een.html">3 dammen tegen 1</a><a href="vangstellingen.html">Vangstellingen</a><a href="tien-zonder-veld.html">10×10 met één veld weg</a></header>
+<div class="wrap">
+  <aside class="side">
+    <div id="board"></div>
+    <div class="buttons">
+      <button id="back" title="vorige stelling (←)">◀</button>
+      <button id="play" title="automatisch afspelen">▶︎▶︎</button>
+      <button id="fwd" title="volgende stelling (→)">▶</button>
+      <button id="nums" title="veldnummers aan/uit">#</button>
+    </div>
+    <div class="panel" id="panel"></div>
+  </aside>
+  <main>
+<h1>2 dammen tegen 1</h1>
+<pre class="tbl"> B \ L−B     0        1       2        3
+ 3         3/3*       7      11/9      11
+ 4          15*      13      13       21
+ 5        (7)/(3)    27     (9)/15    (9)
+ 6          (7)      (9)    (11)      (9)
+ 7        (7)/(5)    (9)    (9)/(11)  (9)
+ 8          (7)      (9)    (11)      (9)
+ 9        (7)/(5)    (9)    (9)/(11)  (9)
+10          (7)      (9)    (11)      (9)
+11        (7)/(5)    (9)    (9)/(11)  (9)
+12          (7)      (9)    (11)      (9)</pre>
+<p class="note">In de tabellen: <code>21</code> = gewonnen, langste winst 21 ply · <code>21*</code> = gewonnen als de sterke partij de lange lijn(en) bezet · <code>(21)</code> = remise (het getal is de langste winst onder de stellingen die wel gewonnen zijn) · <code>13/15</code> = p0/p1. Een bord <em>B × L</em> heeft <em>B</em> als kortste zijde; p1 = de hoekvelden zijn speelbaar, p0 = niet (alleen van belang bij oneven × oneven).</p>
+<ul>
+<li>Voor <em>B</em> ≤ 4 (gedegenereerde borden) winnen twee dammen altijd, op de vierkante borden als ze de lange
+lijn(en) bezetten.</li>
+<li>Voor <em>B</em> ≥ 5 zijn maar twee borden gewonnen: <strong>5×6</strong> (nieuw) en <strong>5×7 p1</strong>
+(bekend). Vanaf <em>B</em> = 6 is alles remise; de overige winsten zijn korte combinaties waarvan de lengte niet van
+de bordgrootte afhangt.</li>
+<li>Met de enkele dam aan zet zijn er op 5×6 (8) en 5×7 (16) een paar uitzonderingen: dubbele aanvallen (vorken).</li>
+</ul>
+<h2>5×6: de langste winst</h2>
+<figure><a class="diagram" href="#" data-i="0"><div class="smallboard" data-g="5x6" data-fen="W:WK1,K8:BK7"></div></a><figcaption>5×6, wit aan zet</figcaption></figure>
+<p>Wit aan zet wint in 27 ply, de langste winst op dit bord:</p>
+<p class="var"><a class="m1 " href="#" data-i="1" title="W27">1. c3-d4</a> <a class="m1 " href="#" data-i="2" title="L26">a3-c5</a> <a class="m1 " href="#" data-i="3" title="W25">2. d4-b2</a> <a class="m1 " href="#" data-i="4" title="L24">c5-e3</a> <a class="m1 " href="#" data-i="5" title="W23">3. a5-b4</a> <a class="m1 " href="#" data-i="6" title="L22">e3-c5</a> <a class="m1 " href="#" data-i="7" title="W21">4. b4-a3</a> <a class="m1 " href="#" data-i="8" title="L20">c5-e3</a> <a class="m1 " href="#" data-i="9" title="W19">5. b2-e5</a> <a class="m1 " href="#" data-i="10" title="L18">e3-f2</a> <a class="m1 " href="#" data-i="11" title="W17">6. a3-c5</a> <a class="m1 " href="#" data-i="12" title="L16">f2-e1</a> <a class="m1 " href="#" data-i="13" title="W15">7. e5-f4</a> <a class="m1 " href="#" data-i="14" title="L14">e1-c3</a> <a class="m1 " href="#" data-i="15" title="W13">8. f4-c1</a> <a class="m1 " href="#" data-i="16" title="L12">c3-e5</a> <a class="m1 " href="#" data-i="17" title="W11">9. c5-e3</a> <a class="m1 " href="#" data-i="18" title="L10">e5-c3</a> <a class="m1 " href="#" data-i="19" title="W9">10. c1-a3</a> <a class="m1 " href="#" data-i="20" title="L8">c3-e5</a> <a class="m1 " href="#" data-i="21" title="W7">11. e3-f4</a> <a class="m1 " href="#" data-i="22" title="L6">e5-d4</a> <a class="m1 " href="#" data-i="23" title="W5">12. a3-b2!</a> <a class="m1 " href="#" data-i="24" title="L4">d4×a1</a> <a class="m1 only" href="#" data-i="25" title="W3">13. f4-e5</a> <a class="m1 " href="#" data-i="26" title="L2">a1-b2</a> <a class="m1 only" href="#" data-i="27" title="W1">14. e5×a1+</a></p>
+<p>Het lange tempospel dient één doel: offeren zodat zwart <em>de hoek in</em> slaat, en dan de tweede dam achter hem op de hoekdiagonaal zetten. Ruim 80% van alle rustige winsten op 5×6 en 5×7 eindigt met een zwarte slag de hoek in.</p>
+<h2>5×7 p1: hetzelfde slotmotief</h2>
+<figure><a class="diagram" href="#" data-i="28"><div class="smallboard" data-g="5x7" data-fen="W:WK1,K9:BK2"></div></a><figcaption>5×7 p1, wit aan zet</figcaption></figure>
+<p>Op 5×7 p1 verschijnt hetzelfde slotmotief na 15 ply:</p>
+<p class="var"><a class="m1 " href="#" data-i="29" title="W15">1. c3-e5</a> <a class="m1 " href="#" data-i="30" title="L14">c5-a3</a> <a class="m1 " href="#" data-i="31" title="W13">2. a5-d2</a> <a class="m1 " href="#" data-i="32" title="L12">a3-c5</a> <a class="m1 " href="#" data-i="33" title="W11">3. d2-c1</a> <a class="m1 " href="#" data-i="34" title="L10">c5-f2</a> <a class="m1 " href="#" data-i="35" title="W9">4. e5-g3</a> <a class="m1 " href="#" data-i="36" title="L8">f2-c5</a> <a class="m1 " href="#" data-i="37" title="W7">5. c1-a3</a> <a class="m1 " href="#" data-i="38" title="L6">c5-d4</a> <a class="m1 " href="#" data-i="39" title="W5">6. a3-b2!</a> <a class="m1 " href="#" data-i="40" title="L4">d4×a1</a> <a class="m1 only" href="#" data-i="41" title="W3">7. g3-e5</a> <a class="m1 " href="#" data-i="42" title="L2">a1-b2</a> <a class="m1 only" href="#" data-i="43" title="W1">8. e5×a1+</a></p>
+<nav class="pager"><a href="index.html">← Overzicht</a><a href="drie-tegen-een.html">3 dammen tegen 1 →</a></nav>
+<p class="legend">Klik op een zet om de stelling op het grote bord te zien; ◀ ▶ (of de pijltjestoetsen) lopen door de
+variant. Waarden gelden voor de partij aan zet; bij een zet voor wie hem doet, met n het aantal ply tot het einde van
+de partij, de zet meegeteld: W = winst (oneven), L = verlies (even), D = remise.
+<span style="color:var(--link);font-weight:600">Blauw</span> = hoofdvariant,
+<span style="color:var(--m2)">groen</span> = zijvariant, <em>cursief</em> = voortzetting van de database,
+<span style="text-decoration:underline wavy var(--err)">golflijn</span> = zet die het resultaat verandert,
+<span style="color:var(--only)">*</span> = enige zet die de winst of de remise behoudt.</p>
+  </main>
+</div>
+<script>
+const POS = [{"f":"W:WK1,K8:BK7","v":"W27","last":null,"prev":null,"next":1,"g":"5x6","m":[["c3-d4","W27",1],["c3-e5","W27",null],["c3-d2","W27",null],["c3-a1","W27",null],["c3-e1","W29",null],["a5-b4","D",null],["c3-b4","D",null],["c3-b2","D",null]]},{"f":"B:WK1,K5:BK7","v":"L26","last":[8,5],"prev":0,"next":2,"g":"5x6","m":[["a3-c5","L26",2],["a3-c1","L24",null],["a3-b4","L2",null],["a3-b2","L2",null]]},{"f":"W:WK1,K5:BK2","v":"W25","last":[7,2],"prev":1,"next":3,"g":"5x6","m":[["d4-b2","W25",3],["d4-e5","W27",null],["d4-f2","W27",null],["d4-c3","W29",null],["d4-a1","W29",null],["a5-b4","D",null],["a5-c3","D",null],["a5-e1","D",null],["d4-e3","D",null],["a5-d2","L2",null]]},{"f":"B:WK1,K10:BK2","v":"L24","last":[5,10],"prev":2,"next":4,"g":"5x6","m":[["c5-e3","L24",4],["c5-a3","L24",null],["c5-f2","L22",null],["c5-d4","L2",null],["c5-b4","L2",null]]},{"f":"W:WK1,K10:BK9","v":"W23","last":[2,9],"prev":3,"next":5,"g":"5x6","m":[["a5-b4","W23",5],["a5-c3","W23",null],["b2-a3","W23",null],["b2-c1","W23",null],["a5-e1","W25",null],["b2-c3","W27",null],["b2-e5","W27",null],["b2-a1","W27",null],["b2-d4","D",null],["a5-d2","L2",null]]},{"f":"B:WK4,K10:BK9","v":"L22","last":[1,4],"prev":4,"next":6,"g":"5x6","m":[["e3-c5","L22",6],["e3-c1","L22",null],["e3-f4","L20",null],["e3-f2","L20",null],["e3-d4","L2",null],["e3-d2","L2",null]]},{"f":"W:WK4,K10:BK2","v":"W21","last":[9,2],"prev":5,"next":7,"g":"5x6","m":[["b4-a3","W21",7],["b2-a3","W21",null],["b4-d2","W23",null],["b4-a5","W25",3],["b4-c3","W25",null],["b4-e1","W27",null],["b2-c3","D",null],["b2-d4","D",null],["b2-e5","D",null],["b2-c1","D",null],["b2-a1","D",null]]},{"f":"B:WK7,K10:BK2","v":"L20","last":[4,7],"prev":6,"next":8,"g":"5x6","m":[["c5-e3","L20",8],["c5-f2","L20",null],["c5-d4","L2",null],["c5-b4","L2",null]]},{"f":"W:WK7,K10:BK9","v":"W19","last":[2,9],"prev":7,"next":9,"g":"5x6","m":[["b2-e5","W19",9],["b2-c1","W19",null],["a3-c5","W21",null],["b2-c3","W21",null],["a3-b4","W23",5],["b2-a1","W23",null],["b2-d4","D",null]]},{"f":"B:WK3,K7:BK9","v":"L18","last":[10,3],"prev":8,"next":10,"g":"5x6","m":[["e3-f2","L18",10],["e3-d2","L18",null],["e3-c5","L16",null],["e3-f4","L4",null],["e3-c1","L4",null],["e3-d4","L2",null]]},{"f":"W:WK3,K7:BK12","v":"W17","last":[9,12],"prev":9,"next":11,"g":"5x6","m":[["a3-c5","W17",11],["e5-f4","W21",null],["e5-c3","W21",null],["e5-b2","W21",null],["e5-a1","W23",null],["a3-b4","W25",null],["a3-b2","W25",null],["a3-c1","W25",null],["e5-d4","D",null]]},{"f":"B:WK2,K3:BK12","v":"L16","last":[7,2],"prev":10,"next":12,"g":"5x6","m":[["f2-e1","L16",12],["f2-e3","L2",null],["f2-d4","L2",null]]},{"f":"W:WK2,K3:BK15","v":"W15","last":[12,15],"prev":11,"next":13,"g":"5x6","m":[["e5-f4","W15",13],["c5-a3","W19",null],["e5-d4","W19",null],["e5-b2","W19",null],["e5-a1","W23",null],["c5-e3","W25",null],["c5-f2","W25",null],["c5-d4","W27",null],["c5-b4","D",null],["e5-c3","D",null]]},{"f":"B:WK2,K6:BK15","v":"L14","last":[3,6],"prev":12,"next":14,"g":"5x6","m":[["e1-c3","L14",14],["e1-a5","L12",null],["e1-f2","L4",null],["e1-d2","L2",null],["e1-b4","L2",null]]},{"f":"W:WK2,K6:BK8","v":"W13","last":[15,8],"prev":13,"next":15,"g":"5x6","m":[["f4-c1","W13",15],["c5-e3","W17",null],["c5-f2","W17",null],["c5-a3","W17",null],["f4-e5","W17",null],["f4-e3","W19",null],["c5-d4","D",null],["c5-b4","D",null],["f4-d2","D",null]]},{"f":"B:WK2,K14:BK8","v":"L12","last":[6,14],"prev":14,"next":16,"g":"5x6","m":[["c3-e5","L12",16],["c3-a5","L12",null],["c3-e1","L12",null],["c3-a1","L12",null],["c3-d4","L2",null],["c3-b4","L2",null],["c3-d2","L2",null],["c3-b2","L2",null]]},{"f":"W:WK2,K14:BK3","v":"W11","last":[8,3],"prev":15,"next":17,"g":"5x6","m":[["c5-e3","W11",17],["c5-f2","W15",null],["c1-d2","W17",null],["c5-b4","W19",null],["c1-e3","W19",null],["c1-a3","W19",null],["c5-a3","W21",null],["c1-f4","W27",null],["c5-d4","D",null],["c1-b2","D",null]]},{"f":"B:WK9,K14:BK3","v":"L10","last":[2,9],"prev":16,"next":18,"g":"5x6","m":[["e5-c3","L10",18],["e5-f4","L8",null],["e5-a1","L8",null],["e5-d4","L2",null],["e5-b2","L2",null]]},{"f":"W:WK9,K14:BK8","v":"W9","last":[3,8],"prev":17,"next":19,"g":"5x6","m":[["c1-a3","W9",19],["e3-c5","W13",15],["e3-f4","W23",null],["e3-f2","W27",null],["e3-d4","D",null],["e3-d2","D",null],["c1-d2","D",null],["c1-b2","D",null]]},{"f":"B:WK7,K9:BK8","v":"L8","last":[14,7],"prev":18,"next":20,"g":"5x6","m":[["c3-e5","L8",20],["c3-a5","L8",null],["c3-e1","L8",null],["c3-a1","L8",null],["c3-d4","L2",null],["c3-b4","L2",null],["c3-d2","L2",null],["c3-b2","L2",null]]},{"f":"W:WK7,K9:BK3","v":"W7","last":[8,3],"prev":19,"next":21,"g":"5x6","m":[["e3-f4","W7",21],["a3-c1","W11",17],["e3-f2","W17",null],["a3-c5","W19",null],["e3-c5","W19",null],["e3-d2","W19",null],["a3-b4","W21",null],["e3-c1","W21",null],["a3-b2","D",null],["e3-d4","D",null]]},{"f":"B:WK6,K7:BK3","v":"L6","last":[9,6],"prev":20,"next":22,"g":"5x6","m":[["e5-d4","L6",22],["e5-c3","L6",null],["e5-a1","L4",null],["e5-b2","L2",null]]},{"f":"W:WK6,K7:BK5","v":"W5","last":[3,5],"prev":21,"next":23,"g":"5x6","m":[["a3-b2","W5",23],["f4-d2","W17",null],["a3-b4","W17",null],["f4-c1","W21",null],["a3-c1","W21",null],["f4-e5","W23",null],["a3-c5","W27",null],["f4-e3","D",null]]},{"f":"B:WK6,K10:BK5","v":"L4","last":[7,10],"prev":22,"next":24,"g":"5x6","m":[["d4×a1","L4",24]]},{"f":"W:WK6:BK13","v":"W3","last":[5,13],"prev":23,"next":25,"g":"5x6","m":[["f4-e5","W3",25],["f4-e3","D",null],["f4-d2","D",null],["f4-c1","D",null]]},{"f":"B:WK3:BK13","v":"L2","last":[6,3],"prev":24,"next":26,"g":"5x6","m":[["a1-b2","L2",26],["a1-c3","L2",null],["a1-d4","L2",null]]},{"f":"W:WK3:BK10","v":"W1","last":[13,10],"prev":25,"next":27,"g":"5x6","m":[["e5×a1","W1",27]]},{"f":"B:WK13:B","v":"L0","last":[3,13],"prev":26,"next":null,"g":"5x6","m":[]},{"f":"W:WK1,K9:BK2","v":"W15","last":null,"prev":null,"next":29,"g":"5x7","m":[["c3-e5","W15",29],["c3-d2","W15",null],["c3-e1","W15",null],["c3-b2","W15",null],["c3-a1","W17",null],["a5-b4","D",null],["c3-d4","D",null],["c3-b4","D",null]]},{"f":"B:WK1,K3:BK2","v":"L14","last":[9,3],"prev":28,"next":30,"g":"5x7","m":[["c5-a3","L14",30],["c5-e3","L12",null],["c5-f2","L12",null],["c5-g1","L12",null],["c5-d4","L2",null],["c5-b4","L2",null]]},{"f":"W:WK1,K3:BK8","v":"W13","last":[2,8],"prev":29,"next":31,"g":"5x7","m":[["a5-d2","W13",31],["a5-e1","W13",null],["e5-g3","W13",null],["a5-c3","W15",null],["e5-f4","W17",null],["e5-d4","W17",null],["e5-c3","W17",null],["e5-a1","W17",null],["a5-b4","D",null],["e5-b2","D",null]]},{"f":"B:WK3,K13:BK8","v":"L12","last":[1,13],"prev":30,"next":32,"g":"5x7","m":[["a3-c5","L12",32],["a3-c1","L12",null],["a3-b4","L2",null],["a3-b2","L2",null]]},{"f":"W:WK3,K13:BK2","v":"W11","last":[8,2],"prev":31,"next":33,"g":"5x7","m":[["e5-g3","W11",null],["d2-c1","W11",33],["d2-f4","W13",null],["d2-g5","W13",null],["e5-c3","W15",null],["e5-b2","W15",null],["e5-a1","W15",null],["d2-c3","W15",null],["d2-a5","W15",29],["d2-e1","W15",null],["e5-f4","D",null],["d2-e3","D",null],["d2-b4","D",null],["e5-d4","L2",null]]},{"f":"B:WK3,K16:BK2","v":"L10","last":[13,16],"prev":32,"next":34,"g":"5x7","m":[["c5-f2","L10",34],["c5-g1","L10",null],["c5-b4","L10",null],["c5-a3","L10",null],["c5-d4","L2",null],["c5-e3","L2",null]]},{"f":"W:WK3,K16:BK14","v":"W9","last":[2,14],"prev":33,"next":35,"g":"5x7","m":[["e5-g3","W9",35],["c1-b2","W11",null],["c1-a3","W11",null],["e5-f4","W13",null],["e5-c3","W13",null],["e5-b2","W13",null],["e5-a1","W13",null],["c1-d2","W13",null],["c1-f4","W13",null],["c1-g5","W13",null],["e5-d4","D",null],["c1-e3","D",null]]},{"f":"B:WK11,K16:BK14","v":"L8","last":[3,11],"prev":34,"next":36,"g":"5x7","m":[["f2-c5","L8",36],["f2-g1","L8",null],["f2-e1","L8",null],["f2-d4","L6",null],["f2-e3","L2",null]]},{"f":"W:WK11,K16:BK2","v":"W7","last":[14,2],"prev":35,"next":37,"g":"5x7","m":[["c1-a3","W7",37],["g3-f4","W11",null],["g3-e5","W11",33],["g3-e1","W11",null],["c1-d2","W11",null],["c1-b2","W11",null],["c1-f4","W13",null],["c1-g5","W13",null],["g3-f2","D",null],["c1-e3","D",null]]},{"f":"B:WK8,K11:BK2","v":"L6","last":[16,8],"prev":36,"next":38,"g":"5x7","m":[["c5-d4","L6",38],["c5-e3","L6",null],["c5-g1","L4",null],["c5-f2","L2",null],["c5-b4","L2",null]]},{"f":"W:WK8,K11:BK6","v":"W5","last":[2,6],"prev":37,"next":39,"g":"5x7","m":[["a3-b2","W5",39],["g3-f2","W5",null],["a3-b4","W9",null],["a3-c5","W9",null],["a3-c1","W9",null],["g3-f4","W9",null],["g3-e5","W9",null],["g3-e1","W9",null]]},{"f":"B:WK11,K12:BK6","v":"L4","last":[8,12],"prev":38,"next":40,"g":"5x7","m":[["d4×a1","L4",40]]},{"f":"W:WK11:BK15","v":"W3","last":[6,15],"prev":39,"next":41,"g":"5x7","m":[["g3-e5","W3",41],["g3-f4","D",null],["g3-f2","D",null],["g3-e1","D",null]]},{"f":"B:WK3:BK15","v":"L2","last":[11,3],"prev":40,"next":42,"g":"5x7","m":[["a1-b2","L2",42],["a1-c3","L2",null],["a1-d4","L2",null]]},{"f":"W:WK3:BK12","v":"W1","last":[15,12],"prev":41,"next":43,"g":"5x7","m":[["e5×a1","W1",43]]},{"f":"B:WK15:B","v":"L0","last":[3,15],"prev":42,"next":null,"g":"5x7","m":[]}];
+const GEOMS = {"5x6":{"w":6,"h":5,"parity":1,"sq":{"1":[0,4],"2":[2,4],"3":[4,4],"4":[1,3],"5":[3,3],"6":[5,3],"7":[0,2],"8":[2,2],"9":[4,2],"10":[1,1],"11":[3,1],"12":[5,1],"13":[0,0],"14":[2,0],"15":[4,0]},"lake":[],"alg":true},"5x7":{"w":7,"h":5,"parity":1,"sq":{"1":[0,4],"2":[2,4],"3":[4,4],"4":[6,4],"5":[1,3],"6":[3,3],"7":[5,3],"8":[0,2],"9":[2,2],"10":[4,2],"11":[6,2],"12":[1,1],"13":[3,1],"14":[5,1],"15":[0,0],"16":[2,0],"17":[4,0],"18":[6,0]},"lake":[],"alg":true}};
+let cur = 0, showNums = true, timer = null;
+
+function parse(fen) {
+  const cells = {};
+  for (const part of fen.split(':').slice(1)) {
+    const side = part[0];
+    for (const it of part.slice(1).split(',')) {
+      if (!it) continue;
+      const king = it[0] === 'K';
+      cells[+(king ? it.slice(1) : it)] = side === 'W' ? (king ? 'W' : 'w') : (king ? 'B' : 'b');
+    }
+  }
+  return cells;
+}
+
+// board geometry: GEOMS[id] = {w, h, sq: {pdn: [file, rank]}, lake: [[file, rank]], alg: bool}
+// rank 0 is the bottom row; every playable or removed square is a dark square
+function svg(fen, last, nums, gid) {
+  const G = GEOMS[gid], cells = parse(fen), hl = new Set(last || []);
+  const at = {};
+  for (const [n, [f, r]] of Object.entries(G.sq)) at[f + ',' + r] = +n;
+  const lake = new Set((G.lake || []).map(([f, r]) => f + ',' + r));
+  let s = `<svg viewBox="0 0 ${G.w} ${G.h}" xmlns="http://www.w3.org/2000/svg">`;
+  for (let y = 0; y < G.h; y++) for (let c = 0; c < G.w; c++) {
+    const key = c + ',' + (G.h - 1 - y), sq = at[key];
+    if (lake.has(key)) {
+      s += `<rect x="${c}" y="${y}" width="1" height="1" fill="var(--lake)"/>`;
+      continue;
+    }
+    s += `<rect x="${c}" y="${y}" width="1" height="1" fill="var(--${sq ? 'dark' : 'light'})"/>`;
+    if (!sq) continue;
+    if (hl.has(sq)) s += `<rect x="${c}" y="${y}" width="1" height="1" fill="var(--hl)" opacity=".55"/>`;
+    if (nums) {
+      const t = G.alg ? String.fromCharCode(97 + c) + (G.h - y) : sq;
+      s += `<text x="${c + .06}" y="${y + .22}" font-size=".19" font-family="system-ui,sans-serif" fill="var(--num)">${t}</text>`;
+    }
+    const p = cells[sq];
+    if (!p) continue;
+    const w = p === 'w' || p === 'W', cx = c + .5, cy = y + .5;
+    const fill = w ? 'var(--wpiece)' : 'var(--bpiece)', stroke = w ? 'var(--wstroke)' : 'var(--bstroke)';
+    s += `<circle cx="${cx}" cy="${cy + .035}" r=".37" fill="rgba(0,0,0,.25)"/>`;
+    s += `<circle cx="${cx}" cy="${cy}" r=".37" fill="${fill}" stroke="${stroke}" stroke-width=".03"/>`;
+    s += `<circle cx="${cx}" cy="${cy}" r=".25" fill="none" stroke="${stroke}" stroke-width=".02" opacity=".5"/>`;
+    if (p === 'W' || p === 'B') {
+      const col = w ? '#9a6b12' : '#e2b44a';
+      s += `<path d="M${cx - .17} ${cy + .09} L${cx - .2} ${cy - .1} L${cx - .08} ${cy - .01} L${cx} ${cy - .15} L${cx + .08} ${cy - .01} L${cx + .2} ${cy - .1} L${cx + .17} ${cy + .09} Z" fill="${col}"/>`;
+    }
+  }
+  return s + '</svg>';
+}
+
+function go(i) {
+  if (i === null || i === undefined || i < 0 || i >= POS.length) return;
+  cur = i;
+  const p = POS[i];
+  document.getElementById('board').innerHTML = svg(p.f, p.last, showNums, p.g);
+  document.querySelectorAll('a.cur').forEach(a => a.classList.remove('cur'));
+  document.querySelectorAll(`a[data-i="${i}"]`).forEach(a => a.classList.add('cur'));
+  const side = p.f[0] === 'W' ? 'wit' : 'zwart';
+  const next = p.next !== null ? POS[p.next].f : null;
+  let h = `<div class="stm">${side} aan zet: ${p.v}</div>`;
+  if (!p.m.length) h += '<div>geen zetten: verloren</div>';
+  h += '<table>';
+  for (const [n, v, j] of p.m) {
+    const played = j !== null && j !== undefined && POS[j].f === next;
+    const mv = j !== null && j !== undefined ? `<a href="#" data-go="${j}">${n}</a>` : n;
+    h += `<tr class="${played ? 'played' : ''}"><td>${mv}</td><td>${v}</td></tr>`;
+  }
+  document.getElementById('panel').innerHTML = h + '</table>';
+}
+
+document.addEventListener('click', e => {
+  const a = e.target.closest('a[data-i], a[data-go]');
+  if (!a) return;
+  e.preventDefault();
+  stop();
+  go(+(a.dataset.i ?? a.dataset.go));
+});
+function stop() { if (timer) { clearInterval(timer); timer = null; document.getElementById('play').textContent = '▶︎▶︎'; } }
+document.getElementById('back').onclick = () => { stop(); go(POS[cur].prev); };
+document.getElementById('fwd').onclick = () => { stop(); go(POS[cur].next); };
+document.getElementById('nums').onclick = () => { showNums = !showNums; go(cur); };
+document.getElementById('play').onclick = () => {
+  if (timer) return stop();
+  document.getElementById('play').textContent = '❚❚';
+  timer = setInterval(() => { if (POS[cur].next === null) stop(); else go(POS[cur].next); }, 900);
+};
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowLeft') { stop(); go(POS[cur].prev); }
+  if (e.key === 'ArrowRight') { stop(); go(POS[cur].next); }
+});
+document.querySelectorAll('.smallboard').forEach(d => { d.innerHTML = svg(d.dataset.fen, null, false, d.dataset.g); });
+const first = document.querySelector('figure a[data-i]');
+go(first ? +first.dataset.i : 0);
+</script>
+</body>
+</html>

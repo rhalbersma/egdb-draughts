@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>De vesting in de dubbele hoek · Checkers: 3 dammen tegen 2</title>
+<style>
+:root {
+  --bg: #fbfaf7; --fg: #1d1d1b; --muted: #6b6a66; --rule: #e3e0d8; --panel: #f3f1ec;
+  --light: #efe6d2; --dark: #9c7a54; --hl: #d8b24a; --num: rgba(255,255,255,.75);
+  --wpiece: #fbf8f1; --wstroke: #4a4440; --bpiece: #2a2623; --bstroke: #000;
+  --link: #1f5f8b; --m2: #5b7d3a; --err: #b3261e; --only: #8a5a00; --db: #6d4aa8;
+  --active: #fff1b8; --lake: #8fb3c9;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #161514; --fg: #e9e6df; --muted: #a29e95; --rule: #34312d; --panel: #201e1c;
+    --light: #c9b99a; --dark: #6e5236; --hl: #c79a2a; --num: rgba(255,255,255,.6);
+    --link: #7fb6dd; --m2: #9cc06e; --err: #f2766d; --only: #e0b04f; --db: #b79cf0; --active: #4a4020; --lake: #3d5a6c;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #161514; --fg: #e9e6df; --muted: #a29e95; --rule: #34312d; --panel: #201e1c;
+  --light: #c9b99a; --dark: #6e5236; --hl: #c79a2a; --num: rgba(255,255,255,.6);
+  --link: #7fb6dd; --m2: #9cc06e; --err: #f2766d; --only: #e0b04f; --db: #b79cf0; --active: #4a4020; --lake: #3d5a6c;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 17px/1.6 Charter, "Bitstream Charter", "Sitka Text", Cambria, Georgia, serif; }
+header { border-bottom: 1px solid var(--rule); padding: 10px 16px; font: 14px/1.4 system-ui, sans-serif; }
+header a { color: var(--muted); text-decoration: none; margin-right: 18px; }
+.wrap { display: grid; grid-template-columns: minmax(280px, 420px) minmax(0, 1fr); gap: 40px;
+  max-width: 1180px; margin: 0 auto; padding: 24px 16px 64px; }
+.side { position: sticky; top: 16px; align-self: start; }
+#board svg { width: 100%; height: auto; display: block; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+.buttons { display: flex; gap: 8px; margin: 10px 0; }
+.buttons button { flex: 1; padding: 6px 0; font: 16px system-ui, sans-serif; color: var(--fg); background: var(--panel);
+  border: 1px solid var(--rule); border-radius: 6px; cursor: pointer; }
+.buttons button:hover { border-color: var(--muted); }
+.panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px;
+  font: 14px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+.panel .stm { font-weight: 600; margin-bottom: 4px; }
+.panel table { border-collapse: collapse; width: 100%; }
+.panel td { padding: 1px 6px 1px 0; }
+.panel tr.played td { background: var(--active); }
+.panel a { color: var(--link); text-decoration: none; }
+main { min-width: 0; }
+h1 { font-size: 30px; line-height: 1.2; margin: 0 0 16px; }
+h2 { font-size: 22px; margin: 36px 0 8px; }
+a.m1, a.m2 { text-decoration: none; white-space: nowrap; border-radius: 3px; padding: 0 1px; }
+a.m1 { color: var(--link); font-weight: 600; }
+a.m2 { color: var(--m2); }
+a.db { font-style: italic; }
+a.err { text-decoration: underline wavy var(--err); text-underline-offset: 3px; }
+a.only::after { content: "*"; color: var(--only); }
+a.cur { background: var(--active); }
+.val { font: 14px ui-monospace, Menlo, Consolas, monospace; color: var(--muted); }
+blockquote { margin: 16px 0; padding: 4px 16px; border-left: 3px solid var(--dark); font-style: italic; }
+figure { float: right; margin: 4px 0 12px 20px; text-align: center; }
+figure .smallboard { width: 150px; }
+figcaption { font: 13px system-ui, sans-serif; color: var(--muted); margin-top: 4px; }
+p.var { margin: 10px 0; }
+.verdict { font: 13px system-ui, sans-serif; padding: 1px 7px; border-radius: 10px; margin-left: 6px; white-space: nowrap; }
+.verdict.ok { background: rgba(60,140,60,.15); }
+.verdict.bad { background: rgba(179,38,30,.15); }
+.note { font-size: 15px; color: var(--muted); }
+.legend { font: 13px/1.6 system-ui, sans-serif; color: var(--muted); border-top: 1px solid var(--rule); margin-top: 32px; padding-top: 12px; }
+.src { font-size: 14px; color: var(--muted); }
+section.diag { clear: both; border-top: 1px solid var(--rule); padding-top: 8px; margin-top: 28px; }
+section.diag h3 { font-size: 19px; margin: 6px 0 4px; }
+.claim { margin: 6px 0; }
+.moves { font-size: 15px; }
+.issues { font: 14px/1.5 system-ui, sans-serif; color: var(--muted); margin: 2px 0 0; padding-left: 18px; }
+.refute { display: flow-root; background: var(--panel); border-left: 3px solid var(--err); padding: 6px 12px; margin: 10px 0; border-radius: 0 6px 6px 0; }
+.refute .t { font: 13px system-ui, sans-serif; color: var(--muted); }
+.toc { list-style: none; padding: 0; }
+.toc li { padding: 5px 0; border-bottom: 1px solid var(--rule); }
+.toc .h { color: var(--muted); font: 14px system-ui, sans-serif; display: inline-block; min-width: 150px; }
+.toc .cnt { font: 13px system-ui, sans-serif; color: var(--muted); margin-left: 8px; }
+.toc .orig { font: 13px system-ui, sans-serif; margin-left: 8px; }
+.pager { display: flex; justify-content: space-between; font: 14px system-ui, sans-serif; margin-top: 40px; clear: both; }
+.pager a, .toc a, .src a, main p a:not(.m1):not(.m2) { color: var(--link); }
+.optree h3 { font-size: 18px; margin: 22px 0 4px; }
+.optree p { margin: 4px 0 4px 18px; }
+pre.tbl { font: 13px/1.45 ui-monospace, Menlo, Consolas, monospace; background: var(--panel); border: 1px solid var(--rule);
+  border-radius: 6px; padding: 10px 12px; overflow-x: auto; }
+table.tbl { border-collapse: collapse; font: 14px/1.4 system-ui, sans-serif; margin: 10px 0; }
+table.tbl th, table.tbl td { border-bottom: 1px solid var(--rule); padding: 4px 10px 4px 0; text-align: left; vertical-align: top; }
+table.tbl th { color: var(--muted); font-weight: 600; }
+.hub { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin: 20px 0; }
+.hub a.card { display: block; border: 1px solid var(--rule); border-radius: 8px; padding: 14px 16px; background: var(--panel);
+  color: var(--fg); text-decoration: none; }
+.hub a.card:hover { border-color: var(--muted); }
+.hub a.card strong { display: block; font-size: 19px; margin-bottom: 4px; color: var(--link); }
+.hub a.card span { font-size: 15px; color: var(--muted); }
+@media (max-width: 760px) {
+  .wrap { grid-template-columns: 1fr; gap: 16px; }
+  .side { position: sticky; top: 0; background: var(--bg); padding-bottom: 6px; z-index: 2; }
+  #board { max-width: 300px; margin: 0 auto; }
+  .panel { display: none; }
+  figure { float: none; margin: 8px 0; }
+}
+</style>
+</head>
+<body>
+<header><a href="../index.html">egdb-draughts</a><a href="index.html">Checkers: 3 dammen tegen 2</a><a href="vesting.html">De vesting in de dubbele hoek</a></header>
+<div class="wrap">
+  <aside class="side">
+    <div id="board"></div>
+    <div class="buttons">
+      <button id="back" title="vorige stelling (←)">◀</button>
+      <button id="play" title="automatisch afspelen">▶︎▶︎</button>
+      <button id="fwd" title="volgende stelling (→)">▶</button>
+      <button id="nums" title="veldnummers aan/uit">#</button>
+    </div>
+    <div class="panel" id="panel"></div>
+  </aside>
+  <main>
+<h1>De vesting in de dubbele hoek</h1>
+
+<p>Een dam op de twee randvelden van een dubbele hoek kan nooit geslagen worden en heeft altijd een wachtzet. Op 8×9 en
+9×10 maakt een zwarte dam in elke dubbele hoek remise in precies de helft van de stellingen, en welke helft dat is,
+beslist de <strong>oppositie</strong>: de pariteit van de som van de rijen van alle stukken wisselt bij elke zet, en
+dammen kunnen geen tempo verliezen, dus wie de oppositie heeft, ligt vanaf het begin vast.</p>
+<table class="tbl"><tr><th>Zwart in beide dubbele hoeken</th><th>Pariteit 0</th><th>Pariteit 1</th></tr>
+<tr><td>8×9</td><td>99,5% remise</td><td>0,0% remise</td></tr>
+<tr><td>9×10</td><td>99,8%</td><td>0,0%</td></tr>
+<tr><td>10×11</td><td>99,9%</td><td>99,9%</td></tr></table>
+<h2>8×9: oppositie</h2>
+<figure><a class="diagram" href="#" data-i="0"><div class="smallboard" data-g="8x9" data-fen="W:WK6,K7,K8:BK5,K9"></div></a><figcaption>8×9, wit aan zet</figcaption></figure>
+<p>Zwart op a7 en i7 (pendelend met b8 en h8), wit op c7, e7 en g7. Met wit aan zet (D) houdt elke zet remise: zwart pendelt gewoon a7-b8-a7. <a class="m1" href="#" data-i="33">1. c7-d8</a> <span class="val">D</span>, <a class="m1" href="#" data-i="34">1. c7-b8</a> <span class="val">D</span>, <a class="m1" href="#" data-i="35">1. c7-d6</a> <span class="val">D</span>, <a class="m1" href="#" data-i="36">1. c7-b6</a> <span class="val">D</span>, <a class="m1" href="#" data-i="37">1. e7-f8</a> <span class="val">D</span>, <a class="m1" href="#" data-i="38">1. e7-d8</a> <span class="val">D</span>, <a class="m1" href="#" data-i="39">1. e7-f6</a> <span class="val">D</span>, <a class="m1" href="#" data-i="40">1. e7-d6</a> <span class="val">D</span>, <a class="m1" href="#" data-i="41">1. g7-h8</a> <span class="val">D</span>, <a class="m1" href="#" data-i="42">1. g7-f8</a> <span class="val">D</span>, <a class="m1" href="#" data-i="43">1. g7-h6</a> <span class="val">D</span>, <a class="m1" href="#" data-i="44">1. g7-f6</a> <span class="val">D</span>.</p>
+<p>Met zwart aan zet staat zwart in zetdwang en verliest in 28 ply: <a class="m1 " href="#" data-i="2" title="L28">1. … a7-b8</a> <a class="m1 " href="#" data-i="3" title="W27">2. g7-f8!</a> <a class="m1 " href="#" data-i="4" title="L26">b8×d6</a> <a class="m1 only" href="#" data-i="5" title="W25">3. e7×c5</a> en 2 tegen 1 wint: <a class="m1 db" href="#" data-i="6" title="L24">3. … i7-h8</a> <a class="m1 db" href="#" data-i="7" title="W23">4. c5-d6</a> <a class="m1 db" href="#" data-i="8" title="L22">h8-i7</a> <a class="m1 db" href="#" data-i="9" title="W21">5. d6-e7</a> <a class="m1 db" href="#" data-i="10" title="L20">i7-h8</a> <a class="m1 db" href="#" data-i="11" title="W19">6. e7-f6</a> <a class="m1 db" href="#" data-i="12" title="L18">h8-i7</a> <a class="m1 db" href="#" data-i="13" title="W17">7. f8-g7</a> <a class="m1 db" href="#" data-i="14" title="L16">i7-h8</a> <a class="m1 db" href="#" data-i="15" title="W15">8. g7-h6</a> <a class="m1 db" href="#" data-i="16" title="L14">h8-i7</a> <a class="m1 db" href="#" data-i="17" title="W13">9. f6-g5</a> <a class="m1 db" href="#" data-i="18" title="L12">i7-h8</a> <a class="m1 db" href="#" data-i="19" title="W11">10. h6-i7</a> <a class="m1 db" href="#" data-i="20" title="L10">h8-g7</a> <a class="m1 db" href="#" data-i="21" title="W9">11. i7-h8</a> <a class="m1 db" href="#" data-i="22" title="L8">g7-f8</a> <a class="m1 db" href="#" data-i="23" title="W7">12. g5-f4</a> <a class="m1 db" href="#" data-i="24" title="L6">f8-e7</a> <a class="m1 db" href="#" data-i="25" title="W5">13. f4-e5</a> <a class="m1 db" href="#" data-i="26" title="L4">e7-f8</a> <a class="m1 db" href="#" data-i="27" title="W3">14. e5-d6</a> <a class="m1 db" href="#" data-i="28" title="L2">f8-g7</a> <a class="m1 only db" href="#" data-i="29" title="W1">15. h8×f6+</a></p>
+<div style="clear:both"></div>
+<figure><a class="diagram" href="#" data-i="30"><div class="smallboard" data-g="8x9" data-fen="W:WK11,K7,K8:BK5,K9"></div></a><figcaption>8×9, wit aan zet</figcaption></figure>
+<p>Met de witte dam op d6 in plaats van c7 (W29) wint wit met <a class="m1 " href="#" data-i="31" title="W29">1. d6-c7!</a>, en bereikt zo dezelfde stelling met zwart aan zet.</p>
+<div style="clear:both"></div>
+
+<h2>De afstandsregel</h2>
+<p>Wat beslist, is de afstand tussen de hoeken van de dubbele hoeken die zwart bezet (<em>D</em> = grootste,
+<em>d</em> = kleinste coördinaatverschil; <em>d</em> = 0 als ze aan dezelfde kant liggen), niet of ze aan dezelfde
+kant liggen:</p>
+<table class="tbl"><tr><th>Borden</th><th>D × d</th><th>Vesting</th></tr>
+<tr><td>6×7, 7×8, 7×9 p0 (verticaal paar)</td><td>6 × 0</td><td>valt</td></tr>
+<tr><td>8×8</td><td>7 × 7</td><td>valt</td></tr>
+<tr><td>8×9, 9×10, 9×9 p0 (zelfde kant), 7×9 p0 (horizontaal)</td><td>8 × 0</td><td>oppositie beslist</td></tr>
+<tr><td>7×9 p0 (diagonaal paar)</td><td>8 × 6</td><td>oppositie beslist</td></tr>
+<tr><td>9×9 p0 (diagonaal paar)</td><td>8 × 8</td><td>houdt</td></tr>
+<tr><td>8×10, 10×10, 10×11, 10×12</td><td>≥ 9</td><td>houdt</td></tr></table>
+<p><em>D</em> ≤ 7: de vesting valt · <em>D</em> = 8: de oppositie beslist, tenzij ook <em>d</em> = 8 ·
+<em>D</em> ≥ 9: de vesting houdt.</p>
+<h2>9×9 p0: één hoek bevriezen kost drie dammen</h2>
+<figure><a class="diagram" href="#" data-i="32"><div class="smallboard" data-g="9x9 p0" data-fen="W:WK32,K33,K29:BK37,K9"></div></a><figcaption>9×9 p0, wit aan zet</figcaption></figure>
+<p>Op 9×9 p0 kost het bevriezen van één hoek al alle drie de witte dammen (één op het pendelveld, één die de uitgang blokkeert, één die de blokkeerder dekt), dus de andere zwarte dam pendelt gewoon (D): <a class="m1" href="#" data-i="45">1. a2-b3</a> <span class="val">D</span>, <a class="m1" href="#" data-i="46">1. c2-b3</a> <span class="val">D</span>, <a class="m1" href="#" data-i="47">1. c2-d1</a> <span class="val">D</span>, <a class="m1" href="#" data-i="48">1. d3-e2</a> <span class="val">L38</span>, <a class="m1" href="#" data-i="49">1. d3-e4</a> <span class="val">L34</span>, <a class="m1" href="#" data-i="50">1. d3-c4</a> <span class="val">L30</span>.</p>
+<nav class="pager"><a href="index.html">← Overzicht</a><span></span></nav>
+<p class="legend">Klik op een zet om de stelling op het grote bord te zien; ◀ ▶ (of de pijltjestoetsen) lopen door de
+variant. Waarden gelden voor de partij aan zet; bij een zet voor wie hem doet, met n het aantal ply tot het einde van
+de partij, de zet meegeteld: W = winst (oneven), L = verlies (even), D = remise.
+<span style="color:var(--link);font-weight:600">Blauw</span> = hoofdvariant,
+<span style="color:var(--m2)">groen</span> = zijvariant, <em>cursief</em> = voortzetting van de database,
+<span style="text-decoration:underline wavy var(--err)">golflijn</span> = zet die het resultaat verandert,
+<span style="color:var(--only)">*</span> = enige zet die de winst of de remise behoudt.</p>
+  </main>
+</div>
+<script>
+const POS = [{"f":"W:WK6,K7,K8:BK5,K9","v":"D","last":null,"prev":null,"next":33,"g":"8x9","m":[["c7-d8","D",33],["c7-b8","D",34],["c7-d6","D",35],["c7-b6","D",36],["e7-f8","D",37],["e7-d8","D",38],["e7-f6","D",39],["e7-d6","D",40],["g7-h8","D",41],["g7-f8","D",42],["g7-h6","D",43],["g7-f6","D",44]]},{"f":"B:WK6,K7,K8:BK5,K9","v":"L28","last":null,"prev":null,"next":2,"g":"8x9","m":[["a7-b8","L28",2],["i7-h8","L28",null],["a7-b6","L12",null],["i7-h6","L12",null]]},{"f":"W:WK6,K7,K8:BK1,K9","v":"W27","last":[5,1],"prev":1,"next":3,"g":"8x9","m":[["g7-f8","W27",3],["c7-d8","W31",null],["c7-d6","W35",null],["c7-b6","W35",null],["e7-d6","W35",null],["e7-f8","D",null],["e7-d8","D",null],["e7-f6","D",null],["g7-h6","L14",null],["g7-f6","L14",null],["g7-h8","L4",null]]},{"f":"B:WK3,K6,K7:BK1,K9","v":"L26","last":[8,3],"prev":2,"next":4,"g":"8x9","m":[["b8×d6","L26",4]]},{"f":"W:WK3,K7:BK9,K11","v":"W25","last":[1,11],"prev":3,"next":5,"g":"8x9","m":[["e7×c5","W25",5]]},{"f":"B:WK3,K15:BK9","v":"L24","last":[7,15],"prev":4,"next":6,"g":"8x9","m":[["i7-h8","L24",6],["i7-h6","L24",null]]},{"f":"W:WK3,K15:BK4","v":"W23","last":[9,4],"prev":5,"next":7,"g":"8x9","m":[["c5-d6","W23",7],["c5-d4","W23",null],["f8-e7","W27",null],["c5-b6","W27",null],["c5-b4","W27",null],["f8-g7","D",null]]},{"f":"B:WK3,K11:BK4","v":"L22","last":[15,11],"prev":6,"next":8,"g":"8x9","m":[["h8-i7","L22",8],["h8-g7","L2",null]]},{"f":"W:WK3,K11:BK9","v":"W21","last":[4,9],"prev":7,"next":9,"g":"8x9","m":[["d6-e7","W21",9],["d6-e5","W21",null],["f8-g7","W25",null],["f8-e7","W25",null],["d6-c7","W25",null],["d6-c5","W25",5]]},{"f":"B:WK3,K7:BK9","v":"L20","last":[11,7],"prev":8,"next":10,"g":"8x9","m":[["i7-h8","L20",10],["i7-h6","L20",null]]},{"f":"W:WK3,K7:BK4","v":"W19","last":[9,4],"prev":9,"next":11,"g":"8x9","m":[["e7-f6","W19",11],["e7-d8","W23",null],["e7-d6","W23",7],["f8-g7","L2",null]]},{"f":"B:WK3,K12:BK4","v":"L18","last":[7,12],"prev":10,"next":12,"g":"8x9","m":[["h8-i7","L18",12],["h8-g7","L2",null]]},{"f":"W:WK3,K12:BK9","v":"W17","last":[4,9],"prev":11,"next":13,"g":"8x9","m":[["f8-g7","W17",13],["f8-e7","W21",null],["f6-g7","W21",null],["f6-e7","W21",9],["f6-g5","W21",null],["f6-e5","W21",null]]},{"f":"B:WK8,K12:BK9","v":"L16","last":[3,8],"prev":12,"next":14,"g":"8x9","m":[["i7-h8","L16",14],["i7-h6","L2",null]]},{"f":"W:WK8,K12:BK4","v":"W15","last":[9,4],"prev":13,"next":15,"g":"8x9","m":[["g7-h6","W15",15],["g7-f8","W19",11],["f6-e7","L2",null],["f6-g5","L2",null],["f6-e5","L2",null]]},{"f":"B:WK12,K13:BK4","v":"L14","last":[8,13],"prev":14,"next":16,"g":"8x9","m":[["h8-i7","L14",16],["h8-g7","L2",null]]},{"f":"W:WK12,K13:BK9","v":"W13","last":[4,9],"prev":15,"next":17,"g":"8x9","m":[["f6-g5","W13",17],["h6-g7","W17",13],["h6-i5","W17",null],["h6-g5","W17",null],["f6-g7","D",null],["f6-e7","D",null],["f6-e5","D",null]]},{"f":"B:WK13,K17:BK9","v":"L12","last":[12,17],"prev":16,"next":18,"g":"8x9","m":[["i7-h8","L12",18]]},{"f":"W:WK13,K17:BK4","v":"W11","last":[9,4],"prev":17,"next":19,"g":"8x9","m":[["h6-i7","W11",19],["g5-f6","W15",15],["g5-h4","W15",null],["g5-f4","W15",null],["h6-i5","W19",null],["h6-g7","L2",null]]},{"f":"B:WK9,K17:BK4","v":"L10","last":[13,9],"prev":18,"next":20,"g":"8x9","m":[["h8-g7","L10",20]]},{"f":"W:WK9,K17:BK8","v":"W9","last":[4,8],"prev":19,"next":21,"g":"8x9","m":[["i7-h8","W9",21],["g5-f4","W11",null],["g5-h4","W37",null],["i7-h6","D",null],["g5-h6","D",null],["g5-f6","D",null]]},{"f":"B:WK4,K17:BK8","v":"L8","last":[9,4],"prev":20,"next":22,"g":"8x9","m":[["g7-f8","L8",22],["g7-h6","L2",null],["g7-f6","L2",null]]},{"f":"W:WK4,K17:BK3","v":"W7","last":[8,3],"prev":21,"next":23,"g":"8x9","m":[["g5-f4","W7",23],["g5-f6","W9",null],["h8-i7","W35",null],["g5-h6","W35",null],["g5-h4","W35",null],["h8-g7","L2",null]]},{"f":"B:WK4,K21:BK3","v":"L6","last":[17,21],"prev":22,"next":24,"g":"8x9","m":[["f8-e7","L6",24],["f8-g7","L2",null]]},{"f":"W:WK4,K21:BK7","v":"W5","last":[3,7],"prev":23,"next":25,"g":"8x9","m":[["f4-e5","W5",25],["h8-g7","W29",null],["f4-e3","W29",null],["h8-i7","W33",null],["f4-g5","W33",null],["f4-g3","W33",null]]},{"f":"B:WK4,K16:BK7","v":"L4","last":[21,16],"prev":24,"next":26,"g":"8x9","m":[["e7-f8","L4",26],["e7-d8","L4",null],["e7-f6","L2",null],["e7-d6","L2",null]]},{"f":"W:WK4,K16:BK3","v":"W3","last":[7,3],"prev":25,"next":27,"g":"8x9","m":[["e5-d6","W3",27],["e5-f4","W7",23],["e5-d4","W7",null],["h8-i7","W9",null],["e5-f6","W9",null],["h8-g7","D",null]]},{"f":"B:WK4,K11:BK3","v":"L2","last":[16,11],"prev":26,"next":28,"g":"8x9","m":[["f8-g7","L2",28],["f8-e7","L2",null]]},{"f":"W:WK4,K11:BK8","v":"W1","last":[3,8],"prev":27,"next":29,"g":"8x9","m":[["h8×f6","W1",29]]},{"f":"B:WK11,K12:B","v":"L0","last":[4,12],"prev":28,"next":null,"g":"8x9","m":[]},{"f":"W:WK11,K7,K8:BK5,K9","v":"W29","last":null,"prev":null,"next":31,"g":"8x9","m":[["d6-c7","W29",1],["e7-d8","W37",null],["e7-f6","W45",null],["g7-h8","W45",null],["g7-f6","W45",null],["d6-e5","W45",null],["d6-c5","W45",null],["e7-f8","W49",null],["g7-f8","W49",null],["g7-h6","D",null]]},{"f":"B:WK6,K7,K8:BK5,K9","v":"L28","last":[11,6],"prev":30,"next":null,"g":"8x9","m":[["a7-b8","L28",2],["i7-h8","L28",null],["a7-b6","L12",null],["i7-h6","L12",null]]},{"f":"W:WK32,K33,K29:BK37,K9","v":"D","last":null,"prev":null,"next":45,"g":"9x9 p0","m":[["a2-b3","D",45],["c2-b3","D",46],["c2-d1","D",47],["d3-e2","L38",48],["d3-e4","L34",49],["d3-c4","L30",50]]},{"f":"B:WK2,K7,K8:BK5,K9","v":"D","last":[6,2],"prev":0,"next":null,"g":"8x9","m":[["a7-b8","D",null],["a7-b6","D",null],["i7-h8","D",null],["i7-h6","L16",null]]},{"f":"B:WK1,K7,K8:BK5,K9","v":"D","last":[6,1],"prev":0,"next":null,"g":"8x9","m":[["a7-b6","D",null],["i7-h8","D",null],["i7-h6","L12",null]]},{"f":"B:WK7,K8,K11:BK5,K9","v":"D","last":[6,11],"prev":0,"next":null,"g":"8x9","m":[["a7-b8","D",null],["a7-b6","D",null],["i7-h8","D",null],["i7-h6","L12",null]]},{"f":"B:WK7,K8,K10:BK5,K9","v":"D","last":[6,10],"prev":0,"next":null,"g":"8x9","m":[["a7×c5","D",null]]},{"f":"B:WK3,K6,K8:BK5,K9","v":"D","last":[7,3],"prev":0,"next":null,"g":"8x9","m":[["a7-b8","D",null],["i7-h8","D",null],["a7-b6","L16",null],["i7-h6","L16",null]]},{"f":"B:WK2,K6,K8:BK5,K9","v":"D","last":[7,2],"prev":0,"next":null,"g":"8x9","m":[["a7-b8","D",null],["i7-h8","D",null],["a7-b6","L16",null],["i7-h6","L16",null]]},{"f":"B:WK6,K8,K12:BK5,K9","v":"D","last":[7,12],"prev":0,"next":null,"g":"8x9","m":[["a7-b8","D",null],["i7-h8","D",null],["i7-h6","L16",null],["a7-b6","L12",null]]},{"f":"B:WK6,K8,K11:BK5,K9","v":"D","last":[7,11],"prev":0,"next":null,"g":"8x9","m":[["a7-b8","D",null],["i7-h8","D",null],["a7-b6","L16",null],["i7-h6","L12",null]]},{"f":"B:WK4,K6,K7:BK5,K9","v":"D","last":[8,4],"prev":0,"next":null,"g":"8x9","m":[["a7-b8","D",null],["i7-h6","D",null],["a7-b6","L12",null]]},{"f":"B:WK3,K6,K7:BK5,K9","v":"D","last":[8,3],"prev":0,"next":null,"g":"8x9","m":[["a7-b8","D",null],["i7-h8","D",null],["i7-h6","D",null],["a7-b6","L16",null]]},{"f":"B:WK6,K7,K13:BK5,K9","v":"D","last":[8,13],"prev":0,"next":null,"g":"8x9","m":[["i7×g5","D",null]]},{"f":"B:WK6,K7,K12:BK5,K9","v":"D","last":[8,12],"prev":0,"next":null,"g":"8x9","m":[["a7-b8","D",null],["i7-h8","D",null],["i7-h6","D",null],["a7-b6","L12",null]]},{"f":"B:WK28,K29,K33:BK9,K37","v":"D","last":[32,28],"prev":32,"next":null,"g":"9x9 p0","m":[["i8-h9","D",null],["i8-h7","D",null],["b1-a2","D",null]]},{"f":"B:WK28,K29,K32:BK9,K37","v":"D","last":[33,28],"prev":32,"next":null,"g":"9x9 p0","m":[["i8-h9","D",null],["i8-h7","D",null],["b1-c2","L28",null]]},{"f":"B:WK29,K32,K38:BK9,K37","v":"D","last":[33,38],"prev":32,"next":null,"g":"9x9 p0","m":[["i8-h9","D",null],["i8-h7","D",null],["b1-c2","L26",null]]},{"f":"B:WK32,K33,K34:BK9,K37","v":"W37","last":[29,34],"prev":32,"next":null,"g":"9x9 p0","m":[["b1×f1","W37",null]]},{"f":"B:WK25,K32,K33:BK9,K37","v":"W33","last":[29,25],"prev":32,"next":null,"g":"9x9 p0","m":[["b1×f5","W33",null]]},{"f":"B:WK24,K32,K33:BK9,K37","v":"W29","last":[29,24],"prev":32,"next":null,"g":"9x9 p0","m":[["b1×b5","W29",null]]}];
+const GEOMS = {"8x9":{"w":9,"h":8,"parity":1,"sq":{"1":[1,7],"2":[3,7],"3":[5,7],"4":[7,7],"5":[0,6],"6":[2,6],"7":[4,6],"8":[6,6],"9":[8,6],"10":[1,5],"11":[3,5],"12":[5,5],"13":[7,5],"14":[0,4],"15":[2,4],"16":[4,4],"17":[6,4],"18":[8,4],"19":[1,3],"20":[3,3],"21":[5,3],"22":[7,3],"23":[0,2],"24":[2,2],"25":[4,2],"26":[6,2],"27":[8,2],"28":[1,1],"29":[3,1],"30":[5,1],"31":[7,1],"32":[0,0],"33":[2,0],"34":[4,0],"35":[6,0],"36":[8,0]},"lake":[],"alg":true},"9x9 p0":{"w":9,"h":9,"parity":0,"sq":{"1":[1,8],"2":[3,8],"3":[5,8],"4":[7,8],"5":[0,7],"6":[2,7],"7":[4,7],"8":[6,7],"9":[8,7],"10":[1,6],"11":[3,6],"12":[5,6],"13":[7,6],"14":[0,5],"15":[2,5],"16":[4,5],"17":[6,5],"18":[8,5],"19":[1,4],"20":[3,4],"21":[5,4],"22":[7,4],"23":[0,3],"24":[2,3],"25":[4,3],"26":[6,3],"27":[8,3],"28":[1,2],"29":[3,2],"30":[5,2],"31":[7,2],"32":[0,1],"33":[2,1],"34":[4,1],"35":[6,1],"36":[8,1],"37":[1,0],"38":[3,0],"39":[5,0],"40":[7,0]},"lake":[],"alg":true}};
+let cur = 0, showNums = true, timer = null;
+
+function parse(fen) {
+  const cells = {};
+  for (const part of fen.split(':').slice(1)) {
+    const side = part[0];
+    for (const it of part.slice(1).split(',')) {
+      if (!it) continue;
+      const king = it[0] === 'K';
+      cells[+(king ? it.slice(1) : it)] = side === 'W' ? (king ? 'W' : 'w') : (king ? 'B' : 'b');
+    }
+  }
+  return cells;
+}
+
+// board geometry: GEOMS[id] = {w, h, sq: {pdn: [file, rank]}, lake: [[file, rank]], alg: bool}
+// rank 0 is the bottom row; every playable or removed square is a dark square
+function svg(fen, last, nums, gid) {
+  const G = GEOMS[gid], cells = parse(fen), hl = new Set(last || []);
+  const at = {};
+  for (const [n, [f, r]] of Object.entries(G.sq)) at[f + ',' + r] = +n;
+  const lake = new Set((G.lake || []).map(([f, r]) => f + ',' + r));
+  let s = `<svg viewBox="0 0 ${G.w} ${G.h}" xmlns="http://www.w3.org/2000/svg">`;
+  for (let y = 0; y < G.h; y++) for (let c = 0; c < G.w; c++) {
+    const key = c + ',' + (G.h - 1 - y), sq = at[key];
+    if (lake.has(key)) {
+      s += `<rect x="${c}" y="${y}" width="1" height="1" fill="var(--lake)"/>`;
+      continue;
+    }
+    s += `<rect x="${c}" y="${y}" width="1" height="1" fill="var(--${sq ? 'dark' : 'light'})"/>`;
+    if (!sq) continue;
+    if (hl.has(sq)) s += `<rect x="${c}" y="${y}" width="1" height="1" fill="var(--hl)" opacity=".55"/>`;
+    if (nums) {
+      const t = G.alg ? String.fromCharCode(97 + c) + (G.h - y) : sq;
+      s += `<text x="${c + .06}" y="${y + .22}" font-size=".19" font-family="system-ui,sans-serif" fill="var(--num)">${t}</text>`;
+    }
+    const p = cells[sq];
+    if (!p) continue;
+    const w = p === 'w' || p === 'W', cx = c + .5, cy = y + .5;
+    const fill = w ? 'var(--wpiece)' : 'var(--bpiece)', stroke = w ? 'var(--wstroke)' : 'var(--bstroke)';
+    s += `<circle cx="${cx}" cy="${cy + .035}" r=".37" fill="rgba(0,0,0,.25)"/>`;
+    s += `<circle cx="${cx}" cy="${cy}" r=".37" fill="${fill}" stroke="${stroke}" stroke-width=".03"/>`;
+    s += `<circle cx="${cx}" cy="${cy}" r=".25" fill="none" stroke="${stroke}" stroke-width=".02" opacity=".5"/>`;
+    if (p === 'W' || p === 'B') {
+      const col = w ? '#9a6b12' : '#e2b44a';
+      s += `<path d="M${cx - .17} ${cy + .09} L${cx - .2} ${cy - .1} L${cx - .08} ${cy - .01} L${cx} ${cy - .15} L${cx + .08} ${cy - .01} L${cx + .2} ${cy - .1} L${cx + .17} ${cy + .09} Z" fill="${col}"/>`;
+    }
+  }
+  return s + '</svg>';
+}
+
+function go(i) {
+  if (i === null || i === undefined || i < 0 || i >= POS.length) return;
+  cur = i;
+  const p = POS[i];
+  document.getElementById('board').innerHTML = svg(p.f, p.last, showNums, p.g);
+  document.querySelectorAll('a.cur').forEach(a => a.classList.remove('cur'));
+  document.querySelectorAll(`a[data-i="${i}"]`).forEach(a => a.classList.add('cur'));
+  const side = p.f[0] === 'W' ? 'wit' : 'zwart';
+  const next = p.next !== null ? POS[p.next].f : null;
+  let h = `<div class="stm">${side} aan zet: ${p.v}</div>`;
+  if (!p.m.length) h += '<div>geen zetten: verloren</div>';
+  h += '<table>';
+  for (const [n, v, j] of p.m) {
+    const played = j !== null && j !== undefined && POS[j].f === next;
+    const mv = j !== null && j !== undefined ? `<a href="#" data-go="${j}">${n}</a>` : n;
+    h += `<tr class="${played ? 'played' : ''}"><td>${mv}</td><td>${v}</td></tr>`;
+  }
+  document.getElementById('panel').innerHTML = h + '</table>';
+}
+
+document.addEventListener('click', e => {
+  const a = e.target.closest('a[data-i], a[data-go]');
+  if (!a) return;
+  e.preventDefault();
+  stop();
+  go(+(a.dataset.i ?? a.dataset.go));
+});
+function stop() { if (timer) { clearInterval(timer); timer = null; document.getElementById('play').textContent = '▶︎▶︎'; } }
+document.getElementById('back').onclick = () => { stop(); go(POS[cur].prev); };
+document.getElementById('fwd').onclick = () => { stop(); go(POS[cur].next); };
+document.getElementById('nums').onclick = () => { showNums = !showNums; go(cur); };
+document.getElementById('play').onclick = () => {
+  if (timer) return stop();
+  document.getElementById('play').textContent = '❚❚';
+  timer = setInterval(() => { if (POS[cur].next === null) stop(); else go(POS[cur].next); }, 900);
+};
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowLeft') { stop(); go(POS[cur].prev); }
+  if (e.key === 'ArrowRight') { stop(); go(POS[cur].next); }
+});
+document.querySelectorAll('.smallboard').forEach(d => { d.innerHTML = svg(d.dataset.fen, null, false, d.dataset.g); });
+const first = document.querySelector('figure a[data-i]');
+go(first ? +first.dataset.i : 0);
+</script>
+</body>
+</html>

@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3 dammen tegen 1 · Drie tegen een is gemeen</title>
+<style>
+:root {
+  --bg: #fbfaf7; --fg: #1d1d1b; --muted: #6b6a66; --rule: #e3e0d8; --panel: #f3f1ec;
+  --light: #efe6d2; --dark: #9c7a54; --hl: #d8b24a; --num: rgba(255,255,255,.75);
+  --wpiece: #fbf8f1; --wstroke: #4a4440; --bpiece: #2a2623; --bstroke: #000;
+  --link: #1f5f8b; --m2: #5b7d3a; --err: #b3261e; --only: #8a5a00; --db: #6d4aa8;
+  --active: #fff1b8; --lake: #8fb3c9;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #161514; --fg: #e9e6df; --muted: #a29e95; --rule: #34312d; --panel: #201e1c;
+    --light: #c9b99a; --dark: #6e5236; --hl: #c79a2a; --num: rgba(255,255,255,.6);
+    --link: #7fb6dd; --m2: #9cc06e; --err: #f2766d; --only: #e0b04f; --db: #b79cf0; --active: #4a4020; --lake: #3d5a6c;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #161514; --fg: #e9e6df; --muted: #a29e95; --rule: #34312d; --panel: #201e1c;
+  --light: #c9b99a; --dark: #6e5236; --hl: #c79a2a; --num: rgba(255,255,255,.6);
+  --link: #7fb6dd; --m2: #9cc06e; --err: #f2766d; --only: #e0b04f; --db: #b79cf0; --active: #4a4020; --lake: #3d5a6c;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 17px/1.6 Charter, "Bitstream Charter", "Sitka Text", Cambria, Georgia, serif; }
+header { border-bottom: 1px solid var(--rule); padding: 10px 16px; font: 14px/1.4 system-ui, sans-serif; }
+header a { color: var(--muted); text-decoration: none; margin-right: 18px; }
+.wrap { display: grid; grid-template-columns: minmax(280px, 420px) minmax(0, 1fr); gap: 40px;
+  max-width: 1180px; margin: 0 auto; padding: 24px 16px 64px; }
+.side { position: sticky; top: 16px; align-self: start; }
+#board svg { width: 100%; height: auto; display: block; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+.buttons { display: flex; gap: 8px; margin: 10px 0; }
+.buttons button { flex: 1; padding: 6px 0; font: 16px system-ui, sans-serif; color: var(--fg); background: var(--panel);
+  border: 1px solid var(--rule); border-radius: 6px; cursor: pointer; }
+.buttons button:hover { border-color: var(--muted); }
+.panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px;
+  font: 14px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+.panel .stm { font-weight: 600; margin-bottom: 4px; }
+.panel table { border-collapse: collapse; width: 100%; }
+.panel td { padding: 1px 6px 1px 0; }
+.panel tr.played td { background: var(--active); }
+.panel a { color: var(--link); text-decoration: none; }
+main { min-width: 0; }
+h1 { font-size: 30px; line-height: 1.2; margin: 0 0 16px; }
+h2 { font-size: 22px; margin: 36px 0 8px; }
+a.m1, a.m2 { text-decoration: none; white-space: nowrap; border-radius: 3px; padding: 0 1px; }
+a.m1 { color: var(--link); font-weight: 600; }
+a.m2 { color: var(--m2); }
+a.db { font-style: italic; }
+a.err { text-decoration: underline wavy var(--err); text-underline-offset: 3px; }
+a.only::after { content: "*"; color: var(--only); }
+a.cur { background: var(--active); }
+.val { font: 14px ui-monospace, Menlo, Consolas, monospace; color: var(--muted); }
+blockquote { margin: 16px 0; padding: 4px 16px; border-left: 3px solid var(--dark); font-style: italic; }
+figure { float: right; margin: 4px 0 12px 20px; text-align: center; }
+figure .smallboard { width: 150px; }
+figcaption { font: 13px system-ui, sans-serif; color: var(--muted); margin-top: 4px; }
+p.var { margin: 10px 0; }
+.verdict { font: 13px system-ui, sans-serif; padding: 1px 7px; border-radius: 10px; margin-left: 6px; white-space: nowrap; }
+.verdict.ok { background: rgba(60,140,60,.15); }
+.verdict.bad { background: rgba(179,38,30,.15); }
+.note { font-size: 15px; color: var(--muted); }
+.legend { font: 13px/1.6 system-ui, sans-serif; color: var(--muted); border-top: 1px solid var(--rule); margin-top: 32px; padding-top: 12px; }
+.src { font-size: 14px; color: var(--muted); }
+section.diag { clear: both; border-top: 1px solid var(--rule); padding-top: 8px; margin-top: 28px; }
+section.diag h3 { font-size: 19px; margin: 6px 0 4px; }
+.claim { margin: 6px 0; }
+.moves { font-size: 15px; }
+.issues { font: 14px/1.5 system-ui, sans-serif; color: var(--muted); margin: 2px 0 0; padding-left: 18px; }
+.refute { display: flow-root; background: var(--panel); border-left: 3px solid var(--err); padding: 6px 12px; margin: 10px 0; border-radius: 0 6px 6px 0; }
+.refute .t { font: 13px system-ui, sans-serif; color: var(--muted); }
+.toc { list-style: none; padding: 0; }
+.toc li { padding: 5px 0; border-bottom: 1px solid var(--rule); }
+.toc .h { color: var(--muted); font: 14px system-ui, sans-serif; display: inline-block; min-width: 150px; }
+.toc .cnt { font: 13px system-ui, sans-serif; color: var(--muted); margin-left: 8px; }
+.toc .orig { font: 13px system-ui, sans-serif; margin-left: 8px; }
+.pager { display: flex; justify-content: space-between; font: 14px system-ui, sans-serif; margin-top: 40px; clear: both; }
+.pager a, .toc a, .src a, main p a:not(.m1):not(.m2) { color: var(--link); }
+.optree h3 { font-size: 18px; margin: 22px 0 4px; }
+.optree p { margin: 4px 0 4px 18px; }
+pre.tbl { font: 13px/1.45 ui-monospace, Menlo, Consolas, monospace; background: var(--panel); border: 1px solid var(--rule);
+  border-radius: 6px; padding: 10px 12px; overflow-x: auto; }
+table.tbl { border-collapse: collapse; font: 14px/1.4 system-ui, sans-serif; margin: 10px 0; }
+table.tbl th, table.tbl td { border-bottom: 1px solid var(--rule); padding: 4px 10px 4px 0; text-align: left; vertical-align: top; }
+table.tbl th { color: var(--muted); font-weight: 600; }
+.hub { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin: 20px 0; }
+.hub a.card { display: block; border: 1px solid var(--rule); border-radius: 8px; padding: 14px 16px; background: var(--panel);
+  color: var(--fg); text-decoration: none; }
+.hub a.card:hover { border-color: var(--muted); }
+.hub a.card strong { display: block; font-size: 19px; margin-bottom: 4px; color: var(--link); }
+.hub a.card span { font-size: 15px; color: var(--muted); }
+@media (max-width: 760px) {
+  .wrap { grid-template-columns: 1fr; gap: 16px; }
+  .side { position: sticky; top: 0; background: var(--bg); padding-bottom: 6px; z-index: 2; }
+  #board { max-width: 300px; margin: 0 auto; }
+  .panel { display: none; }
+  figure { float: none; margin: 8px 0; }
+}
+</style>
+</head>
+<body>
+<header><a href="../index.html">egdb-draughts</a><a href="index.html">Drie tegen een is gemeen</a><a href="twee-tegen-een.html">2 dammen tegen 1</a><a href="drie-tegen-een.html">3 dammen tegen 1</a><a href="vangstellingen.html">Vangstellingen</a><a href="tien-zonder-veld.html">10×10 met één veld weg</a></header>
+<div class="wrap">
+  <aside class="side">
+    <div id="board"></div>
+    <div class="buttons">
+      <button id="back" title="vorige stelling (←)">◀</button>
+      <button id="play" title="automatisch afspelen">▶︎▶︎</button>
+      <button id="fwd" title="volgende stelling (→)">▶</button>
+      <button id="nums" title="veldnummers aan/uit">#</button>
+    </div>
+    <div class="panel" id="panel"></div>
+  </aside>
+  <main>
+<h1>3 dammen tegen 1</h1>
+<pre class="tbl"> B \ L−B    0       1      2       3      4       5      6       7      8       9     10      11
+ 3        0/3      5     7/9      9    9/11     13   15/15
+ 4         9*     11     11      13     17      23     29      37
+ 5      11/15*    23   13/13     15   17/15     17   19/19     21   23/23
+ 6        17*     15     17      19     19      21     25      27     29      33
+ 7      19/17*    19   21/19     23   25/25     35   49/21     53  (73)/67  (73) (73)/(43)
+ 8        25*†    19     23      31    (23)    (33)   (21)     25    (19)    (19)   (21)    (19)
+ 9     (15)/(15)  21  (19)/21   (27) (17)/(19) (31) (19)/(21) (21)  (19)/23  (19) (19)/(19) (21)
+10       (15)     21     25     (27)   (19)    (31)   (21)    (21)   (19)     27   (19)    (19)
+11     (15)/(15)  21  (19)/21   (27) (17)/(19) (31) (19)/(21) (21) (19)/(21) (19)  (19)/25  (19)
+12       (15)     21     25     (27)   (19)    (31)   (21)    (21)   (19)    (21)          27</pre>
+<p class="note">In de tabellen: <code>21</code> = gewonnen, langste winst 21 ply · <code>21*</code> = gewonnen als de sterke partij de lange lijn(en) bezet · <code>(21)</code> = remise (het getal is de langste winst onder de stellingen die wel gewonnen zijn) · <code>13/15</code> = p0/p1. Een bord <em>B × L</em> heeft <em>B</em> als kortste zijde; p1 = de hoekvelden zijn speelbaar, p0 = niet (alleen van belang bij oneven × oneven). † : op 8×8 zijn er 40 stellingen (2 op symmetrie na) met de enkele dam aan zet die remise maken met een vork, ook als wit de lange lijn bezet. Leeg: niet berekend.</p>
+<p>De 10×10-getallen komen overeen met mdgsoftware.nl: met drie dammen aan zet 486.444 winsten en 434.756 remises; met de enkele dam aan zet 16.812 winsten, 863.802 remises en 40.586 verliezen.</p>
+<h2>De drie families</h2>
+<table class="tbl"><tr><th>Familie</th><th>Resultaat (B = 3 … 12)</th></tr>
+<tr><td><strong>L = B + 1</strong></td><td>gewonnen op elk bord</td></tr>
+<tr><td><strong>L = B + 2</strong></td><td>gewonnen, behalve de "verkeerde" kleuring p0 voor B = 9 en 11</td></tr>
+<tr><td><strong>L = 2B − 1</strong></td><td>gewonnen, behalve p0 voor B = 9 en 11 (10×19: 27 ply, 11×21 p1: 25 ply,
+12×23: 27 ply)</td></tr></table>
+<p>De kleuringsregel van het boek klopt: vanaf <em>B</em> = 9 wint bij oneven <em>B</em> alleen de kleuring met
+speelbare hoeken (p1). Op <em>B</em> = 7 wint de verkeerde kleuring nog (5×9 p0, 7×13 p0), omdat de algemene methode
+daar nog reikt. Hoe de families winnen, staat bij de <a href="vangstellingen.html">vangstellingen</a>.</p>
+<h2>De algemene methode op smalle borden</h2>
+<ul>
+<li><strong>B = 5, 6</strong>: elk niet-vierkant bord is gewonnen (gecontroleerd tot 5×13 en 6×15). Drie dammen in
+een kolom sluiten de volle breedte af en worden over het bord geschoven; de langste winst groeit met ongeveer 2 ply per
+extra kolom.</li>
+<li><strong>B = 7</strong>: gewonnen tot en met <strong>7×14</strong> en <strong>7×15 p1</strong> (boek: tot 7×11).
+Vanaf <em>L</em> = 16 is het remise. De langste winsten springen van 25 naar 35, 49, 53 en 67–73 ply: de ruimte wordt
+krap.</li>
+<li><strong>B = 8</strong>: gewonnen bij <em>L</em> = 9, 10, 11 en 15 (= 2<em>B</em> − 1), remise bij
+<em>L</em> = 12–14 en 16–19.</li>
+<li><strong>B ≥ 9</strong>: alleen de families blijven over.</li>
+</ul>
+<h2>Vierkante borden: de lange lijn</h2>
+<p>Op vierkante borden met <em>B</em> ≥ 5 houdt de enkele dam de lange lijn(en). De rustige stellingen met drie dammen
+aan zet, gesplitst naar wie de lange lijn(en) bezet (remises / stellingen):</p>
+<table class="tbl"><tr><th>Bord</th><th>Wit op de lange lijn(en)</th><th>Niemand</th><th>Alleen zwart</th></tr>
+<tr><td>6×6</td><td>0 / 3.154</td><td>0 / 816</td><td>784 / 812</td></tr>
+<tr><td>8×8</td><td>0 / 33.364 (40 vorken met zwart aan zet)</td><td>0 / 17.184</td><td>10.696 / 11.084</td></tr>
+<tr><td>5×5 p1 (twee diagonalen, wit op beide)</td><td>0 / 540</td><td></td><td></td></tr>
+<tr><td>7×7 p1 (wit op beide)</td><td>0 / 6.032</td><td></td><td></td></tr>
+<tr><td>9×9 p1 (wit op beide)</td><td>32.492 / 39.328</td><td></td><td></td></tr>
+<tr><td>10×10</td><td>177.548 / 206.466</td><td></td><td></td></tr></table>
+<p>Tot en met <em>B</em> = 8 beslist de lange lijn; vanaf <em>B</em> = 9 kunnen drie dammen niet winnen, ook niet als ze
+hem bezetten. Met één lange diagonaal komt de voorwaarde neer op "zwart bezet hem niet"; met twee diagonalen heeft wit
+er echt beide nodig.</p>
+<h2>8×8: een langste winst</h2>
+<figure><a class="diagram" href="#" data-i="0"><div class="smallboard" data-g="8x8" data-fen="W:WK4,K8,K11:BK14"></div></a><figcaption>8×8, wit aan zet</figcaption></figure>
+<p>Met wit op de lange lijn wint wit altijd. Een van de langste winsten (25 ply):</p>
+<p class="var"><a class="m1 db" href="#" data-i="1" title="W25">1. g7-f8</a> <a class="m1 db" href="#" data-i="2" title="L24">c5-e3</a> <a class="m1 db" href="#" data-i="3" title="W23">2. f8-d6</a> <a class="m1 db" href="#" data-i="4" title="L22">e3-f2</a> <a class="m1 db" href="#" data-i="5" title="W21">3. d6-b8</a> <a class="m1 db" href="#" data-i="6" title="L20">f2-e3</a> <a class="m1 db" href="#" data-i="7" title="W19">4. f6-e5</a> <a class="m1 db" href="#" data-i="8" title="L18">e3-g5</a> <a class="m1 db" href="#" data-i="9" title="W17">5. b8-a7</a> <a class="m1 db" href="#" data-i="10" title="L16">g5-h6</a> <a class="m1 db" href="#" data-i="11" title="W15">6. a7-c5</a> <a class="m1 db" href="#" data-i="12" title="L14">h6-g5</a> <a class="m1 db" href="#" data-i="13" title="W13">7. e5-d6</a> <a class="m1 db" href="#" data-i="14" title="L12">g5-d8</a> <a class="m1 db" href="#" data-i="15" title="W11">8. d6-f4</a> <a class="m1 db" href="#" data-i="16" title="L10">d8-h4</a> <a class="m1 db" href="#" data-i="17" title="W9">9. h8-c3</a> <a class="m1 db" href="#" data-i="18" title="L8">h4-d8</a> <a class="m1 db" href="#" data-i="19" title="W7">10. f4-d2</a> <a class="m1 db" href="#" data-i="20" title="L6">d8-h4</a> <a class="m1 db" href="#" data-i="21" title="W5">11. c5-f2</a> <a class="m1 db" href="#" data-i="22" title="L4">h4×e1</a> <a class="m1 only db" href="#" data-i="23" title="W3">12. c3-a5</a> <a class="m1 db" href="#" data-i="24" title="L2">e1×b4</a> <a class="m1 db" href="#" data-i="25" title="W1">13. a5×c3+</a></p>
+<nav class="pager"><a href="twee-tegen-een.html">← 2 dammen tegen 1</a><a href="vangstellingen.html">Vangstellingen →</a></nav>
+<p class="legend">Klik op een zet om de stelling op het grote bord te zien; ◀ ▶ (of de pijltjestoetsen) lopen door de
+variant. Waarden gelden voor de partij aan zet; bij een zet voor wie hem doet, met n het aantal ply tot het einde van
+de partij, de zet meegeteld: W = winst (oneven), L = verlies (even), D = remise.
+<span style="color:var(--link);font-weight:600">Blauw</span> = hoofdvariant,
+<span style="color:var(--m2)">groen</span> = zijvariant, <em>cursief</em> = voortzetting van de database,
+<span style="text-decoration:underline wavy var(--err)">golflijn</span> = zet die het resultaat verandert,
+<span style="color:var(--only)">*</span> = enige zet die de winst of de remise behoudt.</p>
+  </main>
+</div>
+<script>
+const POS = [{"f":"W:WK4,K8,K11:BK14","v":"W25","last":null,"prev":null,"next":1,"g":"8x8","m":[["g7-f8","W25",1],["g7-h6","W25",null],["f6-d8","W25",null],["f6-g5","W25",null],["f6-h4","W25",null],["f6-e5","W25",null],["f6-c3","W25",null],["f6-b2","W25",null],["f6-a1","W25",null],["f6-e7","D",null],["f6-d4","D",null]]},{"f":"B:WK3,K4,K11:BK14","v":"L24","last":[8,3],"prev":0,"next":2,"g":"8x8","m":[["c5-e3","L24",2],["c5-f2","L24",null],["c5-g1","L24",null],["c5-a3","L8",null],["c5-b6","L4",null],["c5-a7","L4",null],["c5-d6","L2",null],["c5-e7","L2",null],["c5-d4","L2",null],["c5-b4","L2",null]]},{"f":"W:WK3,K4,K11:BK23","v":"W23","last":[14,23],"prev":1,"next":3,"g":"8x8","m":[["f8-d6","W23",3],["f6-d8","W23",null],["f6-h4","W23",null],["f6-e5","W23",null],["f8-h6","W25",null],["f8-e7","W25",null],["f8-b4","W25",null],["f8-a3","W25",null],["h8-g7","W25",null],["f6-g7","W25",null],["f6-e7","W25",null],["f6-c3","W25",null],["f6-b2","W25",null],["f6-a1","W25",null],["f8-g7","W27",null],["f8-c5","D",null],["f6-g5","D",null],["f6-d4","D",null]]},{"f":"B:WK4,K10,K11:BK23","v":"L22","last":[3,10],"prev":2,"next":4,"g":"8x8","m":[["e3-f2","L22",4],["e3-g1","L22",null],["e3-h6","L16",null],["e3-d2","L16",null],["e3-c1","L16",null],["e3-b6","L4",null],["e3-a7","L4",null],["e3-f4","L2",null],["e3-g5","L2",null],["e3-d4","L2",null],["e3-c5","L2",null]]},{"f":"W:WK4,K10,K11:BK27","v":"W21","last":[23,27],"prev":3,"next":5,"g":"8x8","m":[["d6-b8","W21",5],["d6-h2","W21",null],["f6-d8","W21",null],["f6-h4","W21",null],["f6-e5","W21",null],["h8-g7","W23",null],["d6-c7","W23",null],["d6-e5","W23",null],["d6-f4","W23",null],["f6-g7","W23",null],["f6-e7","W23",null],["f6-g5","W23",null],["f6-c3","W23",null],["f6-b2","W23",null],["f6-a1","W23",null],["d6-e7","W25",null],["d6-f8","W25",null],["d6-b4","W25",null],["d6-a3","W25",null],["d6-g3","D",null],["d6-c5","D",null],["f6-d4","D",null]]},{"f":"B:WK1,K4,K11:BK27","v":"L20","last":[10,1],"prev":4,"next":6,"g":"8x8","m":[["f2-e3","L20",6],["f2-c5","L20",null],["f2-b6","L20",null],["f2-a7","L20",null],["f2-g1","L20",null],["f2-e1","L18",null],["f2-h4","L8",null],["f2-g3","L2",null],["f2-d4","L2",null]]},{"f":"W:WK1,K4,K11:BK23","v":"W19","last":[27,23],"prev":5,"next":7,"g":"8x8","m":[["f6-e5","W19",7],["b8-h2","W21",null],["b8-a7","W21",null],["h8-g7","W21",null],["f6-g7","W21",null],["f6-e7","W21",null],["f6-d8","W21",null],["f6-h4","W21",null],["f6-c3","W21",null],["f6-b2","W21",null],["f6-a1","W21",null],["b8-c7","W23",null],["b8-d6","W23",3],["b8-e5","W23",null],["b8-g3","W23",null],["b8-f4","D",null],["f6-g5","D",null],["f6-d4","D",null]]},{"f":"B:WK1,K4,K15:BK23","v":"L18","last":[11,15],"prev":6,"next":8,"g":"8x8","m":[["e3-g5","L18",8],["e3-h6","L18",null],["e3-c5","L18",null],["e3-b6","L18",null],["e3-a7","L18",null],["e3-f2","L18",null],["e3-d2","L18",null],["e3-c1","L18",null],["e3-g1","L6",null],["e3-f4","L2",null],["e3-d4","L2",null]]},{"f":"W:WK1,K4,K15:BK16","v":"W17","last":[23,16],"prev":7,"next":9,"g":"8x8","m":[["b8-a7","W17",9],["e5-d6","W17",null],["e5-d4","W17",null],["e5-c7","W19",null],["e5-g3","W19",null],["e5-h2","W19",null],["b8-c7","W21",null],["b8-d6","W21",null],["h8-g7","W21",null],["e5-g7","W21",null],["e5-c3","W21",null],["e5-b2","W21",null],["e5-a1","W21",null],["h8-f6","D",null],["e5-f6","D",null],["e5-f4","D",null]]},{"f":"B:WK4,K5,K15:BK16","v":"L16","last":[1,5],"prev":8,"next":10,"g":"8x8","m":[["g5-h6","L16",10],["g5-e7","L16",null],["g5-d8","L16",null],["g5-h4","L16",null],["g5-d2","L16",null],["g5-c1","L16",null],["g5-f6","L2",null],["g5-f4","L2",null],["g5-e3","L2",null]]},{"f":"W:WK4,K5,K15:BK12","v":"W15","last":[16,12],"prev":9,"next":11,"g":"8x8","m":[["a7-c5","W15",11],["e5-d6","W15",null],["h8-f6","W17",null],["a7-b6","W17",null],["a7-d4","W17",null],["a7-f2","W17",null],["a7-g1","W17",null],["e5-c7","W17",null],["e5-b8","W17",null],["e5-g3","W17",null],["e5-h2","W17",null],["a7-b8","W19",null],["e5-d4","W19",null],["e5-f6","W21",null],["e5-c3","W21",null],["e5-b2","W21",null],["e5-a1","W21",null],["h8-g7","D",null],["a7-e3","D",null],["e5-g7","D",null],["e5-f4","D",null]]},{"f":"B:WK4,K14,K15:BK12","v":"L14","last":[5,14],"prev":10,"next":12,"g":"8x8","m":[["h6-g5","L14",12],["h6-d2","L14",null],["h6-c1","L14",null],["h6-f8","L8",null],["h6-g7","L2",null],["h6-f4","L2",null],["h6-e3","L2",null]]},{"f":"W:WK4,K14,K15:BK16","v":"W13","last":[12,16],"prev":11,"next":13,"g":"8x8","m":[["e5-d6","W13",13],["h8-g7","W15",null],["e5-c7","W15",null],["e5-b8","W15",null],["e5-g3","W15",null],["e5-h2","W15",null],["c5-b6","W17",null],["c5-a7","W17",9],["c5-d4","W17",null],["c5-f2","W17",null],["c5-g1","W17",null],["c5-d6","W21",null],["e5-d4","W21",null],["e5-c3","W21",null],["c5-f8","W23",null],["c5-b4","W23",null],["c5-a3","W23",null],["e5-g7","W23",null],["e5-b2","W23",null],["e5-a1","W23",null],["h8-f6","D",null],["c5-e7","D",null],["c5-e3","D",null],["e5-f6","D",null],["e5-f4","D",null]]},{"f":"B:WK4,K10,K14:BK16","v":"L12","last":[15,10],"prev":12,"next":14,"g":"8x8","m":[["g5-d8","L12",14],["g5-h4","L12",null],["g5-d2","L12",null],["g5-h6","L6",null],["g5-c1","L6",null],["g5-f6","L2",null],["g5-e7","L2",null],["g5-f4","L2",null],["g5-e3","L2",null]]},{"f":"W:WK4,K10,K14:BK2","v":"W11","last":[16,2],"prev":13,"next":15,"g":"8x8","m":[["d6-f4","W11",15],["h8-g7","W13",null],["h8-e5","W13",null],["h8-b2","W13",null],["h8-a1","W13",null],["c5-e3","W13",null],["h8-d4","W15",null],["h8-c3","W15",null],["d6-b8","W15",null],["d6-e5","W15",null],["d6-g3","W15",null],["d6-h2","W15",null],["c5-a7","W15",null],["c5-d4","W15",null],["c5-f2","W15",null],["c5-g1","W15",null],["d6-f8","W23",null],["c5-b4","W23",null],["c5-a3","W23",null],["h8-f6","D",null],["d6-e7","D",null],["d6-c7","D",null],["c5-b6","D",null]]},{"f":"B:WK4,K14,K19:BK2","v":"L10","last":[10,19],"prev":14,"next":16,"g":"8x8","m":[["d8-h4","L10",16],["d8-a5","L10",null],["d8-e7","L2",null],["d8-f6","L2",null],["d8-g5","L2",null],["d8-c7","L2",null],["d8-b6","L2",null]]},{"f":"W:WK4,K14,K19:BK20","v":"W9","last":[2,20],"prev":15,"next":17,"g":"8x8","m":[["h8-c3","W9",17],["h8-g7","W13",null],["h8-e5","W13",null],["h8-d4","W13",null],["h8-b2","W13",null],["h8-a1","W13",null],["c5-e3","W13",null],["f4-d6","W13",null],["c5-b6","W15",null],["c5-a7","W15",null],["c5-d4","W15",null],["c5-g1","W15",null],["f4-e5","W15",null],["f4-c7","W15",null],["f4-b8","W15",null],["f4-h2","W15",null],["c5-d6","W21",null],["f4-e3","W21",null],["c5-f8","W23",null],["c5-b4","W23",null],["c5-a3","W23",null],["f4-h6","W23",null],["f4-d2","W23",null],["f4-c1","W23",null],["h8-f6","D",null],["c5-e7","D",null],["c5-f2","D",null],["f4-g5","D",null],["f4-g3","D",null]]},{"f":"B:WK14,K19,K22:BK20","v":"L8","last":[4,22],"prev":16,"next":18,"g":"8x8","m":[["h4-d8","L8",18],["h4-e1","L8",null],["h4-g5","L2",null],["h4-f6","L2",null],["h4-e7","L2",null],["h4-g3","L2",null],["h4-f2","L2",null]]},{"f":"W:WK14,K19,K22:BK2","v":"W7","last":[20,2],"prev":17,"next":19,"g":"8x8","m":[["f4-d2","W7",19],["c3-a5","W7",null],["f4-e5","W11",null],["c3-d4","W11",null],["c3-e5","W11",null],["c3-g7","W11",null],["c3-h8","W11",15],["c3-b2","W11",null],["c3-a1","W11",null],["c5-a7","W13",null],["c5-d4","W13",null],["c5-f2","W13",null],["c5-g1","W13",null],["f4-b8","W13",null],["f4-g3","W13",null],["f4-h2","W13",null],["c5-e3","W15",null],["f4-d6","W15",null],["f4-e3","W19",null],["c5-d6","W21",null],["f4-h6","W21",null],["f4-c1","W21",null],["c5-f8","W23",null],["c5-b4","W23",null],["c5-a3","W23",null],["f4-g5","D",null],["c3-b4","D",null],["c3-d2","D",null],["c3-e1","D",null],["c5-e7","L2",null],["c5-b6","L2",null],["f4-c7","L2",null],["c3-f6","L2",null]]},{"f":"B:WK14,K22,K26:BK2","v":"L6","last":[19,26],"prev":18,"next":20,"g":"8x8","m":[["d8-h4","L6",20],["d8-c7","L6",null],["d8-a5","L4",null],["d8-e7","L2",null],["d8-f6","L2",null],["d8-g5","L2",null],["d8-b6","L2",null]]},{"f":"W:WK14,K22,K26:BK20","v":"W5","last":[2,20],"prev":19,"next":21,"g":"8x8","m":[["c5-f2","W5",21],["c3-e5","W9",null],["d2-f4","W9",17],["c5-e3","W11",null],["d2-e1","W17",null],["c5-b6","W19",null],["c5-a7","W19",null],["c5-d4","W19",null],["c5-g1","W19",null],["d2-e3","W19",null],["c3-d4","W21",null],["d2-h6","W21",null],["d2-c1","W21",null],["c5-d6","W23",null],["c3-g7","W23",null],["c3-h8","W23",null],["c3-b2","W23",null],["c3-a1","W23",null],["c5-f8","W25",null],["c5-b4","W25",null],["c5-a3","W25",null],["c5-e7","D",null],["c3-b4","D",null],["c3-a5","D",null],["c3-f6","L2",null],["d2-g5","L2",null]]},{"f":"B:WK22,K26,K27:BK20","v":"L4","last":[14,27],"prev":20,"next":22,"g":"8x8","m":[["h4×e1","L4",22]]},{"f":"W:WK22,K26:BK31","v":"W3","last":[20,31],"prev":21,"next":23,"g":"8x8","m":[["c3-a5","W3",23],["c3-h8","D",null],["c3-a1","D",null],["d2-e3","D",null],["d2-f4","D",null],["d2-g5","D",null],["d2-h6","D",null],["d2-c1","D",null],["c3-d4","L2",null],["c3-e5","L2",null],["c3-f6","L2",null],["c3-g7","L2",null],["c3-b4","L2",null],["c3-b2","L2",null]]},{"f":"B:WK13,K26:BK31","v":"L2","last":[22,13],"prev":22,"next":24,"g":"8x8","m":[["e1×b4","L2",24],["e1×c3","L2",null]]},{"f":"W:WK13:BK17","v":"W1","last":[31,17],"prev":23,"next":25,"g":"8x8","m":[["a5×c3","W1",25],["a5×d2","W1",null],["a5×e1","W1",null]]},{"f":"B:WK22:B","v":"L0","last":[13,22],"prev":24,"next":null,"g":"8x8","m":[]}];
+const GEOMS = {"8x8":{"w":8,"h":8,"parity":1,"sq":{"1":[1,7],"2":[3,7],"3":[5,7],"4":[7,7],"5":[0,6],"6":[2,6],"7":[4,6],"8":[6,6],"9":[1,5],"10":[3,5],"11":[5,5],"12":[7,5],"13":[0,4],"14":[2,4],"15":[4,4],"16":[6,4],"17":[1,3],"18":[3,3],"19":[5,3],"20":[7,3],"21":[0,2],"22":[2,2],"23":[4,2],"24":[6,2],"25":[1,1],"26":[3,1],"27":[5,1],"28":[7,1],"29":[0,0],"30":[2,0],"31":[4,0],"32":[6,0]},"lake":[],"alg":true}};
+let cur = 0, showNums = true, timer = null;
+
+function parse(fen) {
+  const cells = {};
+  for (const part of fen.split(':').slice(1)) {
+    const side = part[0];
+    for (const it of part.slice(1).split(',')) {
+      if (!it) continue;
+      const king = it[0] === 'K';
+      cells[+(king ? it.slice(1) : it)] = side === 'W' ? (king ? 'W' : 'w') : (king ? 'B' : 'b');
+    }
+  }
+  return cells;
+}
+
+// board geometry: GEOMS[id] = {w, h, sq: {pdn: [file, rank]}, lake: [[file, rank]], alg: bool}
+// rank 0 is the bottom row; every playable or removed square is a dark square
+function svg(fen, last, nums, gid) {
+  const G = GEOMS[gid], cells = parse(fen), hl = new Set(last || []);
+  const at = {};
+  for (const [n, [f, r]] of Object.entries(G.sq)) at[f + ',' + r] = +n;
+  const lake = new Set((G.lake || []).map(([f, r]) => f + ',' + r));
+  let s = `<svg viewBox="0 0 ${G.w} ${G.h}" xmlns="http://www.w3.org/2000/svg">`;
+  for (let y = 0; y < G.h; y++) for (let c = 0; c < G.w; c++) {
+    const key = c + ',' + (G.h - 1 - y), sq = at[key];
+    if (lake.has(key)) {
+      s += `<rect x="${c}" y="${y}" width="1" height="1" fill="var(--lake)"/>`;
+      continue;
+    }
+    s += `<rect x="${c}" y="${y}" width="1" height="1" fill="var(--${sq ? 'dark' : 'light'})"/>`;
+    if (!sq) continue;
+    if (hl.has(sq)) s += `<rect x="${c}" y="${y}" width="1" height="1" fill="var(--hl)" opacity=".55"/>`;
+    if (nums) {
+      const t = G.alg ? String.fromCharCode(97 + c) + (G.h - y) : sq;
+      s += `<text x="${c + .06}" y="${y + .22}" font-size=".19" font-family="system-ui,sans-serif" fill="var(--num)">${t}</text>`;
+    }
+    const p = cells[sq];
+    if (!p) continue;
+    const w = p === 'w' || p === 'W', cx = c + .5, cy = y + .5;
+    const fill = w ? 'var(--wpiece)' : 'var(--bpiece)', stroke = w ? 'var(--wstroke)' : 'var(--bstroke)';
+    s += `<circle cx="${cx}" cy="${cy + .035}" r=".37" fill="rgba(0,0,0,.25)"/>`;
+    s += `<circle cx="${cx}" cy="${cy}" r=".37" fill="${fill}" stroke="${stroke}" stroke-width=".03"/>`;
+    s += `<circle cx="${cx}" cy="${cy}" r=".25" fill="none" stroke="${stroke}" stroke-width=".02" opacity=".5"/>`;
+    if (p === 'W' || p === 'B') {
+      const col = w ? '#9a6b12' : '#e2b44a';
+      s += `<path d="M${cx - .17} ${cy + .09} L${cx - .2} ${cy - .1} L${cx - .08} ${cy - .01} L${cx} ${cy - .15} L${cx + .08} ${cy - .01} L${cx + .2} ${cy - .1} L${cx + .17} ${cy + .09} Z" fill="${col}"/>`;
+    }
+  }
+  return s + '</svg>';
+}
+
+function go(i) {
+  if (i === null || i === undefined || i < 0 || i >= POS.length) return;
+  cur = i;
+  const p = POS[i];
+  document.getElementById('board').innerHTML = svg(p.f, p.last, showNums, p.g);
+  document.querySelectorAll('a.cur').forEach(a => a.classList.remove('cur'));
+  document.querySelectorAll(`a[data-i="${i}"]`).forEach(a => a.classList.add('cur'));
+  const side = p.f[0] === 'W' ? 'wit' : 'zwart';
+  const next = p.next !== null ? POS[p.next].f : null;
+  let h = `<div class="stm">${side} aan zet: ${p.v}</div>`;
+  if (!p.m.length) h += '<div>geen zetten: verloren</div>';
+  h += '<table>';
+  for (const [n, v, j] of p.m) {
+    const played = j !== null && j !== undefined && POS[j].f === next;
+    const mv = j !== null && j !== undefined ? `<a href="#" data-go="${j}">${n}</a>` : n;
+    h += `<tr class="${played ? 'played' : ''}"><td>${mv}</td><td>${v}</td></tr>`;
+  }
+  document.getElementById('panel').innerHTML = h + '</table>';
+}
+
+document.addEventListener('click', e => {
+  const a = e.target.closest('a[data-i], a[data-go]');
+  if (!a) return;
+  e.preventDefault();
+  stop();
+  go(+(a.dataset.i ?? a.dataset.go));
+});
+function stop() { if (timer) { clearInterval(timer); timer = null; document.getElementById('play').textContent = '▶︎▶︎'; } }
+document.getElementById('back').onclick = () => { stop(); go(POS[cur].prev); };
+document.getElementById('fwd').onclick = () => { stop(); go(POS[cur].next); };
+document.getElementById('nums').onclick = () => { showNums = !showNums; go(cur); };
+document.getElementById('play').onclick = () => {
+  if (timer) return stop();
+  document.getElementById('play').textContent = '❚❚';
+  timer = setInterval(() => { if (POS[cur].next === null) stop(); else go(POS[cur].next); }, 900);
+};
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowLeft') { stop(); go(POS[cur].prev); }
+  if (e.key === 'ArrowRight') { stop(); go(POS[cur].next); }
+});
+document.querySelectorAll('.smallboard').forEach(d => { d.innerHTML = svg(d.dataset.fen, null, false, d.dataset.g); });
+const first = document.querySelector('figure a[data-i]');
+go(first ? +first.dataset.i : 0);
+</script>
+</body>
+</html>

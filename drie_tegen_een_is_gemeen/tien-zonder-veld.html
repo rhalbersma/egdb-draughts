@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>10×10 met één veld weg · Drie tegen een is gemeen</title>
+<style>
+:root {
+  --bg: #fbfaf7; --fg: #1d1d1b; --muted: #6b6a66; --rule: #e3e0d8; --panel: #f3f1ec;
+  --light: #efe6d2; --dark: #9c7a54; --hl: #d8b24a; --num: rgba(255,255,255,.75);
+  --wpiece: #fbf8f1; --wstroke: #4a4440; --bpiece: #2a2623; --bstroke: #000;
+  --link: #1f5f8b; --m2: #5b7d3a; --err: #b3261e; --only: #8a5a00; --db: #6d4aa8;
+  --active: #fff1b8; --lake: #8fb3c9;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #161514; --fg: #e9e6df; --muted: #a29e95; --rule: #34312d; --panel: #201e1c;
+    --light: #c9b99a; --dark: #6e5236; --hl: #c79a2a; --num: rgba(255,255,255,.6);
+    --link: #7fb6dd; --m2: #9cc06e; --err: #f2766d; --only: #e0b04f; --db: #b79cf0; --active: #4a4020; --lake: #3d5a6c;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #161514; --fg: #e9e6df; --muted: #a29e95; --rule: #34312d; --panel: #201e1c;
+  --light: #c9b99a; --dark: #6e5236; --hl: #c79a2a; --num: rgba(255,255,255,.6);
+  --link: #7fb6dd; --m2: #9cc06e; --err: #f2766d; --only: #e0b04f; --db: #b79cf0; --active: #4a4020; --lake: #3d5a6c;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 17px/1.6 Charter, "Bitstream Charter", "Sitka Text", Cambria, Georgia, serif; }
+header { border-bottom: 1px solid var(--rule); padding: 10px 16px; font: 14px/1.4 system-ui, sans-serif; }
+header a { color: var(--muted); text-decoration: none; margin-right: 18px; }
+.wrap { display: grid; grid-template-columns: minmax(280px, 420px) minmax(0, 1fr); gap: 40px;
+  max-width: 1180px; margin: 0 auto; padding: 24px 16px 64px; }
+.side { position: sticky; top: 16px; align-self: start; }
+#board svg { width: 100%; height: auto; display: block; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+.buttons { display: flex; gap: 8px; margin: 10px 0; }
+.buttons button { flex: 1; padding: 6px 0; font: 16px system-ui, sans-serif; color: var(--fg); background: var(--panel);
+  border: 1px solid var(--rule); border-radius: 6px; cursor: pointer; }
+.buttons button:hover { border-color: var(--muted); }
+.panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px;
+  font: 14px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+.panel .stm { font-weight: 600; margin-bottom: 4px; }
+.panel table { border-collapse: collapse; width: 100%; }
+.panel td { padding: 1px 6px 1px 0; }
+.panel tr.played td { background: var(--active); }
+.panel a { color: var(--link); text-decoration: none; }
+main { min-width: 0; }
+h1 { font-size: 30px; line-height: 1.2; margin: 0 0 16px; }
+h2 { font-size: 22px; margin: 36px 0 8px; }
+a.m1, a.m2 { text-decoration: none; white-space: nowrap; border-radius: 3px; padding: 0 1px; }
+a.m1 { color: var(--link); font-weight: 600; }
+a.m2 { color: var(--m2); }
+a.db { font-style: italic; }
+a.err { text-decoration: underline wavy var(--err); text-underline-offset: 3px; }
+a.only::after { content: "*"; color: var(--only); }
+a.cur { background: var(--active); }
+.val { font: 14px ui-monospace, Menlo, Consolas, monospace; color: var(--muted); }
+blockquote { margin: 16px 0; padding: 4px 16px; border-left: 3px solid var(--dark); font-style: italic; }
+figure { float: right; margin: 4px 0 12px 20px; text-align: center; }
+figure .smallboard { width: 150px; }
+figcaption { font: 13px system-ui, sans-serif; color: var(--muted); margin-top: 4px; }
+p.var { margin: 10px 0; }
+.verdict { font: 13px system-ui, sans-serif; padding: 1px 7px; border-radius: 10px; margin-left: 6px; white-space: nowrap; }
+.verdict.ok { background: rgba(60,140,60,.15); }
+.verdict.bad { background: rgba(179,38,30,.15); }
+.note { font-size: 15px; color: var(--muted); }
+.legend { font: 13px/1.6 system-ui, sans-serif; color: var(--muted); border-top: 1px solid var(--rule); margin-top: 32px; padding-top: 12px; }
+.src { font-size: 14px; color: var(--muted); }
+section.diag { clear: both; border-top: 1px solid var(--rule); padding-top: 8px; margin-top: 28px; }
+section.diag h3 { font-size: 19px; margin: 6px 0 4px; }
+.claim { margin: 6px 0; }
+.moves { font-size: 15px; }
+.issues { font: 14px/1.5 system-ui, sans-serif; color: var(--muted); margin: 2px 0 0; padding-left: 18px; }
+.refute { display: flow-root; background: var(--panel); border-left: 3px solid var(--err); padding: 6px 12px; margin: 10px 0; border-radius: 0 6px 6px 0; }
+.refute .t { font: 13px system-ui, sans-serif; color: var(--muted); }
+.toc { list-style: none; padding: 0; }
+.toc li { padding: 5px 0; border-bottom: 1px solid var(--rule); }
+.toc .h { color: var(--muted); font: 14px system-ui, sans-serif; display: inline-block; min-width: 150px; }
+.toc .cnt { font: 13px system-ui, sans-serif; color: var(--muted); margin-left: 8px; }
+.toc .orig { font: 13px system-ui, sans-serif; margin-left: 8px; }
+.pager { display: flex; justify-content: space-between; font: 14px system-ui, sans-serif; margin-top: 40px; clear: both; }
+.pager a, .toc a, .src a, main p a:not(.m1):not(.m2) { color: var(--link); }
+.optree h3 { font-size: 18px; margin: 22px 0 4px; }
+.optree p { margin: 4px 0 4px 18px; }
+pre.tbl { font: 13px/1.45 ui-monospace, Menlo, Consolas, monospace; background: var(--panel); border: 1px solid var(--rule);
+  border-radius: 6px; padding: 10px 12px; overflow-x: auto; }
+table.tbl { border-collapse: collapse; font: 14px/1.4 system-ui, sans-serif; margin: 10px 0; }
+table.tbl th, table.tbl td { border-bottom: 1px solid var(--rule); padding: 4px 10px 4px 0; text-align: left; vertical-align: top; }
+table.tbl th { color: var(--muted); font-weight: 600; }
+.hub { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin: 20px 0; }
+.hub a.card { display: block; border: 1px solid var(--rule); border-radius: 8px; padding: 14px 16px; background: var(--panel);
+  color: var(--fg); text-decoration: none; }
+.hub a.card:hover { border-color: var(--muted); }
+.hub a.card strong { display: block; font-size: 19px; margin-bottom: 4px; color: var(--link); }
+.hub a.card span { font-size: 15px; color: var(--muted); }
+@media (max-width: 760px) {
+  .wrap { grid-template-columns: 1fr; gap: 16px; }
+  .side { position: sticky; top: 0; background: var(--bg); padding-bottom: 6px; z-index: 2; }
+  #board { max-width: 300px; margin: 0 auto; }
+  .panel { display: none; }
+  figure { float: none; margin: 8px 0; }
+}
+</style>
+</head>
+<body>
+<header><a href="../index.html">egdb-draughts</a><a href="index.html">Drie tegen een is gemeen</a><a href="twee-tegen-een.html">2 dammen tegen 1</a><a href="drie-tegen-een.html">3 dammen tegen 1</a><a href="vangstellingen.html">Vangstellingen</a><a href="tien-zonder-veld.html">10×10 met één veld weg</a></header>
+<div class="wrap">
+  <aside class="side">
+    <div id="board"></div>
+    <div class="buttons">
+      <button id="back" title="vorige stelling (←)">◀</button>
+      <button id="play" title="automatisch afspelen">▶︎▶︎</button>
+      <button id="fwd" title="volgende stelling (→)">▶</button>
+      <button id="nums" title="veldnummers aan/uit">#</button>
+    </div>
+    <div class="panel" id="panel"></div>
+  </aside>
+  <main>
+<h1>10×10 met één veld weg</h1>
+<p>Eén veld per symmetrieklasse (de 4 symmetrieën van het bord geven 15 klassen), 3 dammen tegen 1:</p>
+<table class="tbl"><tr><th>Weg</th><th>Symmetrische velden</th><th>Boek</th><th>Database</th><th>Langste winst</th><th>Rustige remises (3 dammen aan zet)</th></tr>
+<tr><td>1 (b10)</td><td>a9, j2, i1</td><td>W</td><td><strong>W</strong></td><td>23</td><td>0</td></tr>
+<tr><td>2 (d10)</td><td>a7, j4, g1</td><td>D</td><td><strong>D</strong></td><td>(33)</td><td>64.675</td></tr>
+<tr><td>3 (f10)</td><td>j6, a5, e1</td><td>?</td><td><strong>D</strong></td><td>(23)</td><td>337.341</td></tr>
+<tr><td>4 (h10)</td><td>j8, a3, c1</td><td>D</td><td><strong>D</strong></td><td>(29)</td><td>66.013</td></tr>
+<tr><td>5 (j10, Mertens)</td><td>a1</td><td>W</td><td><strong>W</strong></td><td>21</td><td>0</td></tr>
+<tr><td>7 (c9)</td><td>b8, i3, h2</td><td>W</td><td><strong>W</strong></td><td>25</td><td>0</td></tr>
+<tr><td>8 (e9)</td><td>b6, i5, f2</td><td>D</td><td><strong>D</strong></td><td>(31)</td><td>64.192</td></tr>
+<tr><td>9 (g9)</td><td>i7, b4, d2</td><td>D</td><td><strong>D</strong></td><td>(27)</td><td>66.653</td></tr>
+<tr><td>10 (i9)</td><td>b2</td><td>W</td><td><strong>W als j10 leeg is</strong></td><td>(19)</td><td>29.875, alle met een stuk op het geïsoleerde veld j10</td></tr>
+<tr><td>12 (d8)</td><td>c7, h4, g3</td><td>?</td><td><strong>D</strong></td><td>(35)</td><td>66.365</td></tr>
+<tr><td>13 (f8)</td><td>h6, c5, e3</td><td>?</td><td><strong>D</strong></td><td>(37)</td><td>67.259</td></tr>
+<tr><td>14 (h8)</td><td>c3</td><td>W</td><td><strong>W op één zetdwang na</strong></td><td>33</td><td>2 (één stelling en haar spiegelbeeld)</td></tr>
+<tr><td>18 (e7)</td><td>d6, g5, f4</td><td>D</td><td><strong>D</strong></td><td>(35)</td><td>67.660</td></tr>
+<tr><td>19 (g7)</td><td>d4</td><td>?</td><td><strong>W</strong></td><td>33</td><td>0</td></tr>
+<tr><td>23 (f6)</td><td>e5</td><td>W</td><td><strong>W</strong></td><td>35</td><td>0</td></tr>
+</table>
+<ul>
+<li>Zonder i9 is j10 geïsoleerd: een dam daar kan nooit zetten en nooit geslagen worden.</li>
+<li>De enige uitzondering zonder h8 staat hieronder.</li></ul>
+<h2>Zonder h8: de zetdwang</h2>
+<figure><a class="diagram" href="#" data-i="0"><div class="smallboard" data-g="h8" data-fen="W:WK4,K5,K10:BK15"></div></a><figcaption>10×10 zonder h8, wit aan zet</figcaption></figure>
+<p>Wit op h10, j10 en i9, zwart op j8, wit aan zet: D. i9 en j10 zitten vast en elke zet van h10 laat een dubbele slag toe (1. h10-g9 j8×h10×f8), en 1 tegen 1 is remise. Alle zetten: <a class="m1" href="#" data-i="1">1. h10-g9</a> <span class="val">D</span>, <a class="m1" href="#" data-i="2">1. h10-f8</a> <span class="val">D</span>, <a class="m1" href="#" data-i="3">1. h10-e7</a> <span class="val">D</span>, <a class="m1" href="#" data-i="4">1. h10-d6</a> <span class="val">D</span>, <a class="m1" href="#" data-i="5">1. h10-c5</a> <span class="val">D</span>, <a class="m1" href="#" data-i="6">1. h10-b4</a> <span class="val">D</span>, <a class="m1" href="#" data-i="7">1. h10-a3</a> <span class="val">D</span>.</p>
+<figure><a class="diagram" href="#" data-i="8"><div class="smallboard" data-g="h8" data-fen="B:WK4,K5,K10:BK15"></div></a><figcaption>10×10 zonder h8, zwart aan zet</figcaption></figure>
+<p>Met zwart aan zet is dezelfde stelling verloren in 34 ply:</p>
+<p class="var"><a class="m1 db" href="#" data-i="9" title="L34">1. … j8-g5</a> <a class="m1 db" href="#" data-i="10" title="W33">2. h10-d6</a> <a class="m1 db" href="#" data-i="11" title="L32">g5-j8</a> <a class="m1 db" href="#" data-i="12" title="W31">3. i9-h10</a> <a class="m1 db" href="#" data-i="13" title="L30">j8-g5</a> <a class="m1 db" href="#" data-i="14" title="W29">4. j10-i9</a> <a class="m1 db" href="#" data-i="15" title="L28">g5-f6</a> <a class="m1 db" href="#" data-i="16" title="W27">5. h10-f8</a> <a class="m1 db" href="#" data-i="17" title="L26">f6-c9</a> <a class="m1 db" href="#" data-i="18" title="W25">6. i9-j8</a> <a class="m1 db" href="#" data-i="19" title="L24">c9-d10</a> <a class="m1 db" href="#" data-i="20" title="W23">7. f8-e7</a> <a class="m1 db" href="#" data-i="21" title="L22">d10-e9</a> <a class="m1 db" href="#" data-i="22" title="W21">8. e7-c9</a> <a class="m1 db" href="#" data-i="23" title="L20">e9-d10</a> <a class="m1 db" href="#" data-i="24" title="W19">9. c9-a7</a> <a class="m1 db" href="#" data-i="25" title="L18">d10-e9</a> <a class="m1 db" href="#" data-i="26" title="W17">10. j8-g5</a> <a class="m1 db" href="#" data-i="27" title="L16">e9-a5</a> <a class="m1 db" href="#" data-i="28" title="W15">11. a7-d10</a> <a class="m1 db" href="#" data-i="29" title="L14">a5-b6</a> <a class="m1 db" href="#" data-i="30" title="W13">12. d6-f8</a> <a class="m1 db" href="#" data-i="31" title="L12">b6-c7</a> <a class="m1 db" href="#" data-i="32" title="W11">13. g5-j2</a> <a class="m1 db" href="#" data-i="33" title="L10">c7-a9</a> <a class="m1 db" href="#" data-i="34" title="W9">14. f8-e7</a> <a class="m1 db" href="#" data-i="35" title="L8">a9-c7</a> <a class="m1 db" href="#" data-i="36" title="W7">15. d10-b8</a> <a class="m1 db" href="#" data-i="37" title="L6">c7×a9</a> <a class="m1 only db" href="#" data-i="38" title="W5">16. j2-i1</a> <a class="m1 db" href="#" data-i="39" title="L4">a9-b10</a> <a class="m1 db" href="#" data-i="40" title="W3">17. i1-j2</a> <a class="m1 db" href="#" data-i="41" title="L2">b10×f6</a> <a class="m1 db" href="#" data-i="42" title="W1">18. j2×b10+</a></p>
+<nav class="pager"><a href="vangstellingen.html">← Vangstellingen</a><span></span></nav>
+<p class="legend">Klik op een zet om de stelling op het grote bord te zien; ◀ ▶ (of de pijltjestoetsen) lopen door de
+variant. Waarden gelden voor de partij aan zet; bij een zet voor wie hem doet, met n het aantal ply tot het einde van
+de partij, de zet meegeteld: W = winst (oneven), L = verlies (even), D = remise.
+<span style="color:var(--link);font-weight:600">Blauw</span> = hoofdvariant,
+<span style="color:var(--m2)">groen</span> = zijvariant, <em>cursief</em> = voortzetting van de database,
+<span style="text-decoration:underline wavy var(--err)">golflijn</span> = zet die het resultaat verandert,
+<span style="color:var(--only)">*</span> = enige zet die de winst of de remise behoudt.</p>
+  </main>
+</div>
+<script>
+const POS = [{"f":"W:WK4,K5,K10:BK15","v":"D","last":null,"prev":null,"next":1,"g":"h8","m":[["h10-g9","D",1],["h10-f8","D",2],["h10-e7","D",3],["h10-d6","D",4],["h10-c5","D",5],["h10-b4","D",6],["h10-a3","D",7]]},{"f":"B:WK5,K9,K10:BK15","v":"D","last":[4,9],"prev":0,"next":null,"g":"h8","m":[["j8×f8","D",null],["j8×e7","D",null],["j8×d6","D",null],["j8×c5","D",null],["j8×b4","D",null],["j8×a3","D",null]]},{"f":"B:WK5,K10,K13:BK15","v":"D","last":[4,13],"prev":0,"next":null,"g":"h8","m":[["j8×e7","D",null],["j8×d6","D",null],["j8×c5","D",null],["j8×b4","D",null],["j8×a3","D",null]]},{"f":"B:WK5,K10,K18:BK15","v":"D","last":[4,18],"prev":0,"next":null,"g":"h8","m":[["j8×d6","D",null],["j8×c5","D",null],["j8×b4","D",null],["j8×a3","D",null]]},{"f":"B:WK5,K10,K22:BK15","v":"D","last":[4,22],"prev":0,"next":null,"g":"h8","m":[["j8×c5","D",null],["j8×b4","D",null],["j8×a3","D",null]]},{"f":"B:WK5,K10,K27:BK15","v":"D","last":[4,27],"prev":0,"next":null,"g":"h8","m":[["j8×b4","D",null],["j8×a3","D",null]]},{"f":"B:WK5,K10,K31:BK15","v":"D","last":[4,31],"prev":0,"next":null,"g":"h8","m":[["j8×a3","D",null]]},{"f":"B:WK5,K10,K36:BK15","v":"D","last":[4,36],"prev":0,"next":null,"g":"h8","m":[["j8×h10","D",null]]},{"f":"B:WK4,K5,K10:BK15","v":"L34","last":null,"prev":null,"next":9,"g":"h8","m":[["j8-g5","L34",9],["j8-f4","L34",null],["j8-i7","L32",null],["j8-h6","L32",null],["j8-e3","L32",null],["j8-d2","L32",null],["j8-c1","L32",null]]},{"f":"W:WK4,K5,K10:BK29","v":"W33","last":[15,29],"prev":8,"next":10,"g":"h8","m":[["h10-d6","W33",10],["h10-c5","W33",null],["h10-a3","W33",null],["i9-j8","W33",null],["h10-g9","W35",null],["h10-f8","W35",null],["h10-b4","W35",null],["h10-e7","D",null]]},{"f":"B:WK5,K10,K22:BK29","v":"L32","last":[4,22],"prev":9,"next":11,"g":"h8","m":[["g5-j8","L32",11],["g5-f6","L32",null],["g5-d8","L32",null],["g5-c9","L32",null],["g5-b10","L32",null],["g5-h4","L32",null],["g5-i3","L32",null],["g5-j2","L32",null],["g5-c1","L32",null],["g5-h6","L30",null],["g5-i7","L30",null],["g5-e3","L30",null],["g5-d2","L30",null],["g5-e7","L2",null],["g5-f4","L2",null]]},{"f":"W:WK5,K10,K22:BK15","v":"W31","last":[29,15],"prev":10,"next":12,"g":"h8","m":[["i9-h10","W31",12],["d6-h10","W35",8],["d6-e7","D",3],["d6-f8","D",2],["d6-g9","D",1],["d6-c7","D",null],["d6-b8","D",null],["d6-a9","D",null],["d6-e5","D",null],["d6-f4","D",null],["d6-g3","D",null],["d6-h2","D",null],["d6-i1","D",null],["d6-c5","D",5],["d6-b4","D",6],["d6-a3","D",7]]},{"f":"B:WK4,K5,K22:BK15","v":"L30","last":[10,4],"prev":11,"next":13,"g":"h8","m":[["j8-g5","L30",13],["j8-i7","L28",null],["j8-h6","L28",null],["j8-e3","L28",null],["j8-d2","L28",null],["j8-c1","L28",null],["j8-i9","L2",null],["j8-f4","L2",null]]},{"f":"W:WK4,K5,K22:BK29","v":"W29","last":[15,29],"prev":12,"next":14,"g":"h8","m":[["j10-i9","W29",14],["d6-a9","W29",null],["d6-h2","W29",null],["d6-i1","W29",null],["h10-j8","W31",null],["h10-g9","W31",null],["d6-c7","W31",null],["d6-b8","W31",null],["d6-e5","W31",null],["d6-g3","W31",null],["d6-a3","W31",null],["h10-i9","W33",10],["d6-f8","W33",null],["d6-g9","W33",null],["d6-c5","W33",null],["d6-b4","W33",null],["h10-f8","D",null],["h10-e7","D",null],["d6-e7","D",null],["d6-f4","D",null]]},{"f":"B:WK4,K10,K22:BK29","v":"L28","last":[5,10],"prev":13,"next":15,"g":"h8","m":[["g5-f6","L28",15],["g5-d8","L28",null],["g5-c9","L28",null],["g5-b10","L28",null],["g5-h4","L28",null],["g5-i3","L28",null],["g5-j2","L28",null],["g5-h6","L26",null],["g5-e3","L26",null],["g5-d2","L26",null],["g5-c1","L26",null],["g5-i7","L8",null],["g5-j8","L6",null],["g5-e7","L2",null],["g5-f4","L2",null]]},{"f":"W:WK4,K10,K22:BK23","v":"W27","last":[29,23],"prev":14,"next":16,"g":"h8","m":[["h10-f8","W27",16],["i9-j8","W27",null],["d6-c7","W27",null],["d6-b8","W27",null],["d6-a9","W27",null],["d6-g3","W27",null],["d6-h2","W27",null],["d6-i1","W27",null],["h10-g9","W29",null],["d6-f4","W29",null],["d6-c5","W29",null],["d6-a3","W29",null],["i9-j10","W31",null],["d6-f8","W31",null],["d6-g9","W31",null],["d6-b4","W31",null],["h10-e7","D",null],["d6-e7","D",null],["d6-e5","D",null]]},{"f":"B:WK10,K13,K22:BK23","v":"L26","last":[4,13],"prev":15,"next":17,"g":"h8","m":[["f6-c9","L26",17],["f6-i3","L26",null],["f6-d8","L24",null],["f6-b10","L24",null],["f6-g5","L24",null],["f6-h4","L24",null],["f6-j2","L24",null],["f6-d4","L24",null],["f6-c3","L24",null],["f6-b2","L8",null],["f6-e7","L6",null],["f6-a1","L4",null],["f6-g7","L2",null],["f6-e5","L2",null]]},{"f":"W:WK10,K13,K22:BK7","v":"W25","last":[23,7],"prev":16,"next":18,"g":"h8","m":[["i9-j8","W25",18],["d6-h2","W25",null],["i9-h10","W27",null],["f8-e9","W27",null],["f8-d10","W27",null],["f8-h6","W27",null],["f8-i5","W27",null],["f8-j4","W27",null],["d6-c7","W27",null],["d6-f4","W27",null],["d6-g3","W27",null],["d6-i1","W27",null],["f8-g9","W29",null],["f8-h10","W29",null],["f8-g7","W29",null],["d6-a9","W29",null],["d6-e5","W29",null],["d6-c5","W29",null],["d6-b4","W29",null],["d6-a3","W29",null],["i9-j10","D",null],["f8-e7","D",null],["d6-e7","D",null],["d6-b8","D",null]]},{"f":"B:WK13,K15,K22:BK7","v":"L24","last":[10,15],"prev":17,"next":19,"g":"h8","m":[["c9-d10","L24",19],["c9-b10","L22",null],["c9-d8","L22",null],["c9-f6","L22",null],["c9-h4","L22",null],["c9-i3","L22",null],["c9-j2","L22",null],["c9-a7","L18",null],["c9-e7","L6",null],["c9-g5","L2",null],["c9-b8","L2",null]]},{"f":"W:WK13,K15,K22:BK2","v":"W23","last":[7,2],"prev":18,"next":20,"g":"h8","m":[["f8-e7","W23",20],["f8-j4","W25",null],["f8-g9","W27",null],["f8-h10","W27",null],["f8-e9","D",null],["f8-g7","D",null],["f8-h6","D",null],["f8-i5","D",null],["j8-i9","D",null],["j8-h10","D",null],["j8-i7","D",null],["j8-h6","D",null],["j8-f4","D",null],["j8-e3","D",null],["j8-d2","D",null],["j8-c1","D",null],["d6-e7","D",null],["d6-c7","D",null],["d6-b8","D",null],["d6-a9","D",null],["d6-e5","D",null],["d6-f4","D",null],["d6-g3","D",null],["d6-h2","D",null],["d6-i1","D",null],["d6-c5","D",null],["d6-b4","D",null],["d6-a3","D",null],["j8-g5","L2",null]]},{"f":"B:WK15,K18,K22:BK2","v":"L22","last":[13,18],"prev":19,"next":21,"g":"h8","m":[["d10-e9","L22",21],["d10-g7","L22",null],["d10-i5","L22",null],["d10-j4","L22",null],["d10-a7","L18",null],["d10-f8","L2",null],["d10-h6","L2",null],["d10-c9","L2",null],["d10-b8","L2",null]]},{"f":"W:WK15,K18,K22:BK8","v":"W21","last":[2,8],"prev":20,"next":22,"g":"h8","m":[["e7-c9","W21",22],["d6-h2","W21",null],["j8-i7","W23",null],["j8-g5","W23",null],["j8-f4","W23",null],["j8-e3","W23",null],["j8-d2","W23",null],["j8-c1","W23",null],["e7-b10","W23",null],["e7-f6","W23",null],["e7-h4","W23",null],["e7-i3","W23",null],["d6-b8","W23",null],["d6-f4","W23",null],["d6-g3","W23",null],["d6-i1","W23",null],["d6-c5","W23",null],["j8-i9","W25",null],["j8-h10","W25",null],["e7-g9","W25",null],["e7-h10","W25",null],["e7-g5","W25",null],["e7-j2","W25",null],["d6-a9","W25",null],["d6-e5","W25",null],["d6-b4","W25",null],["d6-a3","W25",null],["j8-h6","D",null],["e7-f8","D",null],["e7-d8","D",null],["d6-c7","D",null]]},{"f":"B:WK7,K15,K22:BK8","v":"L20","last":[18,7],"prev":21,"next":23,"g":"h8","m":[["e9-d10","L20",23],["e9-g7","L20",null],["e9-i5","L20",null],["e9-j4","L20",null],["e9-b6","L18",null],["e9-f10","L16",null],["e9-a5","L16",null],["e9-f8","L2",null],["e9-h6","L2",null],["e9-d8","L2",null],["e9-c7","L2",null]]},{"f":"W:WK7,K15,K22:BK2","v":"W19","last":[8,2],"prev":22,"next":24,"g":"h8","m":[["c9-a7","W19",24],["c9-b10","W23",null],["c9-d8","W23",null],["c9-e7","W23",20],["c9-f6","W23",null],["c9-g5","W23",null],["c9-h4","W23",null],["c9-i3","W23",null],["c9-j2","W23",null],["d6-b8","W27",null],["c9-b8","D",null],["j8-i9","D",null],["j8-h10","D",null],["j8-c1","D",null],["d6-e7","D",null],["d6-f8","D",null],["d6-g9","D",null],["d6-h10","D",null],["d6-c7","D",null],["d6-a9","D",null],["d6-e5","D",null],["d6-f4","D",null],["d6-g3","D",null],["d6-h2","D",null],["d6-i1","D",null],["d6-c5","D",null],["d6-b4","D",null],["d6-a3","D",null],["j8-i7","L2",null],["j8-h6","L2",null],["j8-g5","L2",null],["j8-f4","L2",null],["j8-e3","L2",null],["j8-d2","L2",null]]},{"f":"B:WK15,K16,K22:BK2","v":"L18","last":[7,16],"prev":23,"next":25,"g":"h8","m":[["d10-e9","L18",25],["d10-g7","L18",null],["d10-i5","L18",null],["d10-j4","L6",null],["d10-f8","L2",null],["d10-h6","L2",null],["d10-c9","L2",null],["d10-b8","L2",null]]},{"f":"W:WK15,K16,K22:BK8","v":"W17","last":[2,8],"prev":24,"next":26,"g":"h8","m":[["j8-g5","W17",26],["a7-c9","W21",22],["a7-b8","W23",null],["d6-e7","W23",null],["j8-i7","W25",null],["j8-f4","W25",null],["j8-e3","W25",null],["j8-d2","W25",null],["j8-c1","W25",null],["a7-d10","W25",null],["a7-c5","W25",null],["a7-d4","W25",null],["a7-f2","W25",null],["a7-g1","W25",null],["j8-i9","W27",null],["j8-h10","W27",null],["a7-e3","W27",null],["d6-g9","W27",null],["d6-h10","W27",null],["d6-a9","W27",null],["d6-e5","W27",null],["d6-f4","W27",null],["d6-i1","W27",null],["d6-c5","W27",null],["d6-b4","W27",null],["d6-a3","W27",null],["d6-b8","W29",null],["d6-g3","W29",null],["d6-h2","W29",null],["j8-h6","D",null],["a7-b6","D",null],["d6-f8","D",null],["d6-c7","D",null]]},{"f":"B:WK16,K22,K29:BK8","v":"L16","last":[15,29],"prev":25,"next":27,"g":"h8","m":[["e9-a5","L16",27],["e9-f10","L14",null],["e9-i5","L10",null],["e9-d10","L8",null],["e9-g7","L6",null],["e9-j4","L6",null],["e9-f8","L2",null],["e9-h6","L2",null],["e9-d8","L2",null],["e9-c7","L2",null],["e9-b6","L2",null]]},{"f":"W:WK16,K22,K29:BK26","v":"W15","last":[8,26],"prev":26,"next":28,"g":"h8","m":[["a7-d10","W15",28],["a7-b8","W17",null],["a7-c9","W17",null],["a7-c5","W19",null],["a7-d4","W19",null],["a7-e3","W19",null],["a7-f2","W19",null],["a7-g1","W19",null],["d6-f8","W19",null],["d6-e7","W21",null],["d6-g9","W21",null],["d6-h10","W21",null],["d6-c5","W21",null],["d6-a3","W21",null],["g5-h6","W23",null],["d6-e5","W25",null],["d6-f4","W25",null],["g5-i7","W25",null],["g5-j8","W25",null],["g5-f4","W25",null],["g5-e3","W25",null],["g5-c1","W25",null],["d6-b8","W27",null],["d6-a9","W27",null],["d6-g3","W27",null],["d6-h2","W27",null],["d6-i1","W27",null],["g5-e7","W27",null],["g5-f6","W29",null],["g5-c9","W29",null],["g5-b10","W29",null],["g5-h4","W29",null],["g5-i3","W29",null],["g5-j2","W29",null],["d6-c7","D",null],["d6-b4","D",null],["g5-d8","D",null],["g5-d2","D",null],["a7-b6","L2",null]]},{"f":"B:WK2,K22,K29:BK26","v":"L14","last":[16,2],"prev":27,"next":29,"g":"h8","m":[["a5-b6","L14",29],["a5-e1","L10",null],["a5-f10","L6",null],["a5-c3","L4",null],["a5-c7","L2",null],["a5-d8","L2",null],["a5-e9","L2",null],["a5-b4","L2",null],["a5-d2","L2",null]]},{"f":"W:WK2,K22,K29:BK21","v":"W13","last":[26,21],"prev":28,"next":30,"g":"h8","m":[["d6-f8","W13",30],["d10-f8","W17",null],["d10-g7","W17",null],["d10-h6","W17",null],["d10-i5","W17",null],["d10-j4","W17",null],["d10-c9","W17",null],["d10-b8","W17",null],["d10-a7","W17",null],["g5-d2","W17",null],["d6-e7","W19",null],["d6-g9","W19",null],["d6-h10","W19",null],["d6-b4","W19",null],["d6-a3","W19",null],["d6-e5","W23",null],["d6-f4","W23",null],["g5-h6","W23",null],["g5-f4","W23",null],["d6-b8","W25",null],["d6-a9","W25",null],["d6-g3","W25",null],["d6-h2","W25",null],["d6-i1","W25",null],["g5-i7","W25",null],["g5-j8","W25",null],["g5-e7","W25",null],["g5-c1","W25",null],["g5-f6","W27",null],["g5-c9","W27",null],["g5-b10","W27",null],["g5-h4","W27",null],["g5-i3","W27",null],["g5-j2","W27",null],["d10-e9","D",null],["d6-c7","D",null],["d6-c5","D",null],["g5-d8","D",null],["g5-e3","D",null]]},{"f":"B:WK2,K13,K29:BK21","v":"L12","last":[22,13],"prev":29,"next":31,"g":"h8","m":[["b6-c7","L12",31],["b6-f10","L8",null],["b6-a5","L8",null],["b6-e9","L6",null],["b6-a7","L6",null],["b6-d4","L4",null],["b6-f2","L4",null],["b6-g1","L4",null],["b6-d8","L2",null],["b6-c5","L2",null],["b6-e3","L2",null]]},{"f":"W:WK2,K13,K29:BK17","v":"W11","last":[21,17],"prev":30,"next":32,"g":"h8","m":[["g5-j2","W11",32],["g5-e7","W17",null],["g5-c9","W17",null],["g5-b10","W17",null],["g5-h4","W17",null],["g5-i3","W17",null],["d10-c9","W19",null],["d10-a7","W19",null],["f8-g9","W19",null],["f8-h10","W19",null],["f8-e7","W19",null],["f8-c5","W19",null],["f8-b4","W19",null],["f8-a3","W19",null],["g5-f6","W19",null],["g5-d2","W19",null],["f8-g7","W23",null],["f8-h6","W23",null],["f8-i5","W25",null],["f8-j4","W25",null],["g5-h6","W25",null],["g5-i7","W25",null],["g5-j8","W25",null],["g5-e3","W25",null],["g5-c1","W25",null],["d10-e9","D",null],["d10-b8","D",null],["f8-e9","D",null],["f8-d6","D",null],["g5-d8","D",null],["g5-f4","D",null]]},{"f":"B:WK2,K13,K45:BK17","v":"L10","last":[29,45],"prev":31,"next":33,"g":"h8","m":[["c7-a9","L10",33],["c7-i1","L10",null],["c7-f10","L8",null],["c7-b6","L8",null],["c7-a5","L8",null],["c7-e9","L6",null],["c7-e5","L4",null],["c7-f4","L4",null],["c7-g3","L4",null],["c7-h2","L4",null],["c7-d8","L2",null],["c7-b8","L2",null],["c7-d6","L2",null]]},{"f":"W:WK2,K13,K45:BK6","v":"W9","last":[17,6],"prev":32,"next":34,"g":"h8","m":[["f8-e7","W9",34],["j2-i1","W11",null],["j2-i3","W15",null],["j2-h4","W15",null],["j2-g5","W15",null],["j2-e7","W15",null],["j2-d8","W15",null],["j2-c9","W15",null],["j2-b10","W15",null],["j2-f6","W19",null],["f8-h10","W23",null],["f8-a3","W23",null],["f8-h6","W25",null],["d10-e9","W27",null],["f8-g9","W27",null],["f8-g7","W27",null],["f8-j4","W27",null],["f8-c5","W27",null],["f8-b4","W27",null],["d10-c9","W29",null],["d10-a7","W29",null],["f8-e9","W29",null],["f8-i5","W29",null],["d10-b8","D",null],["f8-d6","D",null]]},{"f":"B:WK2,K18,K45:BK6","v":"L8","last":[13,18],"prev":33,"next":35,"g":"h8","m":[["a9-c7","L8",35],["a9-f4","L8",null],["a9-g3","L8",null],["a9-i1","L8",null],["a9-h2","L6",null],["a9-b10","L4",null],["a9-e5","L4",null],["a9-b8","L2",null],["a9-d6","L2",null]]},{"f":"W:WK2,K18,K45:BK17","v":"W7","last":[6,17],"prev":34,"next":36,"g":"h8","m":[["d10-b8","W7",36],["e7-f8","W11",32],["d10-h6","W19",null],["j2-g5","W19",null],["j2-i1","W19",null],["e7-g5","W21",null],["d10-c9","W23",null],["d10-a7","W23",null],["e7-h10","W23",null],["e7-a3","W23",null],["j2-f6","W23",null],["d10-j4","W25",null],["e7-f6","W25",null],["d10-f8","W27",null],["d10-g7","W27",null],["d10-i5","W27",null],["e7-g9","W27",null],["e7-b10","W27",null],["e7-h4","W27",null],["e7-i3","W27",null],["e7-c5","W27",null],["e7-b4","W27",null],["j2-i3","W27",null],["j2-h4","W27",null],["e7-c9","W29",null],["d10-e9","D",null],["e7-d8","D",null],["e7-d6","D",null]]},{"f":"B:WK11,K18,K45:BK17","v":"L6","last":[2,11],"prev":35,"next":37,"g":"h8","m":[["c7×a9","L6",37]]},{"f":"W:WK18,K45:BK6","v":"W5","last":[17,6],"prev":36,"next":38,"g":"h8","m":[["j2-i1","W5",38],["e7-f8","D",null],["e7-g9","D",null],["e7-h10","D",null],["e7-d8","D",null],["e7-c9","D",null],["e7-b10","D",null],["e7-f6","D",null],["e7-g5","D",null],["e7-h4","D",null],["e7-i3","D",null],["e7-d6","D",null],["e7-c5","D",null],["e7-b4","D",null],["e7-a3","D",null],["j2-i3","D",null],["j2-h4","D",null],["j2-g5","D",null],["j2-f6","D",null]]},{"f":"B:WK18,K50:BK6","v":"L4","last":[45,50],"prev":37,"next":39,"g":"h8","m":[["a9-b10","L4",39],["a9-b8","L2",null],["a9-c7","L2",null],["a9-d6","L2",null],["a9-e5","L2",null],["a9-f4","L2",null],["a9-g3","L2",null],["a9-h2","L2",null]]},{"f":"W:WK18,K50:BK1","v":"W3","last":[6,1],"prev":38,"next":40,"g":"h8","m":[["i1-j2","W3",40],["e7-j2","W5",null],["e7-f8","D",null],["e7-g9","D",null],["e7-h10","D",null],["e7-d8","D",null],["e7-c9","D",null],["e7-f6","D",null],["e7-g5","D",null],["e7-h4","D",null],["e7-i3","D",null],["e7-d6","D",null],["e7-c5","D",null],["e7-b4","D",null],["e7-a3","D",null],["i1-d6","D",null],["i1-c7","D",null],["i1-b8","D",null],["i1-a9","D",null],["i1-h2","L2",null],["i1-g3","L2",null],["i1-f4","L2",null],["i1-e5","L2",null]]},{"f":"B:WK18,K45:BK1","v":"L2","last":[50,45],"prev":39,"next":41,"g":"h8","m":[["b10×f6","L2",41],["b10×g5","L2",null],["b10×h4","L2",null],["b10×i3","L2",null]]},{"f":"W:WK45:BK23","v":"W1","last":[1,23],"prev":40,"next":42,"g":"h8","m":[["j2×b10","W1",42],["j2×c9","W1",null],["j2×d8","W1",null],["j2×e7","W1",null]]},{"f":"B:WK1:B","v":"L0","last":[45,1],"prev":41,"next":null,"g":"h8","m":[]}];
+const GEOMS = {"h8":{"w":10,"h":10,"parity":1,"sq":{"1":[1,9],"2":[3,9],"3":[5,9],"4":[7,9],"5":[9,9],"6":[0,8],"7":[2,8],"8":[4,8],"9":[6,8],"10":[8,8],"11":[1,7],"12":[3,7],"13":[5,7],"15":[9,7],"16":[0,6],"17":[2,6],"18":[4,6],"19":[6,6],"20":[8,6],"21":[1,5],"22":[3,5],"23":[5,5],"24":[7,5],"25":[9,5],"26":[0,4],"27":[2,4],"28":[4,4],"29":[6,4],"30":[8,4],"31":[1,3],"32":[3,3],"33":[5,3],"34":[7,3],"35":[9,3],"36":[0,2],"37":[2,2],"38":[4,2],"39":[6,2],"40":[8,2],"41":[1,1],"42":[3,1],"43":[5,1],"44":[7,1],"45":[9,1],"46":[0,0],"47":[2,0],"48":[4,0],"49":[6,0],"50":[8,0]},"lake":[[7,7]],"alg":true}};
+let cur = 0, showNums = true, timer = null;
+
+function parse(fen) {
+  const cells = {};
+  for (const part of fen.split(':').slice(1)) {
+    const side = part[0];
+    for (const it of part.slice(1).split(',')) {
+      if (!it) continue;
+      const king = it[0] === 'K';
+      cells[+(king ? it.slice(1) : it)] = side === 'W' ? (king ? 'W' : 'w') : (king ? 'B' : 'b');
+    }
+  }
+  return cells;
+}
+
+// board geometry: GEOMS[id] = {w, h, sq: {pdn: [file, rank]}, lake: [[file, rank]], alg: bool}
+// rank 0 is the bottom row; every playable or removed square is a dark square
+function svg(fen, last, nums, gid) {
+  const G = GEOMS[gid], cells = parse(fen), hl = new Set(last || []);
+  const at = {};
+  for (const [n, [f, r]] of Object.entries(G.sq)) at[f + ',' + r] = +n;
+  const lake = new Set((G.lake || []).map(([f, r]) => f + ',' + r));
+  let s = `<svg viewBox="0 0 ${G.w} ${G.h}" xmlns="http://www.w3.org/2000/svg">`;
+  for (let y = 0; y < G.h; y++) for (let c = 0; c < G.w; c++) {
+    const key = c + ',' + (G.h - 1 - y), sq = at[key];
+    if (lake.has(key)) {
+      s += `<rect x="${c}" y="${y}" width="1" height="1" fill="var(--lake)"/>`;
+      continue;
+    }
+    s += `<rect x="${c}" y="${y}" width="1" height="1" fill="var(--${sq ? 'dark' : 'light'})"/>`;
+    if (!sq) continue;
+    if (hl.has(sq)) s += `<rect x="${c}" y="${y}" width="1" height="1" fill="var(--hl)" opacity=".55"/>`;
+    if (nums) {
+      const t = G.alg ? String.fromCharCode(97 + c) + (G.h - y) : sq;
+      s += `<text x="${c + .06}" y="${y + .22}" font-size=".19" font-family="system-ui,sans-serif" fill="var(--num)">${t}</text>`;
+    }
+    const p = cells[sq];
+    if (!p) continue;
+    const w = p === 'w' || p === 'W', cx = c + .5, cy = y + .5;
+    const fill = w ? 'var(--wpiece)' : 'var(--bpiece)', stroke = w ? 'var(--wstroke)' : 'var(--bstroke)';
+    s += `<circle cx="${cx}" cy="${cy + .035}" r=".37" fill="rgba(0,0,0,.25)"/>`;
+    s += `<circle cx="${cx}" cy="${cy}" r=".37" fill="${fill}" stroke="${stroke}" stroke-width=".03"/>`;
+    s += `<circle cx="${cx}" cy="${cy}" r=".25" fill="none" stroke="${stroke}" stroke-width=".02" opacity=".5"/>`;
+    if (p === 'W' || p === 'B') {
+      const col = w ? '#9a6b12' : '#e2b44a';
+      s += `<path d="M${cx - .17} ${cy + .09} L${cx - .2} ${cy - .1} L${cx - .08} ${cy - .01} L${cx} ${cy - .15} L${cx + .08} ${cy - .01} L${cx + .2} ${cy - .1} L${cx + .17} ${cy + .09} Z" fill="${col}"/>`;
+    }
+  }
+  return s + '</svg>';
+}
+
+function go(i) {
+  if (i === null || i === undefined || i < 0 || i >= POS.length) return;
+  cur = i;
+  const p = POS[i];
+  document.getElementById('board').innerHTML = svg(p.f, p.last, showNums, p.g);
+  document.querySelectorAll('a.cur').forEach(a => a.classList.remove('cur'));
+  document.querySelectorAll(`a[data-i="${i}"]`).forEach(a => a.classList.add('cur'));
+  const side = p.f[0] === 'W' ? 'wit' : 'zwart';
+  const next = p.next !== null ? POS[p.next].f : null;
+  let h = `<div class="stm">${side} aan zet: ${p.v}</div>`;
+  if (!p.m.length) h += '<div>geen zetten: verloren</div>';
+  h += '<table>';
+  for (const [n, v, j] of p.m) {
+    const played = j !== null && j !== undefined && POS[j].f === next;
+    const mv = j !== null && j !== undefined ? `<a href="#" data-go="${j}">${n}</a>` : n;
+    h += `<tr class="${played ? 'played' : ''}"><td>${mv}</td><td>${v}</td></tr>`;
+  }
+  document.getElementById('panel').innerHTML = h + '</table>';
+}
+
+document.addEventListener('click', e => {
+  const a = e.target.closest('a[data-i], a[data-go]');
+  if (!a) return;
+  e.preventDefault();
+  stop();
+  go(+(a.dataset.i ?? a.dataset.go));
+});
+function stop() { if (timer) { clearInterval(timer); timer = null; document.getElementById('play').textContent = '▶︎▶︎'; } }
+document.getElementById('back').onclick = () => { stop(); go(POS[cur].prev); };
+document.getElementById('fwd').onclick = () => { stop(); go(POS[cur].next); };
+document.getElementById('nums').onclick = () => { showNums = !showNums; go(cur); };
+document.getElementById('play').onclick = () => {
+  if (timer) return stop();
+  document.getElementById('play').textContent = '❚❚';
+  timer = setInterval(() => { if (POS[cur].next === null) stop(); else go(POS[cur].next); }, 900);
+};
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowLeft') { stop(); go(POS[cur].prev); }
+  if (e.key === 'ArrowRight') { stop(); go(POS[cur].next); }
+});
+document.querySelectorAll('.smallboard').forEach(d => { d.innerHTML = svg(d.dataset.fen, null, false, d.dataset.g); });
+const first = document.querySelector('figure a[data-i]');
+go(first ? +first.dataset.i : 0);
+</script>
+</body>
+</html>

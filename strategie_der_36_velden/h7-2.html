@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>De derde zet · Strategie der 36 velden</title>
+<style>
+:root {
+  --bg: #fbfaf7; --fg: #1d1d1b; --muted: #6b6a66; --rule: #e3e0d8; --panel: #f3f1ec;
+  --light: #efe6d2; --dark: #9c7a54; --hl: #d8b24a; --num: rgba(255,255,255,.75);
+  --wpiece: #fbf8f1; --wstroke: #4a4440; --bpiece: #2a2623; --bstroke: #000;
+  --link: #1f5f8b; --m2: #5b7d3a; --err: #b3261e; --only: #8a5a00; --db: #6d4aa8;
+  --active: #fff1b8; --lake: #8fb3c9;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #161514; --fg: #e9e6df; --muted: #a29e95; --rule: #34312d; --panel: #201e1c;
+    --light: #c9b99a; --dark: #6e5236; --hl: #c79a2a; --num: rgba(255,255,255,.6);
+    --link: #7fb6dd; --m2: #9cc06e; --err: #f2766d; --only: #e0b04f; --db: #b79cf0; --active: #4a4020; --lake: #3d5a6c;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #161514; --fg: #e9e6df; --muted: #a29e95; --rule: #34312d; --panel: #201e1c;
+  --light: #c9b99a; --dark: #6e5236; --hl: #c79a2a; --num: rgba(255,255,255,.6);
+  --link: #7fb6dd; --m2: #9cc06e; --err: #f2766d; --only: #e0b04f; --db: #b79cf0; --active: #4a4020; --lake: #3d5a6c;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 17px/1.6 Charter, "Bitstream Charter", "Sitka Text", Cambria, Georgia, serif; }
+header { border-bottom: 1px solid var(--rule); padding: 10px 16px; font: 14px/1.4 system-ui, sans-serif; }
+header a { color: var(--muted); text-decoration: none; margin-right: 18px; }
+.wrap { display: grid; grid-template-columns: minmax(280px, 420px) minmax(0, 1fr); gap: 40px;
+  max-width: 1180px; margin: 0 auto; padding: 24px 16px 64px; }
+.side { position: sticky; top: 16px; align-self: start; }
+#board svg { width: 100%; height: auto; display: block; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+.buttons { display: flex; gap: 8px; margin: 10px 0; }
+.buttons button { flex: 1; padding: 6px 0; font: 16px system-ui, sans-serif; color: var(--fg); background: var(--panel);
+  border: 1px solid var(--rule); border-radius: 6px; cursor: pointer; }
+.buttons button:hover { border-color: var(--muted); }
+.panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px;
+  font: 14px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+.panel .stm { font-weight: 600; margin-bottom: 4px; }
+.panel table { border-collapse: collapse; width: 100%; }
+.panel td { padding: 1px 6px 1px 0; }
+.panel tr.played td { background: var(--active); }
+.panel a { color: var(--link); text-decoration: none; }
+main { min-width: 0; }
+h1 { font-size: 30px; line-height: 1.2; margin: 0 0 16px; }
+h2 { font-size: 22px; margin: 36px 0 8px; }
+a.m1, a.m2 { text-decoration: none; white-space: nowrap; border-radius: 3px; padding: 0 1px; }
+a.m1 { color: var(--link); font-weight: 600; }
+a.m2 { color: var(--m2); }
+a.db { font-style: italic; }
+a.err { text-decoration: underline wavy var(--err); text-underline-offset: 3px; }
+a.only::after { content: "*"; color: var(--only); }
+a.cur { background: var(--active); }
+.val { font: 14px ui-monospace, Menlo, Consolas, monospace; color: var(--muted); }
+blockquote { margin: 16px 0; padding: 4px 16px; border-left: 3px solid var(--dark); font-style: italic; }
+figure { float: right; margin: 4px 0 12px 20px; text-align: center; }
+figure .smallboard { width: 150px; }
+figcaption { font: 13px system-ui, sans-serif; color: var(--muted); margin-top: 4px; }
+p.var { margin: 10px 0; }
+.verdict { font: 13px system-ui, sans-serif; padding: 1px 7px; border-radius: 10px; margin-left: 6px; white-space: nowrap; }
+.verdict.ok { background: rgba(60,140,60,.15); }
+.verdict.bad { background: rgba(179,38,30,.15); }
+.note { font-size: 15px; color: var(--muted); }
+.legend { font: 13px/1.6 system-ui, sans-serif; color: var(--muted); border-top: 1px solid var(--rule); margin-top: 32px; padding-top: 12px; }
+.src { font-size: 14px; color: var(--muted); }
+section.diag { clear: both; border-top: 1px solid var(--rule); padding-top: 8px; margin-top: 28px; }
+section.diag h3 { font-size: 19px; margin: 6px 0 4px; }
+.claim { margin: 6px 0; }
+.moves { font-size: 15px; }
+.issues { font: 14px/1.5 system-ui, sans-serif; color: var(--muted); margin: 2px 0 0; padding-left: 18px; }
+.refute { display: flow-root; background: var(--panel); border-left: 3px solid var(--err); padding: 6px 12px; margin: 10px 0; border-radius: 0 6px 6px 0; }
+.refute .t { font: 13px system-ui, sans-serif; color: var(--muted); }
+.toc { list-style: none; padding: 0; }
+.toc li { padding: 5px 0; border-bottom: 1px solid var(--rule); }
+.toc .h { color: var(--muted); font: 14px system-ui, sans-serif; display: inline-block; min-width: 150px; }
+.toc .cnt { font: 13px system-ui, sans-serif; color: var(--muted); margin-left: 8px; }
+.toc .orig { font: 13px system-ui, sans-serif; margin-left: 8px; }
+.pager { display: flex; justify-content: space-between; font: 14px system-ui, sans-serif; margin-top: 40px; clear: both; }
+.pager a, .toc a, .src a, main p a:not(.m1):not(.m2) { color: var(--link); }
+.optree h3 { font-size: 18px; margin: 22px 0 4px; }
+.optree p { margin: 4px 0 4px 18px; }
+@media (max-width: 760px) {
+  .wrap { grid-template-columns: 1fr; gap: 16px; }
+  .side { position: sticky; top: 0; background: var(--bg); padding-bottom: 6px; z-index: 2; }
+  #board { max-width: 300px; margin: 0 auto; }
+  .panel { display: none; }
+  figure { float: none; margin: 8px 0; }
+}
+</style>
+</head>
+<body>
+<header><a href="../index.html">egdb-draughts</a><a href="index.html">Strategie der 36 velden</a><a href="opening.html">opening</a><a href="https://www.hijkendtc.nl/7-2-de-derde-zet/">het origineel</a></header>
+<div class="wrap">
+  <aside class="side">
+    <div id="board"></div>
+    <div class="buttons">
+      <button id="back" title="vorige stelling (←)">◀</button>
+      <button id="play" title="automatisch afspelen">▶︎▶︎</button>
+      <button id="fwd" title="volgende stelling (→)">▶</button>
+      <button id="nums" title="veldnummers aan/uit">#</button>
+    </div>
+    <div class="panel" id="panel"></div>
+  </aside>
+  <main>
+<p class="src">Hoofdstuk 7.2</p>
+<h1>De derde zet</h1>
+<p class="src">Herm Jan Brascamp, <a href="https://www.hijkendtc.nl/7-2-de-derde-zet/">De derde zet</a>, <em>Strategie der 36 velden</em>, hijkendtc.nl. Hieronder per diagram de claims van het boek, de varianten en de weerleggingen, nagerekend met de databases.</p>
+<section class="diag" id="d7.1"><h3>Diagram 7.1</h3>
+<figure><a class="diagram" href="#" data-i="0"><div class="smallboard" data-g="6x6" data-fen="W:W14,15,16,17,18:B1,3,4,5,9"></div></a><figcaption>diagram 7.1, wit aan zet</figcaption></figure><p class="note">zie ook <a href="h7.html#d7.1">De randslag-opening</a></p>
+<p class="var"><a class="m2 err" href="#" data-i="2" title="D">3. 14-12</a> <span class="verdict ok">✅ boek: zwart aan zet D · database: D</span>
+<br><span class="note">met 3. 14-12 helemaal niets</span>
+</p>
+<ul class="issues"><li>zet 1 (wit) 14-12 geeft de winst weg (remise) (behoudend: 15-12, 16-13)</li></ul>
+<p class="var"><a class="m2 err" href="#" data-i="3" title="D">3. 14-11</a> <a class="m2 " href="#" data-i="4" title="D">5-8</a> <a class="m2 only" href="#" data-i="5" title="D">4. 11×6</a> <a class="m2 " href="#" data-i="6" title="D">3×8</a> <a class="m2 " href="#" data-i="7" title="D">5. 16-13</a> <a class="m2 only" href="#" data-i="8" title="D">4-7!</a> <a class="m2 " href="#" data-i="9" title="D">6. 13-11</a> <a class="m2 " href="#" data-i="10" title="D">8×13</a> <a class="m2 only" href="#" data-i="11" title="D">7. 17×5</a> <a class="m2 only" href="#" data-i="12" title="D">1×8</a> <a class="m2 only" href="#" data-i="13" title="D">8. 18-14</a> <a class="m2 only" href="#" data-i="14" title="D">9-12</a> <span class="verdict ok">✅ boek: wit aan zet D · database: D</span>
+<br><span class="note">eieren voor zijn geld</span>
+</p>
+<ul class="issues"><li>zet 1 (wit) 14-11 geeft de winst weg (remise) (behoudend: 15-12, 16-13)</li></ul>
+<p class="var"><a class="m2 err" href="#" data-i="15" title="D">3. 14-11</a> <a class="m2 " href="#" data-i="16" title="D">5-8</a> <a class="m2 only" href="#" data-i="17" title="D">4. 11×6</a> <a class="m2 " href="#" data-i="18" title="D">3×8</a> <a class="m2 " href="#" data-i="19" title="D">5. 16-13</a> <a class="m2 err" href="#" data-i="20" title="L36">1-5</a> <a class="m2 err" href="#" data-i="21" title="D">6. 17-14!</a> <span class="verdict bad">❌ boek: zwart aan zet L · database: D</span>
+<br><span class="note">op 5. … 1-5 verliest zwart</span>
+</p>
+<ul class="issues"><li>zet 1 (wit) 14-11: geeft de winst weg (remise); behoudend waren: 15-12, 16-13</li><li>zet 7 (wit) 17-14: geeft de winst weg (remise); behoudend waren: 18-14</li><li>zet 6 (zwart) 1-5 verliest (behoudend: 4-7)</li></ul>
+<div class="refute"><span class="t">weerlegging</span><br><a class="m1 err" href="#" data-i="22" title="D">3. 14-11</a> <a class="m1 " href="#" data-i="23" title="D">5-8</a> <a class="m1 only" href="#" data-i="24" title="D">4. 11×6</a> <a class="m1 " href="#" data-i="25" title="D">3×8</a> <a class="m1 " href="#" data-i="26" title="D">5. 16-13</a> <a class="m1 err" href="#" data-i="27" title="L36">1-5</a> <a class="m1 only db" href="#" data-i="28" title="W35">6. 18-14!</a> <a class="m1 db" href="#" data-i="29" title="L34">9-12</a> <a class="m1 only db" href="#" data-i="30" title="W33">7. 14×9</a> <a class="m1 db" href="#" data-i="31" title="L32">4-7</a> → <a href="h7-4.html#d7.14b">diagram 7.14b</a> (W31)</div>
+<p class="var"><a class="m2 err" href="#" data-i="32" title="D">3. 14-11</a> <a class="m2 " href="#" data-i="33" title="D">5-8</a> <a class="m2 only" href="#" data-i="34" title="D">4. 11×6</a> <a class="m2 " href="#" data-i="35" title="D">3×8</a> <a class="m2 " href="#" data-i="36" title="D">5. 16-13</a> <a class="m2 only" href="#" data-i="37" title="D">4-7</a> <a class="m2 " href="#" data-i="38" title="D">6. 17-14</a> <a class="m2 " href="#" data-i="39" title="D">7-10</a> <span class="verdict bad">❌ boek: wit aan zet L · database: D</span>
+<br><span class="note">tekst "9. 17-14 7-10": meteen gewonnen voor zwart</span>
+</p>
+<ul class="issues"><li>zet 1 (wit) 14-11 geeft de winst weg (remise) (behoudend: 15-12, 16-13)</li></ul>
+<div class="refute"><span class="t">weerlegging</span><br><a class="m1 err" href="#" data-i="40" title="D">3. 14-11</a> <a class="m1 " href="#" data-i="41" title="D">5-8</a> <a class="m1 only" href="#" data-i="42" title="D">4. 11×6</a> <a class="m1 " href="#" data-i="43" title="D">3×8</a> <a class="m1 " href="#" data-i="44" title="D">5. 16-13</a> <a class="m1 only" href="#" data-i="45" title="D">4-7</a> <a class="m1 " href="#" data-i="46" title="D">6. 17-14</a> <a class="m1 " href="#" data-i="47" title="D">7-10</a> <a class="m1 only db" href="#" data-i="48" title="D">7. 13-11</a> <a class="m1 only db" href="#" data-i="49" title="D">8×13</a> <a class="m1 only db" href="#" data-i="50" title="D">8. 14-12</a> <a class="m1 only db" href="#" data-i="51" title="D">9×14</a> <a class="m1 only db" href="#" data-i="52" title="D">9. 18×16</a> <a class="m1 db" href="#" data-i="53" title="D">1-4</a> <a class="m1 only db" href="#" data-i="54" title="D">10. 15-12</a> <a class="m1 only db" href="#" data-i="55" title="D">4-7</a> <a class="m1 only db" href="#" data-i="56" title="D">11. 12-9</a> <a class="m1 only db" href="#" data-i="57" title="D">7-11</a> <a class="m1 only db" href="#" data-i="58" title="D">12. 9-6</a> <a class="m1 db" href="#" data-i="59" title="D">10-13</a> … D</div>
+<p class="var"><a class="m2 err" href="#" data-i="60" title="D">3. 14-11</a> <a class="m2 " href="#" data-i="61" title="D">5-8</a> <a class="m2 only" href="#" data-i="62" title="D">4. 11×6</a> <a class="m2 " href="#" data-i="63" title="D">3×8</a> <a class="m2 " href="#" data-i="64" title="D">5. 16-13</a> <a class="m2 only" href="#" data-i="65" title="D">4-7</a> <a class="m2 err" href="#" data-i="66" title="L16">6. 13-10</a> <a class="m2 only" href="#" data-i="67" title="W15">7-11</a> <span class="verdict ok">✅ boek: wit aan zet L · database: L14</span>
+<br><span class="note">tekst "9. 13-10 7-11": meteen gewonnen voor zwart</span>
+</p>
+<ul class="issues"><li>zet 1 (wit) 14-11 geeft de winst weg (remise) (behoudend: 15-12, 16-13)</li><li>zet 7 (wit) 13-10 verliest (behoudend: 13-11, 17-14, 18-14)</li></ul>
+<p class="var"><a class="m2 err" href="#" data-i="68" title="D">3. 14-11</a> <a class="m2 " href="#" data-i="69" title="D">5-8</a> <a class="m2 only" href="#" data-i="70" title="D">4. 11×6</a> <a class="m2 " href="#" data-i="71" title="D">3×8</a> <a class="m2 " href="#" data-i="72" title="D">5. 16-13</a> <a class="m2 only" href="#" data-i="73" title="D">4-7</a> <a class="m2 " href="#" data-i="74" title="D">6. 18-14</a> <a class="m2 " href="#" data-i="75" title="D">9-12!</a> <a class="m2 only" href="#" data-i="76" title="D">7. 14×9</a> <a class="m2 only" href="#" data-i="77" title="D">7-11</a> <a class="m2 only" href="#" data-i="78" title="D">8. 13-10</a> <a class="m2 " href="#" data-i="79" title="D">11-13</a> <a class="m2 " href="#" data-i="80" title="D">9. 10-7</a> <a class="m2 " href="#" data-i="81" title="D">13-16</a> <a class="m2 only" href="#" data-i="82" title="D">10. 7-4</a> <a class="m2 " href="#" data-i="83" title="D">16-11</a> <a class="m2 " href="#" data-i="84" title="D">11. 17-14</a> <a class="m2 only" href="#" data-i="85" title="D">11×18</a> <a class="m2 only" href="#" data-i="86" title="D">12. 15-12</a> <a class="m2 only" href="#" data-i="87" title="D">8×15</a> <a class="m2 only" href="#" data-i="88" title="D">13. 9-6</a> <a class="m2 " href="#" data-i="89" title="D">18-11</a> <a class="m2 only" href="#" data-i="90" title="D">14. 6-2</a> <span class="verdict ok">✅ boek: zwart aan zet D · database: D</span>
+<br><span class="note">tekst "9. 18-14 ...": wit haalt nog net remise</span>
+</p>
+<ul class="issues"><li>zet 1 (wit) 14-11 geeft de winst weg (remise) (behoudend: 15-12, 16-13)</li></ul>
+</section>
+<section class="diag" id="d7.3"><h3>Diagram 7.3</h3>
+<p class="note">na 3. 16-13!?: alleen 3. … 5-8 houdt remise</p>
+<figure><a class="diagram" href="#" data-i="91"><div class="smallboard" data-g="6x6" data-fen="B:W13,14,15,17,18:B1,3,4,5,9"></div></a><figcaption>diagram 7.3, zwart aan zet</figcaption></figure>
+<p class="claim"><strong>zwart aan zet: <span class="val">L52</span></strong> <span class="verdict bad">boek: D ✗</span></p>
+<p class="moves"><a class="m1" href="#" data-i="92">5-8</a> <span class="val">L52</span>, <a class="m1" href="#" data-i="93">3-6</a> <span class="val">L22</span>, <a class="m1" href="#" data-i="94">5-7</a> <span class="val">L22</span>, <a class="m1" href="#" data-i="95">4-7</a> <span class="val">L18</span>, <a class="m1" href="#" data-i="96">9-12</a> <span class="val">L18</span></p>
+<div class="refute"><span class="t">weerlegging</span><br><a class="m1 " href="#" data-i="97" title="L52">3. … 5-8</a> → <a href="h7-3.html#d7.4">diagram 7.4</a> (W51)</div>
+<p class="var"><a class="m2 " href="#" data-i="99" title="L52">3. … 5-8</a> <span class="verdict bad">❌ boek: wit aan zet D · database: W51</span>
+<br><span class="note">de enige weg naar remise</span>
+</p>
+<ul class="issues"><li>zet 1 5-8 (L52) "de enige": ook 3-6 (L22), 5-7 (L22), 4-7 (L18), 9-12 (L18) behoudt/behouden het resultaat</li></ul>
+<div class="refute"><span class="t">weerlegging</span><br><a class="m1 " href="#" data-i="100" title="L52">3. … 5-8</a> → <a href="h7-3.html#d7.4">diagram 7.4</a> (W51)</div>
+<p class="var"><a class="m2 " href="#" data-i="101" title="L22">3. … 5-7</a> <a class="m2 " href="#" data-i="102" title="W21">4. 13-11</a> <a class="m2 " href="#" data-i="103" title="L20">3-6</a> <a class="m2 only" href="#" data-i="104" title="W19">5. 15-12</a> <a class="m2 " href="#" data-i="105" title="L18">1-5</a> <a class="m2 " href="#" data-i="106" title="W17">6. 12-8</a> <a class="m2 " href="#" data-i="107" title="L16">5×12</a> <a class="m2 only" href="#" data-i="108" title="W15">7. 18-15</a> <a class="m2 " href="#" data-i="109" title="L14">6-8</a> <a class="m2 only" href="#" data-i="110" title="W13">8. 11×6</a> <a class="m2 " href="#" data-i="111" title="L12">9×2</a> <a class="m2 only" href="#" data-i="112" title="W11">9. 15×8</a> <span class="verdict ok">✅ boek: zwart aan zet L · database: L10</span>
+</p>
+<p class="var"><a class="m2 " href="#" data-i="113" title="L22">3. … 3-6</a> <a class="m2 err" href="#" data-i="114" title="D">4. 13-11</a> <a class="m2 only" href="#" data-i="115" title="D">6-8</a> <span class="verdict ok">✅ boek: wit aan zet D · database: D</span>
+<br><span class="note">13-11 6-8 =</span>
+</p>
+<ul class="issues"><li>zet 2 (wit) 13-11 geeft de winst weg (remise) (behoudend: 13-10)</li></ul>
+<p class="var"><em>3. … 3-6 4. 13-10!! 5-8 5. 10-7 4×11 6. 14×10</em> <span class="verdict ">✏️ notatiefout</span>
+<br><span class="note">tekst: 6. 14x10</span>
+</p>
+<ul class="issues"><li>ONMOGELIJK: zet 6 (wit) 14×10 is niet legaal in W:W14,15,17,18:B1,6,8,9,11; legale zetten: 14x7</li></ul>
+<p class="var"><a class="m2 " href="#" data-i="116" title="L22">3. … 3-6</a> <a class="m2 only" href="#" data-i="117" title="W21">4. 13-10</a> <a class="m2 " href="#" data-i="118" title="L18">5-8</a> <a class="m2 only" href="#" data-i="119" title="W17">5. 10-7</a> <a class="m2 " href="#" data-i="120" title="L16">4×11</a> <a class="m2 only" href="#" data-i="121" title="W15">6. 14×7</a> <span class="verdict ok">✅ boek: zwart aan zet L · database: L14</span>
+<br><span class="note">gecorrigeerd: 6. 14x7</span>
+</p>
+<p class="var"><a class="m2 " href="#" data-i="122" title="L22">3. … 3-6</a> <a class="m2 only" href="#" data-i="123" title="W21">4. 13-10!!</a> <a class="m2 " href="#" data-i="124" title="L20">6-8!!</a> <span class="verdict ok">✅ boek: wit aan zet W · database: W19</span>
+<br><span class="note">diagram 7.4 (kerstpuzzel)</span>
+</p>
+</section>
+<section class="diag" id="d7.4j"><h3>Diagram 7.4j</h3>
+<p class="note">kerstpuzzel Hans Jansen (na 3. … 3-6 4. 13-10 6-8): toch wint wit</p>
+<figure><a class="diagram" href="#" data-i="125"><div class="smallboard" data-g="6x6" data-fen="W:W10,14,15,17,18:B1,4,5,8,9"></div></a><figcaption>diagram 7.4j, wit aan zet</figcaption></figure>
+<p class="claim"><strong>wit aan zet: <span class="val">W19</span></strong> <span class="verdict ok">boek: W ✓</span></p>
+<p class="moves"><a class="m1" href="#" data-i="126">14-11</a> <span class="val">W19</span>, <a class="m1" href="#" data-i="127">14-12</a> <span class="val">D</span>, <a class="m1" href="#" data-i="128">10-7</a> <span class="val">L18</span>, <a class="m1" href="#" data-i="129">15-12</a> <span class="val">L18</span>, <a class="m1" href="#" data-i="130">17-13</a> <span class="val">L16</span></p>
+<p class="var"><a class="m2 err" href="#" data-i="132" title="D">5. 14-12</a> <a class="m2 only" href="#" data-i="133" title="D">9×14</a> <a class="m2 only" href="#" data-i="134" title="D">6. 18×6</a> <a class="m2 only" href="#" data-i="135" title="D">5-7</a> <span class="verdict ok">✅ boek: wit aan zet D · database: D</span>
+</p>
+<ul class="issues"><li>zet 1 (wit) 14-12 geeft de winst weg (remise) (behoudend: 14-11)</li></ul>
+<p class="var"><a class="m2 err" href="#" data-i="136" title="L18">5. 10-7??</a> <a class="m2 only" href="#" data-i="137" title="W17">5×10</a> <a class="m2 " href="#" data-i="138" title="L14">6. 14-12</a> <a class="m2 only" href="#" data-i="139" title="W13">9×14</a> <a class="m2 " href="#" data-i="140" title="L12">7. 18×6</a> <a class="m2 only" href="#" data-i="141" title="W11">10-13!</a> <a class="m2 " href="#" data-i="142" title="L10">8. 17×10</a> <a class="m2 only" href="#" data-i="143" title="W9">4-7</a> <a class="m2 " href="#" data-i="144" title="L8">9. 10×5</a> <a class="m2 only" href="#" data-i="145" title="W7">1×3</a> <span class="verdict ok">✅ boek: wit aan zet L · database: L6</span>
+<br><span class="note">zwart wint zelfs</span>
+</p>
+<ul class="issues"><li>bevestigd: 10-7?? verliest zelfs, terecht als fout gemarkeerd (beter: 14-11)</li></ul>
+<p class="var"><em>5. 14-11 8×13 6. 15-12 9×14 7. 18×16 5-8 8. 17-13 1-5 9. 13-11 8×13 10. 16×13</em> <span class="verdict ">✏️ notatiefout</span>
+</p>
+<ul class="issues"><li>ONMOGELIJK: zet 11 (wit) 16×13 is niet legaal in W:W10,16:B4,5,13; legale zetten: 16x11, 10x17</li></ul>
+<p class="var"><em>5. 14-11 8×13 6. 15-12 9×14 7. 18×16 4-7 8. 17-14 1-5 9. 16-13</em> <span class="verdict ">✏️ notatiefout</span>
+</p>
+<ul class="issues"><li>ONMOGELIJK: zet 8 (zwart) 1-5 is niet legaal in B:W10,14,16:B1,5,7; legale zetten: 1-4, 5-8, 7-11</li></ul>
+<p class="var"><a class="m2 only" href="#" data-i="146" title="W19">5. 14-11</a> <a class="m2 " href="#" data-i="147" title="L18">8×13</a> <a class="m2 only" href="#" data-i="148" title="W17">6. 15-12</a> <a class="m2 " href="#" data-i="149" title="L16">9×14</a> <a class="m2 only" href="#" data-i="150" title="W15">7. 18×16</a> <a class="m2 " href="#" data-i="151" title="L14">5-7</a> <a class="m2 only" href="#" data-i="152" title="W13">8. 10×5</a> <a class="m2 " href="#" data-i="153" title="L12">1×8</a> <a class="m2 only" href="#" data-i="154" title="W11">9. 16-13!</a> <a class="m2 " href="#" data-i="155" title="L10">8-12</a> <a class="m2 only" href="#" data-i="156" title="W9">10. 13-11</a> <a class="m2 " href="#" data-i="157" title="L8">12-15</a> <a class="m2 only" href="#" data-i="158" title="W7">11. 17-13!!</a> <span class="verdict ok">✅ boek: zwart aan zet L · database: L6</span>
+<br><span class="note">tekst: "dus 8. 5-7 10x5 9. 1x8 16-13! 10. 8-12 13-11 11. 12-15 17-13!!"</span>
+</p>
+</section>
+<nav class="pager"><a href="h6-opl3.html">← Oplossingen zwaar manoeuvreren III</a><a href="h7-3.html">De vierde zet →</a></nav>
+<p class="legend">Klik op een zet om de stelling op het grote bord te zien; ◀ ▶ (of de pijltjestoetsen) lopen door de
+variant. Waarden gelden voor de partij aan zet; bij een zet voor wie hem doet, met n het aantal ply tot het einde van
+de partij, de zet meegeteld: W = winst (oneven), L = verlies (even), D = remise.
+<span style="color:var(--link);font-weight:600">Blauw</span> = hoofdvariant,
+<span style="color:var(--m2)">groen</span> = zijvariant, <em>cursief</em> = voortzetting van de database,
+<span style="text-decoration:underline wavy var(--err)">golflijn</span> = zet die het resultaat verandert,
+<span style="color:var(--only)">*</span> = enige zet die de winst of de remise behoudt.</p>
+  </main>
+</div>
+<script>
+const POS = [{"f":"W:W14,15,16,17,18:B1,3,4,5,9","v":"W25","last":null,"prev":null,"next":null,"g":"6x6","m":[["15-12","W25",null],["16-13","W53",91],["14-11","D",3],["14-12","D",2],["17-13","D",null]]},{"f":"W:W14,15,16,17,18:B1,3,4,5,9","v":"W25","last":null,"prev":null,"next":2,"g":"6x6","m":[["15-12","W25",null],["16-13","W53",91],["14-11","D",3],["14-12","D",2],["17-13","D",null]]},{"f":"B:W12,15,16,17,18:B1,3,4,5,9","v":"D","last":[14,12],"prev":1,"next":null,"g":"6x6","m":[["9×14","D",null]]},{"f":"B:W11,15,16,17,18:B1,3,4,5,9","v":"D","last":[14,11],"prev":1,"next":4,"g":"6x6","m":[["3-6","D",null],["5-8","D",4],["5-7","L22",null],["4-7","L20",null],["9-12","L20",null]]},{"f":"W:W11,15,16,17,18:B1,3,4,8,9","v":"D","last":[5,8],"prev":3,"next":5,"g":"6x6","m":[["11×6","D",5]]},{"f":"B:W6,15,16,17,18:B1,3,4,9","v":"D","last":[11,6],"prev":4,"next":6,"g":"6x6","m":[["3×8","D",6],["9×2","D",null]]},{"f":"W:W15,16,17,18:B1,4,8,9","v":"D","last":[3,8],"prev":5,"next":7,"g":"6x6","m":[["16-13","D",7],["17-13","D",null],["15-12","L22",null],["18-14","L18",null],["17-14","L14",null]]},{"f":"B:W13,15,17,18:B1,4,8,9","v":"D","last":[16,13],"prev":6,"next":8,"g":"6x6","m":[["4-7","D",8],["1-5","L36",20],["8-11","L14",null],["8-12","L12",null],["9-12","L12",null]]},{"f":"W:W13,15,17,18:B1,7,8,9","v":"D","last":[4,7],"prev":7,"next":9,"g":"6x6","m":[["13-11","D",9],["17-14","D",38],["18-14","D",74],["15-12","L20",null],["13-10","L16",66]]},{"f":"B:W11,15,17,18:B1,7,8,9","v":"D","last":[13,11],"prev":8,"next":10,"g":"6x6","m":[["7×14","D",null],["8×13","D",10]]},{"f":"W:W15,17,18:B1,7,9,13","v":"D","last":[8,13],"prev":9,"next":11,"g":"6x6","m":[["17×5","D",11]]},{"f":"B:W5,15,18:B1,9","v":"D","last":[17,5],"prev":10,"next":12,"g":"6x6","m":[["1×8","D",12]]},{"f":"W:W15,18:B8,9","v":"D","last":[1,8],"prev":11,"next":13,"g":"6x6","m":[["18-14","D",13],["15-12","L6",null]]},{"f":"B:W14,15:B8,9","v":"D","last":[18,14],"prev":12,"next":14,"g":"6x6","m":[["9-12","D",14],["8-11","L4",null],["8-12","L4",null]]},{"f":"W:W14,15:B8,12","v":"D","last":[9,12],"prev":13,"next":null,"g":"6x6","m":[["14×9","D",null]]},{"f":"B:W11,15,16,17,18:B1,3,4,5,9","v":"D","last":[14,11],"prev":1,"next":16,"g":"6x6","m":[["3-6","D",null],["5-8","D",4],["5-7","L22",null],["4-7","L20",null],["9-12","L20",null]]},{"f":"W:W11,15,16,17,18:B1,3,4,8,9","v":"D","last":[5,8],"prev":15,"next":17,"g":"6x6","m":[["11×6","D",5]]},{"f":"B:W6,15,16,17,18:B1,3,4,9","v":"D","last":[11,6],"prev":16,"next":18,"g":"6x6","m":[["3×8","D",6],["9×2","D",null]]},{"f":"W:W15,16,17,18:B1,4,8,9","v":"D","last":[3,8],"prev":17,"next":19,"g":"6x6","m":[["16-13","D",7],["17-13","D",null],["15-12","L22",null],["18-14","L18",null],["17-14","L14",null]]},{"f":"B:W13,15,17,18:B1,4,8,9","v":"D","last":[16,13],"prev":18,"next":20,"g":"6x6","m":[["4-7","D",8],["1-5","L36",20],["8-11","L14",null],["8-12","L12",null],["9-12","L12",null]]},{"f":"W:W13,15,17,18:B4,5,8,9","v":"W35","last":[1,5],"prev":19,"next":21,"g":"6x6","m":[["18-14","W35",28],["13-10","D",null],["13-11","D",null],["15-12","D",null],["17-14","D",21]]},{"f":"B:W13,14,15,18:B4,5,8,9","v":"D","last":[17,14],"prev":20,"next":null,"g":"6x6","m":[["9-12","D",null],["5-7","L26",null],["8-12","L8",null],["4-7","L6",null],["8-11","L6",null]]},{"f":"B:W11,15,16,17,18:B1,3,4,5,9","v":"D","last":[14,11],"prev":1,"next":23,"g":"6x6","m":[["3-6","D",null],["5-8","D",4],["5-7","L22",null],["4-7","L20",null],["9-12","L20",null]]},{"f":"W:W11,15,16,17,18:B1,3,4,8,9","v":"D","last":[5,8],"prev":22,"next":24,"g":"6x6","m":[["11×6","D",5]]},{"f":"B:W6,15,16,17,18:B1,3,4,9","v":"D","last":[11,6],"prev":23,"next":25,"g":"6x6","m":[["3×8","D",6],["9×2","D",null]]},{"f":"W:W15,16,17,18:B1,4,8,9","v":"D","last":[3,8],"prev":24,"next":26,"g":"6x6","m":[["16-13","D",7],["17-13","D",null],["15-12","L22",null],["18-14","L18",null],["17-14","L14",null]]},{"f":"B:W13,15,17,18:B1,4,8,9","v":"D","last":[16,13],"prev":25,"next":27,"g":"6x6","m":[["4-7","D",8],["1-5","L36",20],["8-11","L14",null],["8-12","L12",null],["9-12","L12",null]]},{"f":"W:W13,15,17,18:B4,5,8,9","v":"W35","last":[1,5],"prev":26,"next":28,"g":"6x6","m":[["18-14","W35",28],["13-10","D",null],["13-11","D",null],["15-12","D",null],["17-14","D",21]]},{"f":"B:W13,14,15,17:B4,5,8,9","v":"L34","last":[18,14],"prev":27,"next":29,"g":"6x6","m":[["9-12","L34",29],["4-7","L8",null],["8-12","L8",null],["5-7","L6",null],["8-11","L6",null]]},{"f":"W:W13,14,15,17:B4,5,8,12","v":"W33","last":[9,12],"prev":28,"next":30,"g":"6x6","m":[["14×9","W33",30]]},{"f":"B:W9,13,15,17:B4,5,8","v":"L32","last":[14,9],"prev":29,"next":31,"g":"6x6","m":[["4-7","L32",31],["5-7","L6",null],["8-11","L6",null],["8-12","L6",null]]},{"f":"W:W9,13,15,17:B5,7,8","v":"W31","last":[4,7],"prev":30,"next":null,"g":"6x6","m":[["13-11","W31",null],["9-6","D",null],["13-10","D",null],["15-12","D",null],["17-14","D",null]]},{"f":"B:W11,15,16,17,18:B1,3,4,5,9","v":"D","last":[14,11],"prev":1,"next":33,"g":"6x6","m":[["3-6","D",null],["5-8","D",4],["5-7","L22",null],["4-7","L20",null],["9-12","L20",null]]},{"f":"W:W11,15,16,17,18:B1,3,4,8,9","v":"D","last":[5,8],"prev":32,"next":34,"g":"6x6","m":[["11×6","D",5]]},{"f":"B:W6,15,16,17,18:B1,3,4,9","v":"D","last":[11,6],"prev":33,"next":35,"g":"6x6","m":[["3×8","D",6],["9×2","D",null]]},{"f":"W:W15,16,17,18:B1,4,8,9","v":"D","last":[3,8],"prev":34,"next":36,"g":"6x6","m":[["16-13","D",7],["17-13","D",null],["15-12","L22",null],["18-14","L18",null],["17-14","L14",null]]},{"f":"B:W13,15,17,18:B1,4,8,9","v":"D","last":[16,13],"prev":35,"next":37,"g":"6x6","m":[["4-7","D",8],["1-5","L36",20],["8-11","L14",null],["8-12","L12",null],["9-12","L12",null]]},{"f":"W:W13,15,17,18:B1,7,8,9","v":"D","last":[4,7],"prev":36,"next":38,"g":"6x6","m":[["13-11","D",9],["17-14","D",38],["18-14","D",74],["15-12","L20",null],["13-10","L16",66]]},{"f":"B:W13,14,15,18:B1,7,8,9","v":"D","last":[17,14],"prev":37,"next":39,"g":"6x6","m":[["7-10","D",39],["9-12","D",null],["1-4","L26",null],["8-12","L20",null],["7-11","L18",null],["8-11","L16",null],["1-5","L6",null]]},{"f":"W:W13,14,15,18:B1,8,9,10","v":"D","last":[7,10],"prev":38,"next":null,"g":"6x6","m":[["13-11","D",48],["14-11","L10",null],["15-12","L10",null],["14-12","L8",null]]},{"f":"B:W11,15,16,17,18:B1,3,4,5,9","v":"D","last":[14,11],"prev":1,"next":41,"g":"6x6","m":[["3-6","D",null],["5-8","D",4],["5-7","L22",null],["4-7","L20",null],["9-12","L20",null]]},{"f":"W:W11,15,16,17,18:B1,3,4,8,9","v":"D","last":[5,8],"prev":40,"next":42,"g":"6x6","m":[["11×6","D",5]]},{"f":"B:W6,15,16,17,18:B1,3,4,9","v":"D","last":[11,6],"prev":41,"next":43,"g":"6x6","m":[["3×8","D",6],["9×2","D",null]]},{"f":"W:W15,16,17,18:B1,4,8,9","v":"D","last":[3,8],"prev":42,"next":44,"g":"6x6","m":[["16-13","D",7],["17-13","D",null],["15-12","L22",null],["18-14","L18",null],["17-14","L14",null]]},{"f":"B:W13,15,17,18:B1,4,8,9","v":"D","last":[16,13],"prev":43,"next":45,"g":"6x6","m":[["4-7","D",8],["1-5","L36",20],["8-11","L14",null],["8-12","L12",null],["9-12","L12",null]]},{"f":"W:W13,15,17,18:B1,7,8,9","v":"D","last":[4,7],"prev":44,"next":46,"g":"6x6","m":[["13-11","D",9],["17-14","D",38],["18-14","D",74],["15-12","L20",null],["13-10","L16",66]]},{"f":"B:W13,14,15,18:B1,7,8,9","v":"D","last":[17,14],"prev":45,"next":47,"g":"6x6","m":[["7-10","D",39],["9-12","D",null],["1-4","L26",null],["8-12","L20",null],["7-11","L18",null],["8-11","L16",null],["1-5","L6",null]]},{"f":"W:W13,14,15,18:B1,8,9,10","v":"D","last":[7,10],"prev":46,"next":48,"g":"6x6","m":[["13-11","D",48],["14-11","L10",null],["15-12","L10",null],["14-12","L8",null]]},{"f":"B:W11,14,15,18:B1,8,9,10","v":"D","last":[13,11],"prev":47,"next":49,"g":"6x6","m":[["8×13","D",49]]},{"f":"W:W14,15,18:B1,9,10,13","v":"D","last":[8,13],"prev":48,"next":50,"g":"6x6","m":[["14-12","D",50],["14-11","L8",null],["15-12","L8",null]]},{"f":"B:W12,15,18:B1,9,10,13","v":"D","last":[14,12],"prev":49,"next":51,"g":"6x6","m":[["9×14","D",51]]},{"f":"W:W15,18:B1,10,13,14","v":"D","last":[9,14],"prev":50,"next":52,"g":"6x6","m":[["18×16","D",52]]},{"f":"B:W15,16:B1,10","v":"D","last":[18,16],"prev":51,"next":53,"g":"6x6","m":[["1-4","D",53],["1-5","D",null],["10-13","L6",null]]},{"f":"W:W15,16:B4,10","v":"D","last":[1,4],"prev":52,"next":54,"g":"6x6","m":[["15-12","D",54],["16-13","L4",null]]},{"f":"B:W12,16:B4,10","v":"D","last":[15,12],"prev":53,"next":55,"g":"6x6","m":[["4-7","D",55],["10-13","L4",null]]},{"f":"W:W12,16:B7,10","v":"D","last":[4,7],"prev":54,"next":56,"g":"6x6","m":[["12-9","D",56],["12-8","L6",null],["16-13","L6",null]]},{"f":"B:W9,16:B7,10","v":"D","last":[12,9],"prev":55,"next":57,"g":"6x6","m":[["7-11","D",57],["10-13","L2",null]]},{"f":"W:W9,16:B10,11","v":"D","last":[7,11],"prev":56,"next":58,"g":"6x6","m":[["9-6","D",58],["16-13","L4",null]]},{"f":"B:W6,16:B10,11","v":"D","last":[9,6],"prev":57,"next":59,"g":"6x6","m":[["10-13","D",59],["11-14","D",null],["11-13","L4",null]]},{"f":"W:W6,16:B11,13","v":"D","last":[10,13],"prev":58,"next":null,"g":"6x6","m":[["6-2","D",null],["6-3","L6",null]]},{"f":"B:W11,15,16,17,18:B1,3,4,5,9","v":"D","last":[14,11],"prev":1,"next":61,"g":"6x6","m":[["3-6","D",null],["5-8","D",4],["5-7","L22",null],["4-7","L20",null],["9-12","L20",null]]},{"f":"W:W11,15,16,17,18:B1,3,4,8,9","v":"D","last":[5,8],"prev":60,"next":62,"g":"6x6","m":[["11×6","D",5]]},{"f":"B:W6,15,16,17,18:B1,3,4,9","v":"D","last":[11,6],"prev":61,"next":63,"g":"6x6","m":[["3×8","D",6],["9×2","D",null]]},{"f":"W:W15,16,17,18:B1,4,8,9","v":"D","last":[3,8],"prev":62,"next":64,"g":"6x6","m":[["16-13","D",7],["17-13","D",null],["15-12","L22",null],["18-14","L18",null],["17-14","L14",null]]},{"f":"B:W13,15,17,18:B1,4,8,9","v":"D","last":[16,13],"prev":63,"next":65,"g":"6x6","m":[["4-7","D",8],["1-5","L36",20],["8-11","L14",null],["8-12","L12",null],["9-12","L12",null]]},{"f":"W:W13,15,17,18:B1,7,8,9","v":"D","last":[4,7],"prev":64,"next":66,"g":"6x6","m":[["13-11","D",9],["17-14","D",38],["18-14","D",74],["15-12","L20",null],["13-10","L16",66]]},{"f":"B:W10,15,17,18:B1,7,8,9","v":"W15","last":[13,10],"prev":65,"next":67,"g":"6x6","m":[["7-11","W15",67],["1-5","D",null],["8-11","L12",null],["9-12","L12",null],["8-12","L8",null],["1-4","L6",null]]},{"f":"W:W10,15,17,18:B1,8,9,11","v":"L14","last":[7,11],"prev":66,"next":null,"g":"6x6","m":[["10-7","L14",null],["15-12","L14",null],["17-13","L12",null],["17-14","L12",null],["18-14","L10",null]]},{"f":"B:W11,15,16,17,18:B1,3,4,5,9","v":"D","last":[14,11],"prev":1,"next":69,"g":"6x6","m":[["3-6","D",null],["5-8","D",4],["5-7","L22",null],["4-7","L20",null],["9-12","L20",null]]},{"f":"W:W11,15,16,17,18:B1,3,4,8,9","v":"D","last":[5,8],"prev":68,"next":70,"g":"6x6","m":[["11×6","D",5]]},{"f":"B:W6,15,16,17,18:B1,3,4,9","v":"D","last":[11,6],"prev":69,"next":71,"g":"6x6","m":[["3×8","D",6],["9×2","D",null]]},{"f":"W:W15,16,17,18:B1,4,8,9","v":"D","last":[3,8],"prev":70,"next":72,"g":"6x6","m":[["16-13","D",7],["17-13","D",null],["15-12","L22",null],["18-14","L18",null],["17-14","L14",null]]},{"f":"B:W13,15,17,18:B1,4,8,9","v":"D","last":[16,13],"prev":71,"next":73,"g":"6x6","m":[["4-7","D",8],["1-5","L36",20],["8-11","L14",null],["8-12","L12",null],["9-12","L12",null]]},{"f":"W:W13,15,17,18:B1,7,8,9","v":"D","last":[4,7],"prev":72,"next":74,"g":"6x6","m":[["13-11","D",9],["17-14","D",38],["18-14","D",74],["15-12","L20",null],["13-10","L16",66]]},{"f":"B:W13,14,15,17:B1,7,8,9","v":"D","last":[18,14],"prev":73,"next":75,"g":"6x6","m":[["7-10","D",null],["9-12","D",75],["7-11","L18",null],["8-11","L16",null],["8-12","L12",null],["1-5","L8",null],["1-4","L6",null]]},{"f":"W:W13,14,15,17:B1,7,8,12","v":"D","last":[9,12],"prev":74,"next":76,"g":"6x6","m":[["14×9","D",76]]},{"f":"B:W9,13,15,17:B1,7,8","v":"D","last":[14,9],"prev":75,"next":77,"g":"6x6","m":[["7-11","D",77],["1-5","L32",31],["7-10","L14",null],["8-11","L10",null],["8-12","L10",null],["1-4","L6",null]]},{"f":"W:W9,13,15,17:B1,8,11","v":"D","last":[7,11],"prev":76,"next":78,"g":"6x6","m":[["13-10","D",78],["17-14","L16",null],["9-6","L12",null],["15-12","L12",null]]},{"f":"B:W9,10,15,17:B1,8,11","v":"D","last":[13,10],"prev":77,"next":79,"g":"6x6","m":[["1-4","D",null],["1-5","D",null],["11-13","D",79],["8-12","L6",null],["11-14","L6",null]]},{"f":"W:W9,10,15,17:B1,8,13","v":"D","last":[11,13],"prev":78,"next":80,"g":"6x6","m":[["10-7","D",80],["15-12","D",null],["17-14","D",null],["9-6","L18",null]]},{"f":"B:W7,9,15,17:B1,8,13","v":"D","last":[10,7],"prev":79,"next":81,"g":"6x6","m":[["1-4","D",null],["8-11","D",null],["13-16","D",81],["8-12","L12",null],["1-5","L8",null]]},{"f":"W:W7,9,15,17:B1,8,K16","v":"D","last":[13,16],"prev":80,"next":82,"g":"6x6","m":[["7-4","D",82],["17-14","L46",null],["15-12","L22",null],["17-13","L22",null],["7-5","L20",null],["9-6","L16",null]]},{"f":"B:W4,9,15,17:B1,8,K16","v":"D","last":[7,4],"prev":81,"next":83,"g":"6x6","m":[["1-5","D",null],["8-11","D",null],["8-12","D",null],["16-11","D",83],["16-13","L10",null]]},{"f":"W:W4,9,15,17:B1,8,K11","v":"D","last":[16,11],"prev":82,"next":84,"g":"6x6","m":[["15-12","D",null],["17-14","D",84],["9-6","L14",null],["17-13","L10",null]]},{"f":"B:W4,9,14,15:B1,8,K11","v":"D","last":[17,14],"prev":83,"next":85,"g":"6x6","m":[["11×18","D",85]]},{"f":"W:W4,9,15:B1,8,K18","v":"D","last":[11,18],"prev":84,"next":86,"g":"6x6","m":[["15-12","D",86],["9-6","L8",null]]},{"f":"B:W4,9,12:B1,8,K18","v":"D","last":[15,12],"prev":85,"next":87,"g":"6x6","m":[["8×15","D",87]]},{"f":"W:W4,9:B1,15,K18","v":"D","last":[8,15],"prev":86,"next":88,"g":"6x6","m":[["9-6","D",88]]},{"f":"B:W4,6:B1,15,K18","v":"D","last":[9,6],"prev":87,"next":89,"g":"6x6","m":[["1-5","D",null],["18-14","D",null],["18-11","D",89],["18-7","D",null]]},{"f":"W:W4,6:B1,K11,15","v":"D","last":[18,11],"prev":88,"next":90,"g":"6x6","m":[["6-2","D",90],["6-3","L4",null]]},{"f":"B:WK2,4:B1,K11,15","v":"D","last":[6,2],"prev":89,"next":null,"g":"6x6","m":[["11-7","D",null],["11-8","D",null],["11-6","D",null],["11-3","D",null],["11-13","D",null],["11-16","D",null],["11-14","D",null],["11-18","D",null],["15-18","D",null],["1-5","L2",null]]},{"f":"B:W13,14,15,17,18:B1,3,4,5,9","v":"L52","last":null,"prev":null,"next":92,"g":"6x6","m":[["5-8","L52",92],["3-6","L22",93],["5-7","L22",94],["4-7","L18",95],["9-12","L18",96]]},{"f":"W:W13,14,15,17,18:B1,3,4,8,9","v":"W51","last":[5,8],"prev":91,"next":null,"g":"6x6","m":[["14-11","W51",null],["13-10","D",null],["13-11","D",null],["14-12","D",null],["15-12","L20",null]]},{"f":"W:W13,14,15,17,18:B1,4,5,6,9","v":"W21","last":[3,6],"prev":91,"next":null,"g":"6x6","m":[["13-10","W21",117],["13-11","D",114],["14-11","D",null],["14-12","D",null],["15-12","D",null]]},{"f":"W:W13,14,15,17,18:B1,3,4,7,9","v":"W21","last":[5,7],"prev":91,"next":null,"g":"6x6","m":[["13-11","W21",102],["14-11","W21",null],["15-12","W23",null],["13-10","D",null],["14-12","D",null]]},{"f":"W:W13,14,15,17,18:B1,3,5,7,9","v":"W17","last":[4,7],"prev":91,"next":null,"g":"6x6","m":[["14-12","W17",null],["13-11","W19",null],["13-10","W23",null],["15-12","W31",null],["14-11","L26",null]]},{"f":"W:W13,14,15,17,18:B1,3,4,5,12","v":"W17","last":[9,12],"prev":91,"next":null,"g":"6x6","m":[["15×8","W17",null],["14×9","L24",null]]},{"f":"W:W13,14,15,17,18:B1,3,4,8,9","v":"W51","last":[5,8],"prev":91,"next":null,"g":"6x6","m":[["14-11","W51",null],["13-10","D",null],["13-11","D",null],["14-12","D",null],["15-12","L20",null]]},{"f":"B:W13,14,15,17,18:B1,3,4,5,9","v":"L52","last":null,"prev":null,"next":99,"g":"6x6","m":[["5-8","L52",92],["3-6","L22",93],["5-7","L22",94],["4-7","L18",95],["9-12","L18",96]]},{"f":"W:W13,14,15,17,18:B1,3,4,8,9","v":"W51","last":[5,8],"prev":98,"next":null,"g":"6x6","m":[["14-11","W51",null],["13-10","D",null],["13-11","D",null],["14-12","D",null],["15-12","L20",null]]},{"f":"W:W13,14,15,17,18:B1,3,4,8,9","v":"W51","last":[5,8],"prev":98,"next":null,"g":"6x6","m":[["14-11","W51",null],["13-10","D",null],["13-11","D",null],["14-12","D",null],["15-12","L20",null]]},{"f":"W:W13,14,15,17,18:B1,3,4,7,9","v":"W21","last":[5,7],"prev":98,"next":102,"g":"6x6","m":[["13-11","W21",102],["14-11","W21",null],["15-12","W23",null],["13-10","D",null],["14-12","D",null]]},{"f":"B:W11,14,15,17,18:B1,3,4,7,9","v":"L20","last":[13,11],"prev":101,"next":103,"g":"6x6","m":[["3-6","L20",103],["1-5","L16",null],["7-10","L16",null],["9-12","L14",null]]},{"f":"W:W11,14,15,17,18:B1,4,6,7,9","v":"W19","last":[3,6],"prev":102,"next":104,"g":"6x6","m":[["15-12","W19",104],["17-13","D",null],["11-8","L20",null],["14-12","L12",null]]},{"f":"B:W11,12,14,17,18:B1,4,6,7,9","v":"L18","last":[15,12],"prev":103,"next":105,"g":"6x6","m":[["1-5","L18",105],["7-10","L12",null],["6-8","L10",null]]},{"f":"W:W11,12,14,17,18:B4,5,6,7,9","v":"W17","last":[1,5],"prev":104,"next":106,"g":"6x6","m":[["12-8","W17",106],["18-15","W17",null],["17-13","D",null],["11-8","L14",null]]},{"f":"B:W8,11,14,17,18:B4,5,6,7,9","v":"L16","last":[12,8],"prev":105,"next":107,"g":"6x6","m":[["5×12","L16",107]]},{"f":"W:W11,14,17,18:B4,6,7,9,12","v":"W15","last":[5,12],"prev":106,"next":108,"g":"6x6","m":[["18-15","W15",108],["11-8","L12",null],["17-13","L10",null]]},{"f":"B:W11,14,15,17:B4,6,7,9,12","v":"L14","last":[18,15],"prev":107,"next":109,"g":"6x6","m":[["6-8","L14",109],["7-10","L8",null]]},{"f":"W:W11,14,15,17:B4,7,8,9,12","v":"W13","last":[6,8],"prev":108,"next":110,"g":"6x6","m":[["11×6","W13",110]]},{"f":"B:W6,14,15,17:B4,7,9,12","v":"L12","last":[11,6],"prev":109,"next":111,"g":"6x6","m":[["9×2","L12",111]]},{"f":"W:W14,15,17:B2,4,7,12","v":"W11","last":[9,2],"prev":110,"next":112,"g":"6x6","m":[["15×8","W11",112],["14×9","L16",null]]},{"f":"B:W8,14,17:B2,4,7","v":"L10","last":[15,8],"prev":111,"next":null,"g":"6x6","m":[["7-11","L10",null],["2-5","L8",null],["2-6","L8",null],["7-10","L8",null]]},{"f":"W:W13,14,15,17,18:B1,4,5,6,9","v":"W21","last":[3,6],"prev":98,"next":114,"g":"6x6","m":[["13-10","W21",117],["13-11","D",114],["14-11","D",null],["14-12","D",null],["15-12","D",null]]},{"f":"B:W11,14,15,17,18:B1,4,5,6,9","v":"D","last":[13,11],"prev":113,"next":115,"g":"6x6","m":[["6-8","D",115],["5-7","L20",103],["4-7","L18",null],["5-8","L18",null],["9-12","L6",null]]},{"f":"W:W11,14,15,17,18:B1,4,5,8,9","v":"D","last":[6,8],"prev":114,"next":null,"g":"6x6","m":[["11×6","D",null]]},{"f":"W:W13,14,15,17,18:B1,4,5,6,9","v":"W21","last":[3,6],"prev":98,"next":117,"g":"6x6","m":[["13-10","W21",117],["13-11","D",114],["14-11","D",null],["14-12","D",null],["15-12","D",null]]},{"f":"B:W10,14,15,17,18:B1,4,5,6,9","v":"L20","last":[13,10],"prev":116,"next":118,"g":"6x6","m":[["6-8","L20",124],["4-7","L18",null],["5-8","L18",118],["5-7","L14",null],["9-12","L10",null]]},{"f":"W:W10,14,15,17,18:B1,4,6,8,9","v":"W17","last":[5,8],"prev":117,"next":119,"g":"6x6","m":[["10-7","W17",119],["14-11","D",null],["17-13","D",null],["15-12","L26",null],["14-12","L20",null]]},{"f":"B:W7,14,15,17,18:B1,4,6,8,9","v":"L16","last":[10,7],"prev":118,"next":120,"g":"6x6","m":[["4×11","L16",120]]},{"f":"W:W14,15,17,18:B1,6,8,9,11","v":"W15","last":[4,11],"prev":119,"next":121,"g":"6x6","m":[["14×7","W15",121]]},{"f":"B:W7,15,17,18:B1,6,8,9","v":"L14","last":[14,7],"prev":120,"next":null,"g":"6x6","m":[["8-11","L14",null],["1-4","L12",null],["9-12","L12",null],["1-5","L8",null],["8-12","L8",null]]},{"f":"W:W13,14,15,17,18:B1,4,5,6,9","v":"W21","last":[3,6],"prev":98,"next":123,"g":"6x6","m":[["13-10","W21",117],["13-11","D",114],["14-11","D",null],["14-12","D",null],["15-12","D",null]]},{"f":"B:W10,14,15,17,18:B1,4,5,6,9","v":"L20","last":[13,10],"prev":122,"next":124,"g":"6x6","m":[["6-8","L20",124],["4-7","L18",null],["5-8","L18",118],["5-7","L14",null],["9-12","L10",null]]},{"f":"W:W10,14,15,17,18:B1,4,5,8,9","v":"W19","last":[6,8],"prev":123,"next":null,"g":"6x6","m":[["14-11","W19",126],["14-12","D",127],["10-7","L18",128],["15-12","L18",129],["17-13","L16",130]]},{"f":"W:W10,14,15,17,18:B1,4,5,8,9","v":"W19","last":null,"prev":null,"next":126,"g":"6x6","m":[["14-11","W19",126],["14-12","D",127],["10-7","L18",128],["15-12","L18",129],["17-13","L16",130]]},{"f":"B:W10,11,15,17,18:B1,4,5,8,9","v":"L18","last":[14,11],"prev":125,"next":null,"g":"6x6","m":[["8×13","L18",147]]},{"f":"B:W10,12,15,17,18:B1,4,5,8,9","v":"D","last":[14,12],"prev":125,"next":null,"g":"6x6","m":[["9×14","D",133]]},{"f":"B:W7,14,15,17,18:B1,4,5,8,9","v":"W17","last":[10,7],"prev":125,"next":null,"g":"6x6","m":[["5×10","W17",137],["4×11","L12",null]]},{"f":"B:W10,12,14,17,18:B1,4,5,8,9","v":"W17","last":[15,12],"prev":125,"next":null,"g":"6x6","m":[["8×15","W17",null]]},{"f":"B:W10,13,14,15,18:B1,4,5,8,9","v":"W15","last":[17,13],"prev":125,"next":null,"g":"6x6","m":[["8-12","W15",null],["8-11","D",null],["9-12","L20",null],["5-7","L16",null],["4-7","L12",null]]},{"f":"W:W10,14,15,17,18:B1,4,5,8,9","v":"W19","last":null,"prev":null,"next":132,"g":"6x6","m":[["14-11","W19",126],["14-12","D",127],["10-7","L18",128],["15-12","L18",129],["17-13","L16",130]]},{"f":"B:W10,12,15,17,18:B1,4,5,8,9","v":"D","last":[14,12],"prev":131,"next":133,"g":"6x6","m":[["9×14","D",133]]},{"f":"W:W10,15,17,18:B1,4,5,8,14","v":"D","last":[9,14],"prev":132,"next":134,"g":"6x6","m":[["18×6","D",134]]},{"f":"B:W6,10,15,17:B1,4,5","v":"D","last":[18,6],"prev":133,"next":135,"g":"6x6","m":[["5-7","D",135],["4-7","L8",null],["5-8","L8",null]]},{"f":"W:W6,10,15,17:B1,4,7","v":"D","last":[5,7],"prev":134,"next":null,"g":"6x6","m":[["10×5","D",null]]},{"f":"B:W7,14,15,17,18:B1,4,5,8,9","v":"W17","last":[10,7],"prev":131,"next":137,"g":"6x6","m":[["5×10","W17",137],["4×11","L12",null]]},{"f":"W:W14,15,17,18:B1,4,8,9,10","v":"L16","last":[5,10],"prev":136,"next":138,"g":"6x6","m":[["14-11","L16",null],["15-12","L16",null],["14-12","L14",138],["17-13","L6",null]]},{"f":"B:W12,15,17,18:B1,4,8,9,10","v":"W13","last":[14,12],"prev":137,"next":139,"g":"6x6","m":[["9×14","W13",139]]},{"f":"W:W15,17,18:B1,4,8,10,14","v":"L12","last":[9,14],"prev":138,"next":140,"g":"6x6","m":[["17×5","L12",null],["18×6","L12",140]]},{"f":"B:W6,15,17:B1,4,10","v":"W11","last":[18,6],"prev":139,"next":141,"g":"6x6","m":[["10-13","W11",141],["1-5","L10",null],["4-7","L10",null]]},{"f":"W:W6,15,17:B1,4,13","v":"L10","last":[10,13],"prev":140,"next":142,"g":"6x6","m":[["17×10","L10",142]]},{"f":"B:W6,10,15:B1,4","v":"W9","last":[17,10],"prev":141,"next":143,"g":"6x6","m":[["4-7","W9",143],["1-5","L6",null]]},{"f":"W:W6,10,15:B1,7","v":"L8","last":[4,7],"prev":142,"next":144,"g":"6x6","m":[["10×5","L8",144]]},{"f":"B:W5,6,15:B1","v":"W7","last":[10,5],"prev":143,"next":145,"g":"6x6","m":[["1×3","W7",145]]},{"f":"W:W15:B3","v":"L6","last":[1,3],"prev":144,"next":null,"g":"6x6","m":[["15-12","L6",null]]},{"f":"B:W10,11,15,17,18:B1,4,5,8,9","v":"L18","last":[14,11],"prev":131,"next":147,"g":"6x6","m":[["8×13","L18",147]]},{"f":"W:W10,15,17,18:B1,4,5,9,13","v":"W17","last":[8,13],"prev":146,"next":148,"g":"6x6","m":[["15-12","W17",148],["17-14","L12",null],["18-14","L12",null],["10-7","L10",null]]},{"f":"B:W10,12,17,18:B1,4,5,9,13","v":"L16","last":[15,12],"prev":147,"next":149,"g":"6x6","m":[["9×14","L16",149]]},{"f":"W:W10,17,18:B1,4,5,13,14","v":"W15","last":[9,14],"prev":148,"next":150,"g":"6x6","m":[["18×16","W15",150]]},{"f":"B:W10,16,17:B1,4,5","v":"L14","last":[18,16],"prev":149,"next":151,"g":"6x6","m":[["5-7","L14",151],["5-8","L14",null],["4-7","L10",null]]},{"f":"W:W10,16,17:B1,4,7","v":"W13","last":[5,7],"prev":150,"next":152,"g":"6x6","m":[["10×5","W13",152]]},{"f":"B:W5,16,17:B1,4","v":"L12","last":[10,5],"prev":151,"next":153,"g":"6x6","m":[["1×8","L12",153]]},{"f":"W:W16,17:B4,8","v":"W11","last":[1,8],"prev":152,"next":154,"g":"6x6","m":[["16-13","W11",154],["17-13","L12",null],["17-14","L6",null]]},{"f":"B:W13,17:B4,8","v":"L10","last":[16,13],"prev":153,"next":155,"g":"6x6","m":[["8-12","L10",155],["8-11","L8",null],["4-7","L4",null]]},{"f":"W:W13,17:B4,12","v":"W9","last":[8,12],"prev":154,"next":156,"g":"6x6","m":[["13-11","W9",156],["13-10","D",null],["17-14","L2",null]]},{"f":"B:W11,17:B4,12","v":"L8","last":[13,11],"prev":155,"next":157,"g":"6x6","m":[["4-7","L8",null],["12-15","L8",157],["12-14","L4",null]]},{"f":"W:W11,17:B4,15","v":"W7","last":[12,15],"prev":156,"next":158,"g":"6x6","m":[["17-13","W7",158],["11-8","D",null],["17-14","L8",null],["11-7","L4",null]]},{"f":"B:W11,13:B4,15","v":"L6","last":[17,13],"prev":157,"next":null,"g":"6x6","m":[["4-7","L6",null],["15-18","L6",null]]}];
+const GEOMS = {"6x6":{"w":6,"h":6,"sq":{"1":[1,5],"2":[3,5],"3":[5,5],"4":[0,4],"5":[2,4],"6":[4,4],"7":[1,3],"8":[3,3],"9":[5,3],"10":[0,2],"11":[2,2],"12":[4,2],"13":[1,1],"14":[3,1],"15":[5,1],"16":[0,0],"17":[2,0],"18":[4,0]},"lake":[],"alg":false}};
+let cur = 0, showNums = true, timer = null;
+
+function parse(fen) {
+  const cells = {};
+  for (const part of fen.split(':').slice(1)) {
+    const side = part[0];
+    for (const it of part.slice(1).split(',')) {
+      if (!it) continue;
+      const king = it[0] === 'K';
+      cells[+(king ? it.slice(1) : it)] = side === 'W' ? (king ? 'W' : 'w') : (king ? 'B' : 'b');
+    }
+  }
+  return cells;
+}
+
+// board geometry: GEOMS[id] = {w, h, sq: {pdn: [file, rank]}, lake: [[file, rank]], alg: bool}
+// rank 0 is the bottom row; every playable or removed square is a dark square
+function svg(fen, last, nums, gid) {
+  const G = GEOMS[gid], cells = parse(fen), hl = new Set(last || []);
+  const at = {};
+  for (const [n, [f, r]] of Object.entries(G.sq)) at[f + ',' + r] = +n;
+  const lake = new Set((G.lake || []).map(([f, r]) => f + ',' + r));
+  let s = `<svg viewBox="0 0 ${G.w} ${G.h}" xmlns="http://www.w3.org/2000/svg">`;
+  for (let y = 0; y < G.h; y++) for (let c = 0; c < G.w; c++) {
+    const key = c + ',' + (G.h - 1 - y), sq = at[key];
+    if (lake.has(key)) {
+      s += `<rect x="${c}" y="${y}" width="1" height="1" fill="var(--lake)"/>`;
+      continue;
+    }
+    s += `<rect x="${c}" y="${y}" width="1" height="1" fill="var(--${sq ? 'dark' : 'light'})"/>`;
+    if (!sq) continue;
+    if (hl.has(sq)) s += `<rect x="${c}" y="${y}" width="1" height="1" fill="var(--hl)" opacity=".55"/>`;
+    if (nums) {
+      const t = G.alg ? String.fromCharCode(97 + c) + (G.h - y) : sq;
+      s += `<text x="${c + .06}" y="${y + .22}" font-size=".19" font-family="system-ui,sans-serif" fill="var(--num)">${t}</text>`;
+    }
+    const p = cells[sq];
+    if (!p) continue;
+    const w = p === 'w' || p === 'W', cx = c + .5, cy = y + .5;
+    const fill = w ? 'var(--wpiece)' : 'var(--bpiece)', stroke = w ? 'var(--wstroke)' : 'var(--bstroke)';
+    s += `<circle cx="${cx}" cy="${cy + .035}" r=".37" fill="rgba(0,0,0,.25)"/>`;
+    s += `<circle cx="${cx}" cy="${cy}" r=".37" fill="${fill}" stroke="${stroke}" stroke-width=".03"/>`;
+    s += `<circle cx="${cx}" cy="${cy}" r=".25" fill="none" stroke="${stroke}" stroke-width=".02" opacity=".5"/>`;
+    if (p === 'W' || p === 'B') {
+      const col = w ? '#9a6b12' : '#e2b44a';
+      s += `<path d="M${cx - .17} ${cy + .09} L${cx - .2} ${cy - .1} L${cx - .08} ${cy - .01} L${cx} ${cy - .15} L${cx + .08} ${cy - .01} L${cx + .2} ${cy - .1} L${cx + .17} ${cy + .09} Z" fill="${col}"/>`;
+    }
+  }
+  return s + '</svg>';
+}
+
+function go(i) {
+  if (i === null || i === undefined || i < 0 || i >= POS.length) return;
+  cur = i;
+  const p = POS[i];
+  document.getElementById('board').innerHTML = svg(p.f, p.last, showNums, p.g);
+  document.querySelectorAll('a.cur').forEach(a => a.classList.remove('cur'));
+  document.querySelectorAll(`a[data-i="${i}"]`).forEach(a => a.classList.add('cur'));
+  const side = p.f[0] === 'W' ? 'wit' : 'zwart';
+  const next = p.next !== null ? POS[p.next].f : null;
+  let h = `<div class="stm">${side} aan zet: ${p.v}</div>`;
+  if (!p.m.length) h += '<div>geen zetten: verloren</div>';
+  h += '<table>';
+  for (const [n, v, j] of p.m) {
+    const played = j !== null && j !== undefined && POS[j].f === next;
+    const mv = j !== null && j !== undefined ? `<a href="#" data-go="${j}">${n}</a>` : n;
+    h += `<tr class="${played ? 'played' : ''}"><td>${mv}</td><td>${v}</td></tr>`;
+  }
+  document.getElementById('panel').innerHTML = h + '</table>';
+}
+
+document.addEventListener('click', e => {
+  const a = e.target.closest('a[data-i], a[data-go]');
+  if (!a) return;
+  e.preventDefault();
+  stop();
+  go(+(a.dataset.i ?? a.dataset.go));
+});
+function stop() { if (timer) { clearInterval(timer); timer = null; document.getElementById('play').textContent = '▶︎▶︎'; } }
+document.getElementById('back').onclick = () => { stop(); go(POS[cur].prev); };
+document.getElementById('fwd').onclick = () => { stop(); go(POS[cur].next); };
+document.getElementById('nums').onclick = () => { showNums = !showNums; go(cur); };
+document.getElementById('play').onclick = () => {
+  if (timer) return stop();
+  document.getElementById('play').textContent = '❚❚';
+  timer = setInterval(() => { if (POS[cur].next === null) stop(); else go(POS[cur].next); }, 900);
+};
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowLeft') { stop(); go(POS[cur].prev); }
+  if (e.key === 'ArrowRight') { stop(); go(POS[cur].next); }
+});
+document.querySelectorAll('.smallboard').forEach(d => { d.innerHTML = svg(d.dataset.fen, null, false, d.dataset.g); });
+const first = document.querySelector('figure a[data-i]');
+go(first ? +first.dataset.i : 0);
+</script>
+</body>
+</html>

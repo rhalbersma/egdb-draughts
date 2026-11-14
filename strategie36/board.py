@@ -43,6 +43,24 @@ def diagram(fen, numbers=True):
     return '\n'.join(lines)
 
 
+def with_columns(fen, columns, gap=5):
+    """The diagram with text columns (lists of lines) next to it; rows are added below the board when a
+    column is longer than the diagram."""
+    board = diagram(fen).split('\n')
+    height = max([len(board)] + [len(c) for c in columns])
+    board += [''] * (height - len(board))
+    width = max(len(b) for b in board)
+    cols = []
+    for c in columns:
+        w = max([len(x) for x in c] + [0])
+        cols.append([x.ljust(w) for x in c] + [' ' * w] * (height - len(c)))
+    lines = []
+    for i in range(height):
+        line = board[i].ljust(width) + ''.join(' ' * gap + col[i] for col in cols)
+        lines.append(line.rstrip())
+    return '\n'.join(lines)
+
+
 if __name__ == '__main__':
     for f in sys.argv[1:]:
         print(diagram(f))

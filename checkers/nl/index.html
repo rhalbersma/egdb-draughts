@@ -166,7 +166,7 @@ table.tbl th { color: var(--muted); font-weight: 600; }
       <button id="play" data-tip="Variant automatisch afspelen" aria-label="Variant automatisch afspelen">▶︎▶︎</button>
       <button id="fwd" data-tip="Volgende stelling (→)" aria-label="Volgende stelling (→)">▶</button>
       <button id="nums" data-tip="Veldnamen op het bord aan/uit" aria-label="Veldnamen op het bord aan/uit">#</button>
-      <button id="nota" data-tip="Wissel tussen numerieke (13-10) en algebraïsche (d3-e4) notatie" aria-label="Wissel tussen numerieke (13-10) en algebraïsche (d3-e4) notatie">1-2</button>
+      <button id="nota" data-tip="Wissel tussen numerieke (1, 2, …) en algebraïsche (a1, b2, …) notatie" aria-label="Wissel tussen numerieke (1, 2, …) en algebraïsche (a1, b2, …) notatie">1…18</button>
     </div>
     <div class="panel" id="panel"></div>
   </aside>
@@ -213,7 +213,7 @@ remise.</p>
 <p>Na <a class="m1" href="#" data-i="35">1. <span class="mv" data-g="7x8" data-n="2-5" data-a="c7-b6">c7-b6</span></a> moet zwart de enige remisezet vinden; alles andere verliest: <a class="m1" href="#" data-i="41">1. … <span class="mv" data-g="7x8" data-n="11-14" data-a="e5-d4">e5-d4</span></a> <span class="val">D</span>, <a class="m1" href="#" data-i="42">1. … <span class="mv" data-g="7x8" data-n="10-13" data-a="c5-b4">c5-b4</span></a> <span class="val">L34</span>, <a class="m1" href="#" data-i="43">1. … <span class="mv" data-g="7x8" data-n="10-14" data-a="c5-d4">c5-d4</span></a> <span class="val">L30</span>, <a class="m1" href="#" data-i="44">1. … <span class="mv" data-g="7x8" data-n="10-6" data-a="c5-d6">c5-d6</span></a> <span class="val">L22</span>, <a class="m1" href="#" data-i="45">1. … <span class="mv" data-g="7x8" data-n="11-15" data-a="e5-f4">e5-f4</span></a> <span class="val">L18</span>, <a class="m1" href="#" data-i="46">1. … <span class="mv" data-g="7x8" data-n="11-7" data-a="e5-f6">e5-f6</span></a> <span class="val">L10</span>, <a class="m1" href="#" data-i="47">1. … <span class="mv" data-g="7x8" data-n="11-6" data-a="e5-d6">e5-d6</span></a> <span class="val">L6</span>.</p>
 <p>Na 1. … <span class="mv" data-g="7x8" data-n="11-14" data-a="e5-d4">e5-d4</span> kan wit zijn dammen eeuwig houden maar breekt nooit uit: zwart kan in geen van de 901.577 stellingen die zonder slag bereikbaar zijn een slag afdwingen.</p>
 <nav class="pager"><span></span><a href="vesting.html">De vesting in de dubbele hoek →</a></nav>
-<p class="legend">Klik op een zet om de stelling op het grote bord te zien; ◀ ▶ (of de pijltjestoetsen) lopen door de variant. Waarden gelden voor de partij aan zet; bij een zet voor wie hem doet, met n het aantal ply tot het einde van de partij, de zet meegeteld: W = winst (oneven), L = verlies (even), D = remise. <span style="color:var(--link);font-weight:600">Blauw</span> = hoofdvariant, <span style="color:var(--m2)">groen</span> = zijvariant, <em>cursief</em> = voortzetting van de database, <span class="q">?</span> = zet die volgens de database het resultaat verandert, met tussen [ ] de betere zet of de weerlegging (<span style="color:var(--db)">≡</span> = terug naar de stelling vóór die zet), <span style="color:var(--only)">*</span> = enige zet die de winst of de remise behoudt. De knop # zet de veldnamen op het grote bord aan of uit; de knop 1-2 / a1 wisselt tussen numerieke en algebraïsche notatie, ook in de tekst.</p>
+<p class="legend">Klik op een zet om de stelling op het grote bord te zien; ◀ ▶ (of de pijltjestoetsen) lopen door de variant. Waarden gelden voor de partij aan zet; bij een zet voor wie hem doet, met n het aantal ply tot het einde van de partij, de zet meegeteld: W = winst (oneven), L = verlies (even), D = remise. <span style="color:var(--link);font-weight:600">Blauw</span> = hoofdvariant, <span style="color:var(--m2)">groen</span> = zijvariant, <em>cursief</em> = voortzetting van de database, <span class="q">?</span> = zet die volgens de database het resultaat verandert, met tussen [ ] de betere zet of de weerlegging (<span style="color:var(--db)">≡</span> = terug naar de stelling vóór die zet), <span style="color:var(--only)">*</span> = enige zet die de winst of de remise behoudt. De knop # zet de veldnamen op het grote bord aan of uit; de knop met het bereik van de veldnamen (bv. 1…18 of a1…f6 op 6×6) wisselt tussen numerieke en algebraïsche notatie, ook in de tekst.</p>
   </main>
 </div>
 <script>
@@ -279,7 +279,7 @@ function go(i) {
   cur = i;
   const p = POS[i];
   document.getElementById('board').innerHTML = svg(p.f, p.last, showNums, p.g);
-  document.getElementById('nota').textContent = nt(p.g) === 'alg' ? 'a1' : '1-2';
+  document.getElementById('nota').textContent = notaLabel(p.g);
   document.querySelectorAll('a.cur').forEach(a => a.classList.remove('cur'));
   document.querySelectorAll(`a[data-i="${i}"]`).forEach(a => a.classList.add('cur'));
   const side = p.f[0] === 'W' ? UI.white : UI.black;
@@ -307,6 +307,12 @@ function stop() { if (timer) { clearInterval(timer); timer = null; document.getE
 document.getElementById('back').onclick = () => { stop(); go(POS[cur].prev); };
 document.getElementById('fwd').onclick = () => { stop(); go(POS[cur].next); };
 document.getElementById('nums').onclick = () => { showNums = !showNums; go(cur); };
+// the label of the notation button: the range of square names of the board on display, e.g. 1…18 or a1…f6
+function notaLabel(gid) {
+  const G = GEOMS[gid];
+  if (nt(gid) !== 'alg') return '1…' + Math.max(...Object.keys(G.sq).map(Number));
+  return 'a1…' + String.fromCharCode(96 + G.w) + G.h;
+}
 function setNotation(n, store) {
   notation = n;
   if (store) { try { localStorage.setItem('notation-v2', n); } catch (e) {} }

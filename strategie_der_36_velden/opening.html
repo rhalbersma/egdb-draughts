@@ -166,7 +166,7 @@ table.tbl th { color: var(--muted); font-weight: 600; }
       <button id="play" data-tip="Variant automatisch afspelen" aria-label="Variant automatisch afspelen">▶︎▶︎</button>
       <button id="fwd" data-tip="Volgende stelling (→)" aria-label="Volgende stelling (→)">▶</button>
       <button id="nums" data-tip="Veldnamen op het bord aan/uit" aria-label="Veldnamen op het bord aan/uit">#</button>
-      <button id="nota" data-tip="Wissel tussen numerieke (13-10) en algebraïsche (d3-e4) notatie" aria-label="Wissel tussen numerieke (13-10) en algebraïsche (d3-e4) notatie">1-2</button>
+      <button id="nota" data-tip="Wissel tussen numerieke (1, 2, …) en algebraïsche (a1, b2, …) notatie" aria-label="Wissel tussen numerieke (1, 2, …) en algebraïsche (a1, b2, …) notatie">1…18</button>
     </div>
     <div class="panel" id="panel"></div>
   </aside>
@@ -213,7 +213,7 @@ table.tbl th { color: var(--muted); font-weight: 600; }
 <p>Jan-Jaap van Horssen loste 6×6 al eerder zwak op, in <em>Complexity of checkers and draughts on different board sizes</em>, ICGA Journal 40 (2018) 341–352: een database met winst/remise/verlies tot en met 8 stukken en proof-number search vanuit de beginstand. Onze databases en openingsboom zijn daar onafhankelijk van, en komen op alle punten met hem overeen:</p>
 <table class="tbl"><tr><th></th><th>Van Horssen (2018)</th><th>Hier</th></tr><tr><td>Beginstand</td><td>remise</td><td>remise</td></tr><tr><td>Eerste zetten van wit</td><td>alle remise</td><td>alle vijf remise</td></tr><tr><td>Antwoorden van zwart</td><td>direct verliezende antwoorden</td><td>idem, bv. 1. <span class="mv" data-g="6x6" data-n="13-10" data-a="b2-a3">13-10</span> <span class="mv" data-g="6x6" data-n="4-7" data-a="a5-b4">4-7</span> (L60)</td></tr><tr><td>Diepste verlies van zwart vanaf de beginstand</td><td>61 ply</td><td>61 ply (2 + 59 na 1. <span class="mv" data-g="6x6" data-n="13-10" data-a="b2-a3">13-10</span> <span class="mv" data-g="6x6" data-n="4-7" data-a="a5-b4">4-7</span>)</td></tr><tr><td>Stellingen t/m 3, 4, 5, 6, 7 stukken</td><td>31.155 · 512.910 · 5.789.784 · 48.881.249 · 322.389.233</td><td>precies dezelfde aantallen</td></tr><tr><td>Stellingen t/m 8 stukken</td><td>1.617.366.257</td><td>1.702.191.569 (incl. 7 tegen 1)</td></tr></table>
 <p>Het verschil bij 8 stukken is precies 84.825.312: de stellingen met 7 stukken tegen 1, die Van Horssen terecht weglaat, want elke kant begint met 6 stukken. Hij bewijst de waarde van de beginstand (zonder transpositietabel, om graph-history-problemen te vermijden); hier zijn de afstanden tot het einde exact voor de hele boom tot en met ply 4.</p>
-<p class="legend">Klik op een zet om de stelling op het grote bord te zien; ◀ ▶ (of de pijltjestoetsen) lopen door de variant. Waarden gelden voor de partij aan zet; bij een zet voor wie hem doet, met n het aantal ply tot het einde van de partij, de zet meegeteld: W = winst (oneven), L = verlies (even), D = remise. <span style="color:var(--link);font-weight:600">Blauw</span> = hoofdvariant, <span style="color:var(--m2)">groen</span> = zijvariant, <em>cursief</em> = voortzetting van de database, <span class="q">?</span> = zet die volgens de database het resultaat verandert, met tussen [ ] de betere zet of de weerlegging (<span style="color:var(--db)">≡</span> = terug naar de stelling vóór die zet), <span style="color:var(--only)">*</span> = enige zet die de winst of de remise behoudt. De knop # zet de veldnamen op het grote bord aan of uit; de knop 1-2 / a1 wisselt tussen numerieke en algebraïsche notatie, ook in de tekst.</p>
+<p class="legend">Klik op een zet om de stelling op het grote bord te zien; ◀ ▶ (of de pijltjestoetsen) lopen door de variant. Waarden gelden voor de partij aan zet; bij een zet voor wie hem doet, met n het aantal ply tot het einde van de partij, de zet meegeteld: W = winst (oneven), L = verlies (even), D = remise. <span style="color:var(--link);font-weight:600">Blauw</span> = hoofdvariant, <span style="color:var(--m2)">groen</span> = zijvariant, <em>cursief</em> = voortzetting van de database, <span class="q">?</span> = zet die volgens de database het resultaat verandert, met tussen [ ] de betere zet of de weerlegging (<span style="color:var(--db)">≡</span> = terug naar de stelling vóór die zet), <span style="color:var(--only)">*</span> = enige zet die de winst of de remise behoudt. De knop # zet de veldnamen op het grote bord aan of uit; de knop met het bereik van de veldnamen (bv. 1…18 of a1…f6 op 6×6) wisselt tussen numerieke en algebraïsche notatie, ook in de tekst.</p>
   </main>
 </div>
 <script>
@@ -279,7 +279,7 @@ function go(i) {
   cur = i;
   const p = POS[i];
   document.getElementById('board').innerHTML = svg(p.f, p.last, showNums, p.g);
-  document.getElementById('nota').textContent = nt(p.g) === 'alg' ? 'a1' : '1-2';
+  document.getElementById('nota').textContent = notaLabel(p.g);
   document.querySelectorAll('a.cur').forEach(a => a.classList.remove('cur'));
   document.querySelectorAll(`a[data-i="${i}"]`).forEach(a => a.classList.add('cur'));
   const side = p.f[0] === 'W' ? UI.white : UI.black;
@@ -307,6 +307,12 @@ function stop() { if (timer) { clearInterval(timer); timer = null; document.getE
 document.getElementById('back').onclick = () => { stop(); go(POS[cur].prev); };
 document.getElementById('fwd').onclick = () => { stop(); go(POS[cur].next); };
 document.getElementById('nums').onclick = () => { showNums = !showNums; go(cur); };
+// the label of the notation button: the range of square names of the board on display, e.g. 1…18 or a1…f6
+function notaLabel(gid) {
+  const G = GEOMS[gid];
+  if (nt(gid) !== 'alg') return '1…' + Math.max(...Object.keys(G.sq).map(Number));
+  return 'a1…' + String.fromCharCode(96 + G.w) + G.h;
+}
 function setNotation(n, store) {
   notation = n;
   if (store) { try { localStorage.setItem('notation-v2', n); } catch (e) {} }

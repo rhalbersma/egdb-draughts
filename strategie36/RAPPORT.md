@@ -5,6 +5,23 @@ Herm Jan Brascamp, *Strategie der 36 velden* ([hijkendtc.nl](https://www.hijkend
 Elke stelling is opgezocht of uitgerekend tot het einde van de partij: winst, remise of verlies, met de
 afstand tot het einde in ply (DTM).
 
+Herm Jan Brascamp schreef deze reeks rond 2013–2016, zonder computer. Gemeten aan de databases staat zijn
+analyse vrijwel overal overeind:
+
+* Van de 112 diagramclaims kloppen er 97. Van de 15 die niet kloppen, gaan er 8 over stellingen bij hoofdstuk 4
+  waarvan ik de stukopstelling zelf uit de tekst heb afgeleid (4.11c/d, 4.12b/c). Echte fouten van het boek zijn
+  er 7: 7.3, 7.4, 7.6, 7.13, 7.22 en 8.7 (met wit en met zwart aan zet).
+* Van de 333 varianten zijn er 9 inhoudelijk onjuist. De 28 notatiefouten zijn tikfouten waarvan de bedoeling
+  bijna altijd duidelijk is.
+* De winstsystemen van hoofdstuk 1 t/m 5, de vangstellingen en het lange eindspel van hoofdstuk 9 ("alleen 2-7
+  wint", 49 ply, met de slotfinesse 21. 15-12!) kloppen vrijwel volledig.
+* De fouten zitten bijna allemaal in de randslag-opening van hoofdstuk 7: stellingen met 8 tot 10 stukken
+  waarin de winst 25 tot 50 ply diep ligt. In 7.22 wint bijvoorbeeld alleen 10. 12-8!, gevolgd door een
+  eindspel dat pas na 39 ply beslist is. Zulke lijnen zijn zonder computer nauwelijks te vinden.
+
+Dit rapport is dus vooral een bevestiging van zijn werk. De weerleggingen hieronder laten zien waar de
+databases op die enkele plaatsen verder kijken.
+
 ## Belangrijkste bevindingen
 
 ### De beginstand van 6×6 is remise

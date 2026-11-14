@@ -961,12 +961,18 @@ char wdl_of_value(std::uint16_t v) { return v == DRAW ? 'D' : (v & 1) ? 'W' : 'L
 // recompute every value of every prebuilt and extra slice from its successors (WDL only above dtm_max)
 std::uint64_t verify(int threads)
 {
+        // in storage order (the order in which the slices were built), so that successor slices in the
+        // memory-mapped layer are read with good locality
+        std::vector<std::pair<std::uint64_t, std::uint64_t>> order;
+        for (std::size_t i = 0; i < tab_key.size(); ++i)
+                if (tab_key[i]) order.push_back({ tab_off[i], tab_key[i] - 1 });
+        std::sort(order.begin(), order.end());
         std::vector<std::uint64_t> keys;
-        for (auto k : tab_key) if (k) keys.push_back(k - 1);
+        for (auto const& [off, k] : order) keys.push_back(k);
         for (auto const& [k, v] : extra) keys.push_back(k);
         std::uint64_t errors = 0, done = 0;
         auto t0 = std::chrono::steady_clock::now();
-        #pragma omp parallel for schedule(dynamic, 16) reduction(+ : errors) num_threads(threads)
+        #pragma omp parallel for schedule(dynamic, 64) reduction(+ : errors) num_threads(threads)
         for (std::size_t i = 0; i < keys.size(); ++i) {
                 Key key = Key::unpack(keys[i]);
                 Meta s = meta_of(key);

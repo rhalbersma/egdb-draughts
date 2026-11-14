@@ -964,12 +964,21 @@ std::uint64_t verify(int threads)
         std::vector<std::uint64_t> keys;
         for (auto k : tab_key) if (k) keys.push_back(k - 1);
         for (auto const& [k, v] : extra) keys.push_back(k);
-        std::uint64_t errors = 0;
+        std::uint64_t errors = 0, done = 0;
+        auto t0 = std::chrono::steady_clock::now();
         #pragma omp parallel for schedule(dynamic, 16) reduction(+ : errors) num_threads(threads)
         for (std::size_t i = 0; i < keys.size(); ++i) {
                 Key key = Key::unpack(keys[i]);
                 Meta s = meta_of(key);
                 SliceRef r = slice_values(key);
+                std::uint64_t d;
+                #pragma omp atomic capture
+                d = ++done;
+                if (d % 1000000 == 0) {
+                        double sec = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+                        #pragma omp critical
+                        std::cerr << "verify: " << d << " / " << keys.size() << " slices, " << sec << " s" << std::endl;
+                }
                 bool exact = r.dtm != nullptr;
                 for (std::uint64_t j = 0; j < 2 * s.P; ++j) {
                         std::uint16_t a = ref_value(r, j), b = from_successors(pos_of(s, j % s.P, int(j / s.P)));

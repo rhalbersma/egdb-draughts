@@ -77,6 +77,7 @@ details.onpage a { margin-right: 12px; white-space: nowrap; }
 .buttons button { flex: 1; padding: 6px 0; font: 16px system-ui, sans-serif; color: var(--fg); background: var(--panel);
   border: 1px solid var(--rule); border-radius: 6px; cursor: pointer; }
 .buttons button:hover { border-color: var(--muted); }
+.buttons button svg { width: 14px; height: 14px; display: block; margin: 0 auto; fill: currentColor; }
 /* tooltips above the buttons, in the language of the page */
 .buttons button { position: relative; }
 .buttons button[data-tip]::after { content: attr(data-tip); position: absolute; bottom: calc(100% + 8px); left: 50%;
@@ -173,9 +174,11 @@ table.tbl th { color: var(--muted); font-weight: 600; }
   <aside class="side">
     <div id="board"></div>
     <div class="buttons">
-      <button id="back" data-tip="Previous position (←)" aria-label="Previous position (←)">◀</button>
-      <button id="play" data-tip="Play the line automatically" aria-label="Play the line automatically">▶︎▶︎</button>
-      <button id="fwd" data-tip="Next position (→)" aria-label="Next position (→)">▶</button>
+      <button id="start" data-tip="Start of the line (Home)" aria-label="Start of the line (Home)"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="2" height="10"/><path d="M14 3v10L5 8z"/></svg></button>
+      <button id="back" data-tip="Previous position (←)" aria-label="Previous position (←)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10.5 2.5 5 8l5.5 5.5" fill="none" stroke="currentColor" stroke-width="2.2"/></svg></button>
+      <button id="play" data-tip="Play / pause the line" aria-label="Play / pause the line"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11L13.5 8z"/></svg></button>
+      <button id="fwd" data-tip="Next position (→)" aria-label="Next position (→)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 2.5 11 8l-5.5 5.5" fill="none" stroke="currentColor" stroke-width="2.2"/></svg></button>
+      <button id="end" data-tip="End of the line (End)" aria-label="End of the line (End)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 3v10l9-5z"/><rect x="12" y="3" width="2" height="10"/></svg></button>
       <button id="nums" data-tip="Square names on the board on/off" aria-label="Square names on the board on/off">#</button>
       <button id="nota" data-tip="Switch between numeric (1, 2, …) and algebraic (a1, b2, …) notation" aria-label="Switch between numeric (1, 2, …) and algebraic (a1, b2, …) notation">1…18</button>
     </div>
@@ -378,7 +381,7 @@ table.tbl th { color: var(--muted); font-weight: 600; }
 <p class="var"><a class="m1 db" href="#" data-i="442" title="L26">1. … <span class="mv" data-g="6x6" data-n="16-13" data-a="a1-b2">16-13</span>!</a> → <a href="h4.html#d4.12b">diagram 4.12b</a> (W25)</p>
 </section>
 <nav class="pager"><a href="h3-3.html">← Moeizame remise en luchtig slot</a><a href="h5a.html">Scouppe I →</a></nav>
-<p class="legend">Click a move to see the position on the large board; ◀ ▶ (or the arrow keys) step through the line. Values are for the side to move; for a move, for the side making it, with n the number of plies to the end of the game, the move included: W = win (odd), L = loss (even), D = draw. <span style="color:var(--link);font-weight:600">Blue</span> = main line, <span style="color:var(--m2)">green</span> = side line, <em>italics</em> = continuation by the database, <span class="q">?</span> = a move that changes the result according to the database, with the better move or the refutation in [ ] (<span style="color:var(--db)">≡</span> = back to the position before that move), <span style="color:var(--only)">*</span> = the only move that keeps the win or the draw. The # button turns the square names on the large board on or off; the button with the range of the square names (e.g. 1…18 or a1…f6 on 6×6) switches between numeric and algebraic notation, in the text as well.</p>
+<p class="legend">Click a move to see the position on the large board; ‹ › (or the arrow keys) step through the line, ⏮︎ ⏭︎ jump to its start and end, ▶︎ plays it. Values are for the side to move; for a move, for the side making it, with n the number of plies to the end of the game, the move included: W = win (odd), L = loss (even), D = draw. <span style="color:var(--link);font-weight:600">Blue</span> = main line, <span style="color:var(--m2)">green</span> = side line, <em>italics</em> = continuation by the database, <span class="q">?</span> = a move that changes the result according to the database, with the better move or the refutation in [ ] (<span style="color:var(--db)">≡</span> = back to the position before that move), <span style="color:var(--only)">*</span> = the only move that keeps the win or the draw. The # button turns the square names on the large board on or off; the button with the range of the square names (e.g. 1…18 or a1…f6 on 6×6) switches between numeric and algebraic notation, in the text as well.</p>
   </main>
 </div>
 <script>
@@ -468,7 +471,13 @@ document.addEventListener('click', e => {
   stop();
   go(+(a.dataset.i ?? a.dataset.go));
 });
-function stop() { if (timer) { clearInterval(timer); timer = null; document.getElementById('play').textContent = '▶︎▶︎'; } }
+const ICON_PLAY = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11L13.5 8z"/></svg>', ICON_PAUSE = '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="3" width="3" height="10"/><rect x="9.5" y="3" width="3" height="10"/></svg>';
+function stop() { if (timer) { clearInterval(timer); timer = null; document.getElementById('play').innerHTML = ICON_PLAY; } }
+// the first and the last position of the line on display
+function lineStart() { let i = cur; while (POS[i].prev !== null) i = POS[i].prev; return i; }
+function lineEnd() { let i = cur; while (POS[i].next !== null) i = POS[i].next; return i; }
+document.getElementById('start').onclick = () => { stop(); go(lineStart()); };
+document.getElementById('end').onclick = () => { stop(); go(lineEnd()); };
 document.getElementById('back').onclick = () => { stop(); go(POS[cur].prev); };
 document.getElementById('fwd').onclick = () => { stop(); go(POS[cur].next); };
 document.getElementById('nums').onclick = () => { showNums = !showNums; go(cur); };
@@ -487,7 +496,8 @@ function setNotation(n, store) {
 document.getElementById('nota').onclick = () => setNotation(nt(POS[cur].g) === 'alg' ? 'num' : 'alg', true);
 document.getElementById('play').onclick = () => {
   if (timer) return stop();
-  document.getElementById('play').textContent = '❚❚';
+  if (POS[cur].next === null) go(lineStart());     // at the end of the line: play it again from the start
+  document.getElementById('play').innerHTML = ICON_PAUSE;
   timer = setInterval(() => { if (POS[cur].next === null) stop(); else go(POS[cur].next); }, 900);
 };
 document.addEventListener('click', e => {
@@ -497,6 +507,8 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') document.querySelectorAll('details.menu[open]').forEach(m => m.removeAttribute('open'));
   if (e.key === 'ArrowLeft') { stop(); go(POS[cur].prev); }
   if (e.key === 'ArrowRight') { stop(); go(POS[cur].next); }
+  if (e.key === 'Home') { e.preventDefault(); stop(); go(lineStart()); }
+  if (e.key === 'End') { e.preventDefault(); stop(); go(lineEnd()); }
 });
 document.querySelectorAll('.smallboard').forEach(d => { d.innerHTML = svg(d.dataset.fen, null, false, d.dataset.g); });
 const first = document.querySelector('figure a[data-i]');

@@ -77,6 +77,7 @@ details.onpage a { margin-right: 12px; white-space: nowrap; }
 .buttons button { flex: 1; padding: 6px 0; font: 16px system-ui, sans-serif; color: var(--fg); background: var(--panel);
   border: 1px solid var(--rule); border-radius: 6px; cursor: pointer; }
 .buttons button:hover { border-color: var(--muted); }
+.buttons button svg { width: 14px; height: 14px; display: block; margin: 0 auto; fill: currentColor; }
 /* tooltips above the buttons, in the language of the page */
 .buttons button { position: relative; }
 .buttons button[data-tip]::after { content: attr(data-tip); position: absolute; bottom: calc(100% + 8px); left: 50%;
@@ -173,9 +174,11 @@ table.tbl th { color: var(--muted); font-weight: 600; }
   <aside class="side">
     <div id="board"></div>
     <div class="buttons">
-      <button id="back" data-tip="Vorige stelling (←)" aria-label="Vorige stelling (←)">◀</button>
-      <button id="play" data-tip="Variant automatisch afspelen" aria-label="Variant automatisch afspelen">▶︎▶︎</button>
-      <button id="fwd" data-tip="Volgende stelling (→)" aria-label="Volgende stelling (→)">▶</button>
+      <button id="start" data-tip="Begin van de variant (Home)" aria-label="Begin van de variant (Home)"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="2" height="10"/><path d="M14 3v10L5 8z"/></svg></button>
+      <button id="back" data-tip="Vorige stelling (←)" aria-label="Vorige stelling (←)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10.5 2.5 5 8l5.5 5.5" fill="none" stroke="currentColor" stroke-width="2.2"/></svg></button>
+      <button id="play" data-tip="Variant afspelen / pauzeren" aria-label="Variant afspelen / pauzeren"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11L13.5 8z"/></svg></button>
+      <button id="fwd" data-tip="Volgende stelling (→)" aria-label="Volgende stelling (→)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 2.5 11 8l-5.5 5.5" fill="none" stroke="currentColor" stroke-width="2.2"/></svg></button>
+      <button id="end" data-tip="Einde van de variant (End)" aria-label="Einde van de variant (End)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 3v10l9-5z"/><rect x="12" y="3" width="2" height="10"/></svg></button>
       <button id="nums" data-tip="Veldnamen op het bord aan/uit" aria-label="Veldnamen op het bord aan/uit">#</button>
       <button id="nota" data-tip="Wissel tussen numerieke (1, 2, …) en algebraïsche (a1, b2, …) notatie" aria-label="Wissel tussen numerieke (1, 2, …) en algebraïsche (a1, b2, …) notatie">1…18</button>
     </div>
@@ -310,7 +313,7 @@ table.tbl th { color: var(--muted); font-weight: 600; }
 </p>
 </section>
 <nav class="pager"><a href="h4.html">← Een zwarte schijf op 15 en een zwarte dam</a><a href="h5b.html">Scouppe Trucs →</a></nav>
-<p class="legend">Klik op een zet om de stelling op het grote bord te zien; ◀ ▶ (of de pijltjestoetsen) lopen door de variant. Waarden gelden voor de partij aan zet; bij een zet voor wie hem doet, met n het aantal ply tot het einde van de partij, de zet meegeteld: W = winst (oneven), L = verlies (even), D = remise. <span style="color:var(--link);font-weight:600">Blauw</span> = hoofdvariant, <span style="color:var(--m2)">groen</span> = zijvariant, <em>cursief</em> = voortzetting van de database, <span class="q">?</span> = zet die volgens de database het resultaat verandert, met tussen [ ] de betere zet of de weerlegging (<span style="color:var(--db)">≡</span> = terug naar de stelling vóór die zet), <span style="color:var(--only)">*</span> = enige zet die de winst of de remise behoudt. De knop # zet de veldnamen op het grote bord aan of uit; de knop met het bereik van de veldnamen (bv. 1…18 of a1…f6 op 6×6) wisselt tussen numerieke en algebraïsche notatie, ook in de tekst.</p>
+<p class="legend">Klik op een zet om de stelling op het grote bord te zien; ‹ › (of de pijltjestoetsen) lopen door de variant, ⏮︎ ⏭︎ springen naar het begin en het einde, ▶︎ speelt hem af. Waarden gelden voor de partij aan zet; bij een zet voor wie hem doet, met n het aantal ply tot het einde van de partij, de zet meegeteld: W = winst (oneven), L = verlies (even), D = remise. <span style="color:var(--link);font-weight:600">Blauw</span> = hoofdvariant, <span style="color:var(--m2)">groen</span> = zijvariant, <em>cursief</em> = voortzetting van de database, <span class="q">?</span> = zet die volgens de database het resultaat verandert, met tussen [ ] de betere zet of de weerlegging (<span style="color:var(--db)">≡</span> = terug naar de stelling vóór die zet), <span style="color:var(--only)">*</span> = enige zet die de winst of de remise behoudt. De knop # zet de veldnamen op het grote bord aan of uit; de knop met het bereik van de veldnamen (bv. 1…18 of a1…f6 op 6×6) wisselt tussen numerieke en algebraïsche notatie, ook in de tekst.</p>
   </main>
 </div>
 <script>
@@ -400,7 +403,13 @@ document.addEventListener('click', e => {
   stop();
   go(+(a.dataset.i ?? a.dataset.go));
 });
-function stop() { if (timer) { clearInterval(timer); timer = null; document.getElementById('play').textContent = '▶︎▶︎'; } }
+const ICON_PLAY = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11L13.5 8z"/></svg>', ICON_PAUSE = '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="3" width="3" height="10"/><rect x="9.5" y="3" width="3" height="10"/></svg>';
+function stop() { if (timer) { clearInterval(timer); timer = null; document.getElementById('play').innerHTML = ICON_PLAY; } }
+// the first and the last position of the line on display
+function lineStart() { let i = cur; while (POS[i].prev !== null) i = POS[i].prev; return i; }
+function lineEnd() { let i = cur; while (POS[i].next !== null) i = POS[i].next; return i; }
+document.getElementById('start').onclick = () => { stop(); go(lineStart()); };
+document.getElementById('end').onclick = () => { stop(); go(lineEnd()); };
 document.getElementById('back').onclick = () => { stop(); go(POS[cur].prev); };
 document.getElementById('fwd').onclick = () => { stop(); go(POS[cur].next); };
 document.getElementById('nums').onclick = () => { showNums = !showNums; go(cur); };
@@ -419,7 +428,8 @@ function setNotation(n, store) {
 document.getElementById('nota').onclick = () => setNotation(nt(POS[cur].g) === 'alg' ? 'num' : 'alg', true);
 document.getElementById('play').onclick = () => {
   if (timer) return stop();
-  document.getElementById('play').textContent = '❚❚';
+  if (POS[cur].next === null) go(lineStart());     // at the end of the line: play it again from the start
+  document.getElementById('play').innerHTML = ICON_PAUSE;
   timer = setInterval(() => { if (POS[cur].next === null) stop(); else go(POS[cur].next); }, 900);
 };
 document.addEventListener('click', e => {
@@ -429,6 +439,8 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') document.querySelectorAll('details.menu[open]').forEach(m => m.removeAttribute('open'));
   if (e.key === 'ArrowLeft') { stop(); go(POS[cur].prev); }
   if (e.key === 'ArrowRight') { stop(); go(POS[cur].next); }
+  if (e.key === 'Home') { e.preventDefault(); stop(); go(lineStart()); }
+  if (e.key === 'End') { e.preventDefault(); stop(); go(lineEnd()); }
 });
 document.querySelectorAll('.smallboard').forEach(d => { d.innerHTML = svg(d.dataset.fen, null, false, d.dataset.g); });
 const first = document.querySelector('figure a[data-i]');

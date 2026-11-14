@@ -5,11 +5,34 @@ Herm Jan Brascamp, *Strategie der 36 velden* ([hijkendtc.nl](https://www.hijkend
 Elke stelling is opgezocht of uitgerekend tot het einde van de partij: winst, remise of verlies, met de
 afstand tot het einde in ply (DTM).
 
-Herm Jan Brascamp schreef "dit werkje", zoals hij het zelf noemt, rond 2013–2016, zonder computer. In de
-inleiding merkt hij op: "Een groot voordeel is natuurlijk, dat er geen damprogramma voor het 36-ruitenbord
-bestaat." Het gaat hem om "overmachtseindspelen": "De witte strategie is er op gericht, tot drie dammen te komen
-met behoud van de lange lijn. Zwart probeert de lange lijn te veroveren of de doorgang van de witte schijven te
-belemmeren." Gemeten aan de databases staat zijn analyse vrijwel overal overeind:
+Herm Jan Brascamp schreef "dit werkje", zoals hij het zelf noemt, in 2016, zonder computer. In de inleiding
+merkt hij op: "Een groot voordeel is natuurlijk, dat er geen damprogramma voor het 36-ruitenbord bestaat." Het gaat
+hem om "overmachtseindspelen": "De witte strategie is er op gericht, tot drie dammen te komen met behoud van de lange
+lijn. Zwart probeert de lange lijn te veroveren of de doorgang van de witte schijven te belemmeren."
+
+### Voorgeschiedenis
+
+Brascamp beschrijft zelf waar zijn werk op voortbouwt. In de inleiding: "J.F. Moser schreef in 1966 "Strategie der
+honderd velden". In de jaren '90 hebben Jannes van der Wal, Harm Wiersma en Hans Jansen het damspel op het 6×6-bord
+geanalyseerd vanuit de beginstand." En over *De randslag-opening* (hoofdstuk 7): "Rond kerstmis 2013 heeft de
+schrijver, met aanwijzingen van Hans Jansen, studie gemaakt van deze opening. De conclusie was toen, dat wit met
+3. 16-13 ging winnen. Recent onderzoek, zoals beschreven in hoofdstuk 6 bij diagram 6.9, heeft geleid tot de nieuwe
+remise-conclusie. Bovendien werd eind 2013 als vaststaand aangenomen, dat 3. 16-13 de beste zet was […]. Ook onjuist!
+Moeilijk, dammen op het 6×6-bord."
+
+De databases beslissen beide vragen:
+
+* **De conclusie van kerstmis 2013 was juist:** na 3. 16-13 wint wit (53 ply). De "nieuwe remise-conclusie" houdt
+  geen stand. Diagram 6.9 is op zichzelf wel remise, maar in de hoofdvariant geeft 10. 4-1 de winst weg: 10. 12-8!
+  wint. Daarmee vervalt ook de slotsom van 7.7 *Conclusie*, "dat zwart nog net remise kan bereiken na de opening
+  1. 13-11 6-8 2. 11×6 2×9??".
+* **"Ook onjuist!" klopt:** 3. 16-13 is niet de beste zet. 3. 15-12 (hoofdstuk 7.1, *Een offervariant*) wint
+  sneller, in 25 ply.
+* Over de beginstand, die in de jaren '90 werd geanalyseerd: die is remise (zie hieronder).
+
+### Gemeten aan de databases
+
+De analyse van het boek staat vrijwel overal overeind:
 
 * Van de 112 diagramclaims ("wit wint", "remise") kloppen er 97. Van de 15 die niet kloppen, gaan er 8 over de
   stellingen bij "bereikt wit helemaal niets" in hoofdstuk 4 (*Een zwarte schijf op 15 en een zwarte dam*),
@@ -23,8 +46,7 @@ belemmeren." Gemeten aan de databases staat zijn analyse vrijwel overal overeind
 * De fouten zitten bijna allemaal in *De randslag-opening* (hoofdstuk 7): stellingen met 8 tot 10 stukken
   waarin de winst 25 tot 50 ply diep ligt. Bij diagram 7.22 schrijft hij "Op drie van de vier zetten wint wit";
   ook op de vierde, 7. … 7-10, wint wit, maar alleen met 10. 12-8!, gevolgd door een eindspel dat pas na 39 ply
-  beslist is. Zijn conclusie "dat zwart nog net remise kan bereiken na de opening 1. 13-11 6-8 2. 11×6 2×9??"
-  houdt daardoor geen stand. Zulke lijnen zijn zonder computer nauwelijks te vinden.
+  beslist is. Zulke lijnen zijn zonder computer nauwelijks te vinden.
 
 Dit rapport is dus vooral een bevestiging van zijn werk. De weerleggingen hieronder laten zien waar de
 databases op die enkele plaatsen verder kijken.

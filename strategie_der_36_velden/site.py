@@ -8,17 +8,16 @@
 book's website, in the same order, with the diagrams, the claims, the variations and the refutations; every
 move is clickable, a large board follows, and for every position the database value and all moves are shown.
 
-The pages are generated locally (the databases are needed) into site/ (not tracked) and published on the
+The pages are generated locally (the databases are needed) into _site/strategie_der_36_velden/ (not tracked) and published on the
 gh-pages branch:
 
-    python3 strategie36/site.py data/egdb_6x6
-    git worktree add ../gh-pages gh-pages && cp site/* ../gh-pages/ && cd ../gh-pages && git add -A && git commit
+    python3 strategie_der_36_velden/site.py data/egdb_6x6
+    git worktree add ../gh-pages gh-pages && cp -r _site/* ../gh-pages/ && cd ../gh-pages && git add -A && git commit
 
-usage: site.py path/to/egdb_6x6 [--out site]
+usage: site.py path/to/egdb_6x6 [--out _site/strategie_der_36_velden]
 """
 
 import argparse
-import html
 import json
 import re
 import sys
@@ -27,6 +26,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(ROOT / 'common'))
+from sitekit import Page, badge, esc, geom_6x6, md, write_page   # noqa: E402
 from check import Engine, parse_line                           # noqa: E402
 from claims import DIAGRAMS, LINES                             # noqa: E402
 from corrections import (absolute, agrees, build_book,         # noqa: E402
@@ -37,6 +38,7 @@ START = 'W:W13,14,15,16,17,18:B1,2,3,4,5,6'
 WSC = 30000
 ORIGINAL = 'https://www.hijkendtc.nl/strategie-der-36-velden-hjb/'
 REPO = 'https://github.com/rhalbersma/egdb-draughts'
+TITLE = 'Strategie der 36 velden'
 H = 'https://www.hijkendtc.nl/'
 
 # the pages of the book's website in its own order: (file, label, title, original, sections, diagrams)
@@ -123,7 +125,7 @@ class Oracle:
 
     def __init__(self, eng):
         self.eng = eng
-        self.tree = json.loads((ROOT / 'results' / 'opening_6x6.json').read_text())['tree']
+        self.tree = json.loads((HERE / 'opening' / 'opening_6x6.json').read_text())['tree']
 
     def analyse(self, fen):
         """-> (value, [(notation, value for the mover, next fen)]) best first"""
@@ -147,128 +149,17 @@ class Oracle:
         return None
 
 
-class Page:
-    def __init__(self, oracle):
-        self.o = oracle
-        self.pos = []          # {'f': fen, 'last': [from, to], 'prev': i, 'next': i}
-        self.index = {}
-
-    def add(self, fen, last=None, prev=None):
-        i = len(self.pos)
-        self.pos.append({'f': fen, 'last': last, 'prev': prev, 'next': None})
-        if prev is not None and self.pos[prev]['next'] is None:
-            self.pos[prev]['next'] = i
-        self.index.setdefault(fen, i)
-        return i
-
-    def child(self, prev, mv):
-        sq = [int(x) for x in re.split('[-x]', mv[0])]
-        return self.add(mv[2], [sq[0], sq[-1]], prev)
-
-    def diagram(self, fen, caption):
-        i = self.add(fen)
-        return (f'<figure><a class="diagram" href="#" data-i="{i}"><div class="smallboard" data-fen="{fen}"></div></a>'
-                f'<figcaption>{caption}</figcaption></figure>'), i
-
-    def moves(self, fen, plan, number, black_first, cls='m1', start=None, extend=0, nbook=None):
-        """plan: [(notations, marks)] from fen as links, then at most extend best moves (to the end of the
-        game); moves from index nbook on are the database's. Returns (html, last index, end fen, plies)."""
-        nbook = len(plan) if nbook is None else nbook
-        prev = self.add(fen) if start is None else start
-        out, k, n = [], (1 if black_first else 0), 0
-        while n < len(plan) + extend:
-            v, legal = self.o.analyse(fen)
-            if not legal:
-                break
-            if n < len(plan):
-                cand = [m for m in legal if m[0] in plan[n][0]]
-                if not cand:
-                    break
-                mv, marks = cand[0], plan[n][1]
-            else:
-                mv, marks = legal[0], ''
-            best = legal[0][1][0]
-            keeping = [m for m in legal if m[1][0] == best]
-            flags = []
-            if mv[1][0] != best and best != '?':
-                flags.append('err')
-            elif len(keeping) == 1 and best in 'WD':
-                flags.append('only')
-            if n >= nbook:
-                flags.append('db')
-            i = self.child(prev, mv)
-            num = f'{number + k // 2}.' if k % 2 == 0 else (f'{number + k // 2}. …' if n == 0 else '')
-            nota = mv[0].replace('x', '×') + marks
-            out.append(f'<a class="{cls} {" ".join(flags)}" href="#" data-i="{i}" title="{mv[1]}">'
-                       f'{num + " " if num else ""}{nota}</a>')
-            prev, fen, k, n = i, mv[2], k + 1, n + 1
-        if out and not self.o.analyse(fen)[1]:
-            out[-1] = out[-1].replace('</a>', '+</a>')
-        return ' '.join(out), prev, fen, n
-
-    def line(self, fen, text, cls='m1', start=None):
-        black_first, mv = parse_line(text)
-        m0 = re.match(r'\s*(\d+)\.', text)
-        plan = [((f'{f}-{t}', f'{f}x{t}'), marks) for f, t, cap, marks, only in mv]
-        return self.moves(fen, plan, int(m0.group(1)) if m0 else 1, black_first, cls, start)
-
-    def data(self):
-        rows = []
-        for p in self.pos:
-            v, legal = self.o.analyse(p['f'])
-            rows.append({'f': p['f'], 'v': v, 'last': p['last'], 'prev': p['prev'], 'next': p['next'],
-                         'm': [[m[0].replace('x', '×'), m[1], self.index.get(m[2])] for m in legal]})
-        return json.dumps(rows, ensure_ascii=False, separators=(',', ':'))
+def book_line(pg, fen, text, cls='m1', start=None):
+    """the moves of a line of the book (book notation) from fen as links"""
+    black_first, mv = parse_line(text)
+    m0 = re.match(r'\s*(\d+)\.', text)
+    plan = [((f'{f}-{t}', f'{f}x{t}'), marks) for f, t, cap, marks, only in mv]
+    return pg.moves(fen, plan, int(m0.group(1)) if m0 else 1, black_first, cls, start)
 
 
 def claim_label(claim, stm):
     return ({'W+': 'W', '=': 'D', 'Z+': 'L', 'notW+': '≤D'} if stm == 'W' else
             {'W+': 'L', '=': 'D', 'Z+': 'W', 'notW+': '≥D'})[claim]
-
-
-def badge(ok, text):
-    return f'<span class="verdict {"ok" if ok else "bad" if ok is False else ""}">{text}</span>'
-
-
-def esc(s):
-    return html.escape(s, quote=False)
-
-
-def md(text):
-    """the small part of Markdown used in bevindingen.md -> HTML"""
-    def inline(s):
-        s = esc(s)
-        s = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', lambda m: f'<a href="{m.group(2).replace("../", REPO + "/blob/main/")}">{m.group(1)}</a>', s)
-        s = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', s)
-        s = re.sub(r'\*(.+?)\*', r'<em>\1</em>', s)
-        s = re.sub(r'`(.+?)`', r'<code>\1</code>', s)
-        return s
-    out, para, items = [], [], []
-
-    def flush():
-        if para:
-            out.append('<p>' + inline(' '.join(para)) + '</p>')
-            para.clear()
-        if items:
-            out.append('<ul>' + ''.join(f'<li>{inline(x)}</li>' for x in items) + '</ul>')
-            items.clear()
-    for ln in text.split('\n'):
-        if not ln.strip():
-            flush()
-        elif ln.startswith('#'):
-            flush()
-            lvl = len(ln) - len(ln.lstrip('#'))
-            out.append(f'<h{min(lvl, 3)}>{inline(ln.lstrip("#").strip())}</h{min(lvl, 3)}>')
-        elif ln.startswith('* '):
-            if para:
-                flush()
-            items.append(ln[2:].strip())
-        elif ln.startswith('  ') and items:
-            items[-1] += ' ' + ln.strip()
-        else:
-            para.append(ln.strip())
-    flush()
-    return '\n'.join(out)
 
 
 class Site:
@@ -298,14 +189,16 @@ class Site:
         self.page_of = {p[0]: p for p in PAGES}
 
     def nav(self, orig=ORIGINAL):
-        return (f'<a href="index.html">Strategie der 36 velden · gecontroleerd</a><a href="opening.html">opening</a>'
-                f'<a href="{orig}">het origineel</a>')
+        return (f'<a href="../index.html">egdb-draughts</a><a href="index.html">Strategie der 36 velden</a>'
+                f'<a href="opening.html">opening</a><a href="{orig}">het origineel</a>')
+
+    def page(self):
+        pg = Page()
+        pg.use('6x6', self.o, geom_6x6())
+        return pg
 
     def write(self, name, title, body, pg, orig=ORIGINAL):
-        tpl = (HERE / 'site_template.html').read_text()
-        page = (tpl.replace('{{TITLE}}', esc(title)).replace('{{NAV}}', self.nav(orig)).replace('{{BODY}}', body)
-                .replace('{{DATA}}', pg.data()))
-        (self.out / name).write_text(page)
+        write_page(self.out / name, title, self.nav(orig), body, pg, TITLE)
 
     def refutation_html(self, pg, fen, start, cont, number, own, refute_at=None, stop_on_book=True):
         r = refutation(self.eng, fen, cont, number, self.known, own, refute_at=refute_at, stop_on_book=stop_on_book)
@@ -372,7 +265,7 @@ class Site:
             body = f'<em>{esc(r["text"])}</em>'
             verdict = badge(None, '✏️ notatiefout')
         else:
-            body, _, end, _ = pg.line(fen, r['text'], 'm2', i0)
+            body, _, end, _ = book_line(pg, fen, r['text'], 'm2', i0)
             e = r['end_fen'][0]
             if r['claim']:
                 ok = r.get('claim_ok')
@@ -398,7 +291,7 @@ class Site:
 
     def chapter_page(self, k):
         pid, lab, title, orig, sections, listed = PAGES[k]
-        pg = Page(self.o)
+        pg = self.page()
         dids = [did for did in DIAGRAMS if self.home[did] == pid or any(r['start'] == did for r in self.lines[pid])]
 
         def key(did):
@@ -436,7 +329,7 @@ class Site:
         return ' · '.join(parts)
 
     def index_page(self):
-        pg = Page(self.o)
+        pg = self.page()
         text = (HERE / 'bevindingen.md').read_text()
         intro = text[:text.index('## Belangrijkste bevindingen')]
         intro = intro[intro.index('\n') + 1:]          # without the title
@@ -446,7 +339,7 @@ class Site:
             toc.append(f'<li><span class="h">{esc(lab)}</span><a href="{pid}.html">{esc(title)}</a>'
                        f'<span class="cnt">{self.counts(pid)}</span> <a class="orig" href="{orig}">origineel</a></li>')
         toc.append('</ul>')
-        body = ['<h1>Strategie der 36 velden</h1>', fig, md(intro), '<h2>Inhoud</h2>',
+        body = ['<h1>Strategie der 36 velden</h1>', fig, md(intro, 'strategie_der_36_velden/'), '<h2>Inhoud</h2>',
                 '<p>De hoofdstukken in de volgorde van de website van het boek; per hoofdstuk de diagrammen, de '
                 'varianten en de weerleggingen.</p>', '\n'.join(toc),
                 '<h2>De opening</h2><p>Met de databases tot en met 10 stukken is ook de beginstand van 6×6 opgelost: '
@@ -455,7 +348,7 @@ class Site:
         self.write('index.html', 'Overzicht', '\n'.join(body), pg)
 
     def opening_page(self):
-        pg = Page(self.o)
+        pg = self.page()
         fig, i0 = pg.diagram(START, 'de beginstand, wit aan zet')
         v0, legal0 = self.o.analyse(START)
         body = ['<h1>De opening</h1>', fig,
@@ -482,10 +375,10 @@ def main():
     ap.add_argument('engine')
     ap.add_argument('--db', default=str(ROOT / 'data' / '6x6_le9.db'))
     ap.add_argument('--attach', default=str(ROOT / 'data' / '6x6_10.dtm'))
-    ap.add_argument('--out', default=str(ROOT / 'site'))
+    ap.add_argument('--out', default=str(ROOT / '_site' / 'strategie_der_36_velden'))
     args = ap.parse_args()
     out = Path(args.out)
-    out.mkdir(exist_ok=True)
+    out.mkdir(parents=True, exist_ok=True)
     for f in out.glob('*.html'):
         f.unlink()
     site = Site(Engine(args.engine, 10, args.db, args.attach), out)

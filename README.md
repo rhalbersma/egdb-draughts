@@ -10,6 +10,18 @@ The databases were used to check, extend and refine the results of a 1988 Dutch 
 "three kings against one" on boards of every size, whose results were all found by hand.
 This page collects the programs, the tables and the most interesting findings.
 
+> **Companion sites** with clickable diagrams: [Strategie der 36 velden](https://rhalbersma.github.io/egdb-draughts/strategie_der_36_velden/) ·
+> [Drie tegen een is gemeen](https://rhalbersma.github.io/egdb-draughts/drie_tegen_een_is_gemeen/) ·
+> [English checkers 3 vs 2](https://rhalbersma.github.io/egdb-draughts/checkers/)
+>
+> **6×6 with men and kings**
+>
+> Exact databases up to 10 pieces for international draughts on the 6×6 board ([`src/egdb_6x6.cpp`](src/egdb_6x6.cpp))
+> solve the start position (a draw, [`opening_6x6.md`](strategie_der_36_velden/opening/opening_6x6.md)) and check every diagram and
+> variation of Herm Jan Brascamp's *Strategie der 36 velden* (2016). The companion site follows the chapters of the
+> book with clickable moves and the database value of every position; the full report (Dutch) is
+> [`strategie_der_36_velden/RAPPORT.md`](strategie_der_36_velden/RAPPORT.md).
+
 * [Programs](#programs)
 * [Conventions](#conventions)
 * [International draughts: 2 kings vs 1](#international-draughts-2-kings-vs-1)
@@ -420,10 +432,10 @@ scripts/run_all.sh                 # all databases, a few minutes; writes data/ 
 ```
 
 * [`results/summary.txt`](results/summary.txt): one line per database run (board, time, verification, draws, longest win).
-* [`scripts/trap.py`](scripts/trap.py): DTM per square of the black king for a fixed placement of the white kings.
-* [`scripts/edge_corner.py`](scripts/edge_corner.py): checkers 3-2 draws by white kings on the edge × black kings in double corners.
-* [`scripts/checkers_draws.py`](scripts/checkers_draws.py): classifies checkers draws (immediate shots versus blockades).
-* [`scripts/force_capture.py`](scripts/force_capture.py): can black force the win of a white king, and how fast.
+* [`drie_tegen_een_is_gemeen/trap.py`](drie_tegen_een_is_gemeen/trap.py): DTM per square of the black king for a fixed placement of the white kings.
+* [`checkers/edge_corner.py`](checkers/edge_corner.py): checkers 3-2 draws by white kings on the edge × black kings in double corners.
+* [`checkers/checkers_draws.py`](checkers/checkers_draws.py): classifies checkers draws (immediate shots versus blockades).
+* [`checkers/force_capture.py`](checkers/force_capture.py): can black force the win of a white king, and how fast.
 
 ---
 

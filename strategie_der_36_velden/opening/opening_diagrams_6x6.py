@@ -6,9 +6,9 @@
 
 """Diagrams of the opening tree with the legal moves and their values next to the board.
 
-Reads results/opening_6x6.json (from opening_solve_6x6.py) and uses egdb_6x6 only for move generation.
+Reads opening_6x6.json (from opening_solve_6x6.py) and uses egdb_6x6 only for move generation.
 
-usage: opening_diagrams_6x6.py path/to/egdb_6x6 [--json results/opening_6x6.json] [--plies 0,1] [--out FILE]
+usage: opening_diagrams_6x6.py path/to/egdb_6x6 [--json opening_6x6.json] [--plies 0,1] [--out FILE]
 """
 
 import argparse
@@ -20,7 +20,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parent / 'strategie36'))
+sys.path.insert(0, str(HERE.parent))
 from board import diagram                      # noqa: E402
 from opening_solve_6x6 import label, score_label, up   # noqa: E402
 
@@ -28,7 +28,7 @@ from opening_solve_6x6 import label, score_label, up   # noqa: E402
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('engine')
-    ap.add_argument('--json', default=str(HERE.parent / 'results' / 'opening_6x6.json'))
+    ap.add_argument('--json', default=str(HERE / 'opening_6x6.json'))
     ap.add_argument('--plies', default='0,1')
     ap.add_argument('--out', default=None)
     args = ap.parse_args()

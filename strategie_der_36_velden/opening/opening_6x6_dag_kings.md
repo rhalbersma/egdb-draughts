@@ -3,7 +3,7 @@
 Vanuit de beginstand, laag voor laag, met samengevoegde transposities. Een stelling is een
 databaseblad als ze hoogstens 10 stukken heeft of als beide kanten een dam hebben; alleen de overige
 stellingen (meer dan 10 stukken, hoogstens één kant met dammen) worden uitgebreid. Die kunnen zich niet
-herhalen, dus de DAG is acyclisch en de frontier sluit (na ply 39). Gemaakt met `scripts/opening_dag_6x6.py`.
+herhalen, dus de DAG is acyclisch en de frontier sluit (na ply 39). Gemaakt met `opening_dag_6x6.py`.
 
 | ply | zetten | knopen | transposities | db: ≤10 stukken | db: dammen beide kanten | geen zetten | open | knopen cumulatief | db-knopen cumulatief |
 |---|---|---|---|---|---|---|---|---|---|

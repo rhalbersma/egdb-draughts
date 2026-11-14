@@ -292,6 +292,7 @@ struct Options
         std::vector<std::string> queries;
         bool do_verify = true;
         bool do_text = true;
+        bool serve = false;
 };
 
 // ---------------------------------------------------------------------------
@@ -934,7 +935,54 @@ public:
                         std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count(), errors);
 
                 for (auto const& q : opt.queries) { query(q); }
+                if (opt.serve) { serve(); }
                 return errors;
+        }
+
+        // ---- line protocol for other programs (e.g. the companion site) ------------
+        //   geom      -> "geom W H PARITY", "sq PDN FILE RANK" per square, "lake FILE RANK" per removed square
+        //   pos FEN   -> "val V", then "move ALG NUM V NEXTFEN" per move, best first
+        // values: Wn / Ln (n plies, for the side to move resp. the mover), D; each answer ends with "end"
+
+        [[nodiscard]] static std::string show(std::uint8_t v)
+        {
+                return v >= DRAW ? "D" : std::format("{}{}", (v & 1) ? 'W' : 'L', static_cast<int>(v));
+        }
+
+        void serve() const
+        {
+                std::cout << "ready" << std::endl;
+                for (std::string line; std::getline(std::cin, line);) {
+                        auto const sp = line.find(' ');
+                        auto const cmd = line.substr(0, sp);
+                        auto const arg = sp == std::string::npos ? std::string{} : line.substr(sp + 1);
+                        try {
+                                if (cmd == "geom") {
+                                        std::cout << std::format("geom {} {} {}\n", g.grid.width, g.grid.height, g.grid.parity);
+                                        for (auto i = 0; i < g.n; ++i) {
+                                                auto const& nm = g.name[static_cast<std::size_t>(i)];
+                                                std::cout << std::format("sq {} {} {}\n", g.pdn[static_cast<std::size_t>(i)], nm[0] - 'a', std::stoi(nm.substr(1)) - 1);
+                                        }
+                                        for (auto const& [f, r] : g.lake) { std::cout << std::format("lake {} {}\n", f, r); }
+                                } else if (cmd == "pos") {
+                                        auto const [p, swapped] = normalize(parse_fen(arg));
+                                        std::cout << "val " << show(probe(p)) << '\n';
+                                        auto ms = analyse(p);
+                                        std::ranges::stable_sort(ms, std::greater{}, [](auto const& mr) { return preference(mr.value); });
+                                        for (auto const& mr : ms) {
+                                                auto q = play(p, mr.move);
+                                                if (swapped) { std::swap(q.white, q.black); q.stm ^= 1; }
+                                                std::cout << std::format("move {} {} {} {}\n", notation(mr.move, true), notation(mr.move, false),
+                                                        show(mr.value), to_fen(q));
+                                        }
+                                } else {
+                                        std::cout << "error unknown command\n";
+                                }
+                        } catch (std::exception const& e) {
+                                std::cout << "error " << e.what() << '\n';
+                        }
+                        std::cout << "end" << std::endl;
+                }
         }
 };
 
@@ -1001,7 +1049,8 @@ void usage()
                 "  --out DIR           write db_<w>_<b>.txt and db_<w>_<b>.bin files to DIR\n"
                 "  --no-text           with --out: only the compact binary files\n"
                 "  --query FEN         analyse a position (e.g. W:WK2,K10,K45:BK50); repeatable\n"
-                "  --no-verify         skip the verification pass\n";
+                "  --no-verify         skip the verification pass\n"
+                "  --serve             after building, answer 'geom' and 'pos FEN' requests on stdin\n";
 }
 
 auto parse_square(std::string const& s)
@@ -1038,6 +1087,7 @@ try {
                 else if (arg == "--no-text")   { opt.do_text = false; }
                 else if (arg == "--query")     { opt.queries.push_back(next()); }
                 else if (arg == "--no-verify") { opt.do_verify = false; }
+                else if (arg == "--serve")     { opt.serve = true; }
                 else if (arg == "--rules")     {
                         auto const r = next();
                         if (r == "checkers")           { flying_kings = false; majority_capture = false; }

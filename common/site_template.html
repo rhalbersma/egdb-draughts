@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="nl">
+<html lang="{{LANG}}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -32,6 +32,7 @@ header { border-bottom: 1px solid var(--rule); padding: 8px 16px; font: 14px/1.4
 header > a { color: var(--muted); text-decoration: none; }
 header > a.brand { color: var(--fg); font-weight: 600; }
 header > a:hover { color: var(--fg); }
+header > a.lang { margin-left: auto; border: 1px solid var(--rule); border-radius: 6px; padding: 2px 8px; }
 .menu { position: relative; }
 .menu summary { list-style: none; cursor: pointer; color: var(--fg); border: 1px solid var(--rule); border-radius: 6px;
   padding: 3px 10px; background: var(--panel); user-select: none; }
@@ -134,29 +135,25 @@ table.tbl th { color: var(--muted); font-weight: 600; }
   <aside class="side">
     <div id="board"></div>
     <div class="buttons">
-      <button id="back" title="vorige stelling (←)">◀</button>
-      <button id="play" title="automatisch afspelen">▶︎▶︎</button>
-      <button id="fwd" title="volgende stelling (→)">▶</button>
-      <button id="nums" title="veldnummers aan/uit">#</button>
+      <button id="back" title="{{T_BACK}}">◀</button>
+      <button id="play" title="{{T_PLAY}}">▶︎▶︎</button>
+      <button id="fwd" title="{{T_FWD}}">▶</button>
+      <button id="nums" title="{{T_NUMS}}">#</button>
+      <button id="nota" title="{{T_NOTA}}">1-2</button>
     </div>
     <div class="panel" id="panel"></div>
   </aside>
   <main>
 {{BODY}}
-<p class="legend">Klik op een zet om de stelling op het grote bord te zien; ◀ ▶ (of de pijltjestoetsen) lopen door de
-variant. Waarden gelden voor de partij aan zet; bij een zet voor wie hem doet, met n het aantal ply tot het einde van
-de partij, de zet meegeteld: W = winst (oneven), L = verlies (even), D = remise.
-<span style="color:var(--link);font-weight:600">Blauw</span> = hoofdvariant,
-<span style="color:var(--m2)">groen</span> = zijvariant, <em>cursief</em> = voortzetting van de database,
-<span class="q">?</span> = zet die volgens de database het resultaat verandert, met tussen [ ] de betere zet of de
-weerlegging (<span style="color:var(--db)">≡</span> = terug naar de stelling vóór die zet),
-<span style="color:var(--only)">*</span> = enige zet die de winst of de remise behoudt.</p>
+<p class="legend">{{LEGEND}}</p>
   </main>
 </div>
 <script>
 const POS = {{DATA}};
+const UI = {{UI}};
 const GEOMS = {{GEOMS}};
-let cur = 0, showNums = true, timer = null;
+let cur = 0, showNums = true, timer = null, notation = '{{NOTATION}}';
+try { const n = localStorage.getItem('notation'); if (n === 'num' || n === 'alg') notation = n; } catch (e) {}
 
 function parse(fen) {
   const cells = {};
@@ -189,7 +186,7 @@ function svg(fen, last, nums, gid) {
     if (!sq) continue;
     if (hl.has(sq)) s += `<rect x="${c}" y="${y}" width="1" height="1" fill="var(--hl)" opacity=".55"/>`;
     if (nums) {
-      const t = G.alg ? String.fromCharCode(97 + c) + (G.h - y) : sq;
+      const t = notation === 'alg' ? String.fromCharCode(97 + c) + (G.h - y) : sq;
       s += `<text x="${c + .06}" y="${y + .22}" font-size=".19" font-family="system-ui,sans-serif" fill="var(--num)">${t}</text>`;
     }
     const p = cells[sq];
@@ -214,12 +211,13 @@ function go(i) {
   document.getElementById('board').innerHTML = svg(p.f, p.last, showNums, p.g);
   document.querySelectorAll('a.cur').forEach(a => a.classList.remove('cur'));
   document.querySelectorAll(`a[data-i="${i}"]`).forEach(a => a.classList.add('cur'));
-  const side = p.f[0] === 'W' ? 'wit' : 'zwart';
+  const side = p.f[0] === 'W' ? UI.white : UI.black;
   const next = p.next !== null ? POS[p.next].f : null;
-  let h = `<div class="stm">${side} aan zet: ${p.v}</div>`;
-  if (!p.m.length) h += '<div>geen zetten: verloren</div>';
+  let h = `<div class="stm">${side} ${UI.tomove}: ${p.v}</div>`;
+  if (!p.m.length) h += `<div>${UI.nomoves}</div>`;
   h += '<table>';
-  for (const [n, v, j] of p.m) {
+  for (const [num, alg, v, j] of p.m) {
+    const n = notation === 'alg' ? alg : num;
     const played = j !== null && j !== undefined && POS[j].f === next;
     const mv = j !== null && j !== undefined ? `<a href="#" data-go="${j}">${n}</a>` : n;
     h += `<tr class="${played ? 'played' : ''}"><td>${mv}</td><td>${v}</td></tr>`;
@@ -238,6 +236,14 @@ function stop() { if (timer) { clearInterval(timer); timer = null; document.getE
 document.getElementById('back').onclick = () => { stop(); go(POS[cur].prev); };
 document.getElementById('fwd').onclick = () => { stop(); go(POS[cur].next); };
 document.getElementById('nums').onclick = () => { showNums = !showNums; go(cur); };
+function setNotation(n) {
+  notation = n;
+  try { localStorage.setItem('notation', n); } catch (e) {}
+  document.querySelectorAll('span.mv').forEach(s => { s.textContent = n === 'alg' ? s.dataset.a : s.dataset.n; });
+  document.getElementById('nota').textContent = n === 'alg' ? 'a1' : '1-2';
+  go(cur);
+}
+document.getElementById('nota').onclick = () => setNotation(notation === 'alg' ? 'num' : 'alg');
 document.getElementById('play').onclick = () => {
   if (timer) return stop();
   document.getElementById('play').textContent = '❚❚';
@@ -254,6 +260,7 @@ document.addEventListener('keydown', e => {
 document.querySelectorAll('.smallboard').forEach(d => { d.innerHTML = svg(d.dataset.fen, null, false, d.dataset.g); });
 const first = document.querySelector('figure a[data-i]');
 go(first ? +first.dataset.i : 0);
+setNotation(notation);
 </script>
 </body>
 </html>

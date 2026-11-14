@@ -112,6 +112,7 @@ class Page:
         self.geoms = {}
         self.oracles = {}
         self.seen = set()
+        self.notation = 'num'          # default notation of the page: 'num' or 'alg' (the viewer can switch)
 
     def use(self, gid, oracle, geom):
         self.geoms[gid] = geom
@@ -129,6 +130,21 @@ class Page:
     def analyse(self, i_or_gid, fen=None):
         gid = self.pos[i_or_gid]['g'] if fen is None else i_or_gid
         return self.oracles[gid].analyse(self.pos[i_or_gid]['f'] if fen is None else fen)
+
+    def notations(self, gid, mv):
+        """(numeric, algebraic) notation of a move, with × for captures"""
+        if len(mv) > 3:
+            num, alg = mv[3], mv[0]
+        else:
+            sq = self.geoms[gid]['sq']
+            num = mv[0]
+            alg = re.sub(r'\d+', lambda m: f'{chr(97 + sq[int(m.group())][0])}{sq[int(m.group())][1] + 1}', num)
+        return num.replace('x', '×'), alg.replace('x', '×')
+
+    def label(self, gid, mv):
+        """the notation of a move as an element that the notation switch can change"""
+        num, alg = self.notations(gid, mv)
+        return f'<span class="mv" data-n="{num}" data-a="{alg}">{num if self.notation == "num" else alg}</span>'
 
     def child(self, prev, mv):
         return self.add(mv[2], squares(mv[3] if len(mv) > 3 else mv[0]), prev)
@@ -174,9 +190,9 @@ class Page:
             i = self.child(prev, mv)
             mnum, black = number + k // 2, k % 2 == 1
             num = f'{mnum}.' if not black else (f'{mnum}. …' if n == 0 else '')
-            nota = mv[0].replace('x', '×') + marks
+            nota = self.label(g, mv) + marks
             if err and '?' not in marks:      # a "!" of the book that the database contradicts goes in parentheses
-                nota = mv[0].replace('x', '×') + (f'({marks})' if marks else '') + '<span class="q">?</span>'
+                nota = self.label(g, mv) + (f'({marks})' if marks else '') + '<span class="q">?</span>'
             out.append(f'<a class="{cls} {" ".join(flags)}" href="#" data-i="{i}" title="{mv[1]}">'
                        f'{num + " " if num else ""}{nota}</a>')
             if err and n < nbook:
@@ -208,14 +224,51 @@ class Page:
         for p in self.pos:
             v, legal = self.oracles[p['g']].analyse(p['f'])
             rows.append({'f': p['f'], 'v': v, 'last': p['last'], 'prev': p['prev'], 'next': p['next'], 'g': p['g'],
-                         'm': [[m[0].replace('x', '×'), m[1], self.index.get((p['g'], m[2]))] for m in legal]})
+                         'm': [[*self.notations(p['g'], m), m[1], self.index.get((p['g'], m[2]))] for m in legal]})
         return json.dumps(rows, ensure_ascii=False, separators=(',', ':'))
 
 
-def write_page(path, title, nav, body, page, site_title):
+UI = {
+    'nl': {'back': 'vorige stelling (←)', 'play': 'automatisch afspelen', 'fwd': 'volgende stelling (→)',
+           'nums': 'veldnamen aan/uit', 'nota': 'numerieke of algebraïsche notatie',
+           'js': {'white': 'wit', 'black': 'zwart', 'tomove': 'aan zet', 'nomoves': 'geen zetten: verloren'},
+           'legend': 'Klik op een zet om de stelling op het grote bord te zien; ◀ ▶ (of de pijltjestoetsen) lopen door '
+                     'de variant. Waarden gelden voor de partij aan zet; bij een zet voor wie hem doet, met n het aantal '
+                     'ply tot het einde van de partij, de zet meegeteld: W = winst (oneven), L = verlies (even), '
+                     'D = remise. <span style="color:var(--link);font-weight:600">Blauw</span> = hoofdvariant, '
+                     '<span style="color:var(--m2)">groen</span> = zijvariant, <em>cursief</em> = voortzetting van de '
+                     'database, <span class="q">?</span> = zet die volgens de database het resultaat verandert, met '
+                     'tussen [ ] de betere zet of de weerlegging (<span style="color:var(--db)">≡</span> = terug naar de '
+                     'stelling vóór die zet), <span style="color:var(--only)">*</span> = enige zet die de winst of de '
+                     'remise behoudt. De knop 1-2 / a1 wisselt tussen numerieke en algebraïsche notatie.'},
+    'en': {'back': 'previous position (←)', 'play': 'play automatically', 'fwd': 'next position (→)',
+           'nums': 'square names on/off', 'nota': 'numeric or algebraic notation',
+           'js': {'white': 'white', 'black': 'black', 'tomove': 'to move', 'nomoves': 'no moves: lost'},
+           'legend': 'Click a move to see the position on the large board; ◀ ▶ (or the arrow keys) step through the '
+                     'line. Values are for the side to move; for a move, for the side making it, with n the number of '
+                     'plies to the end of the game, the move included: W = win (odd), L = loss (even), D = draw. '
+                     '<span style="color:var(--link);font-weight:600">Blue</span> = main line, '
+                     '<span style="color:var(--m2)">green</span> = side line, <em>italics</em> = continuation by the '
+                     'database, <span class="q">?</span> = a move that changes the result according to the database, '
+                     'with the better move or the refutation in [ ] (<span style="color:var(--db)">≡</span> = back to '
+                     'the position before that move), <span style="color:var(--only)">*</span> = the only move that '
+                     'keeps the win or the draw. The 1-2 / a1 button switches between numeric and algebraic notation.'},
+}
+
+
+def lang_link(lang, alt):
+    """the switch to the same page in the other language"""
+    return f'<a class="lang" href="{alt}" hreflang="{"en" if lang == "nl" else "nl"}">{"English" if lang == "nl" else "Nederlands"}</a>'
+
+
+def write_page(path, title, nav, body, page, site_title, lang='nl'):
     tpl = TEMPLATE.read_text()
+    u = UI[lang]
+    tpl = (tpl.replace('{{LANG}}', lang).replace('{{T_BACK}}', u['back']).replace('{{T_PLAY}}', u['play'])
+           .replace('{{T_FWD}}', u['fwd']).replace('{{T_NUMS}}', u['nums']).replace('{{T_NOTA}}', u['nota'])
+           .replace('{{LEGEND}}', u['legend']).replace('{{UI}}', json.dumps(u['js'], ensure_ascii=False)))
     geoms = json.dumps(page.geoms, separators=(',', ':'))
-    out = (tpl.replace('{{TITLE}}', esc(title)).replace('{{SITE}}', esc(site_title)).replace('{{NAV}}', nav)
+    out = (tpl.replace('{{NOTATION}}', page.notation).replace('{{TITLE}}', esc(title)).replace('{{SITE}}', esc(site_title)).replace('{{NAV}}', nav)
            .replace('{{BODY}}', body).replace('{{GEOMS}}', geoms).replace('{{DATA}}', page.data()))
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     Path(path).write_text(out)

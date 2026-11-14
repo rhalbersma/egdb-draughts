@@ -27,7 +27,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(ROOT / 'common'))
-from sitekit import Page, badge, esc, geom_6x6, md, menu, write_page   # noqa: E402
+from sitekit import Page, badge, esc, geom_6x6, lang_link, md, menu, write_page   # noqa: E402
 from check import Engine, parse_line                           # noqa: E402
 from claims import DIAGRAMS, LINES                             # noqa: E402
 from corrections import (absolute, agrees, build_book,         # noqa: E402
@@ -121,6 +121,27 @@ def side(stm):
     return 'wit' if stm == 'W' else 'zwart'
 
 
+# remarks of check.py (Dutch) -> English
+NOTE_EN = [('ONMOGELIJK', 'IMPOSSIBLE'), ('is niet legaal in', 'is not legal in'), ('legale zetten', 'legal moves'),
+           ('"de enige": ook', '"the only move": also'), ('behoudt/behouden het resultaat', 'keep(s) the result'),
+           ('als fout gemarkeerd, maar verandert het resultaat niet', 'marked as an error, but does not change the result'),
+           ('blijft', 'stays'), ('verliest sneller', 'loses faster'), ('i.p.v.', 'instead of'), ('bevestigd', 'confirmed'),
+           ('(wit)', '(white)'), ('(zwart)', '(black)'), ('zet ', 'move '), ('tekst', 'text'), ('gecorrigeerd', 'corrected')]
+
+
+def note_en(x):
+    for a, b in NOTE_EN:
+        x = x.replace(a, b)
+    return x
+
+
+def heading_en(h):
+    for a, b in (('Hoofdstuk', 'Chapter'), ('Opgaven', 'Problems'), ('Oplossingen', 'Solutions'),
+                 ('Vervolg', 'continued'), ('De opening', 'The opening')):
+        h = h.replace(a, b)
+    return h
+
+
 def base(did):
     m = re.match(r'(\d+\.\d+)', did)
     return m.group(1) if m else did
@@ -173,7 +194,8 @@ def claim_label(claim, stm):
 
 
 class Site:
-    def __init__(self, eng, out):
+    def __init__(self, eng, out, lang='nl'):
+        self.lang = lang
         self.eng = eng
         self.o = Oracle(eng)
         self.out = out
@@ -198,19 +220,37 @@ class Site:
             self.home[did] = cand[0]
         self.page_of = {p[0]: p for p in PAGES}
 
+    def t(self, nl, en):
+        return nl if self.lang == 'nl' else en
+
+    def side(self, stm):
+        return self.t('wit', 'white') if stm == 'W' else self.t('zwart', 'black')
+
+    def lab(self, lab):
+        return lab if self.lang == 'nl' else lab.replace('Hoofdstuk', 'Chapter')
+
+    def note(self, x):
+        return x if self.lang == 'nl' else note_en(x)
+
     def nav(self, orig=ORIGINAL, current=None):
-        groups = [('', [('index.html', 'Overzicht')])]
+        t = self.t
+        groups = [('', [('index.html', t('Overzicht', 'Overview'))])]
         for heading, pids in LANDING:
             items = []
             for pid in pids:
                 _, lab, title, *_ = self.page_of[pid]
                 short = lab.replace('Hoofdstuk ', '') if lab else ''
                 items.append((f'{pid}.html', f'{short} {title}'.strip()))
-            groups.append((heading, items))
-        groups.append(('De opening', [('opening.html', 'De beginstand en alle openingen tot 3 ply')]))
+            groups.append((heading if self.lang == 'nl' else heading_en(heading), items))
+        groups.append((t('De opening', 'The opening'),
+                       [('opening.html', t('De beginstand en alle openingen tot 3 ply',
+                                           'The start position and all openings to 3 plies'))]))
+        home = '../index.html' if self.lang == 'nl' else '../../en/index.html'
+        alt = f'en/{current}' if self.lang == 'nl' else f'../{current}'
         return (f'<a class="brand" href="index.html">Strategie der 36 velden</a>'
-                f'{menu(groups, current, "Hoofdstukken")}<a href="opening.html">Opening</a>'
-                f'<a href="{orig}">Origineel ↗</a><a href="../index.html">Alle sites</a>')
+                f'{menu(groups, current, t("Hoofdstukken", "Chapters"))}<a href="opening.html">Opening</a>'
+                f'<a href="{orig}">{t("Origineel", "Original")} ↗</a><a href="{home}">{t("Alle sites", "All sites")}</a>'
+                f'{lang_link(self.lang, alt)}')
 
     def page(self):
         pg = Page()
@@ -218,7 +258,7 @@ class Site:
         return pg
 
     def write(self, name, title, body, pg, orig=ORIGINAL):
-        write_page(self.out / name, title, self.nav(orig, name), body, pg, TITLE)
+        write_page(self.out / name, title, self.nav(orig, name), body, pg, TITLE, self.lang)
 
     def claim_refutation(self, pg, fen, i0, did):
         """the refutation of a wrong diagram claim, as in an annotated game: the book's line as the main line with
@@ -244,7 +284,7 @@ class Site:
             for stm in sides_to_show(did):
                 fen = stm + d['fen'][1:]
                 sd = d['sides'][stm]
-                fig, i0 = pg.diagram(fen, f'diagram {did}, {side(stm)} aan zet')
+                fig, i0 = pg.diagram(fen, f'diagram {did}, {self.side(stm)} {self.t("aan zet", "to move")}')
                 out.append(fig)
                 if 'error' in sd:
                     out.append(f'<p class="claim">{esc(d["note"])}: {esc(sd["error"])}</p>')
@@ -252,22 +292,24 @@ class Site:
                 v, legal = self.o.analyse(fen)
                 cl = f' · boek: <em>{esc(d["note"])}</em>' if sd['claim'] else ''
                 ok = sd['ok']
-                b = badge(ok, f'boek: {claim_label(sd["claim"], stm)} {"✓" if ok else "✗"}') if sd['claim'] else ''
-                out.append(f'<p class="claim"><strong>{side(stm)} aan zet: <span class="val">{v}</span></strong> {b}'
-                           f'{cl if not sd["claim"] else ""}</p>')
+                b = (badge(ok, f'{self.t("boek", "book")}: {claim_label(sd["claim"], stm)} {"✓" if ok else "✗"}')
+                     if sd['claim'] else '')
+                out.append(f'<p class="claim"><strong>{self.side(stm)} {self.t("aan zet", "to move")}: '
+                           f'<span class="val">{v}</span></strong> {b}{cl if not sd["claim"] else ""}</p>')
                 if sd['claim'] is None and d['note']:
                     pass
-                mv = ', '.join(f'<a class="m1" href="#" data-i="{pg.child(i0, m)}">{m[0].replace("x", "×")}</a> '
+                mv = ', '.join(f'<a class="m1" href="#" data-i="{pg.child(i0, m)}">{pg.label('6x6', m)}</a> '
                                f'<span class="val">{m[1]}</span>' for m in legal)
-                out.append(f'<p class="moves">{mv or "geen zetten"}</p>')
+                out.append(f'<p class="moves">{mv or self.t("geen zetten", "no moves")}</p>')
                 if ok is False:
                     out.append(f'<p class="var">{self.claim_refutation(pg, fen, i0, did)}</p>')
             if d['note']:
                 out.insert(1, f'<p class="note">{esc(d["note"])}</p>')
         elif mylines:
             r0 = mylines[0]
-            fig, _ = pg.diagram(r0['start_fen'], f'diagram {did}, {side(r0["start_fen"][0])} aan zet')
-            out.append(fig + f'<p class="note">zie ook <a href="{self.home[did]}.html#d{did}">'
+            fig, _ = pg.diagram(r0['start_fen'], f'diagram {did}, {self.side(r0["start_fen"][0])} '
+                                                 f'{self.t("aan zet", "to move")}')
+            out.append(fig + f'<p class="note">{self.t("zie ook", "see also")} <a href="{self.home[did]}.html#d{did}">'
                              f'{esc(self.page_of[self.home[did]][2])}</a></p>')
         starts = {}
         for r in mylines:
@@ -290,7 +332,7 @@ class Site:
         tail = ''
         if 'illegal' in r:
             body = f'<em>{esc(r["text"])}</em>'
-            verdict = badge(None, '✏️ notatiefout')
+            verdict = badge(None, self.t('✏️ notatiefout', '✏️ notation error'))
         else:
             asides = {}
             if r['status'] == 'onjuist':
@@ -311,16 +353,16 @@ class Site:
             e = r['end_fen'][0]
             if r['claim']:
                 ok = r.get('claim_ok')
-                verdict = badge(ok, f'{icon} boek: {side(e)} aan zet {claim_label(r["claim"], e)} · database: '
-                                    f'{r["end_val"]}')
+                verdict = badge(ok, f'{icon} {self.t("boek", "book")}: {self.side(e)} {self.t("aan zet", "to move")} '
+                                    f'{claim_label(r["claim"], e)} · database: {r["end_val"]}')
             else:
-                verdict = badge(None, f'{icon} database: {side(e)} aan zet {r["end_val"]}')
+                verdict = badge(None, f'{icon} database: {self.side(e)} {self.t("aan zet", "to move")} {r["end_val"]}')
         out = [f'<p class="var">{body}{tail} {verdict}']
         if r['note']:
             out.append(f'<br><span class="note">{esc(r["note"])}</span>')
         out.append('</p>')
         if notes:
-            out.append('<ul class="issues">' + ''.join(f'<li>{esc(x)}</li>' for x in notes) + '</ul>')
+            out.append('<ul class="issues">' + ''.join(f'<li>{esc(self.note(x))}</li>' for x in notes) + '</ul>')
         return '\n'.join(out)
 
     def continuation(self, pg, ref, k, prev, fen, mnum, black, mark, cls='m3'):
@@ -343,17 +385,22 @@ class Site:
             b = base(did)
             return (listed.index(b) if b in listed else len(listed), list(DIAGRAMS).index(did))
         dids.sort(key=key)
-        body = [f'<p class="src">{esc(lab)}</p>' if lab else '', f'<h1>{esc(title)}</h1>',
+        body = [f'<p class="src">{esc(self.lab(lab))}</p>' if lab else '', f'<h1>{esc(title)}</h1>',
                 f'<p class="src">Herm Jan Brascamp, <a href="{orig}">{esc(title)}</a>, <em>Strategie der 36 '
-                f'velden</em>, hijkendtc.nl. Hieronder per diagram de claims van het boek, de varianten en de '
-                f'weerleggingen, nagerekend met de databases.</p>']
+                f'velden</em>, hijkendtc.nl. ' + self.t('Hieronder per diagram de claims van het boek, de varianten en '
+                                                       'de weerleggingen, nagerekend met de databases.',
+                                                       'Per diagram the claims of the book, the variations and the '
+                                                       'refutations, checked with the databases. The book\'s own notes '
+                                                       'are in Dutch.') + '</p>']
         marks = []
         for did in dids:
             sides = self.diag[did]['sides'].values() if self.home[did] == pid else []
             oks = [x.get('ok') for x in sides if x.get('ok') is not None]
             marks.append(f'<a href="#d{did}">{did}{" ❌" if False in oks else " ✅" if oks else ""}</a>')
-        body.append(f'<details class="onpage"><summary>Op deze pagina: {len(dids)} diagram'
-                    f'{"men" if len(dids) != 1 else ""}</summary>{" ".join(marks)}</details>')
+        nd = len(dids)
+        body.append(f'<details class="onpage"><summary>' + self.t(f'Op deze pagina: {nd} diagram{"men" if nd != 1 else ""}',
+                                                               f'On this page: {nd} diagram{"s" if nd != 1 else ""}')
+                    + f'</summary>{" ".join(marks)}</details>')
         for did in dids:
             body.append(self.diagram_block(pg, did, pid))
         prev = f'<a href="{PAGES[k - 1][0]}.html">← {esc(PAGES[k - 1][2])}</a>' if k > 0 else '<span></span>'
@@ -375,19 +422,19 @@ class Site:
             st[r['status']] = st.get(r['status'], 0) + 1
         parts = []
         if ok or bad:
-            parts.append(f'diagrammen ✅ {ok}' + (f' ❌ {bad}' if bad else ''))
+            parts.append(f'{self.t("diagrammen", "diagrams")} ✅ {ok}' + (f' ❌ {bad}' if bad else ''))
         if st:
-            parts.append('varianten ' + ' '.join(f'{STATUS[s]} {n}' for s, n in sorted(st.items())))
+            parts.append(f'{self.t("varianten", "variations")} ' + ' '.join(f'{STATUS[s]} {n}' for s, n in sorted(st.items())))
         return ' · '.join(parts)
 
     def index_page(self):
         pg = self.page()
-        text = (HERE / 'bevindingen.md').read_text()
-        intro = text[:text.index('## Belangrijkste bevindingen')]
+        text = (HERE / self.t('bevindingen.md', 'findings_en.md')).read_text()
+        intro = text[:text.index('## Belangrijkste bevindingen')] if self.lang == 'nl' else text
         intro = intro[intro.index('\n') + 1:]          # without the title
         parts = re.split(r'(?m)^### ', intro)
         lead, sections = parts[0], [x.split('\n', 1) for x in parts[1:]]
-        fig, _ = pg.diagram(START, 'de beginstand')
+        fig, _ = pg.diagram(START, self.t('de beginstand', 'the start position'))
         toc = ['<ul class="toc">']
         for heading, pids in LANDING:
             links = []
@@ -395,46 +442,62 @@ class Site:
                 _, lab, title, *_ = self.page_of[pid]
                 short = lab.replace('Hoofdstuk ', '') if lab and len(pids) > 1 else ''
                 links.append(f'<a href="{pid}.html">{esc((short + " " + title).strip())}</a>')
-            toc.append(f'<li><span class="h">{esc(heading)}</span>{" · ".join(links)}</li>')
+            toc.append(f'<li><span class="h">{esc(heading if self.lang == "nl" else heading_en(heading))}</span>'
+                       f'{" · ".join(links)}</li>')
         toc.append('</ul>')
-        rows = ''.join(f'<tr><td>{esc(lab)}</td><td><a href="{pid}.html">{esc(title)}</a></td><td>{self.counts(pid)}</td></tr>'
+        rows = ''.join(f'<tr><td>{esc(self.lab(lab))}</td><td><a href="{pid}.html">{esc(title)}</a></td><td>{self.counts(pid)}</td></tr>'
                        for pid, lab, title, *_ in PAGES)
+        t = self.t
         body = ['<h1>Strategie der 36 velden</h1>', fig, md(lead, 'strategie_der_36_velden/'),
-                '<h2>Hoofdstukken</h2>', '<p>In de volgorde van de website van het boek. Elk hoofdstuk toont de '
-                'diagrammen met de claims van het boek, de varianten en de weerleggingen; het menu '
-                '<em>Hoofdstukken</em> bovenaan brengt je overal heen.</p>', '\n'.join(toc),
-                '<h2>De opening</h2><p>Met de databases tot en met 10 stukken is ook de beginstand van 6×6 opgelost: '
-                '<a href="opening.html">remise, met alle openingen tot 3 ply</a>.</p>', '<h2>Achtergrond</h2>']
+                t('<h2>Hoofdstukken</h2>', '<h2>Chapters</h2>'),
+                t('<p>In de volgorde van de website van het boek. Elk hoofdstuk toont de diagrammen met de claims van '
+                  'het boek, de varianten en de weerleggingen; het menu <em>Hoofdstukken</em> bovenaan brengt je overal '
+                  'heen.</p>',
+                  '<p>In the order of the book\'s website (the chapter titles are Brascamp\'s, in Dutch). Each chapter '
+                  'shows the diagrams with the claims of the book, the variations and the refutations; the '
+                  '<em>Chapters</em> menu at the top takes you anywhere.</p>'), '\n'.join(toc),
+                t('<h2>De opening</h2><p>Met de databases tot en met 10 stukken is ook de beginstand van 6×6 opgelost: '
+                  '<a href="opening.html">remise, met alle openingen tot 3 ply</a>.</p>',
+                  '<h2>The opening</h2><p>With the databases up to 10 pieces the start position of 6×6 is solved too: '
+                  '<a href="opening.html">a draw, with all openings to 3 plies</a>.</p>'),
+                t('<h2>Achtergrond</h2>', '<h2>Background</h2>')]
         for head, rest in sections:
             body.append(f'<details class="more"><summary>{esc(head.strip())}</summary><div>'
                         f'{md(rest, "strategie_der_36_velden/")}</div></details>')
-        body.append('<details class="more"><summary>Resultaten per hoofdstuk</summary><div><p>✅ bevestigd, ❌ onjuist; '
-                    'bij de varianten ook ⚠️ opmerking, ✏️ notatiefout, ℹ️ informatief.</p><table class="tbl">'
-                    f'{rows}</table></div></details>')
-        body.append(f'<p class="src">Het volledige rapport, de databases en de programma\'s: <a href="{REPO}">{REPO}</a>.</p>')
-        self.write('index.html', 'Overzicht', '\n'.join(body), pg)
+        body.append('<details class="more"><summary>' + t('Resultaten per hoofdstuk', 'Results per chapter')
+                    + '</summary><div><p>' + t('✅ bevestigd, ❌ onjuist; bij de varianten ook ⚠️ opmerking, ✏️ '
+                                               'notatiefout, ℹ️ informatief.',
+                                               '✅ confirmed, ❌ wrong; for the variations also ⚠️ remark, ✏️ notation '
+                                               'error, ℹ️ information.') + f'</p><table class="tbl">{rows}</table></div></details>')
+        body.append(f'<p class="src">' + t('Het volledige rapport (Nederlands), de databases en de programma\'s',
+                                           'The full report (Dutch), the databases and the programs')
+                    + f': <a href="{REPO}">{REPO}</a>.</p>')
+        self.write('index.html', t('Overzicht', 'Overview'), '\n'.join(body), pg)
 
     def opening_page(self):
         pg = self.page()
-        fig, i0 = pg.diagram(START, 'de beginstand, wit aan zet')
+        fig, i0 = pg.diagram(START, self.t('de beginstand, wit aan zet', 'the start position, white to move'))
         v0, legal0 = self.o.analyse(START)
-        body = ['<h1>De opening</h1>', fig,
-                f'<p>De beginstand is <strong>remise</strong>. Alle vijf eerste zetten van wit houden remise. '
-                f'Hieronder elke zet tot 3 ply met zijn waarde, sterkste eerst; klik op een zet om de stelling te '
-                f'zien. De waarden komen uit de opgeloste openingsboom (stellingen met meer dan 10 stukken) en de '
-                f'databases.</p>', '<div class="optree">']
+        body = [self.t('<h1>De opening</h1>', '<h1>The opening</h1>'), fig, self.t(
+                '<p>De beginstand is <strong>remise</strong>. Alle vijf eerste zetten van wit houden remise. Hieronder '
+                'elke zet tot 3 ply met zijn waarde, sterkste eerst; klik op een zet om de stelling te zien. De waarden '
+                'komen uit de opgeloste openingsboom (stellingen met meer dan 10 stukken) en de databases.</p>',
+                '<p>The start position is a <strong>draw</strong>. All five first moves of white keep the draw. Below, '
+                'every move to 3 plies with its value, strongest first; click a move to see the position. The values '
+                'come from the solved opening tree (positions with more than 10 pieces) and the databases.</p>'),
+                '<div class="optree">']
         for m1 in legal0:
             i1 = pg.child(i0, m1)
-            body.append(f'<h3><a class="m1" href="#" data-i="{i1}">1. {m1[0].replace("x", "×")}</a> '
+            body.append(f'<h3><a class="m1" href="#" data-i="{i1}">1. {pg.label('6x6', m1)}</a> '
                         f'<span class="val">{m1[1]}</span></h3>')
             for m2 in self.o.analyse(m1[2])[1]:
                 i2 = pg.child(i1, m2)
-                rep = [f'<a class="m2" href="#" data-i="{pg.child(i2, m3)}">2. {m3[0].replace("x", "×")}</a> '
+                rep = [f'<a class="m2" href="#" data-i="{pg.child(i2, m3)}">2. {pg.label('6x6', m3)}</a> '
                        f'<span class="val">{m3[1]}</span>' for m3 in self.o.analyse(m2[2])[1]]
-                body.append(f'<p><a class="m1" href="#" data-i="{i2}">1. … {m2[0].replace("x", "×")}</a> '
+                body.append(f'<p><a class="m1" href="#" data-i="{i2}">1. … {pg.label('6x6', m2)}</a> '
                             f'<span class="val">{m2[1]}</span> — ' + ', '.join(rep) + '</p>')
         body.append('</div>')
-        self.write('opening.html', 'De opening', '\n'.join(body), pg)
+        self.write('opening.html', self.t('De opening', 'The opening'), '\n'.join(body), pg)
 
 
 def main():
@@ -444,16 +507,18 @@ def main():
     ap.add_argument('--attach', default=str(ROOT / 'data' / '6x6_10.dtm'))
     ap.add_argument('--out', default=str(ROOT / '_site' / 'strategie_der_36_velden'))
     args = ap.parse_args()
-    out = Path(args.out)
-    out.mkdir(parents=True, exist_ok=True)
-    for f in out.glob('*.html'):
-        f.unlink()
-    site = Site(Engine(args.engine, 10, args.db, args.attach), out)
-    for k in range(len(PAGES)):
-        n = site.chapter_page(k)
-        print(f'{PAGES[k][0]}: {n} positions', file=sys.stderr)
-    site.index_page()
-    site.opening_page()
+    eng = Engine(args.engine, 10, args.db, args.attach)
+    for lang in ('nl', 'en'):
+        out = Path(args.out) / ('' if lang == 'nl' else 'en')
+        out.mkdir(parents=True, exist_ok=True)
+        for f in out.glob('*.html'):
+            f.unlink()
+        site = Site(eng, out, lang)
+        for k in range(len(PAGES)):
+            n = site.chapter_page(k)
+            print(f'{lang} {PAGES[k][0]}: {n} positions', file=sys.stderr)
+        site.index_page()
+        site.opening_page()
     (out / '.nojekyll').write_text('')
 
 

@@ -15,27 +15,52 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
-SITES = [
-    ('strategie_der_36_velden/', 'Strategie der 36 velden',
-     'Herm Jan Brascamps reeks over het 6×6-bord (2016), hoofdstuk voor hoofdstuk nagerekend met exacte databases tot '
-     '10 stukken; plus de oplossing van de beginstand: remise.'),
-    ('drie_tegen_een_is_gemeen/', 'Drie tegen een is gemeen',
-     'Twee en drie dammen tegen één op borden van elke afmeting: de winst op 5×6, de families, de vangstellingen en '
-     '10×10 met één veld weg.'),
-    ('checkers/', 'Checkers: 3 dammen tegen 2',
-     'Korte dammen op borden van elke afmeting: blokkades, de vesting in de dubbele hoek en de oppositie.'),
-]
+SITES = {
+    'nl': [
+        ('strategie_der_36_velden/', 'Strategie der 36 velden',
+         'Herm Jan Brascamps reeks over het 6×6-bord (2016), hoofdstuk voor hoofdstuk nagerekend met exacte databases tot '
+         '10 stukken; plus de oplossing van de beginstand: remise.'),
+        ('drie_tegen_een_is_gemeen/', 'Drie tegen een is gemeen',
+         'Twee en drie dammen tegen één op borden van elke afmeting: de winst op 5×6, de families, de vangstellingen en '
+         '10×10 met één veld weg.'),
+        ('checkers/', 'Checkers: 3 dammen tegen 2',
+         'Korte dammen op borden van elke afmeting: blokkades, de vesting in de dubbele hoek en de oppositie.'),
+    ],
+    'en': [
+        ('../strategie_der_36_velden/en/', 'Strategie der 36 velden',
+         'Herm Jan Brascamp\'s series on the 6×6 board (2016), checked chapter by chapter with exact databases up to 10 '
+         'pieces; plus the solution of the start position: a draw.'),
+        ('../drie_tegen_een_is_gemeen/en/', 'Drie tegen een is gemeen',
+         'Two and three kings against one on boards of any size: the win on 5×6, the families, the trapping positions '
+         'and 10×10 with one square removed.'),
+        ('../checkers/en/', 'Checkers: 3 kings against 2',
+         'Short kings on boards of any size: blockades, the double-corner fortress and opposition.'),
+    ],
+}
+
+TEXT = {
+    'nl': ('Eindspeldatabases voor het damspel',
+           'Exacte eindspeldatabases voor het internationale damspel en voor checkers, op borden van elke afmeting: elke '
+           'stelling is uitgerekend tot het einde van de partij, met de afstand in ply. Drie sites spelen klassieke '
+           'analyses na, met klikbare zetten en bij elke stelling de waarde en alle zetten.',
+           'De programma\'s, databases en rapporten', 'en/index.html', 'English'),
+    'en': ('Endgame databases for draughts',
+           'Exact endgame databases for international draughts and for checkers, on boards of any size: every position is '
+           'computed to the end of the game, with the distance in plies. Three sites replay classic analyses, with '
+           'clickable moves and for every position the value and all moves.',
+           'The programs, databases and reports', '../index.html', 'Nederlands'),
+}
 
 OLD = ['index.html', 'opening.html', 'voorbeeld-7-22.html'] + [f'{p}.html' for p in (
     'h1', 'h2', 'h3', 'h3-3', 'h4', 'h5a', 'h5b', 'h5c', 'h5d', 'h6a', 'h6b', 'h7', 'h6a-opl', 'h6-opl1', 'h6-opl2',
     'h6-opl3', 'h7-2', 'h7-3', 'h7-4', 'h7-5', 'h7-6', 'h7-7', 'h8', 'h9')]
 
 PAGE = '''<!DOCTYPE html>
-<html lang="nl">
+<html lang="{lang}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>egdb-draughts · eindspeldatabases</title>
+<title>egdb-draughts · {h1}</title>
 <style>
 :root { --bg: #fbfaf7; --fg: #1d1d1b; --muted: #6b6a66; --rule: #e3e0d8; --panel: #f3f1ec; --link: #1f5f8b; }
 @media (prefers-color-scheme: dark) {
@@ -54,18 +79,19 @@ a { color: var(--link); }
 .hub strong { display: block; font-size: 20px; margin-bottom: 6px; color: var(--link); }
 .hub span { font-size: 15px; color: var(--muted); }
 .src { font: 14px system-ui, sans-serif; color: var(--muted); }
+.lang { float: right; font: 14px system-ui, sans-serif; color: var(--muted); border: 1px solid var(--rule); border-radius: 6px;
+  padding: 2px 8px; text-decoration: none; }
 </style>
 </head>
 <body>
 <main>
-<h1>Eindspeldatabases voor het damspel</h1>
-<p>Exacte eindspeldatabases voor het internationale damspel en voor checkers, op borden van elke afmeting: elke
-stelling is uitgerekend tot het einde van de partij, met de afstand in ply. Drie sites spelen klassieke analyses na,
-met klikbare zetten en bij elke stelling de waarde en alle zetten.</p>
+<a class="lang" href="{alt}">{altname}</a>
+<h1>{h1}</h1>
+<p>{intro}</p>
 <div class="hub">
 {cards}
 </div>
-<p class="src">De programma's, databases en rapporten: <a href="https://github.com/rhalbersma/egdb-draughts">github.com/rhalbersma/egdb-draughts</a>.</p>
+<p class="src">{src}: <a href="https://github.com/rhalbersma/egdb-draughts">github.com/rhalbersma/egdb-draughts</a>.</p>
 </main>
 </body>
 </html>
@@ -81,8 +107,16 @@ def main():
     args = ap.parse_args()
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    cards = '\n'.join(f'<a href="{u}"><strong>{t}</strong><span>{d}</span></a>' for u, t, d in SITES)
-    (out / 'index.html').write_text(PAGE.replace('{cards}', cards))
+    for lang in ('nl', 'en'):
+        h1, intro, src, alt, altname = TEXT[lang]
+        cards = '\n'.join(f'<a href="{u}"><strong>{t}</strong><span>{d}</span></a>' for u, t, d in SITES[lang])
+        page = PAGE
+        for k, v in (('{cards}', cards), ('{lang}', lang), ('{h1}', h1), ('{intro}', intro), ('{src}', src),
+                     ('{alt}', alt), ('{altname}', altname)):
+            page = page.replace(k, v)
+        d = out if lang == 'nl' else out / 'en'
+        d.mkdir(parents=True, exist_ok=True)
+        (d / 'index.html').write_text(page)
     for f in OLD[1:]:
         target = 'strategie_der_36_velden/' + ('h7-7.html#d7.22' if f == 'voorbeeld-7-22.html' else f)
         (out / f).write_text(REDIRECT.format(url=target))

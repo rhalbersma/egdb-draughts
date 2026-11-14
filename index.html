@@ -66,6 +66,22 @@ p.var { margin: 10px 0; }
 .note { font-size: 15px; color: var(--muted); }
 .legend { font: 13px/1.6 system-ui, sans-serif; color: var(--muted); border-top: 1px solid var(--rule); margin-top: 32px; padding-top: 12px; }
 .src { font-size: 14px; color: var(--muted); }
+section.diag { clear: both; border-top: 1px solid var(--rule); padding-top: 8px; margin-top: 28px; }
+section.diag h3 { font-size: 19px; margin: 6px 0 4px; }
+.claim { margin: 6px 0; }
+.moves { font-size: 15px; }
+.issues { font: 14px/1.5 system-ui, sans-serif; color: var(--muted); margin: 2px 0 0; padding-left: 18px; }
+.refute { display: flow-root; background: var(--panel); border-left: 3px solid var(--err); padding: 6px 12px; margin: 10px 0; border-radius: 0 6px 6px 0; }
+.refute .t { font: 13px system-ui, sans-serif; color: var(--muted); }
+.toc { list-style: none; padding: 0; }
+.toc li { padding: 5px 0; border-bottom: 1px solid var(--rule); }
+.toc .h { color: var(--muted); font: 14px system-ui, sans-serif; display: inline-block; min-width: 150px; }
+.toc .cnt { font: 13px system-ui, sans-serif; color: var(--muted); margin-left: 8px; }
+.toc .orig { font: 13px system-ui, sans-serif; margin-left: 8px; }
+.pager { display: flex; justify-content: space-between; font: 14px system-ui, sans-serif; margin-top: 40px; clear: both; }
+.pager a, .toc a, .src a, main p a:not(.m1):not(.m2) { color: var(--link); }
+.optree h3 { font-size: 18px; margin: 22px 0 4px; }
+.optree p { margin: 4px 0 4px 18px; }
 @media (max-width: 760px) {
   .wrap { grid-template-columns: 1fr; gap: 16px; }
   .side { position: sticky; top: 0; background: var(--bg); padding-bottom: 6px; z-index: 2; }
@@ -76,7 +92,7 @@ p.var { margin: 10px 0; }
 </style>
 </head>
 <body>
-<header><a href="index.html">Strategie der 36 velden · gecontroleerd</a><a href="https://www.hijkendtc.nl/strategie-der-36-velden-hjb/">het origineel</a></header>
+<header><a href="index.html">Strategie der 36 velden · gecontroleerd</a><a href="opening.html">opening</a><a href="https://www.hijkendtc.nl/strategie-der-36-velden-hjb/">het origineel</a></header>
 <div class="wrap">
   <aside class="side">
     <div id="board"></div>
@@ -89,7 +105,48 @@ p.var { margin: 10px 0; }
     <div class="panel" id="panel"></div>
   </aside>
   <main>
-<figure><a class="diagram" href="#" data-i="0"><div class="smallboard" data-fen="W:W13,14,15,16,17,18:B1,2,3,4,5,6"></div></a><figcaption>de beginstand</figcaption></figure><h1>Strategie der 36 velden</h1><p>Herm Jan Brascamp, <em>Strategie der 36 velden</em> (<a href="https://www.hijkendtc.nl/strategie-der-36-velden-hjb/">hijkendtc.nl</a>), nagerekend met exacte eindspeldatabases voor het 6×6-bord.</p><ul><li><a href="voorbeeld-7-22.html">7.7 Conclusie: diagram 7.22</a></li></ul>
+<h1>Strategie der 36 velden</h1>
+<figure><a class="diagram" href="#" data-i="0"><div class="smallboard" data-fen="W:W13,14,15,16,17,18:B1,2,3,4,5,6"></div></a><figcaption>de beginstand</figcaption></figure>
+<p>Herm Jan Brascamp, <em>Strategie der 36 velden</em> (<a href="https://www.hijkendtc.nl/strategie-der-36-velden-hjb/">hijkendtc.nl</a>), 24 secties met ruim 100 diagrammen, systematisch nagerekend met exacte databases voor het 6×6-bord. Elke stelling is opgezocht of uitgerekend tot het einde van de partij: winst, remise of verlies, met de afstand tot het einde in ply (DTM).</p>
+<p>Herm Jan Brascamp schreef "dit werkje", zoals hij het zelf noemt, in het najaar van 2016, zonder computer. In de inleiding merkt hij op: "Een groot voordeel is natuurlijk, dat er geen damprogramma voor het 36-ruitenbord bestaat." Het gaat hem om "overmachtseindspelen": "De witte strategie is er op gericht, tot drie dammen te komen met behoud van de lange lijn. Zwart probeert de lange lijn te veroveren of de doorgang van de witte schijven te belemmeren."</p>
+<h3>Voorgeschiedenis</h3>
+<p>Brascamp beschrijft zelf waar zijn werk op voortbouwt. In de inleiding: "J.F. Moser schreef in 1966 "Strategie der honderd velden". In de jaren '90 hebben Jannes van der Wal, Harm Wiersma en Hans Jansen het damspel op het 6×6-bord geanalyseerd vanuit de beginstand." En over <em>De randslag-opening</em> (hoofdstuk 7): "Rond kerstmis 2013 heeft de schrijver, met aanwijzingen van Hans Jansen, studie gemaakt van deze opening. De conclusie was toen, dat wit met 3. 16-13 ging winnen. Recent onderzoek, zoals beschreven in hoofdstuk 6 bij diagram 6.9, heeft geleid tot de nieuwe remise-conclusie. Bovendien werd eind 2013 als vaststaand aangenomen, dat 3. 16-13 de beste zet was […]. Ook onjuist! Moeilijk, dammen op het 6×6-bord."</p>
+<p>De databases beslissen beide vragen:</p>
+<ul><li><strong>De conclusie van kerstmis 2013 was juist:</strong> na 3. 16-13 wint wit (53 ply). De "nieuwe remise-conclusie" houdt geen stand. Diagram 6.9 is op zichzelf wel remise, maar in de hoofdvariant geeft 10. 4-1 de winst weg: 10. 12-8! wint. Daarmee vervalt ook de slotsom van 7.7 <em>Conclusie</em>, "dat zwart nog net remise kan bereiken na de opening 1. 13-11 6-8 2. 11×6 2×9??".</li><li><strong>"Ook onjuist!" klopt:</strong> 3. 16-13 is niet de beste zet. 3. 15-12 (hoofdstuk 7.1, <em>Een offervariant</em>) wint sneller, in 25 ply.</li><li>Over de beginstand, die in de jaren '90 werd geanalyseerd: die is remise (zie hieronder).</li></ul>
+<h3>Gemeten aan de databases</h3>
+<p>De analyse van het boek staat vrijwel overal overeind:</p>
+<ul><li>Van de 112 diagramclaims ("wit wint", "remise") kloppen er 97. Van de 15 die niet kloppen, gaan er 8 over de stellingen bij "bereikt wit helemaal niets" in hoofdstuk 4 (<em>Een zwarte schijf op 15 en een zwarte dam</em>), waarvan ik de stukopstelling zelf uit de tekst heb afgeleid (4.11c/d, 4.12b/c). Echte fouten van het boek zijn er 7: 7.3, 7.4, 7.6, 7.13, 7.22 en 8.7 (met wit en met zwart aan zet).</li><li>Van de 333 varianten zijn er 9 inhoudelijk onjuist. De 28 notatiefouten zijn tikfouten waarvan de bedoeling bijna altijd duidelijk is.</li><li>De winstsystemen van <em>De lange lijn</em>, <em>Een hinderlijke schijf</em>, <em>Een zwarte schijf op 15 en een zwarte dam</em>, de Scouppe-hoofdstukken en <em>Compositie op finesse 5</em> kloppen vrijwel volledig, net als <em>Het taaie eindspel</em> (hoofdstuk 9: alleen 2-7 wint, 49 ply, met de slotfinesse 21. 15-12!).</li><li>De fouten zitten bijna allemaal in <em>De randslag-opening</em> (hoofdstuk 7): stellingen met 8 tot 10 stukken waarin de winst 25 tot 50 ply diep ligt. Bij diagram 7.22 schrijft hij "Op drie van de vier zetten wint wit"; ook op de vierde, 7. … 7-10, wint wit, maar alleen met 10. 12-8!, gevolgd door een eindspel dat pas na 39 ply beslist is. Zulke lijnen zijn zonder computer nauwelijks te vinden.</li></ul>
+<p>Dit rapport is dus vooral een bevestiging van zijn werk. De weerleggingen hieronder laten zien waar de databases op die enkele plaatsen verder kijken.</p>
+<h2>Inhoud</h2>
+<p>De hoofdstukken in de volgorde van de website van het boek; per hoofdstuk de diagrammen, de varianten en de weerleggingen.</p>
+<ul class="toc">
+<li><span class="h">Hoofdstuk 1</span><a href="h1.html">Inleiding</a><span class="cnt">diagrammen ✅ 2 · varianten ✏️ 1 ✅ 3</span> <a class="orig" href="https://www.hijkendtc.nl/strategie-der-36-velden/">origineel</a></li>
+<li><span class="h">Hoofdstuk 2</span><a href="h2.html">De lange lijn</a><span class="cnt">diagrammen ✅ 4 · varianten ✅ 9</span> <a class="orig" href="https://www.hijkendtc.nl/strategie-der-36-velden-ii/">origineel</a></li>
+<li><span class="h">Hoofdstuk 3</span><a href="h3.html">Een hinderlijke schijf</a><span class="cnt">diagrammen ✅ 3 · varianten ℹ️ 3 ✏️ 2 ✅ 14 ⚠️ 1</span> <a class="orig" href="https://www.hijkendtc.nl/strategie-der-36-velden-2/">origineel</a></li>
+<li><span class="h">Hoofdstuk 3.3</span><a href="h3-3.html">Moeizame remise en luchtig slot</a><span class="cnt">diagrammen ✅ 1 · varianten ✅ 5 ❌ 1 ⚠️ 3</span> <a class="orig" href="https://www.hijkendtc.nl/strategie-der-36-velden-3/">origineel</a></li>
+<li><span class="h">Hoofdstuk 4</span><a href="h4.html">Een zwarte schijf op 15 en een zwarte dam</a><span class="cnt">diagrammen ✅ 14 ❌ 8 · varianten ✏️ 2 ✅ 17</span> <a class="orig" href="https://www.hijkendtc.nl/strategie-der-36-velden-hoofdstuk-4/">origineel</a></li>
+<li><span class="h">Hoofdstuk 5a</span><a href="h5a.html">Scouppe I</a><span class="cnt">diagrammen ✅ 15 · varianten ✅ 16</span> <a class="orig" href="https://www.hijkendtc.nl/scouppe/">origineel</a></li>
+<li><span class="h">Hoofdstuk 5b</span><a href="h5b.html">Scouppe Trucs</a><span class="cnt">diagrammen ✅ 4 · varianten ✅ 9</span> <a class="orig" href="https://www.hijkendtc.nl/scouppe-trucs/">origineel</a></li>
+<li><span class="h">Hoofdstuk 5c</span><a href="h5c.html">Scouppe: Dam op 17</a><span class="cnt">diagrammen ✅ 3 · varianten ✅ 7</span> <a class="orig" href="https://www.hijkendtc.nl/dam-op-17/">origineel</a></li>
+<li><span class="h">Hoofdstuk 5d</span><a href="h5d.html">Compositie op finesse 5</a><span class="cnt">diagrammen ✅ 1 · varianten ✏️ 3 ✅ 9 ❌ 1 ⚠️ 3</span> <a class="orig" href="https://www.hijkendtc.nl/compositie-op-finesse-5/">origineel</a></li>
+<li><span class="h">Hoofdstuk 6a</span><a href="h6a.html">Intermezzo: acht opgaven (sectie 6.1)</a><span class="cnt">diagrammen ✅ 2 · varianten ✏️ 1 ✅ 4 ⚠️ 3</span> <a class="orig" href="https://www.hijkendtc.nl/acht-opgaven/">origineel</a></li>
+<li><span class="h">Hoofdstuk 6b</span><a href="h6b.html">Zwaar manoeuvreren (sectie 6.2)</a><span class="cnt">diagrammen ✅ 2 · varianten ✅ 5</span> <a class="orig" href="https://www.hijkendtc.nl/zwaar-manouevreren/">origineel</a></li>
+<li><span class="h">Hoofdstuk 7</span><a href="h7.html">De randslag-opening</a><span class="cnt">diagrammen ✅ 1 · varianten ℹ️ 1 ✅ 4</span> <a class="orig" href="https://www.hijkendtc.nl/randslag/">origineel</a></li>
+<li><span class="h">Hoofdstuk 6a</span><a href="h6a-opl.html">Oplossingen (sectie 6.1)</a><span class="cnt">diagrammen ✅ 2 · varianten ✅ 12</span> <a class="orig" href="https://www.hijkendtc.nl/oplossingen/">origineel</a></li>
+<li><span class="h"></span><a href="h6-opl1.html">Oplossingen zwaar manoeuvreren I</a><span class="cnt">diagrammen ✅ 4 · varianten ✅ 8</span> <a class="orig" href="https://www.hijkendtc.nl/6-4-oplossingen-2-zwaar-manoeuvreren/">origineel</a></li>
+<li><span class="h"></span><a href="h6-opl2.html">Oplossingen zwaar manoeuvreren II</a><span class="cnt">diagrammen ✅ 1 · varianten ✏️ 1 ✅ 15</span> <a class="orig" href="https://www.hijkendtc.nl/6-5-oplossingen-3-de-stand-waar-alles-om-draait/">origineel</a></li>
+<li><span class="h"></span><a href="h6-opl3.html">Oplossingen zwaar manoeuvreren III</a><span class="cnt">diagrammen ✅ 6 · varianten ✏️ 2 ✅ 9</span> <a class="orig" href="https://www.hijkendtc.nl/6-6-oplossingen-4-toegift-nog-steeds-zwaar-manoeuvreren/">origineel</a></li>
+<li><span class="h">Hoofdstuk 7.2</span><a href="h7-2.html">De derde zet</a><span class="cnt">diagrammen ✅ 1 ❌ 1 · varianten ✏️ 3 ✅ 11 ❌ 3</span> <a class="orig" href="https://www.hijkendtc.nl/7-2-de-derde-zet/">origineel</a></li>
+<li><span class="h">Hoofdstuk 7.3</span><a href="h7-3.html">De vierde zet</a><span class="cnt">diagrammen ✅ 2 ❌ 2 · varianten ℹ️ 1 ✏️ 1 ✅ 12 ❌ 1</span> <a class="orig" href="https://www.hijkendtc.nl/7-3-de-vierde-zet/">origineel</a></li>
+<li><span class="h">Hoofdstuk 7.4</span><a href="h7-4.html">Naar voren</a><span class="cnt">diagrammen ✅ 4 ❌ 1 · varianten ℹ️ 1 ✅ 11 ❌ 2 ⚠️ 1</span> <a class="orig" href="https://www.hijkendtc.nl/7-4-naar-voren/">origineel</a></li>
+<li><span class="h">Hoofdstuk 7.5</span><a href="h7-5.html">Achteruit</a><span class="cnt">varianten ✏️ 3 ✅ 15 ⚠️ 1</span> <a class="orig" href="https://www.hijkendtc.nl/7-5-achteruit-de-zesde-zet/">origineel</a></li>
+<li><span class="h">Hoofdstuk 7.6</span><a href="h7-6.html">Een dijk van een stand</a><span class="cnt">diagrammen ✅ 3 · varianten ✏️ 2 ✅ 9</span> <a class="orig" href="https://www.hijkendtc.nl/7-6-een-dijk-van-een-stand/">origineel</a></li>
+<li><span class="h">Hoofdstuk 7.7</span><a href="h7-7.html">Conclusie</a><span class="cnt">diagrammen ✅ 1 ❌ 1 · varianten ✏️ 1 ✅ 8 ❌ 1</span> <a class="orig" href="https://www.hijkendtc.nl/7-7-conclusie/">origineel</a></li>
+<li><span class="h">Hoofdstuk 8.0</span><a href="h8.html">Een schijf op 4</a><span class="cnt">diagrammen ✅ 11 ❌ 2 · varianten ✏️ 1 ✅ 18 ⚠️ 1</span> <a class="orig" href="https://www.hijkendtc.nl/8-een-schijf-op-4/">origineel</a></li>
+<li><span class="h">Hoofdstuk 9.0</span><a href="h9.html">Het taaie eindspel</a><span class="cnt">diagrammen ✅ 10 · varianten ℹ️ 1 ✏️ 5 ✅ 43 ⚠️ 3</span> <a class="orig" href="https://www.hijkendtc.nl/9-het-taaie-eindspel/">origineel</a></li>
+</ul>
+<h2>De opening</h2><p>Met de databases tot en met 10 stukken is ook de beginstand van 6×6 opgelost: <a href="opening.html">remise, met alle openingen tot 3 ply</a>.</p>
+<p class="src">Het volledige rapport, de databases en de programma's: <a href="https://github.com/rhalbersma/egdb-draughts">https://github.com/rhalbersma/egdb-draughts</a>.</p>
 <p class="legend">Klik op een zet om de stelling op het grote bord te zien; ◀ ▶ (of de pijltjestoetsen) lopen door de
 variant. Waarden gelden voor de partij aan zet; bij een zet voor wie hem doet, met n het aantal ply tot het einde van
 de partij, de zet meegeteld: W = winst (oneven), L = verlies (even), D = remise.

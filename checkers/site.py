@@ -202,6 +202,8 @@ opposition. On odd × odd boards with playable corners there are no exceptions a
             fig, i0 = pg.diagram(fen, t(f'8×8, wit aan zet: {v}', f'8×8, white to move: {v}'), gid=k88)
             h, *_ = pg.best_line(fen, 80, start=i0)
             body += [head, fig, cap.format(v=v[1:]), f'<p class="var">{h}</p>', '<div style="clear:both"></div>']
+            if fen == 'W:WK4,K8,K29:BK1,K28':
+                body += self.traps88(pg, k88, e88)
         fen = 'W:WK1,K2,K3:BK10,K11'
         fig, i0 = pg.diagram(fen, t('7×8, wit aan zet', '7×8, white to move'), gid=k78)
         v, legal = e78.analyse(fen)
@@ -226,6 +228,80 @@ rate 0.0% with no white king on the edge, 0.5% with three), and black holding bo
                    '<p>After 1. … e5-d4 white can keep its kings forever but never breaks out: black cannot force a '
                    'capture in any of the 901,577 positions reachable without captures.</p>')]
         self.write('index.html', 'Overzicht', '\n'.join(body), pg, k78)
+
+    @staticmethod
+    def exchange(e, fen):
+        """white to move: a quiet offer after which black must capture and white captures back (3-2 -> 2-1), as the
+        moves (offer, capture, recapture), or None"""
+        count = lambda f: tuple(len([x for x in side[1:].split(',') if x]) for side in f.split(':')[1:])
+        for off in e.analyse(fen)[1]:
+            if count(off[2]) != (3, 2):
+                continue
+            replies = e.analyse(off[2])[1]
+            if not replies or any(count(r[2]) != (2, 2) for r in replies):
+                continue
+            backs = [next((m for m in e.analyse(r[2])[1] if count(m[2])[1] < 2), None) for r in replies]
+            if all(backs):
+                return off, replies[0], backs[0]
+        return None
+
+    def traps88(self, pg, k88, e88):
+        """the trap in both phases on 8x8: every shuttle move of black allows a forced exchange"""
+        t = self.t
+        body = [t('<h2>3 tegen 2 op 8×8: de val in beide fasen</h2>', '<h2>3 against 2 on 8×8: the trap in both phases</h2>'),
+                t('<p>Wit breekt de dubbele hoeken met een val: een opstelling waarin elke pendelzet van zwart een '
+                  'gedwongen ruil toelaat: met een rustige zet dwingt wit zwart een witte dam te slaan, wit slaat terug, en 2 tegen 1 wint. Zwart '
+                  'heeft twee dammen en dus twee pendelzetten; de val moet ze allebei straffen, ook als de ruil de andere zwarte dam treft. Of zo\'n val werkt, hangt '
+                  'af van de fase: de pariteit van de som van de rijen van alle dammen, met zwart aan zet. Die verandert '
+                  'zonder slag nooit, want dammen kunnen geen tempo verliezen; dat is de oppositie. De database telt de '
+                  'vallen met zwart aan zet en beide zwarte dammen op de randvelden van twee dubbele hoeken:</p>',
+                  '<p>White breaks the double corners with a trap: a set-up in which every shuttle move of black allows a '
+                  'forced exchange: with a quiet move white forces black to capture a white king, white captures back, and 2 against 1 wins. '
+                  'Black has two kings and therefore two shuttle moves; the trap has to punish both, even when the exchange hits the other black king. Whether such a trap '
+                  'works depends on the phase: the parity of the sum of the ranks of all kings, with black to move. It '
+                  'never changes without a capture, since kings cannot lose a tempo; that is the opposition. The database '
+                  'counts the traps with black to move and both black kings on the edge squares of two double corners:</p>'),
+                t('<table class="tbl"><tr><th>Bord</th><th>Vallen in fase 0</th><th>Vallen in fase 1</th><th>Gevolg</th></tr>'
+                  '<tr><td>8×8</td><td>3</td><td>3</td><td>de vesting valt altijd</td></tr>'
+                  '<tr><td>8×9, 9×10</td><td>3</td><td>0</td><td>de oppositie beslist: de helft remise</td></tr>'
+                  '<tr><td>10×10</td><td>0</td><td>0</td><td>de vesting houdt</td></tr></table>',
+                  '<table class="tbl"><tr><th>Board</th><th>Traps in phase 0</th><th>Traps in phase 1</th><th>Consequence</th></tr>'
+                  '<tr><td>8×8</td><td>3</td><td>3</td><td>the fortress always falls</td></tr>'
+                  '<tr><td>8×9, 9×10</td><td>3</td><td>0</td><td>the opposition decides: half are draws</td></tr>'
+                  '<tr><td>10×10</td><td>0</td><td>0</td><td>the fortress holds</td></tr></table>'),
+                t('<p>Op 8×8 heeft wit dus in elke fase een val en kiest hij de val die bij de oppositie past. In de vallen '
+                  'staan de drie witte dammen op een van de twee lange diagonalen die de dubbele hoeken verbinden, tussen '
+                  'de zwarte dammen in; welke diagonaal, bepaalt de fase. Alleen op 8×8 lopen beide diagonalen van de ene '
+                  'dubbele hoek naar de andere. De tellingen komen uit '
+                  '<a href="https://github.com/rhalbersma/egdb-draughts/blob/main/checkers/traps.py"><code>traps.py</code></a>.</p>',
+                  '<p>On 8×8 white therefore has a trap in each phase and picks the one that fits the opposition. In the '
+                  'traps the three white kings stand on one of the two long diagonals that connect the double corners, '
+                  'between the black kings; which diagonal decides the phase. Only on 8×8 do both diagonals run from one '
+                  'double corner to the other. The counts come from '
+                  '<a href="https://github.com/rhalbersma/egdb-draughts/blob/main/checkers/traps.py"><code>traps.py</code></a>.</p>')]
+        for fen, ph in (('B:WK14,K18,K23:BK5,K32', 1), ('B:WK6,K15,K24:BK5,K32', 0)):
+            v, legal = e88.analyse(fen)
+            fig, i0 = pg.diagram(fen, t(f'8×8, zwart aan zet (fase {ph}): {v}', f'8×8, black to move (phase {ph}): {v}'),
+                                 gid=k88)
+            lines = []
+            for m in legal:
+                nb = [int(x.lstrip('K')) for x in m[2].split(':')[2][1:].split(',') if x]
+                if not set(nb) & {1, 28}:          # only the shuttle moves 5-1 and 32-28
+                    continue
+                ex = self.exchange(e88, m[2])
+                i1 = pg.child(i0, m)
+                parts = [f'<a class="m1" href="#" data-i="{i1}">1. … {pg.label(k88, m)}</a>']
+                i = i1
+                for k, mv in enumerate(ex):
+                    i = pg.child(i, mv)
+                    pre = '2. ' if k == 0 else ('3. ' if k == 2 else '')
+                    parts.append(f'<a class="m1" href="#" data-i="{i}">{pre}{pg.label(k88, mv)}</a>')
+                lines.append(' '.join(parts))
+            body += [fig, t('<p>Elke pendelzet van zwart wordt gestraft: ', '<p>Every shuttle move of black is punished: ')
+                     + '; '.join(lines) + t(', en 2 tegen 1 wint. Alle zetten van zwart: ',
+                                            ', and 2 against 1 wins. All moves of black: ')
+                     + self.moves_list(pg, i0, legal, '1. … ') + '.</p>', '<div style="clear:both"></div>']
+        return body
 
     def vesting(self):
         k89, e89 = self.engine(9, 8, 1)

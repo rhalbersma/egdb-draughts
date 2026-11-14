@@ -16,7 +16,7 @@ Values are backed up as intervals [lo, hi] (-1 loss, 0 draw, 1 win, for the side
 "<= Draw" results of the checkers proof (Schaeffer et al., Science 2007). Where the root or an opening
 is not decided, the unknown leaves that matter are listed.
 
-usage: opening_solve_6x6.py path/to/egdb_6x6 [--db data/6x6_le10.db] [--table 3] [--out results/opening_6x6]
+usage: opening_solve_6x6.py path/to/egdb_6x6 [--db data/6x6_le10.db] [--table 3] [--out opening_6x6]
                             [--dtm-db data/6x6_le9.db]
        opening_solve_6x6.py path/to/egdb_6x6 --db data/6x6_le9.db --attach data/6x6_10.dtm --dtm [--table 4]
 """
@@ -118,7 +118,7 @@ def main():
     ap.add_argument('--db', default='data/6x6_le10.db')
     ap.add_argument('--table', type=int, default=3)
     ap.add_argument('--tree', type=int, default=None, help='depth of the stored tree with distances (default: --table)')
-    ap.add_argument('--out', default='results/opening_6x6')
+    ap.add_argument('--out', default=str(Path(__file__).resolve().parent / 'opening_6x6'))
     ap.add_argument('--attach', default=None, help='layer to attach after loading --db (e.g. data/6x6_10.dtm)')
     ap.add_argument('--dtm', action='store_true', help='the databases have exact DTM: compute the distances with the same engine')
     ap.add_argument('--dtm-db', default=None, help='database with exact DTM (e.g. data/6x6_le9.db) for the distances')
@@ -341,7 +341,7 @@ def main():
     walk_tree(START, [])
     rows.sort(key=lambda r: tuple(numeric(m) for m in r[0]))
     res = Counter(label(*iv[f], f[0], None, True)[:1] for _, f in rows)
-    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'strategie36'))
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     from board import diagram
     diagrams = ['## Diagrammen', '', 'w/b = witte/zwarte schijf, W/B = dam.', '',
                 f'Beginstand, wit aan zet: **{lab(START, False)}**', '', '```text', diagram(START), '```', '']

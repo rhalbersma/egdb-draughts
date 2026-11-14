@@ -3,26 +3,26 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{TITLE}} · Strategie der 36 velden</title>
+<title>{{TITLE}} · {{SITE}}</title>
 <style>
 :root {
   --bg: #fbfaf7; --fg: #1d1d1b; --muted: #6b6a66; --rule: #e3e0d8; --panel: #f3f1ec;
   --light: #efe6d2; --dark: #9c7a54; --hl: #d8b24a; --num: rgba(255,255,255,.75);
   --wpiece: #fbf8f1; --wstroke: #4a4440; --bpiece: #2a2623; --bstroke: #000;
   --link: #1f5f8b; --m2: #5b7d3a; --err: #b3261e; --only: #8a5a00; --db: #6d4aa8;
-  --active: #fff1b8;
+  --active: #fff1b8; --lake: #8fb3c9;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #161514; --fg: #e9e6df; --muted: #a29e95; --rule: #34312d; --panel: #201e1c;
     --light: #c9b99a; --dark: #6e5236; --hl: #c79a2a; --num: rgba(255,255,255,.6);
-    --link: #7fb6dd; --m2: #9cc06e; --err: #f2766d; --only: #e0b04f; --db: #b79cf0; --active: #4a4020;
+    --link: #7fb6dd; --m2: #9cc06e; --err: #f2766d; --only: #e0b04f; --db: #b79cf0; --active: #4a4020; --lake: #3d5a6c;
   }
 }
 :root[data-theme="dark"] {
   --bg: #161514; --fg: #e9e6df; --muted: #a29e95; --rule: #34312d; --panel: #201e1c;
   --light: #c9b99a; --dark: #6e5236; --hl: #c79a2a; --num: rgba(255,255,255,.6);
-  --link: #7fb6dd; --m2: #9cc06e; --err: #f2766d; --only: #e0b04f; --db: #b79cf0; --active: #4a4020;
+  --link: #7fb6dd; --m2: #9cc06e; --err: #f2766d; --only: #e0b04f; --db: #b79cf0; --active: #4a4020; --lake: #3d5a6c;
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--fg);
@@ -117,6 +117,7 @@ de partij, de zet meegeteld: W = winst (oneven), L = verlies (even), D = remise.
 </div>
 <script>
 const POS = {{DATA}};
+const GEOMS = {{GEOMS}};
 let cur = 0, showNums = true, timer = null;
 
 function parse(fen) {
@@ -132,19 +133,30 @@ function parse(fen) {
   return cells;
 }
 
-function svg(fen, last, nums) {
-  const cells = parse(fen), hl = new Set(last || []);
-  let s = '<svg viewBox="0 0 6 6" xmlns="http://www.w3.org/2000/svg">';
-  for (let r = 0; r < 6; r++) for (let c = 0; c < 6; c++) {
-    const dark = (r + c) % 2 === 1;
-    s += `<rect x="${c}" y="${r}" width="1" height="1" fill="var(--${dark ? 'dark' : 'light'})"/>`;
-    if (!dark) continue;
-    const sq = r * 3 + Math.floor(c / 2) + 1;
-    if (hl.has(sq)) s += `<rect x="${c}" y="${r}" width="1" height="1" fill="var(--hl)" opacity=".55"/>`;
-    if (nums) s += `<text x="${c + .06}" y="${r + .22}" font-size=".19" font-family="system-ui,sans-serif" fill="var(--num)">${sq}</text>`;
+// board geometry: GEOMS[id] = {w, h, sq: {pdn: [file, rank]}, lake: [[file, rank]], alg: bool}
+// rank 0 is the bottom row; every playable or removed square is a dark square
+function svg(fen, last, nums, gid) {
+  const G = GEOMS[gid], cells = parse(fen), hl = new Set(last || []);
+  const at = {};
+  for (const [n, [f, r]] of Object.entries(G.sq)) at[f + ',' + r] = +n;
+  const lake = new Set((G.lake || []).map(([f, r]) => f + ',' + r));
+  let s = `<svg viewBox="0 0 ${G.w} ${G.h}" xmlns="http://www.w3.org/2000/svg">`;
+  for (let y = 0; y < G.h; y++) for (let c = 0; c < G.w; c++) {
+    const key = c + ',' + (G.h - 1 - y), sq = at[key];
+    if (lake.has(key)) {
+      s += `<rect x="${c}" y="${y}" width="1" height="1" fill="var(--lake)"/>`;
+      continue;
+    }
+    s += `<rect x="${c}" y="${y}" width="1" height="1" fill="var(--${sq ? 'dark' : 'light'})"/>`;
+    if (!sq) continue;
+    if (hl.has(sq)) s += `<rect x="${c}" y="${y}" width="1" height="1" fill="var(--hl)" opacity=".55"/>`;
+    if (nums) {
+      const t = G.alg ? String.fromCharCode(97 + c) + (G.h - y) : sq;
+      s += `<text x="${c + .06}" y="${y + .22}" font-size=".19" font-family="system-ui,sans-serif" fill="var(--num)">${t}</text>`;
+    }
     const p = cells[sq];
     if (!p) continue;
-    const w = p === 'w' || p === 'W', cx = c + .5, cy = r + .5;
+    const w = p === 'w' || p === 'W', cx = c + .5, cy = y + .5;
     const fill = w ? 'var(--wpiece)' : 'var(--bpiece)', stroke = w ? 'var(--wstroke)' : 'var(--bstroke)';
     s += `<circle cx="${cx}" cy="${cy + .035}" r=".37" fill="rgba(0,0,0,.25)"/>`;
     s += `<circle cx="${cx}" cy="${cy}" r=".37" fill="${fill}" stroke="${stroke}" stroke-width=".03"/>`;
@@ -161,7 +173,7 @@ function go(i) {
   if (i === null || i === undefined || i < 0 || i >= POS.length) return;
   cur = i;
   const p = POS[i];
-  document.getElementById('board').innerHTML = svg(p.f, p.last, showNums);
+  document.getElementById('board').innerHTML = svg(p.f, p.last, showNums, p.g);
   document.querySelectorAll('a.cur').forEach(a => a.classList.remove('cur'));
   document.querySelectorAll(`a[data-i="${i}"]`).forEach(a => a.classList.add('cur'));
   const side = p.f[0] === 'W' ? 'wit' : 'zwart';
@@ -197,7 +209,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'ArrowLeft') { stop(); go(POS[cur].prev); }
   if (e.key === 'ArrowRight') { stop(); go(POS[cur].next); }
 });
-document.querySelectorAll('.smallboard').forEach(d => { d.innerHTML = svg(d.dataset.fen, null, false); });
+document.querySelectorAll('.smallboard').forEach(d => { d.innerHTML = svg(d.dataset.fen, null, false, d.dataset.g); });
 const first = document.querySelector('figure a[data-i]');
 go(first ? +first.dataset.i : 0);
 </script>

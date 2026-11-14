@@ -60,7 +60,7 @@ databases op die enkele plaatsen verder kijken.
 ### De beginstand van 6×6 is remise
 
 Met de databases tot en met 10 stukken en de volledige openingsboom is de beginstand exact opgelost: remise
-(details en de tabel van alle 106 openingen van 3 ply in [`results/opening_6x6.md`](../results/opening_6x6.md)).
+(details en de tabel van alle 106 openingen van 3 ply in [`opening/opening_6x6.md`](opening/opening_6x6.md)).
 Alle vijf eerste zetten van wit houden remise. Na 1. 13-11 6-8 2. 11×6 is het remise, maar 2. … 2×9?? (de
 randslag van hoofdstuk 7) verliest.
 

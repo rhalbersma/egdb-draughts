@@ -43,13 +43,14 @@ def geom_6x6():
         r = (n - 1) // 3
         c = 2 * ((n - 1) % 3) + (1 if r % 2 == 0 else 0)
         sq[n] = [c, 5 - r]
-    return {'w': 6, 'h': 6, 'sq': sq, 'lake': [], 'alg': False}
+    return {'w': 6, 'h': 6, 'sq': sq, 'lake': [], 'pref': 'num'}
 
 
 class FastEngine:
     """egdb_fast --serve for one board and material (the databases are built at start, in seconds)."""
 
     def __init__(self, exe, *args):
+        self.args = [str(a) for a in args]
         self.p = subprocess.Popen([str(exe), *map(str, args), '--serve', '--no-text'], stdin=subprocess.PIPE,
                                   stdout=subprocess.PIPE, text=True, bufsize=1)
         while True:
@@ -84,7 +85,11 @@ class FastEngine:
                 sq[int(t[1])] = [int(t[2]), int(t[3])]
             elif t[0] == 'lake':
                 lake.append([int(t[1]), int(t[2])])
-        return {'w': w, 'h': h, 'parity': parity, 'sq': sq, 'lake': lake, 'alg': True}
+        # the standard notation of the board: numeric on the boards of a game (8x8 checkers, 10x10 international
+        # draughts), algebraic on all others
+        checkers = 'checkers' in self.args
+        standard = (w, h) == ((8, 8) if checkers else (10, 10))
+        return {'w': w, 'h': h, 'parity': parity, 'sq': sq, 'lake': lake, 'pref': 'num' if standard else 'alg'}
 
     def analyse(self, fen):
         if fen not in self.cache:
@@ -112,7 +117,6 @@ class Page:
         self.geoms = {}
         self.oracles = {}
         self.seen = set()
-        self.notation = 'num'          # default notation of the page: 'num' or 'alg' (the viewer can switch)
 
     def use(self, gid, oracle, geom):
         self.geoms[gid] = geom
@@ -144,7 +148,8 @@ class Page:
     def label(self, gid, mv):
         """the notation of a move as an element that the notation switch can change"""
         num, alg = self.notations(gid, mv)
-        return f'<span class="mv" data-n="{num}" data-a="{alg}">{num if self.notation == "num" else alg}</span>'
+        pref = self.geoms[gid].get('pref', 'num')
+        return f'<span class="mv" data-g="{gid}" data-n="{num}" data-a="{alg}">{num if pref == "num" else alg}</span>'
 
     def child(self, prev, mv):
         return self.add(mv[2], squares(mv[3] if len(mv) > 3 else mv[0]), prev)
@@ -284,7 +289,7 @@ def write_page(path, title, nav, body, page, site_title, lang='nl'):
            .replace('{{T_FWD}}', u['fwd']).replace('{{T_NUMS}}', u['nums']).replace('{{T_NOTA}}', u['nota'])
            .replace('{{LEGEND}}', u['legend']).replace('{{UI}}', json.dumps(u['js'], ensure_ascii=False)))
     geoms = json.dumps(page.geoms, separators=(',', ':'))
-    out = (tpl.replace('{{NOTATION}}', page.notation).replace('{{TITLE}}', esc(title)).replace('{{SITE}}', esc(site_title)).replace('{{NAV}}', nav)
+    out = (tpl.replace('{{TITLE}}', esc(title)).replace('{{SITE}}', esc(site_title)).replace('{{NAV}}', nav)
            .replace('{{BODY}}', body).replace('{{GEOMS}}', geoms).replace('{{DATA}}', page.data()))
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     Path(path).write_text(out)

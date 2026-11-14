@@ -59,7 +59,6 @@ class Site:
 
     def page(self, *boards):
         pg = Page()
-        pg.notation = 'alg'
         for gid, eng in boards:
             pg.use(gid, eng, eng.g)
         return pg

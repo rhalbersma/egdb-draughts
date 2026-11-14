@@ -114,6 +114,7 @@ a.cur { background: var(--active); }
 blockquote { margin: 16px 0; padding: 4px 16px; border-left: 3px solid var(--dark); font-style: italic; }
 figure { float: right; margin: 4px 0 12px 20px; text-align: center; }
 figure .smallboard { width: 150px; }
+.diag figure { clear: right; width: 210px; }            /* the diagrams of a section below each other, not side by side */
 figcaption { font: 13px system-ui, sans-serif; color: var(--muted); margin-top: 4px; }
 p.var { margin: 10px 0; }
 .verdict { font: 13px system-ui, sans-serif; padding: 1px 7px; border-radius: 10px; margin-left: 6px; white-space: nowrap; }
@@ -131,6 +132,8 @@ section.diag h3 { font-size: 19px; margin: 6px 0 4px; }
 .refute .t { font: 13px system-ui, sans-serif; color: var(--muted); }
 .toc { list-style: none; padding: 0; }
 .toc li { padding: 5px 0; border-bottom: 1px solid var(--rule); }
+.toc ul.sub { display: inline-block; vertical-align: top; list-style: none; margin: 0; padding: 0; }
+.toc ul.sub li { padding: 0 0 2px; border: 0; }
 .toc .h { color: var(--muted); font: 14px system-ui, sans-serif; display: inline-block; min-width: 205px; }
 @media (max-width: 760px) { .toc .h { display: block; } }
 .toc .cnt { font: 13px system-ui, sans-serif; color: var(--muted); margin-left: 8px; }
@@ -195,6 +198,7 @@ table.tbl th { color: var(--muted); font-weight: 600; }
 <figure><a class="diagram" href="#" data-i="0"><div class="smallboard" data-g="6x6" data-fen="W:WK1,K5,12,17:BK3,10"></div></a><figcaption>diagram 5.1, wit aan zet</figcaption></figure>
 <p class="claim"><strong>wit aan zet: <span class="val">W35</span></strong> <span class="verdict ok">boek: W ✓</span></p>
 <p class="moves"><a class="m1" href="#" data-i="1"><span class="mv" data-g="6x6" data-n="1-4" data-a="b6-a5">1-4</span></a> <span class="val">W35</span>, <a class="m1" href="#" data-i="2"><span class="mv" data-g="6x6" data-n="5-2" data-a="c5-d6">5-2</span></a> <span class="val">W35</span>, <a class="m1" href="#" data-i="3"><span class="mv" data-g="6x6" data-n="5-8" data-a="c5-d4">5-8</span></a> <span class="val">D</span>, <a class="m1" href="#" data-i="4"><span class="mv" data-g="6x6" data-n="12-8" data-a="e3-d4">12-8</span></a> <span class="val">D</span>, <a class="m1" href="#" data-i="5"><span class="mv" data-g="6x6" data-n="12-9" data-a="e3-f4">12-9</span></a> <span class="val">D</span>, <a class="m1" href="#" data-i="6"><span class="mv" data-g="6x6" data-n="17-13" data-a="c1-b2">17-13</span></a> <span class="val">D</span>, <a class="m1" href="#" data-i="7"><span class="mv" data-g="6x6" data-n="17-14" data-a="c1-d2">17-14</span></a> <span class="val">D</span>, <a class="m1" href="#" data-i="8"><span class="mv" data-g="6x6" data-n="5-7" data-a="c5-b4">5-7</span></a> <span class="val">L16</span></p>
+<div style="clear:right"></div>
 <figure><a class="diagram" href="#" data-i="9"><div class="smallboard" data-g="6x6" data-fen="B:WK1,K5,12,17:BK3,10"></div></a><figcaption>diagram 5.1, zwart aan zet</figcaption></figure>
 <p class="claim"><strong>zwart aan zet: <span class="val">L22</span></strong> <span class="verdict ok">boek: L ✓</span></p>
 <p class="moves"><a class="m1" href="#" data-i="10"><span class="mv" data-g="6x6" data-n="3-11" data-a="f6-c3">3-11</span></a> <span class="val">L22</span>, <a class="m1" href="#" data-i="11"><span class="mv" data-g="6x6" data-n="10-13" data-a="a3-b2">10-13</span></a> <span class="val">L18</span>, <a class="m1" href="#" data-i="12"><span class="mv" data-g="6x6" data-n="3-8" data-a="f6-d4">3-8</span></a> <span class="val">L8</span>, <a class="m1" href="#" data-i="13"><span class="mv" data-g="6x6" data-n="3-16" data-a="f6-a1">3-16</span></a> <span class="val">L8</span>, <a class="m1" href="#" data-i="14"><span class="mv" data-g="6x6" data-n="3-6" data-a="f6-e5">3-6</span></a> <span class="val">L4</span>, <a class="m1" href="#" data-i="15"><span class="mv" data-g="6x6" data-n="3-13" data-a="f6-b2">3-13</span></a> <span class="val">L4</span></p>

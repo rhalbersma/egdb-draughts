@@ -114,6 +114,7 @@ a.cur { background: var(--active); }
 blockquote { margin: 16px 0; padding: 4px 16px; border-left: 3px solid var(--dark); font-style: italic; }
 figure { float: right; margin: 4px 0 12px 20px; text-align: center; }
 figure .smallboard { width: 150px; }
+.diag figure { clear: right; width: 210px; }            /* the diagrams of a section below each other, not side by side */
 figcaption { font: 13px system-ui, sans-serif; color: var(--muted); margin-top: 4px; }
 p.var { margin: 10px 0; }
 .verdict { font: 13px system-ui, sans-serif; padding: 1px 7px; border-radius: 10px; margin-left: 6px; white-space: nowrap; }
@@ -131,6 +132,8 @@ section.diag h3 { font-size: 19px; margin: 6px 0 4px; }
 .refute .t { font: 13px system-ui, sans-serif; color: var(--muted); }
 .toc { list-style: none; padding: 0; }
 .toc li { padding: 5px 0; border-bottom: 1px solid var(--rule); }
+.toc ul.sub { display: inline-block; vertical-align: top; list-style: none; margin: 0; padding: 0; }
+.toc ul.sub li { padding: 0 0 2px; border: 0; }
 .toc .h { color: var(--muted); font: 14px system-ui, sans-serif; display: inline-block; min-width: 205px; }
 @media (max-width: 760px) { .toc .h { display: block; } }
 .toc .cnt { font: 13px system-ui, sans-serif; color: var(--muted); margin-left: 8px; }
@@ -195,13 +198,13 @@ table.tbl th { color: var(--muted); font-weight: 600; }
 <ul class="toc">
 <li><span class="h">Hoofdstuk 1</span><a href="h1.html">Inleiding</a></li>
 <li><span class="h">Hoofdstuk 2</span><a href="h2.html">De lange lijn</a></li>
-<li><span class="h">Hoofdstuk 3</span><a href="h3.html">3 Een hinderlijke schijf</a> · <a href="h3-3.html">3.3 Moeizame remise en luchtig slot</a></li>
+<li><span class="h">Hoofdstuk 3</span><ul class="sub"><li><a href="h3.html">3 Een hinderlijke schijf</a></li><li><a href="h3-3.html">3.3 Moeizame remise en luchtig slot</a></li></ul></li>
 <li><span class="h">Hoofdstuk 4</span><a href="h4.html">Een zwarte schijf op 15 en een zwarte dam</a></li>
-<li><span class="h">Hoofdstuk 5 · Scouppe</span><a href="h5a.html">5a Scouppe I</a> · <a href="h5b.html">5b Scouppe Trucs</a> · <a href="h5c.html">5c Scouppe: Dam op 17</a> · <a href="h5d.html">5d Compositie op finesse 5</a></li>
-<li><span class="h">Hoofdstuk 6 · Opgaven</span><a href="h6a.html">6a Intermezzo: acht opgaven (sectie 6.1)</a> · <a href="h6b.html">6b Zwaar manoeuvreren (sectie 6.2)</a></li>
+<li><span class="h">Hoofdstuk 5 · Scouppe</span><ul class="sub"><li><a href="h5a.html">5a Scouppe I</a></li><li><a href="h5b.html">5b Scouppe Trucs</a></li><li><a href="h5c.html">5c Scouppe: Dam op 17</a></li><li><a href="h5d.html">5d Compositie op finesse 5</a></li></ul></li>
+<li><span class="h">Hoofdstuk 6 · Opgaven</span><ul class="sub"><li><a href="h6a.html">6a Intermezzo: acht opgaven (sectie 6.1)</a></li><li><a href="h6b.html">6b Zwaar manoeuvreren (sectie 6.2)</a></li></ul></li>
 <li><span class="h">Hoofdstuk 7</span><a href="h7.html">De randslag-opening</a></li>
-<li><span class="h">Hoofdstuk 6 · Oplossingen</span><a href="h6a-opl.html">6a Oplossingen (sectie 6.1)</a> · <a href="h6-opl1.html">Oplossingen zwaar manoeuvreren I</a> · <a href="h6-opl2.html">Oplossingen zwaar manoeuvreren II</a> · <a href="h6-opl3.html">Oplossingen zwaar manoeuvreren III</a></li>
-<li><span class="h">Hoofdstuk 7 · Vervolg</span><a href="h7-2.html">7.2 De derde zet</a> · <a href="h7-3.html">7.3 De vierde zet</a> · <a href="h7-4.html">7.4 Naar voren</a> · <a href="h7-5.html">7.5 Achteruit</a> · <a href="h7-6.html">7.6 Een dijk van een stand</a> · <a href="h7-7.html">7.7 Conclusie</a></li>
+<li><span class="h">Hoofdstuk 6 · Oplossingen</span><ul class="sub"><li><a href="h6a-opl.html">6a Oplossingen (sectie 6.1)</a></li><li><a href="h6-opl1.html">Oplossingen zwaar manoeuvreren I</a></li><li><a href="h6-opl2.html">Oplossingen zwaar manoeuvreren II</a></li><li><a href="h6-opl3.html">Oplossingen zwaar manoeuvreren III</a></li></ul></li>
+<li><span class="h">Hoofdstuk 7 · Vervolg</span><ul class="sub"><li><a href="h7-2.html">7.2 De derde zet</a></li><li><a href="h7-3.html">7.3 De vierde zet</a></li><li><a href="h7-4.html">7.4 Naar voren</a></li><li><a href="h7-5.html">7.5 Achteruit</a></li><li><a href="h7-6.html">7.6 Een dijk van een stand</a></li><li><a href="h7-7.html">7.7 Conclusie</a></li></ul></li>
 <li><span class="h">Hoofdstuk 8</span><a href="h8.html">Een schijf op 4</a></li>
 <li><span class="h">Hoofdstuk 9</span><a href="h9.html">Het taaie eindspel</a></li>
 </ul>

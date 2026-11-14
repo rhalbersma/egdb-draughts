@@ -85,6 +85,7 @@ def main():
     ap.add_argument('engine')
     ap.add_argument('--db', default='data/6x6_le10.db')
     ap.add_argument('--table', type=int, default=3)
+    ap.add_argument('--tree', type=int, default=None, help='depth of the stored tree with distances (default: --table)')
     ap.add_argument('--out', default='results/opening_6x6')
     ap.add_argument('--attach', default=None, help='layer to attach after loading --db (e.g. data/6x6_10.dtm)')
     ap.add_argument('--dtm', action='store_true', help='the databases have exact DTM: compute the distances with the same engine')
@@ -194,7 +195,7 @@ def main():
         if fen in tree_nodes and tree_nodes[fen] <= depth:
             return
         tree_nodes[fen] = depth
-        if depth < args.table and fen in children:
+        if depth < (args.tree or args.table) and fen in children:
             for _, c in children[fen]:
                 collect(c, depth + 1)
     collect(START, 0)

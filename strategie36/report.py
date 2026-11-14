@@ -125,7 +125,8 @@ def main():
     parts = [
         f"Diagramclaims: {dcount['ok']} bevestigd, {dcount['fout']} onjuist. "
         f"Varianten: {len(data['lines'])}, waarvan " + ', '.join(f'{STATUS[k]} {k}: {v}' for k, v in sorted(counts.items())) + '.',
-        '', '### Diagrammen', '', diagram_blocks(data['diagrams']), '', '### Varianten', '', lines_table(data['lines']), '',
+        '', '### Weerleggingen van onjuiste diagramclaims', '', (HERE / 'weerleggingen.md').read_text(),
+        '### Diagrammen', '', diagram_blocks(data['diagrams']), '', '### Varianten', '', lines_table(data['lines']), '',
         f"Database-statistiek: `{' '.join(data['stats'])}`", ''
     ]
     tables = '\n'.join(parts)

@@ -14,8 +14,8 @@ import sys
 
 
 def diagram(fen, numbers=True):
-    """Framed diagram with rank numbers and file letters; with numbers=True the square numbers are
-    printed next to it (without a frame), two characters per square."""
+    """Framed diagram with rank numbers and file letters; with numbers=True the numbered board is
+    printed next to it, two characters per square."""
     cell = {}
     for part in fen.split(':')[1:]:
         side = part[0]
@@ -23,8 +23,9 @@ def diagram(fen, numbers=True):
             if it:
                 king = it[0] == 'K'
                 cell[int(it[1:] if king else it)] = (side.upper() if king else side.lower())
-    gap = '      '
-    lines = ['    +-------------+']
+    gap = '     '
+    num_rule = '+' + '-' * 19 + '+'
+    lines = ['    +-------------+' + (gap + num_rule if numbers else '')]
     for r in range(6):                       # r = 0 is row 6 (squares 1-3)
         row, nums = [' '] * 12, []
         for c in range(6):
@@ -35,9 +36,10 @@ def diagram(fen, numbers=True):
             nums.append(f'{sq:2d}' if dark else '  ')
         line = f'  {6 - r} | ' + ''.join(row) + '|'
         if numbers:
-            line += gap + ' '.join(nums)
+            line += gap + '| ' + ' '.join(nums) + ' |'
         lines.append(line.rstrip())
-    lines += ['    +-------------+', '      a b c d e f']
+    lines += ['    +-------------+' + (gap + num_rule if numbers else ''),
+              '      a b c d e f']
     return '\n'.join(lines)
 
 

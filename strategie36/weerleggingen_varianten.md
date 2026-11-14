@@ -1,4 +1,4 @@
-Voor elke variant waarvan de eindclaim niet klopt: de claim van het boek gaat over de stelling aan het einde van de variant. De weerlegging vervangt de laatste zet van de variant waarna de claim niet meer opgaat. Klopt de claim in geen enkele stelling van de variant, dan is er geen weerlegging en loopt de hoofdvariant door vanaf het einde van de variant; het diagram toont dan die eindstelling. Het diagram toont de stelling na de weerlegging, ernaast de hoofdvariant vanaf het begin: na de weerlegging de snelste winst tegen de taaiste verdediging (bij remise een korte voortzetting), tot het einde van de partij ("+") of tot een ander diagram uit het boek. "!" = de weerlegging, "*" = de enige zet die de winst of de remise behoudt, "?" = een zet uit het boek die het resultaat verandert.
+Voor elke variant waarvan de eindclaim niet klopt: de claim van het boek gaat over de stelling aan het einde van de variant. De weerlegging vervangt de laatste zet van de variant waarna de claim niet meer opgaat. Boven de hoofdvariant staat de waarde van de beginstelling en van de eindstelling van de variant uit het boek, met de claim van het boek. Klopt de claim in geen enkele stelling van de variant, dan is er geen weerlegging en loopt de hoofdvariant door vanaf het einde van de variant; het diagram toont dan die eindstelling. Het diagram toont de stelling na de weerlegging, ernaast de hoofdvariant vanaf het begin: na de weerlegging de snelste winst tegen de taaiste verdediging (bij remise een korte voortzetting), tot het einde van de partij ("+") of tot een ander diagram uit het boek. "!" = de weerlegging, "*" = de enige zet die de winst of de remise behoudt, "?" = een zet uit het boek die het resultaat verandert.
 
 #### Sectie 3.3, vanaf diagram 3.4: weerlegging 2. 15-18!*
 
@@ -6,7 +6,7 @@ Voor elke variant waarvan de eindclaim niet klopt: de claim van het boek gaat ov
 
 ```text
     +-------------+     +-------------------+     wit aan zet: W39
-  6 |   .   .   b |     |     1     2     3 |     boek, einde variant: zwart aan zet L ❌, database: D
+  6 |   .   .   b |     |     1     2     3 |     einde: zwart aan zet D  (boek: L ❌)
   5 | .   .   .   |     |  4     5     6    |
   4 |   w   .   . |     |     7     8     9 |       1.  10-7?      6-11?
   3 | .   B   .   |     | 10    11    12    |       2.  15-18!*    11×4
@@ -22,7 +22,7 @@ Voor elke variant waarvan de eindclaim niet klopt: de claim van het boek gaat ov
 
 ```text
     +-------------+     +-------------------+     wit aan zet: W43
-  6 |   .   .   W |     |     1     2     3 |     boek, einde variant: zwart aan zet ≥D ❌, database: L10
+  6 |   .   .   W |     |     1     2     3 |     einde: zwart aan zet L10  (boek: ≥D ❌)
   5 | .   .   .   |     |  4     5     6    |
   4 |   .   .   W |     |     7     8     9 |       1.  9-2*       7-10
   3 | .   .   w   |     | 10    11    12    |       2.  12-9*      3-16
@@ -42,7 +42,7 @@ Voor elke variant waarvan de eindclaim niet klopt: de claim van het boek gaat ov
 
 ```text
     +-------------+     +-------------------+     wit aan zet: W25
-  6 |   .   .   . |     |     1     2     3 |     boek, einde variant: zwart aan zet L ❌, database: D
+  6 |   .   .   . |     |     1     2     3 |     einde: zwart aan zet D  (boek: L ❌)
   5 | b   b   .   |     |  4     5     6    |
   4 |   .   b   b |     |     7     8     9 |       3.  14-11?     5-8
   3 | .   .   .   |     | 10    11    12    |       4.  11×6*      3×8
@@ -58,7 +58,7 @@ Voor elke variant waarvan de eindclaim niet klopt: de claim van het boek gaat ov
 
 ```text
     +-------------+     +-------------------+     wit aan zet: W25
-  6 |   b   .   . |     |     1     2     3 |     boek, einde variant: wit aan zet L ❌, database: D
+  6 |   b   .   . |     |     1     2     3 |     einde: wit aan zet D  (boek: L ❌)
   5 | .   .   .   |     |  4     5     6    |
   4 |   .   b   b |     |     7     8     9 |       3.  14-11?     5-8
   3 | b   .   .   |     | 10    11    12    |       4.  11×6*      3×8
@@ -79,7 +79,7 @@ Voor elke variant waarvan de eindclaim niet klopt: de claim van het boek gaat ov
 
 ```text
     +-------------+     +-------------------+     zwart aan zet: L52
-  6 |   b   .   b |     |     1     2     3 |     boek, einde variant: wit aan zet D ❌, database: W51
+  6 |   b   .   b |     |     1     2     3 |     einde: wit aan zet W51  (boek: D ❌)
   5 | b   .   .   |     |  4     5     6    |
   4 |   .   b   b |     |     7     8     9 |       3.  …          5-8
   3 | .   .   .   |     | 10    11    12    |       → diagram 7.4 (W51)
@@ -95,7 +95,7 @@ Voor elke variant waarvan de eindclaim niet klopt: de claim van het boek gaat ov
 
 ```text
     +-------------+     +-------------------+     wit aan zet: W51
-  6 |   .   .   b |     |     1     2     3 |     boek, einde variant: wit aan zet L ❌, database: D
+  6 |   .   .   b |     |     1     2     3 |     einde: wit aan zet D  (boek: L ❌)
   5 | .   .   .   |     |  4     5     6    |
   4 |   .   b   b |     |     7     8     9 |       4.  13-11?     8×13*
   3 | .   .   .   |     | 10    11    12    |       5.  17×10*     4-7
@@ -115,7 +115,7 @@ Voor elke variant waarvan de eindclaim niet klopt: de claim van het boek gaat ov
 
 ```text
     +-------------+     +-------------------+     wit aan zet: W35
-  6 |   .   .   . |     |     1     2     3 |     boek, einde variant: wit aan zet D ❌, database: W13
+  6 |   .   .   . |     |     1     2     3 |     einde: wit aan zet W13  (boek: D ❌)
   5 | .   b   .   |     |  4     5     6    |
   4 |   b   b   w |     |     7     8     9 |       6.  17-14?     9-12*
   3 | .   .   .   |     | 10    11    12    |       7.  14×9*      4-7!*
@@ -131,7 +131,7 @@ Voor elke variant waarvan de eindclaim niet klopt: de claim van het boek gaat ov
 
 ```text
     +-------------+     +-------------------+     wit aan zet: D
-  6 |   B   .   . |     |     1     2     3 |     boek, einde variant: wit aan zet W ❌, database: D
+  6 |   B   .   . |     |     1     2     3 |     einde: wit aan zet D  (boek: W ❌)
   5 | .   b   .   |     |  4     5     6    |
   4 |   .   .   w |     |     7     8     9 |       13. 15-12      4-1
   3 | .   .   w   |     | 10    11    12    |       14. 9-6        5-7*
@@ -149,7 +149,7 @@ Voor elke variant waarvan de eindclaim niet klopt: de claim van het boek gaat ov
 
 ```text
     +-------------+     +-------------------+     wit aan zet: W25
-  6 |   .   b   b |     |     1     2     3 |     boek, einde variant: wit aan zet D ❌, database: W43
+  6 |   .   b   b |     |     1     2     3 |     einde: wit aan zet W43  (boek: D ❌)
   5 | b   .   .   |     |  4     5     6    |
   4 |   .   .   . |     |     7     8     9 |       3.  16-13      5-8
   3 | b   .   w   |     | 10    11    12    |       4.  14-11*     1-5

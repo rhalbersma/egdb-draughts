@@ -110,6 +110,30 @@ transpositietabel, om graph-history-problemen te vermijden; met de 8-stukkendata
 seconde). Hier zijn de afstanden tot het einde exact voor de hele openingsboom tot en met ply 4, en voor elke
 stelling uit het boek.
 
+### Hoe ver is 6×6 opgelost?
+
+In de termen van Allis (1994) is 6×6 hiermee, net als bij Van Horssen, **zwak opgelost**: de waarde van de
+beginstand is bewezen, met een strategie om die te halen. **Sterk opgelost** zou betekenen dat de waarde van elke
+legale stelling bekend is. Zover is het niet, maar inhoudelijk ligt er veel meer vast dan bij een zwakke oplossing
+gebruikelijk is:
+
+| | Stellingen | Status |
+|---|---|---|
+| Tot en met 10 stukken | 25.741.493.062 | sterk opgelost, met exacte afstand tot het einde (DTM) |
+| 11–12 stukken, hooguit één kant dammen: de volledige openings-DAG | 193.708 | 188.103 (97%) bewezen; open: 2.008 ≥D, 578 ≤D, 3.019 ? |
+| Alle overige stellingen met 11 of 12 stukken | ca. 91 miljard legaal, waarvan 89 miljard met dammen aan beide kanten | onbekend |
+
+De open stellingen in de DAG hangen allemaal af van de 5.101 bladeren met 11 of 12 stukken en dammen aan beide
+kanten waarvan de waarde ook na één ply niet vastligt. Achter die bladeren ligt geen handvol stellingen: een
+verkenning vanaf die bladeren vond meer dan 5 miljoen verschillende bereikbare stellingen met dammen aan beide kanten
+voordat ik hem stopte, vooral eindspelen met alleen dammen, zoals 6 dammen tegen 5 (alleen al 29.405.376 legale
+stellingen). Sterk oplossen vraagt dus de databases voor 11 en 12 stukken met dammen aan beide kanten: ruim drie
+keer zoveel stellingen als alle databases tot en met 10 stukken samen. De getallen komen uit
+[`opening/opening_strength_6x6.py`](opening/opening_strength_6x6.py).
+
+Kort gezegd: formeel zwak opgelost, inhoudelijk sterk tot en met 10 stukken, met een openingsboom die voor 97% is
+bewezen en een exacte afstand tot het einde voor de beginstand en alle stellingen tot en met ply 4.
+
 ### Hoofdstuk 6/7: de randslag-opening 1. 13-11 6-8 2. 11×6 2×9
 
 * **3. 15-12 wint snel (bevestigd):** winst in 25 ply.

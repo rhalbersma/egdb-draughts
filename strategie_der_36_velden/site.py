@@ -474,6 +474,49 @@ class Site:
                     + f': <a href="{REPO}">{REPO}</a>.</p>')
         self.write('index.html', t('Overzicht', 'Overview'), '\n'.join(body), pg)
 
+    def strength(self):
+        """how far 6x6 is solved (numbers from opening/opening_strength_6x6.py)"""
+        t = self.t
+        rows = [(t('Tot en met 10 stukken', 'Up to 10 pieces'), t('25.741.493.062', '25,741,493,062'),
+                 t('sterk opgelost, met exacte afstand tot het einde (DTM)', 'strongly solved, with the exact distance to '
+                   'the end (DTM)')),
+                (t('11–12 stukken, hooguit één kant dammen: de volledige openings-DAG',
+                   '11–12 pieces, kings on at most one side: the complete opening DAG'), t('193.708', '193,708'),
+                 t('188.103 (97%) bewezen; open: 2.008 ≥D, 578 ≤D, 3.019 ?', '188,103 (97%) proven; open: 2,008 ≥D, '
+                   '578 ≤D, 3,019 ?')),
+                (t('Alle overige stellingen met 11 of 12 stukken', 'All other positions with 11 or 12 pieces'),
+                 t('ca. 91 miljard legaal, waarvan 89 miljard met dammen aan beide kanten',
+                   'about 91 billion legal, of which 89 billion with kings on both sides'), t('onbekend', 'unknown'))]
+        tbl = ''.join(f'<tr><td>{a}</td><td>{b}</td><td>{c}</td></tr>' for a, b, c in rows)
+        return (t('<h3>Hoe ver is 6×6 opgelost?</h3>', '<h3>How far is 6×6 solved?</h3>') + t(
+            '<p>In de termen van Allis (1994) is 6×6 hiermee, net als bij Van Horssen, <strong>zwak opgelost</strong>: de '
+            'waarde van de beginstand is bewezen, met een strategie om die te halen. <strong>Sterk opgelost</strong> zou '
+            'betekenen dat de waarde van elke legale stelling bekend is. Zover is het niet, maar inhoudelijk ligt er veel '
+            'meer vast dan bij een zwakke oplossing gebruikelijk is:</p>',
+            '<p>In the terms of Allis (1994) 6×6 is thereby, as with Van Horssen, <strong>weakly solved</strong>: the '
+            'value of the start position is proven, with a strategy to achieve it. <strong>Strongly solved</strong> would '
+            'mean that the value of every legal position is known. It is not that far, but in substance much more is '
+            'settled than is usual for a weak solution:</p>')
+            + f'<table class="tbl"><tr><th></th><th>{t("Stellingen", "Positions")}</th><th>Status</th></tr>{tbl}</table>'
+            + t('<p>De open stellingen in de DAG hangen allemaal af van de 5.101 bladeren met 11 of 12 stukken en dammen '
+                'aan beide kanten waarvan de waarde ook na één ply niet vastligt. Achter die bladeren ligt geen handvol '
+                'stellingen: een verkenning vanaf die bladeren vond meer dan 5 miljoen verschillende bereikbare stellingen '
+                'met dammen aan beide kanten voordat hij werd gestopt, vooral eindspelen met alleen dammen, zoals 6 dammen '
+                'tegen 5 (alleen al 29.405.376 legale stellingen). Sterk oplossen vraagt dus de databases voor 11 en 12 '
+                'stukken met dammen aan beide kanten: ruim drie keer zoveel stellingen als alle databases tot en met 10 '
+                'stukken samen.</p><p>Kort gezegd: formeel zwak opgelost, inhoudelijk sterk tot en met 10 stukken, met een '
+                'openingsboom die voor 97% is bewezen en een exacte afstand tot het einde voor de beginstand en alle '
+                'stellingen tot en met ply 4.</p>',
+                '<p>The open positions in the DAG all depend on the 5,101 leaves with 11 or 12 pieces and kings on both '
+                'sides whose value is not settled after one ply either. Behind those leaves lies not a handful of '
+                'positions: a probe from those leaves found more than 5 million different reachable positions with kings '
+                'on both sides before it was stopped, mostly endgames with kings only, such as 6 kings against 5 (29,405,376 '
+                'legal positions for that material alone). Solving strongly therefore needs the databases for 11 and 12 '
+                'pieces with kings on both sides: more than three times as many positions as all databases up to 10 '
+                'pieces together.</p><p>In short: formally weakly solved, in substance strongly up to 10 pieces, with an '
+                'opening tree that is 97% proven and an exact distance to the end for the start position and all positions '
+                'up to ply 4.</p>'))
+
     def opening_page(self):
         pg = self.page()
         fig, i0 = pg.diagram(START, self.t('de beginstand, wit aan zet', 'the start position, white to move'))
@@ -567,6 +610,7 @@ class Site:
             'rightly leaves out, since each side starts with 6 pieces. He proves the value of the start position (without '
             'a transposition table, to avoid graph-history problems); here the distances to the end are exact for the '
             'whole tree up to ply 4.</p>'))
+        body.append(self.strength())
         self.write('opening.html', self.t('De opening', 'The opening'), '\n'.join(body), pg)
 
 

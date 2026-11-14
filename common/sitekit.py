@@ -155,6 +155,37 @@ class Page:
 
     MOVE_RE = re.compile(r'(?<![\w.,/])(\d{1,3}(?:[-x×]\d{1,3})+|[a-z]\d{1,2}(?:[-x×][a-z]\d{1,2})+)(?![\w/]|\.\d)')
 
+    # single squares: algebraic names (h10) in algebraic texts; in numeric texts numbers after "op", "veld(en)",
+    # "on", "square(s)" (dam op 9, schijven op 14 en 18)
+    SQ_ALG_RE = re.compile(r'(?<![\w.,/×-])([a-z]\d{1,2})(?![\w/×-]|\.\d)')
+    SQ_NUM_RE = re.compile(r'\b(op|veld|velden|on|square|squares) (\d{1,2}(?:(?:, | en | and )\d{1,2})*)(?![\d×x-]|\.\d)'
+                           r'(?!\s*(?:ply|plies|stuk|piece|zet|move|dam|schijf|king|man\b|men\b|keer|time|tegen|against))')
+
+    def _square(self, n_or_name, gid):
+        sq = self.geoms[gid]['sq']
+        name = {int(n): f'{chr(97 + f)}{r + 1}' for n, (f, r) in sq.items()}
+        num_of = {v: k for k, v in name.items()}
+        if isinstance(n_or_name, int):
+            if n_or_name not in name:
+                return None
+            n, a = n_or_name, name[n_or_name]
+        else:
+            if n_or_name not in num_of or n_or_name in ('p0', 'p1'):      # p0 / p1: the colourings, not squares
+                return None
+            n, a = num_of[n_or_name], n_or_name
+        pref = self.geoms[gid].get('pref', 'num')
+        return f'<span class="mv" data-g="{gid}" data-n="{n}" data-a="{a}">{n if pref == "num" else a}</span>'
+
+    def _squares(self, text, gid, authored):
+        if authored == 'alg':
+            return self.SQ_ALG_RE.sub(lambda m: self._square(m.group(1), gid) or m.group(0), text)
+
+        def sub(m):
+            parts = re.split(r'(, | en | and )', m.group(2))
+            conv = [p if i % 2 else (self._square(int(p), gid) or p) for i, p in enumerate(parts)]
+            return f'{m.group(1)} ' + ''.join(conv)
+        return self.SQ_NUM_RE.sub(sub, text)
+
     def _token(self, tok, gid):
         """a move in running text -> notation element, or None if it is not a move on this board"""
         sq = self.geoms[gid]['sq']
@@ -179,11 +210,14 @@ class Page:
     def _convert(self, text, gid, authored='num'):
         """authored: the notation the text is written in; only moves in that notation are converted (so that
         material like 3-1 in a text with algebraic moves stays as it is)"""
-        def sub(m):
-            if m.group(1)[0].isdigit() != (authored == 'num'):
-                return m.group(0)
-            return self._token(m.group(1), gid) or m.group(0)
-        return self.MOVE_RE.sub(sub, text)
+        out, pos = [], 0
+        for m in self.MOVE_RE.finditer(text):
+            out.append(self._squares(text[pos:m.start()], gid, authored))
+            tok = m.group(1)
+            out.append((self._token(tok, gid) if tok[0].isdigit() == (authored == 'num') else None) or m.group(0))
+            pos = m.end()
+        out.append(self._squares(text[pos:], gid, authored))
+        return ''.join(out)
 
     def prose(self, text, gid, authored='num'):
         """plain text -> HTML in which the moves follow the notation switch"""

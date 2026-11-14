@@ -221,11 +221,11 @@ Kept at the same place on every board size, the conversion always takes exactly 
 
 | Family | White kings | Boards checked | Black to move | White to move |
 |---|---|---|---|---|
-| **B + 1** | b2, (L−1, B−2), (L−3, B−4) — e.g. 10×11: b2, k9, i7 | 6×7 … 11×12 | 10 | 9 |
-| **B + 2** | b2, (L−1, B−3), (L−3, B−5) — e.g. 10×12: b2, l8, j6 | 6×8 … 10×12 | 12 | 11 |
-| **2B − 1** | one above each leg of the V, one below its apex — e.g. 10×19: b2, j8, r2 | 5×9 … 9×17 | 8 | 7 |
+| **B + 1** | (2, 2), (L, B − 1), (L − 2, B − 3) — e.g. 10×11: b2, k9, i7 | 6×7 … 11×12 | 10 | 9 |
+| **B + 2** | (2, 2), (L, B − 2), (L − 2, B − 4) — e.g. 10×12: b2, l8, j6 | 6×8 … 10×12 | 12 | 11 |
+| **2B − 1** | (2, 2), (B, B − 2), (L − 1, 2) — e.g. 10×19: b2, j8, r2 | 5×9 … 9×17 | 8 | 7 |
 
-No draw is left on any of these boards. The strong side builds the trapping position from an arbitrary position
+Coordinates are (file, rank) counted from (1, 1) = a1 at the bottom left; for 2B − 1, (2, 2) and (L − 1, 2) stand on the legs of the V and (B, B − 2) below its apex. No draw is left on any of these boards. The strong side builds the trapping position from an arbitrary position
 and then converts quickly: on 9×17 the longest win is 23 plies, of which at most 8 are the conversion.
 
 **The V** (only for `L = 2B − 1`): the diagonals from the two corners of one long side meet exactly in the

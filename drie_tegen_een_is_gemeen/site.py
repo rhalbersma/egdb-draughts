@@ -362,11 +362,7 @@ both.</p>''')]
 de V</strong>. Op dezelfde plaats gehouden kost de omzetting op elk bord precies even veel ply. De sterke partij bouwt
 de vangstelling op vanuit een willekeurige stelling en zet daarna snel om: op 9×17 is de langste winst 23 ply, waarvan
 hooguit 8 voor de omzetting.</p>
-<table class="tbl"><tr><th>Familie</th><th>Witte dammen</th><th>Gecontroleerd</th><th>Zwart aan zet</th><th>Wit aan zet</th></tr>
-<tr><td><strong>B + 1</strong></td><td>b2, (L−1, B−2), (L−3, B−4) — bv. 10×11: b2, k9, i7</td><td>6×7 … 11×12</td><td>10</td><td>9</td></tr>
-<tr><td><strong>B + 2</strong></td><td>b2, (L−1, B−3), (L−3, B−5) — bv. 10×12: b2, l8, j6</td><td>6×8 … 10×12</td><td>12</td><td>11</td></tr>
-<tr><td><strong>2B − 1</strong></td><td>één boven elk been van de V, één onder de top — bv. 10×19: b2, j8, r2</td><td>5×9 … 9×17</td><td>8</td><td>7</td></tr>
-</table>
+{TABLE}
 <p>(Langste verlies met zwart aan zet / langste winst met wit aan zet, over elk veld van de zwarte dam waar de partij
 aan zet niet kan slaan. Telt men alleen de velden waar geen van beide kan slaan, dan is de langste winst met wit aan zet
 9, 9 en 7 ply.) Hieronder per familie het veld van de zwarte dam met de langste winst waar geen van beide kan
@@ -375,15 +371,31 @@ slaan.</p>''', '''
 V</strong>. Kept at the same place on every board size, the conversion always takes exactly the same number of plies.
 The strong side builds the trapping position from an arbitrary position and then converts quickly: on 9×17 the longest
 win is 23 plies, of which at most 8 are the conversion.</p>
-<table class="tbl"><tr><th>Family</th><th>White kings</th><th>Boards checked</th><th>Black to move</th><th>White to move</th></tr>
-<tr><td><strong>B + 1</strong></td><td>b2, (L−1, B−2), (L−3, B−4) — e.g. 10×11: b2, k9, i7</td><td>6×7 … 11×12</td><td>10</td><td>9</td></tr>
-<tr><td><strong>B + 2</strong></td><td>b2, (L−1, B−3), (L−3, B−5) — e.g. 10×12: b2, l8, j6</td><td>6×8 … 10×12</td><td>12</td><td>11</td></tr>
-<tr><td><strong>2B − 1</strong></td><td>one above each leg of the V, one below its apex — e.g. 10×19: b2, j8, r2</td><td>5×9 … 9×17</td><td>8</td><td>7</td></tr>
-</table>
+{TABLE}
 <p>(Longest loss with black to move / longest win with white to move, over every square of the black king where the side
 to move cannot capture. Counting only the squares where neither side can capture, the longest win with white to move is
 9, 9 and 7 plies.) Below, per family, the square of the black king with the longest win where neither side can
 capture.</p>''')]
+        # the trapping positions in general coordinates (file, rank), counted from (1, 1) = a1 at the bottom left;
+        # checked on every board of the column "boards" with the databases
+        gen = [('B + 1', '(2, 2), (L, B − 1), (L − 2, B − 3)', '10x11', '6×7 … 11×12', 10, 9),
+               ('B + 2', '(2, 2), (L, B − 2), (L − 2, B − 4)', '10x12', '6×8 … 10×12', 12, 11),
+               ('2B − 1', '(2, 2), (B, B − 2), (L − 1, 2)', '10x19', '5×9 … 9×17', 8, 7)]
+        ex = {gid: wk for gid, w, h, wk, *_ in fams}
+        rows = ''.join(f'<tr><td><strong>{f}</strong></td><td>{c} — {t("bv.", "e.g.")} {g.replace("x", "×")}: '
+                       f'{pg.prose(", ".join(ex[g]), g, "alg")}</td><td>{boards}</td><td>{lb}</td><td>{lw}</td></tr>'
+                       for f, c, g, boards, lb, lw in gen)
+        table = (t('<table class="tbl"><tr><th>Familie</th><th>Witte dammen (kolom, rij)</th><th>Gecontroleerd</th>'
+                   '<th>Zwart aan zet</th><th>Wit aan zet</th></tr>',
+                   '<table class="tbl"><tr><th>Family</th><th>White kings (file, rank)</th><th>Boards checked</th>'
+                   '<th>Black to move</th><th>White to move</th></tr>') + rows + '</table>'
+                 + t('<p class="note">Coördinaten (kolom, rij) gerekend vanaf (1, 1) = a1 linksonder; <em>B</em> × '
+                     '<em>L</em> met <em>L</em> kolommen en <em>B</em> rijen. Bij 2<em>B</em> − 1 staan (2, 2) en '
+                     '(<em>L</em> − 1, 2) op de benen van de V en (<em>B</em>, <em>B</em> − 2) onder de top.</p>',
+                     '<p class="note">Coordinates (file, rank) counted from (1, 1) = a1 at the bottom left; <em>B</em> × '
+                     '<em>L</em> with <em>L</em> files and <em>B</em> ranks. For 2<em>B</em> − 1, (2, 2) and '
+                     '(<em>L</em> − 1, 2) stand on the legs of the V and (<em>B</em>, <em>B</em> − 2) below its apex.</p>'))
+        body[1] = body[1].replace('{TABLE}', table)
         for gid, w, h, wk, fam, black in fams:
             e = engines[gid]
             if black is None:
@@ -398,13 +410,13 @@ capture.</p>''')]
             vb, _ = e.analyse(fb)
             hb, *_ = pg.best_line(fb, 40, start=ib)
             body += [f'<h2>{t("Familie", "Family")} {fam}: {gid.replace("x", "×")}</h2>', fig,
-                     t(f'<p>Witte dammen op {", ".join(wk)}, de zwarte dam op {black}. Wit aan zet: {v}.</p>',
-                       f'<p>White kings on {", ".join(wk)}, the black king on {black}. White to move: {v}.</p>'),
+                     pg.prose_html(t(f'<p>Witte dammen op {", ".join(wk)}, de zwarte dam op {black}. Wit aan zet: {v}.</p>',
+                       f'<p>White kings on {", ".join(wk)}, the black king on {black}. White to move: {v}.</p>'), gid, 'alg'),
                      f'<p class="var">{hl}</p>', t(f'<p>Dezelfde stelling met zwart aan zet: {vb}.</p>',
                                                    f'<p>The same position with black to move: {vb}.</p>'),
                      f'<p class="var">{hb}</p>']
             if gid == '10x11':
-                body.append(t('<p>Op 10×11 (diagram 8 van het boek) wint wit met wit aan zet op elk veld van de zwarte dam '
+                body.append(pg.prose_html(t('<p>Op 10×11 (diagram 8 van het boek) wint wit met wit aan zet op elk veld van de zwarte dam '
                             'binnen 5 ply, <strong>behalve op h10, het gearceerde veld in het boek, waar het 9 ply '
                             'kost</strong>. De dam op b2 staat op de lange lijn, waarvan het andere eind een ingang '
                             'rechtsboven is; de twee dammen rechtsboven vormen er een halve val mee en de bovenste kan '
@@ -413,7 +425,7 @@ capture.</p>''')]
                               'the black king, <strong>except h10, the hatched square in the book, which takes 9 '
                               'plies</strong>. The king at b2 stands on the long diagonal, whose other end is an entrance '
                               'at the top right; the two kings at the top right form a half trap with it and the upper one '
-                              'can close the long diagonal.</p>'))
+                              'can close the long diagonal.</p>'), gid, 'alg'))
             if gid == '10x19':
                 body.append(t('<p><strong>De V</strong> (alleen bij <em>L</em> = 2<em>B</em> − 1): de diagonalen vanuit '
                             'de twee hoeken van één lange zijde ontmoeten elkaar precies in het midden van de overkant. '

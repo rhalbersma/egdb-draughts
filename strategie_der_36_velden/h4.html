@@ -27,8 +27,31 @@
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--fg);
   font: 17px/1.6 Charter, "Bitstream Charter", "Sitka Text", Cambria, Georgia, serif; }
-header { border-bottom: 1px solid var(--rule); padding: 10px 16px; font: 14px/1.4 system-ui, sans-serif; }
-header a { color: var(--muted); text-decoration: none; margin-right: 18px; }
+header { border-bottom: 1px solid var(--rule); padding: 8px 16px; font: 14px/1.4 system-ui, sans-serif;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 18px; position: relative; z-index: 5; }
+header > a { color: var(--muted); text-decoration: none; }
+header > a.brand { color: var(--fg); font-weight: 600; }
+header > a:hover { color: var(--fg); }
+.menu { position: relative; }
+.menu summary { list-style: none; cursor: pointer; color: var(--fg); border: 1px solid var(--rule); border-radius: 6px;
+  padding: 3px 10px; background: var(--panel); user-select: none; }
+.menu summary::-webkit-details-marker { display: none; }
+.menu summary::after { content: " ▾"; color: var(--muted); }
+.menu[open] summary::after { content: " ▴"; }
+.menu-panel { position: absolute; left: 0; top: calc(100% + 6px); min-width: 300px; max-height: 75vh; overflow-y: auto;
+  background: var(--bg); border: 1px solid var(--rule); border-radius: 8px; box-shadow: 0 6px 24px rgba(0,0,0,.18);
+  padding: 8px 0; }
+.menu-panel .mh { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); padding: 8px 14px 2px; }
+.menu-panel a { display: block; padding: 4px 14px 4px 22px; color: var(--fg); text-decoration: none; }
+.menu-panel a:hover { background: var(--panel); }
+.menu-panel a[aria-current="page"] { background: var(--active); font-weight: 600; }
+details.more { border: 1px solid var(--rule); border-radius: 8px; margin: 12px 0; background: var(--panel); }
+details.more > summary { cursor: pointer; padding: 10px 14px; font: 600 15px system-ui, sans-serif; }
+details.more > div { padding: 0 16px 8px; }
+details.onpage { font: 14px/1.6 system-ui, sans-serif; margin: 10px 0 0; }
+details.onpage summary { cursor: pointer; color: var(--muted); }
+details.onpage a { margin-right: 12px; white-space: nowrap; }
+@media (max-width: 760px) { .menu-panel { position: fixed; left: 8px; right: 8px; top: 48px; min-width: 0; } }
 .wrap { display: grid; grid-template-columns: minmax(280px, 420px) minmax(0, 1fr); gap: 40px;
   max-width: 1180px; margin: 0 auto; padding: 24px 16px 64px; }
 .side { position: sticky; top: 16px; align-self: start; }
@@ -75,13 +98,25 @@ section.diag h3 { font-size: 19px; margin: 6px 0 4px; }
 .refute .t { font: 13px system-ui, sans-serif; color: var(--muted); }
 .toc { list-style: none; padding: 0; }
 .toc li { padding: 5px 0; border-bottom: 1px solid var(--rule); }
-.toc .h { color: var(--muted); font: 14px system-ui, sans-serif; display: inline-block; min-width: 150px; }
+.toc .h { color: var(--muted); font: 14px system-ui, sans-serif; display: inline-block; min-width: 205px; }
+@media (max-width: 760px) { .toc .h { display: block; } }
 .toc .cnt { font: 13px system-ui, sans-serif; color: var(--muted); margin-left: 8px; }
 .toc .orig { font: 13px system-ui, sans-serif; margin-left: 8px; }
 .pager { display: flex; justify-content: space-between; font: 14px system-ui, sans-serif; margin-top: 40px; clear: both; }
 .pager a, .toc a, .src a, main p a:not(.m1):not(.m2) { color: var(--link); }
 .optree h3 { font-size: 18px; margin: 22px 0 4px; }
 .optree p { margin: 4px 0 4px 18px; }
+pre.tbl { font: 13px/1.45 ui-monospace, Menlo, Consolas, monospace; background: var(--panel); border: 1px solid var(--rule);
+  border-radius: 6px; padding: 10px 12px; overflow-x: auto; }
+table.tbl { border-collapse: collapse; font: 14px/1.4 system-ui, sans-serif; margin: 10px 0; }
+table.tbl th, table.tbl td { border-bottom: 1px solid var(--rule); padding: 4px 10px 4px 0; text-align: left; vertical-align: top; }
+table.tbl th { color: var(--muted); font-weight: 600; }
+.hub { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin: 20px 0; }
+.hub a.card { display: block; border: 1px solid var(--rule); border-radius: 8px; padding: 14px 16px; background: var(--panel);
+  color: var(--fg); text-decoration: none; }
+.hub a.card:hover { border-color: var(--muted); }
+.hub a.card strong { display: block; font-size: 19px; margin-bottom: 4px; color: var(--link); }
+.hub a.card span { font-size: 15px; color: var(--muted); }
 @media (max-width: 760px) {
   .wrap { grid-template-columns: 1fr; gap: 16px; }
   .side { position: sticky; top: 0; background: var(--bg); padding-bottom: 6px; z-index: 2; }
@@ -92,7 +127,7 @@ section.diag h3 { font-size: 19px; margin: 6px 0 4px; }
 </style>
 </head>
 <body>
-<header><a href="../index.html">egdb-draughts</a><a href="index.html">Strategie der 36 velden</a><a href="opening.html">opening</a><a href="https://www.hijkendtc.nl/strategie-der-36-velden-hoofdstuk-4/">het origineel</a></header>
+<header><a class="brand" href="index.html">Strategie der 36 velden</a><details class="menu"><summary>Hoofdstukken</summary><nav class="menu-panel"><a href="index.html">Overzicht</a><div class="mh">Hoofdstuk 1</div><a href="h1.html">1 Inleiding</a><div class="mh">Hoofdstuk 2</div><a href="h2.html">2 De lange lijn</a><div class="mh">Hoofdstuk 3</div><a href="h3.html">3 Een hinderlijke schijf</a><a href="h3-3.html">3.3 Moeizame remise en luchtig slot</a><div class="mh">Hoofdstuk 4</div><a href="h4.html" aria-current="page">4 Een zwarte schijf op 15 en een zwarte dam</a><div class="mh">Hoofdstuk 5 · Scouppe</div><a href="h5a.html">5a Scouppe I</a><a href="h5b.html">5b Scouppe Trucs</a><a href="h5c.html">5c Scouppe: Dam op 17</a><a href="h5d.html">5d Compositie op finesse 5</a><div class="mh">Hoofdstuk 6 · Opgaven en oplossingen</div><a href="h6a.html">6a Intermezzo: acht opgaven (sectie 6.1)</a><a href="h6b.html">6b Zwaar manoeuvreren (sectie 6.2)</a><a href="h6a-opl.html">6a Oplossingen (sectie 6.1)</a><a href="h6-opl1.html">Oplossingen zwaar manoeuvreren I</a><a href="h6-opl2.html">Oplossingen zwaar manoeuvreren II</a><a href="h6-opl3.html">Oplossingen zwaar manoeuvreren III</a><div class="mh">Hoofdstuk 7 · De randslag-opening</div><a href="h7.html">7 De randslag-opening</a><a href="h7-2.html">7.2 De derde zet</a><a href="h7-3.html">7.3 De vierde zet</a><a href="h7-4.html">7.4 Naar voren</a><a href="h7-5.html">7.5 Achteruit</a><a href="h7-6.html">7.6 Een dijk van een stand</a><a href="h7-7.html">7.7 Conclusie</a><div class="mh">Hoofdstuk 8</div><a href="h8.html">8.0 Een schijf op 4</a><div class="mh">Hoofdstuk 9</div><a href="h9.html">9.0 Het taaie eindspel</a><div class="mh">De opening</div><a href="opening.html">De beginstand en alle openingen tot 3 ply</a></nav></details><a href="opening.html">Opening</a><a href="https://www.hijkendtc.nl/strategie-der-36-velden-hoofdstuk-4/">Origineel ↗</a><a href="../index.html">Alle sites</a></header>
 <div class="wrap">
   <aside class="side">
     <div id="board"></div>
@@ -108,6 +143,7 @@ section.diag h3 { font-size: 19px; margin: 6px 0 4px; }
 <p class="src">Hoofdstuk 4</p>
 <h1>Een zwarte schijf op 15 en een zwarte dam</h1>
 <p class="src">Herm Jan Brascamp, <a href="https://www.hijkendtc.nl/strategie-der-36-velden-hoofdstuk-4/">Een zwarte schijf op 15 en een zwarte dam</a>, <em>Strategie der 36 velden</em>, hijkendtc.nl. Hieronder per diagram de claims van het boek, de varianten en de weerleggingen, nagerekend met de databases.</p>
+<details class="onpage"><summary>Op deze pagina: 20 diagrammen</summary><a href="#d4.1a">4.1a ✅</a> <a href="#d4.1b">4.1b ✅</a> <a href="#d4.1c">4.1c ✅</a> <a href="#d4.1d">4.1d ✅</a> <a href="#d4.1e">4.1e ✅</a> <a href="#d4.2b">4.2b ✅</a> <a href="#d4.3">4.3 ✅</a> <a href="#d4.4">4.4 ✅</a> <a href="#d1.1">1.1</a> <a href="#d2.3">2.3</a> <a href="#d4.10">4.10 ✅</a> <a href="#d4.10b">4.10b ✅</a> <a href="#d4.10c">4.10c ✅</a> <a href="#d4.11">4.11 ✅</a> <a href="#d4.11b">4.11b ✅</a> <a href="#d4.11c">4.11c ❌</a> <a href="#d4.11d">4.11d ❌</a> <a href="#d4.12">4.12 ✅</a> <a href="#d4.12b">4.12b ❌</a> <a href="#d4.12c">4.12c ❌</a></details>
 <section class="diag" id="d4.1a"><h3>Diagram 4.1a</h3>
 <p class="note">dam op 9: winst langs dezelfde lijnen</p>
 <figure><a class="diagram" href="#" data-i="0"><div class="smallboard" data-g="6x6" data-fen="W:WK16,K17,K18:BK9,15"></div></a><figcaption>diagram 4.1a, wit aan zet</figcaption></figure>
@@ -402,7 +438,11 @@ document.getElementById('play').onclick = () => {
   document.getElementById('play').textContent = '❚❚';
   timer = setInterval(() => { if (POS[cur].next === null) stop(); else go(POS[cur].next); }, 900);
 };
+document.addEventListener('click', e => {
+  document.querySelectorAll('details.menu[open]').forEach(m => { if (!m.contains(e.target)) m.removeAttribute('open'); });
+});
 document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') document.querySelectorAll('details.menu[open]').forEach(m => m.removeAttribute('open'));
   if (e.key === 'ArrowLeft') { stop(); go(POS[cur].prev); }
   if (e.key === 'ArrowRight') { stop(); go(POS[cur].next); }
 });

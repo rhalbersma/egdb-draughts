@@ -27,8 +27,31 @@
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--fg);
   font: 17px/1.6 Charter, "Bitstream Charter", "Sitka Text", Cambria, Georgia, serif; }
-header { border-bottom: 1px solid var(--rule); padding: 10px 16px; font: 14px/1.4 system-ui, sans-serif; }
-header a { color: var(--muted); text-decoration: none; margin-right: 18px; }
+header { border-bottom: 1px solid var(--rule); padding: 8px 16px; font: 14px/1.4 system-ui, sans-serif;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 18px; position: relative; z-index: 5; }
+header > a { color: var(--muted); text-decoration: none; }
+header > a.brand { color: var(--fg); font-weight: 600; }
+header > a:hover { color: var(--fg); }
+.menu { position: relative; }
+.menu summary { list-style: none; cursor: pointer; color: var(--fg); border: 1px solid var(--rule); border-radius: 6px;
+  padding: 3px 10px; background: var(--panel); user-select: none; }
+.menu summary::-webkit-details-marker { display: none; }
+.menu summary::after { content: " ▾"; color: var(--muted); }
+.menu[open] summary::after { content: " ▴"; }
+.menu-panel { position: absolute; left: 0; top: calc(100% + 6px); min-width: 300px; max-height: 75vh; overflow-y: auto;
+  background: var(--bg); border: 1px solid var(--rule); border-radius: 8px; box-shadow: 0 6px 24px rgba(0,0,0,.18);
+  padding: 8px 0; }
+.menu-panel .mh { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); padding: 8px 14px 2px; }
+.menu-panel a { display: block; padding: 4px 14px 4px 22px; color: var(--fg); text-decoration: none; }
+.menu-panel a:hover { background: var(--panel); }
+.menu-panel a[aria-current="page"] { background: var(--active); font-weight: 600; }
+details.more { border: 1px solid var(--rule); border-radius: 8px; margin: 12px 0; background: var(--panel); }
+details.more > summary { cursor: pointer; padding: 10px 14px; font: 600 15px system-ui, sans-serif; }
+details.more > div { padding: 0 16px 8px; }
+details.onpage { font: 14px/1.6 system-ui, sans-serif; margin: 10px 0 0; }
+details.onpage summary { cursor: pointer; color: var(--muted); }
+details.onpage a { margin-right: 12px; white-space: nowrap; }
+@media (max-width: 760px) { .menu-panel { position: fixed; left: 8px; right: 8px; top: 48px; min-width: 0; } }
 .wrap { display: grid; grid-template-columns: minmax(280px, 420px) minmax(0, 1fr); gap: 40px;
   max-width: 1180px; margin: 0 auto; padding: 24px 16px 64px; }
 .side { position: sticky; top: 16px; align-self: start; }
@@ -75,7 +98,8 @@ section.diag h3 { font-size: 19px; margin: 6px 0 4px; }
 .refute .t { font: 13px system-ui, sans-serif; color: var(--muted); }
 .toc { list-style: none; padding: 0; }
 .toc li { padding: 5px 0; border-bottom: 1px solid var(--rule); }
-.toc .h { color: var(--muted); font: 14px system-ui, sans-serif; display: inline-block; min-width: 150px; }
+.toc .h { color: var(--muted); font: 14px system-ui, sans-serif; display: inline-block; min-width: 205px; }
+@media (max-width: 760px) { .toc .h { display: block; } }
 .toc .cnt { font: 13px system-ui, sans-serif; color: var(--muted); margin-left: 8px; }
 .toc .orig { font: 13px system-ui, sans-serif; margin-left: 8px; }
 .pager { display: flex; justify-content: space-between; font: 14px system-ui, sans-serif; margin-top: 40px; clear: both; }
@@ -103,7 +127,7 @@ table.tbl th { color: var(--muted); font-weight: 600; }
 </style>
 </head>
 <body>
-<header><a href="../index.html">egdb-draughts</a><a href="index.html">Checkers: 3 dammen tegen 2</a><a href="vesting.html">De vesting in de dubbele hoek</a></header>
+<header><a class="brand" href="index.html">Checkers: 3 dammen tegen 2</a><details class="menu"><summary>Pagina's</summary><nav class="menu-panel"><a href="index.html">Overzicht</a><a href="vesting.html" aria-current="page">De vesting in de dubbele hoek</a></nav></details><a href="../index.html">Alle sites</a></header>
 <div class="wrap">
   <aside class="side">
     <div id="board"></div>
@@ -251,7 +275,11 @@ document.getElementById('play').onclick = () => {
   document.getElementById('play').textContent = '❚❚';
   timer = setInterval(() => { if (POS[cur].next === null) stop(); else go(POS[cur].next); }, 900);
 };
+document.addEventListener('click', e => {
+  document.querySelectorAll('details.menu[open]').forEach(m => { if (!m.contains(e.target)) m.removeAttribute('open'); });
+});
 document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') document.querySelectorAll('details.menu[open]').forEach(m => m.removeAttribute('open'));
   if (e.key === 'ArrowLeft') { stop(); go(POS[cur].prev); }
   if (e.key === 'ArrowRight') { stop(); go(POS[cur].next); }
 });

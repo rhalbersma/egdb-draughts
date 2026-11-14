@@ -172,7 +172,7 @@ table.tbl th { color: var(--muted); font-weight: 600; }
   </aside>
   <main>
 <h1>3 kings against 1</h1>
-<pre class="tbl"> B \ L−B    0       1      2       3      4       5      6       7      8       9     10      11
+<pre class="tbl"> W \ H−W    0       1      2       3      4       5      6       7      8       9     10      11
  3        0/3      5     7/9      9    9/11     13   15/15
  4         9*     11     11      13     17      23     29      37
  5      11/15*    23   13/13     15   17/15     17   19/19     21   23/23
@@ -183,32 +183,32 @@ table.tbl th { color: var(--muted); font-weight: 600; }
 10       (15)     21     25     (27)   (19)    (31)   (21)    (21)   (19)     27   (19)    (19)
 11     (15)/(15)  21  (19)/21   (27) (17)/(19) (31) (19)/(21) (21) (19)/(21) (19)  (19)/25  (19)
 12       (15)     21     25     (27)   (19)    (31)   (21)    (21)   (19)    (21)          27</pre>
-<p class="note">In the tables: <code>21</code> = won, longest win 21 plies · <code>21*</code> = won provided the stronger side occupies the long diagonal(s) · <code>(21)</code> = drawn (the number is the longest win among the positions that are won) · <code>13/15</code> = p0/p1. A board <em>B × L</em> has <em>B</em> as its shorter side; p1 = the corner squares are playable, p0 = they are not (only relevant for odd × odd). † : on 8×8 there are 40 positions (2 up to symmetry) with the single king to move that draw by a fork, even with white on the long diagonal. Blank: not computed.</p>
+<p class="note">In the tables: <code>21</code> = won, longest win 21 plies · <code>21*</code> = won provided the stronger side occupies the long diagonal(s) · <code>(21)</code> = drawn (the number is the longest win among the positions that are won) · <code>13/15</code> = p0/p1. A board <em>W × H</em> has <em>W</em> as its shorter side; p1 = the corner squares are playable, p0 = they are not (only relevant for odd × odd). † : on 8×8 there are 40 positions (2 up to symmetry) with the single king to move that draw by a fork, even with white on the long diagonal. Blank: not computed.</p>
 <p>The 10×10 numbers agree with mdgsoftware.nl: with three kings to move 486,444 wins and 434,756 draws; with the single king to move 16,812 wins, 863,802 draws and 40,586 losses.</p>
 <h2>The three families</h2>
-<table class="tbl"><tr><th>Family</th><th>Result (B = 3 … 12)</th></tr>
-<tr><td><strong>L = B + 1</strong></td><td>won on every board</td></tr>
-<tr><td><strong>L = B + 2</strong></td><td>won, except the "wrong" colouring p0 for B = 9 and 11</td></tr>
-<tr><td><strong>L = 2B − 1</strong></td><td>won, except p0 for B = 9 and 11 (10×19: 27 plies, 11×21 p1: 25 plies,
+<table class="tbl"><tr><th>Family</th><th>Result (W = 3 … 12)</th></tr>
+<tr><td><strong>H = W + 1</strong></td><td>won on every board</td></tr>
+<tr><td><strong>H = W + 2</strong></td><td>won, except the "wrong" colouring p0 for W = 9 and 11</td></tr>
+<tr><td><strong>H = 2W − 1</strong></td><td>won, except p0 for W = 9 and 11 (10×19: 27 plies, 11×21 p1: 25 plies,
 12×23: 27 plies)</td></tr></table>
-<p>The colouring rule of the book is confirmed: from <em>B</em> = 9 on, for odd <em>B</em> only the colouring with
-playable corners (p1) wins. On <em>B</em> = 7 the wrong colouring still wins (5×9 p0, 7×13 p0) because the general
+<p>The colouring rule of the book is confirmed: from <em>W</em> = 9 on, for odd <em>W</em> only the colouring with
+playable corners (p1) wins. On <em>W</em> = 7 the wrong colouring still wins (5×9 p0, 7×13 p0) because the general
 method still reaches that far. How the families win is shown with the <a href="vangstellingen.html">trapping
 positions</a>.</p>
 <h2>The general method on narrow boards</h2>
 <ul>
-<li><strong>B = 5, 6</strong>: every non-square board is won (checked up to 5×13 and 6×15). Three kings in a column
+<li><strong>W = 5, 6</strong>: every non-square board is won (checked up to 5×13 and 6×15). Three kings in a column
 close off the full width and can be pushed along the board; the longest win grows by about 2 plies per extra
 column.</li>
-<li><strong>B = 7</strong>: won up to <strong>7×14</strong> and <strong>7×15 p1</strong> (book: up to 7×11). From
-<em>L</em> = 16 on it is drawn. The longest wins jump from 25 to 35, 49, 53 and 67–73 plies: the space becomes
+<li><strong>W = 7</strong>: won up to <strong>7×14</strong> and <strong>7×15 p1</strong> (book: up to 7×11). From
+<em>H</em> = 16 on it is drawn. The longest wins jump from 25 to 35, 49, 53 and 67–73 plies: the space becomes
 tight.</li>
-<li><strong>B = 8</strong>: won at <em>L</em> = 9, 10, 11 and 15 (= 2<em>B</em> − 1), drawn at <em>L</em> = 12–14 and
+<li><strong>W = 8</strong>: won at <em>H</em> = 9, 10, 11 and 15 (= 2<em>W</em> − 1), drawn at <em>H</em> = 12–14 and
 16–19.</li>
-<li><strong>B ≥ 9</strong>: only the families remain.</li>
+<li><strong>W ≥ 9</strong>: only the families remain.</li>
 </ul>
 <h2>Square boards: the long diagonal</h2>
-<p>On square boards with <em>B</em> ≥ 5 the single king holds the long diagonal(s). Splitting the quiet positions with
+<p>On square boards with <em>W</em> ≥ 5 the single king holds the long diagonal(s). Splitting the quiet positions with
 three kings to move by who occupies the long diagonal(s) (draws / positions):</p>
 <table class="tbl"><tr><th>Board</th><th>White on the long diagonal(s)</th><th>Nobody</th><th>Only black</th></tr>
 <tr><td>6×6</td><td>0 / 3,154</td><td>0 / 816</td><td>784 / 812</td></tr>
@@ -217,7 +217,7 @@ three kings to move by who occupies the long diagonal(s) (draws / positions):</p
 <tr><td>7×7 p1 (white on both)</td><td>0 / 6,032</td><td></td><td></td></tr>
 <tr><td>9×9 p1 (white on both)</td><td>32,492 / 39,328</td><td></td><td></td></tr>
 <tr><td>10×10</td><td>177,548 / 206,466</td><td></td><td></td></tr></table>
-<p>Up to <em>B</em> = 8 the long diagonal decides; from <em>B</em> = 9 on three kings cannot win even when they hold it.
+<p>Up to <em>W</em> = 8 the long diagonal decides; from <em>W</em> = 9 on three kings cannot win even when they hold it.
 With one long diagonal the condition amounts to "black does not hold it"; with two diagonals white really needs
 both.</p>
 <h2>8×8: a longest win</h2>

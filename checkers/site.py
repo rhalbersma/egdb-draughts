@@ -19,7 +19,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(ROOT / 'common'))
-from sitekit import FastEngine, Page, esc, write_page   # noqa: E402
+from sitekit import FastEngine, Page, esc, menu, write_page   # noqa: E402
 
 TITLE = 'Checkers: 3 dammen tegen 2'
 
@@ -42,9 +42,10 @@ class Site:
                                            '--white', nw, '--black', nb)
         return key, self.engines[key]
 
-    def nav(self):
-        links = ''.join(f'<a href="{f}">{esc(t)}</a>' for f, t in PAGES[1:])
-        return f'<a href="../index.html">egdb-draughts</a><a href="index.html">{esc(TITLE)}</a>' + links
+    def nav(self, current=None):
+        items = [(f, t) for f, t in PAGES]
+        return (f'<a class="brand" href="index.html">{esc(TITLE)}</a>{menu([(None, items)], current, "Pagina\'s")}'
+                f'<a href="../index.html">Alle sites</a>')
 
     def page(self, *boards):
         pg = Page()
@@ -57,7 +58,7 @@ class Site:
         prev = f'<a href="{PAGES[k - 1][0]}">← {esc(PAGES[k - 1][1])}</a>' if k > 0 else '<span></span>'
         nxt = f'<a href="{PAGES[k + 1][0]}">{esc(PAGES[k + 1][1])} →</a>' if k + 1 < len(PAGES) else '<span></span>'
         body += f'\n<nav class="pager">{prev}{nxt}</nav>'
-        write_page(self.out / name, title, self.nav(), body, pg, TITLE)
+        write_page(self.out / name, title, self.nav(name), body, pg, TITLE)
 
     @staticmethod
     def plan(text):

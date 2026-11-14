@@ -241,3 +241,16 @@ def md(text, base=''):
             para.append(ln.strip())
     flush()
     return '\n'.join(out)
+
+
+def menu(groups, current=None, label='Inhoud'):
+    """an expandable menu for the header: groups = [(heading or None, [(href, text)])]"""
+    out = [f'<details class="menu"><summary>{esc(label)}</summary><nav class="menu-panel">']
+    for heading, items in groups:
+        if heading:
+            out.append(f'<div class="mh">{esc(heading)}</div>')
+        for href, text in items:
+            cur = ' aria-current="page"' if href == current else ''
+            out.append(f'<a href="{href}"{cur}>{esc(text)}</a>')
+    out.append('</nav></details>')
+    return ''.join(out)

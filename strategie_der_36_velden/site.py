@@ -27,7 +27,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(ROOT / 'common'))
-from sitekit import Page, badge, esc, geom_6x6, md, write_page   # noqa: E402
+from sitekit import Page, badge, esc, geom_6x6, md, menu, write_page   # noqa: E402
 from check import Engine, parse_line                           # noqa: E402
 from claims import DIAGRAMS, LINES                             # noqa: E402
 from corrections import (absolute, agrees, build_book,         # noqa: E402
@@ -40,6 +40,24 @@ ORIGINAL = 'https://www.hijkendtc.nl/strategie-der-36-velden-hjb/'
 REPO = 'https://github.com/rhalbersma/egdb-draughts'
 TITLE = 'Strategie der 36 velden'
 H = 'https://www.hijkendtc.nl/'
+
+# the menu: the pages grouped per chapter of the book
+GROUPS = [
+    ('Hoofdstuk 1', ['h1']), ('Hoofdstuk 2', ['h2']), ('Hoofdstuk 3', ['h3', 'h3-3']), ('Hoofdstuk 4', ['h4']),
+    ('Hoofdstuk 5 · Scouppe', ['h5a', 'h5b', 'h5c', 'h5d']),
+    ('Hoofdstuk 6 · Opgaven en oplossingen', ['h6a', 'h6b', 'h6a-opl', 'h6-opl1', 'h6-opl2', 'h6-opl3']),
+    ('Hoofdstuk 7 · De randslag-opening', ['h7', 'h7-2', 'h7-3', 'h7-4', 'h7-5', 'h7-6', 'h7-7']),
+    ('Hoofdstuk 8', ['h8']), ('Hoofdstuk 9', ['h9']),
+]
+
+# the landing page: the same pages in the order of the book's website, consecutive pages of a chapter on one line
+LANDING = [
+    ('Hoofdstuk 1', ['h1']), ('Hoofdstuk 2', ['h2']), ('Hoofdstuk 3', ['h3', 'h3-3']), ('Hoofdstuk 4', ['h4']),
+    ('Hoofdstuk 5 · Scouppe', ['h5a', 'h5b', 'h5c', 'h5d']), ('Hoofdstuk 6 · Opgaven', ['h6a', 'h6b']),
+    ('Hoofdstuk 7', ['h7']), ('Hoofdstuk 6 · Oplossingen', ['h6a-opl', 'h6-opl1', 'h6-opl2', 'h6-opl3']),
+    ('Hoofdstuk 7 · Vervolg', ['h7-2', 'h7-3', 'h7-4', 'h7-5', 'h7-6', 'h7-7']), ('Hoofdstuk 8', ['h8']),
+    ('Hoofdstuk 9', ['h9']),
+]
 
 # the pages of the book's website in its own order: (file, label, title, original, sections, diagrams)
 PAGES = [
@@ -188,9 +206,19 @@ class Site:
             self.home[did] = cand[0]
         self.page_of = {p[0]: p for p in PAGES}
 
-    def nav(self, orig=ORIGINAL):
-        return (f'<a href="../index.html">egdb-draughts</a><a href="index.html">Strategie der 36 velden</a>'
-                f'<a href="opening.html">opening</a><a href="{orig}">het origineel</a>')
+    def nav(self, orig=ORIGINAL, current=None):
+        groups = [('', [('index.html', 'Overzicht')])]
+        for heading, pids in GROUPS:
+            items = []
+            for pid in pids:
+                _, lab, title, *_ = self.page_of[pid]
+                short = lab.replace('Hoofdstuk ', '') if lab else ''
+                items.append((f'{pid}.html', f'{short} {title}'.strip()))
+            groups.append((heading, items))
+        groups.append(('De opening', [('opening.html', 'De beginstand en alle openingen tot 3 ply')]))
+        return (f'<a class="brand" href="index.html">Strategie der 36 velden</a>'
+                f'{menu(groups, current, "Hoofdstukken")}<a href="opening.html">Opening</a>'
+                f'<a href="{orig}">Origineel ↗</a><a href="../index.html">Alle sites</a>')
 
     def page(self):
         pg = Page()
@@ -198,7 +226,7 @@ class Site:
         return pg
 
     def write(self, name, title, body, pg, orig=ORIGINAL):
-        write_page(self.out / name, title, self.nav(orig), body, pg, TITLE)
+        write_page(self.out / name, title, self.nav(orig, name), body, pg, TITLE)
 
     def refutation_html(self, pg, fen, start, cont, number, own, refute_at=None, stop_on_book=True):
         r = refutation(self.eng, fen, cont, number, self.known, own, refute_at=refute_at, stop_on_book=stop_on_book)
@@ -302,6 +330,13 @@ class Site:
                 f'<p class="src">Herm Jan Brascamp, <a href="{orig}">{esc(title)}</a>, <em>Strategie der 36 '
                 f'velden</em>, hijkendtc.nl. Hieronder per diagram de claims van het boek, de varianten en de '
                 f'weerleggingen, nagerekend met de databases.</p>']
+        marks = []
+        for did in dids:
+            sides = self.diag[did]['sides'].values() if self.home[did] == pid else []
+            oks = [x.get('ok') for x in sides if x.get('ok') is not None]
+            marks.append(f'<a href="#d{did}">{did}{" ❌" if False in oks else " ✅" if oks else ""}</a>')
+        body.append(f'<details class="onpage"><summary>Op deze pagina: {len(dids)} diagram'
+                    f'{"men" if len(dids) != 1 else ""}</summary>{" ".join(marks)}</details>')
         for did in dids:
             body.append(self.diagram_block(pg, did, pid))
         prev = f'<a href="{PAGES[k - 1][0]}.html">← {esc(PAGES[k - 1][2])}</a>' if k > 0 else '<span></span>'
@@ -333,18 +368,33 @@ class Site:
         text = (HERE / 'bevindingen.md').read_text()
         intro = text[:text.index('## Belangrijkste bevindingen')]
         intro = intro[intro.index('\n') + 1:]          # without the title
+        parts = re.split(r'(?m)^### ', intro)
+        lead, sections = parts[0], [x.split('\n', 1) for x in parts[1:]]
         fig, _ = pg.diagram(START, 'de beginstand')
         toc = ['<ul class="toc">']
-        for pid, lab, title, orig, sections, listed in PAGES:
-            toc.append(f'<li><span class="h">{esc(lab)}</span><a href="{pid}.html">{esc(title)}</a>'
-                       f'<span class="cnt">{self.counts(pid)}</span> <a class="orig" href="{orig}">origineel</a></li>')
+        for heading, pids in LANDING:
+            links = []
+            for pid in pids:
+                _, lab, title, *_ = self.page_of[pid]
+                short = lab.replace('Hoofdstuk ', '') if lab and len(pids) > 1 else ''
+                links.append(f'<a href="{pid}.html">{esc((short + " " + title).strip())}</a>')
+            toc.append(f'<li><span class="h">{esc(heading)}</span>{" · ".join(links)}</li>')
         toc.append('</ul>')
-        body = ['<h1>Strategie der 36 velden</h1>', fig, md(intro, 'strategie_der_36_velden/'), '<h2>Inhoud</h2>',
-                '<p>De hoofdstukken in de volgorde van de website van het boek; per hoofdstuk de diagrammen, de '
-                'varianten en de weerleggingen.</p>', '\n'.join(toc),
+        rows = ''.join(f'<tr><td>{esc(lab)}</td><td><a href="{pid}.html">{esc(title)}</a></td><td>{self.counts(pid)}</td></tr>'
+                       for pid, lab, title, *_ in PAGES)
+        body = ['<h1>Strategie der 36 velden</h1>', fig, md(lead, 'strategie_der_36_velden/'),
+                '<h2>Hoofdstukken</h2>', '<p>In de volgorde van de website van het boek. Elk hoofdstuk toont de '
+                'diagrammen met de claims van het boek, de varianten en de weerleggingen; het menu '
+                '<em>Hoofdstukken</em> bovenaan brengt je overal heen.</p>', '\n'.join(toc),
                 '<h2>De opening</h2><p>Met de databases tot en met 10 stukken is ook de beginstand van 6×6 opgelost: '
-                '<a href="opening.html">remise, met alle openingen tot 3 ply</a>.</p>',
-                f'<p class="src">Het volledige rapport, de databases en de programma\'s: <a href="{REPO}">{REPO}</a>.</p>']
+                '<a href="opening.html">remise, met alle openingen tot 3 ply</a>.</p>', '<h2>Achtergrond</h2>']
+        for head, rest in sections:
+            body.append(f'<details class="more"><summary>{esc(head.strip())}</summary><div>'
+                        f'{md(rest, "strategie_der_36_velden/")}</div></details>')
+        body.append('<details class="more"><summary>Resultaten per hoofdstuk</summary><div><p>✅ bevestigd, ❌ onjuist; '
+                    'bij de varianten ook ⚠️ opmerking, ✏️ notatiefout, ℹ️ informatief.</p><table class="tbl">'
+                    f'{rows}</table></div></details>')
+        body.append(f'<p class="src">Het volledige rapport, de databases en de programma\'s: <a href="{REPO}">{REPO}</a>.</p>')
         self.write('index.html', 'Overzicht', '\n'.join(body), pg)
 
     def opening_page(self):

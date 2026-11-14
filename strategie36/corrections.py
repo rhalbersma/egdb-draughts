@@ -99,51 +99,65 @@ def refutation(eng, fen, cont, number, known, own, refute_at=None, stop_on_book=
         seq.append(mv)
         cur = mv[2]
     return {'seq': seq, 'star': star, 'err': err, 'refute': refute, 'reached': reached, 'ending': ending,
-            'after': seq[refute][2] if refute is not None else (seq[min(len(cont), len(seq)) - 1][2] if cont and seq else fen),
-            'number': number}
+            'number': number, 'nbook': len(cont)}
 
 
-def render(r, stm):
-    """-> (head, lines of the main line)"""
+def render(r, stm, fen):
+    """-> (head, lines of the main line, position shown, book moves before it). The diagram shows the position
+    where the refutation is played (or, without refutation, the end of the book's variation), and the main line
+    starts there."""
     seq, refute, ending = r['seq'], r['refute'], r['ending']
+    if refute is not None:
+        s = refute
+    elif r['reached']:
+        s = 0
+    else:
+        s = min(r['nbook'], len(seq))
+    pos = seq[s - 1][2] if s else fen
 
     def nota(i):
         return (seq[i][0].replace('x', '×') + ('?' if r['err'][i] else '') + ('!' if i == refute else '')
                 + ('*' if r['star'][i] else '') + ('+' if ending == 'mate' and i == len(seq) - 1 else ''))
+
+    def number(k):
+        return r['number'] + (k + (1 if stm == 'B' else 0)) // 2
+
+    def black(k):
+        return (k + (1 if stm == 'B' else 0)) % 2 == 1
+    prefix = ' '.join((f'{number(i)}. ' if not black(i) else (f'{number(i)}. … ' if i == 0 else '')) + nota(i)
+                      for i in range(s))
     col = []
-    k, i = (1 if stm == 'B' else 0), 0
+    i = s
     while i < len(seq):
-        num = f"{r['number'] + k // 2}.".ljust(4)
-        if k % 2 == 1:
+        num = f'{number(i)}.'.ljust(4)
+        if black(i):
             col.append(f'  {num}…          {nota(i)}')
             i += 1
-            k += 1
             continue
         col.append(f"  {num}{nota(i):10} {nota(i + 1) if i + 1 < len(seq) else ''}".rstrip())
         i += 2
-        k += 2
     if r['reached']:
         col.append(f"  → diagram {r['reached'][0]} ({r['reached'][1]})")
     elif ending == 'draw':
         col.append('  … D')
     if refute is not None:
-        kk = refute + (1 if stm == 'B' else 0)
-        head = f"weerlegging {r['number'] + kk // 2}. {'… ' if kk % 2 else ''}{nota(refute)}"
+        head = f"weerlegging {number(refute)}. {'… ' if black(refute) else ''}{nota(refute)}"
     elif r['reached']:
         head = f"variant naar diagram {r['reached'][0]} ({r['reached'][1]})"
     else:
         head = 'voortzetting na het boek'
-    return head, col
+    return head, col, pos, prefix
 
 
 def side(stm):
     return 'wit' if stm == 'W' else 'zwart'
 
 
-INTRO = ('Het diagram toont de stelling na de weerlegging, ernaast de hoofdvariant vanaf het begin: na de '
-         'weerlegging de snelste winst tegen de taaiste verdediging (bij remise een korte voortzetting), tot het '
-         'einde van de partij ("+") of tot een ander diagram uit het boek. "!" = de weerlegging, "*" = de enige '
-         'zet die de winst of de remise behoudt, "?" = een zet uit het boek die het resultaat verandert.')
+INTRO = ('Het diagram toont de stelling waarin de weerlegging ("!") gespeeld wordt, met de partij aan zet en de '
+         'waarde; ernaast de hoofdvariant vanaf de weerlegging: de snelste winst tegen de taaiste verdediging (bij '
+         'remise een korte voortzetting), tot het einde van de partij ("+") of tot een ander diagram uit het boek. '
+         '"*" = de enige zet die de winst of de remise behoudt, "?" = een zet uit het boek die het resultaat '
+         'verandert.')
 
 
 def main():
@@ -196,16 +210,18 @@ def main():
             fen = stm + d['fen'][1:]
             cont, number = book.get(fen, ([], 1))
             r = refutation(eng, fen, cont, number, known, d['id'])
-            head, col = render(r, stm)
-            col = [f"{side(stm)} aan zet: {sd['val']}", f"boek:  {claim_label(sd['claim'], stm)} ❌", ''] + col
-            out += [f"#### Diagram {d['id']}, {side(stm)} aan zet: {head}", '', f"*{d['note']}*", '',
-                    '```text', with_columns(r['after'], [col]), '```', '']
+            head, col, pos, prefix = render(r, stm, fen)
+            ps = pos[0]
+            col = [f"{side(ps)} aan zet: {eng.analyse(pos)[0]}", f"boek:  {claim_label(sd['claim'], ps)} ❌", ''] + col
+            note = f"*{d['note']}*" + (f"; boek: {prefix}" if prefix else '')
+            out += [f"#### Diagram {d['id']}, {side(stm)} aan zet: {head}", '', note, '',
+                    '```text', with_columns(pos, [col]), '```', '']
             print(f"diagram {d['id']} {stm}: {head}", file=sys.stderr)
     Path(args.out).write_text('\n'.join(out) + '\n')
 
     out = ['Voor elke variant waarvan de eindclaim niet klopt: de claim van het boek gaat over de stelling aan het '
            'einde van de variant. De weerlegging vervangt de laatste zet van de variant waarna de claim niet meer '
-           'opgaat. Boven de hoofdvariant staat de waarde van de beginstelling en van de eindstelling van de variant uit het boek, met de claim van het boek. Klopt de claim in geen enkele stelling van de variant, dan is er geen weerlegging en loopt de '
+           'opgaat. Boven de hoofdvariant staan ook de eindstelling van de variant uit het boek en de claim van het boek. Klopt de claim in geen enkele stelling van de variant, dan is er geen weerlegging en loopt de '
            'hoofdvariant door vanaf het einde van de variant; het diagram toont dan die eindstelling. ' + INTRO, '']
     for ln in results['lines']:
         if ln['status'] != 'onjuist':
@@ -219,15 +235,18 @@ def main():
         m0 = re.match(r'\s*(\d+)\.', ln['text'])
         number = int(m0.group(1)) if m0 else 1
         r = refutation(eng, fen, cont, number, known, ln['start'], refute_at=refute_at, stop_on_book=False)
-        head, col = render(r, stm)
+        head, col, pos, prefix = render(r, stm, fen)
         e = ln['end_fen'][0]
+        ps = pos[0]
         if r['refute'] is None and not r['reached']:
             head += f": {side(e)} aan zet {ln['end_val']}"
-        col = [f"{side(stm)} aan zet: {ln['plies'][0]['val_before']}", f"einde: {side(e)} aan zet {ln['end_val']}",
-               f"boek:  {claim_label(ln['claim'], e)} ❌", ''] + col
+            col = [f"{side(e)} aan zet: {ln['end_val']}", f"boek:  {claim_label(ln['claim'], e)} ❌", ''] + col
+        else:
+            col = [f"{side(ps)} aan zet: {eng.analyse(pos)[0]}", f"einde boek: {side(e)} aan zet {ln['end_val']}",
+                   f"boek:  {claim_label(ln['claim'], e)} ❌", ''] + col
         text = ln['text'] + (f" — {ln['note']}" if ln['note'] else '')
         out += [f"#### Sectie {ln['section']}, vanaf diagram {ln['start']}: {head}", '', f'*{text}*', '',
-                '```text', with_columns(r['after'], [col]), '```', '']
+                '```text', with_columns(pos, [col]), '```', '']
         print(f"line {ln['section']} {ln['start']}: {head}", file=sys.stderr)
     Path(args.out_lines).write_text('\n'.join(out) + '\n')
 

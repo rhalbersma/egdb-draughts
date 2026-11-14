@@ -1,4 +1,4 @@
-Voor elke diagramclaim die niet klopt: de variant van het boek wordt gevolgd zolang die het resultaat behoudt; de eerste zet van het boek die het resultaat verandert, wordt vervangen door de beste zet. Zonder variant in het boek is de eerste beste zet de weerlegging. Het diagram toont de stelling na de weerlegging, ernaast de hoofdvariant vanaf het begin: na de weerlegging de snelste winst tegen de taaiste verdediging (bij remise een korte voortzetting), tot het einde van de partij ("+") of tot een ander diagram uit het boek. "!" = de weerlegging, "*" = de enige zet die de winst of de remise behoudt, "?" = een zet uit het boek die het resultaat verandert.
+Voor elke diagramclaim die niet klopt: de variant van het boek wordt gevolgd zolang die het resultaat behoudt; de eerste zet van het boek die het resultaat verandert, wordt vervangen door de beste zet. Zonder variant in het boek is de eerste beste zet de weerlegging. Het diagram toont de stelling waarin de weerlegging ("!") gespeeld wordt, met de partij aan zet en de waarde; ernaast de hoofdvariant vanaf de weerlegging: de snelste winst tegen de taaiste verdediging (bij remise een korte voortzetting), tot het einde van de partij ("+") of tot een ander diagram uit het boek. "*" = de enige zet die de winst of de remise behoudt, "?" = een zet uit het boek die het resultaat verandert.
 
 #### Diagram 4.11c, wit aan zet: weerlegging 1. 1-4!
 
@@ -6,8 +6,8 @@ Voor elke diagramclaim die niet klopt: de variant van het boek wordt gevolgd zol
 
 ```text
     +-------------+     +-------------------+     wit aan zet: W21
-  6 |   .   .   B |     |     1     2     3 |     boek:  D ❌
-  5 | W   .   .   |     |  4     5     6    |
+  6 |   W   .   B |     |     1     2     3 |     boek:  D ❌
+  5 | .   .   .   |     |  4     5     6    |
   4 |   .   .   w |     |     7     8     9 |       1.  1-4!       3-8
   3 | .   .   .   |     | 10    11    12    |       2.  4-7        8-16
   2 |   .   w   b |     |    13    14    15 |       3.  7-2        16-3
@@ -27,12 +27,12 @@ Voor elke diagramclaim die niet klopt: de variant van het boek wordt gevolgd zol
 
 ```text
     +-------------+     +-------------------+     zwart aan zet: L22
-  6 |   W   .   . |     |     1     2     3 |     boek:  D ❌
+  6 |   W   .   B |     |     1     2     3 |     boek:  D ❌
   5 | .   .   .   |     |  4     5     6    |
   4 |   .   .   w |     |     7     8     9 |       1.  …          3-16!
   3 | .   .   .   |     | 10    11    12    |       2.  1-4        16-3
   2 |   .   w   b |     |    13    14    15 |       3.  4-7        3-16
-  1 | B   .   W   |     | 16    17    18    |       4.  7-2        16-3
+  1 | .   .   W   |     | 16    17    18    |       4.  7-2        16-3
     +-------------+     +-------------------+       5.  2-10       3-8
       a b c d e f                                   6.  10-5       8×1
                                                     7.  14-11      1-4
@@ -49,8 +49,8 @@ Voor elke diagramclaim die niet klopt: de variant van het boek wordt gevolgd zol
 
 ```text
     +-------------+     +-------------------+     wit aan zet: W21
-  6 |   .   .   . |     |     1     2     3 |     boek:  D ❌
-  5 | W   .   .   |     |  4     5     6    |
+  6 |   W   .   . |     |     1     2     3 |     boek:  D ❌
+  5 | .   .   .   |     |  4     5     6    |
   4 |   .   .   w |     |     7     8     9 |       1.  1-4!       16-3
   3 | .   .   .   |     | 10    11    12    |       2.  4-7        3-16
   2 |   .   w   b |     |    13    14    15 |       3.  7-2        16-3
@@ -70,12 +70,12 @@ Voor elke diagramclaim die niet klopt: de variant van het boek wordt gevolgd zol
 
 ```text
     +-------------+     +-------------------+     zwart aan zet: L22
-  6 |   W   .   B |     |     1     2     3 |     boek:  D ❌
+  6 |   W   .   . |     |     1     2     3 |     boek:  D ❌
   5 | .   .   .   |     |  4     5     6    |
   4 |   .   .   w |     |     7     8     9 |       1.  …          16-3!
   3 | .   .   .   |     | 10    11    12    |       → diagram 4.11c (W21)
   2 |   .   w   b |     |    13    14    15 |
-  1 | .   .   W   |     | 16    17    18    |
+  1 | B   .   W   |     | 16    17    18    |
     +-------------+     +-------------------+
       a b c d e f
 ```
@@ -86,10 +86,10 @@ Voor elke diagramclaim die niet klopt: de variant van het boek wordt gevolgd zol
 
 ```text
     +-------------+     +-------------------+     wit aan zet: W25
-  6 |   .   .   . |     |     1     2     3 |     boek:  D ❌
+  6 |   W   .   . |     |     1     2     3 |     boek:  D ❌
   5 | .   .   .   |     |  4     5     6    |
   4 |   W   .   w |     |     7     8     9 |       1.  1-12!      15×8
-  3 | .   .   W   |     | 10    11    12    |       2.  7-11*      13-10
+  3 | .   .   .   |     | 10    11    12    |       2.  7-11*      13-10
   2 |   B   .   b |     |    13    14    15 |       3.  11×3       10-5
   1 | .   .   w   |     | 16    17    18    |       4.  3-11       5-1
     +-------------+     +-------------------+       5.  9-6        1-5
@@ -113,8 +113,8 @@ Voor elke diagramclaim die niet klopt: de variant van het boek wordt gevolgd zol
   5 | .   .   .   |     |  4     5     6    |
   4 |   W   .   w |     |     7     8     9 |       1.  …          13-16!
   3 | .   .   .   |     | 10    11    12    |       2.  7-4        16-3
-  2 |   .   .   b |     |    13    14    15 |       3.  4-14       3-16
-  1 | B   .   w   |     | 16    17    18    |       4.  14-7       16-13
+  2 |   B   .   b |     |    13    14    15 |       3.  4-14       3-16
+  1 | .   .   w   |     | 16    17    18    |       4.  14-7       16-13
     +-------------+     +-------------------+       5.  1-12       15×8
       a b c d e f                                   6.  7-11*      13-10
                                                     7.  11×3       10-5
@@ -137,8 +137,8 @@ Voor elke diagramclaim die niet klopt: de variant van het boek wordt gevolgd zol
 ```text
     +-------------+     +-------------------+     wit aan zet: W31
   6 |   W   .   . |     |     1     2     3 |     boek:  D ❌
-  5 | W   .   .   |     |  4     5     6    |
-  4 |   .   .   w |     |     7     8     9 |       1.  7-4!       16-3
+  5 | .   .   .   |     |  4     5     6    |
+  4 |   W   .   w |     |     7     8     9 |       1.  7-4!       16-3
   3 | .   .   .   |     | 10    11    12    |       2.  4-14       3-16
   2 |   .   .   b |     |    13    14    15 |       3.  14-7       16-13
   1 | B   .   w   |     | 16    17    18    |       → diagram 4.12b (W25)
@@ -156,8 +156,8 @@ Voor elke diagramclaim die niet klopt: de variant van het boek wordt gevolgd zol
   5 | .   .   .   |     |  4     5     6    |
   4 |   W   .   w |     |     7     8     9 |       1.  …          16-13!
   3 | .   .   .   |     | 10    11    12    |       → diagram 4.12b (W25)
-  2 |   B   .   b |     |    13    14    15 |
-  1 | .   .   w   |     | 16    17    18    |
+  2 |   .   .   b |     |    13    14    15 |
+  1 | B   .   w   |     | 16    17    18    |
     +-------------+     +-------------------+
       a b c d e f
 ```
@@ -169,8 +169,8 @@ Voor elke diagramclaim die niet klopt: de variant van het boek wordt gevolgd zol
 ```text
     +-------------+     +-------------------+     zwart aan zet: L52
   6 |   b   .   b |     |     1     2     3 |     boek:  D ❌
-  5 | b   .   .   |     |  4     5     6    |
-  4 |   .   b   b |     |     7     8     9 |       3.  …          5-8
+  5 | b   b   .   |     |  4     5     6    |
+  4 |   .   .   b |     |     7     8     9 |       3.  …          5-8
   3 | .   .   .   |     | 10    11    12    |       → diagram 7.4 (W51)
   2 |   w   w   w |     |    13    14    15 |
   1 | .   w   w   |     | 16    17    18    |
@@ -184,11 +184,11 @@ Voor elke diagramclaim die niet klopt: de variant van het boek wordt gevolgd zol
 
 ```text
     +-------------+     +-------------------+     wit aan zet: W51
-  6 |   .   .   . |     |     1     2     3 |     boek:  D ❌
-  5 | b   b   .   |     |  4     5     6    |
+  6 |   b   .   b |     |     1     2     3 |     boek:  D ❌
+  5 | b   .   .   |     |  4     5     6    |
   4 |   .   b   b |     |     7     8     9 |       4.  14-11*     1-5
   3 | .   .   .   |     | 10    11    12    |       5.  11×6*      3×8
-  2 |   w   .   w |     |    13    14    15 |       → diagram 7.10 (W35)
+  2 |   w   w   w |     |    13    14    15 |       → diagram 7.10 (W35)
   1 | .   w   w   |     | 16    17    18    |
     +-------------+     +-------------------+
       a b c d e f
@@ -196,14 +196,14 @@ Voor elke diagramclaim die niet klopt: de variant van het boek wordt gevolgd zol
 
 #### Diagram 7.6, wit aan zet: weerlegging 5. … 9-12!*
 
-*na 4. … 1-5: wit wint*
+*na 4. … 1-5: wit wint*; boek: 5. 17-13
 
 ```text
-    +-------------+     +-------------------+     wit aan zet: D
-  6 |   .   .   b |     |     1     2     3 |     boek:  W ❌
+    +-------------+     +-------------------+     zwart aan zet: D
+  6 |   .   .   b |     |     1     2     3 |     boek:  L ❌
   5 | b   b   .   |     |  4     5     6    |
-  4 |   .   b   . |     |     7     8     9 |       5.  17-13      9-12!*
-  3 | w   .   b   |     | 10    11    12    |       6.  14×9*      3-6*
+  4 |   .   b   b |     |     7     8     9 |       5.  …          9-12!*
+  3 | w   .   .   |     | 10    11    12    |       6.  14×9*      3-6*
   2 |   w   w   w |     |    13    14    15 |       7.  9×7*       4×16*
   1 | .   .   w   |     | 16    17    18    |       8.  10-7       8-11
     +-------------+     +-------------------+       9.  7×14*      16-3
@@ -214,38 +214,34 @@ Voor elke diagramclaim die niet klopt: de variant van het boek wordt gevolgd zol
 
 #### Diagram 7.13, wit aan zet: weerlegging 9. 13-11!*
 
-*wit aan zet, remise*
+*wit aan zet, remise*; boek: 8. 9-6* 8×3
 
 ```text
-    +-------------+     +-------------------+     wit aan zet: W13
+    +-------------+     +-------------------+     wit aan zet: W11
   6 |   .   .   b |     |     1     2     3 |     boek:  D ❌
   5 | b   .   .   |     |  4     5     6    |
-  4 |   b   .   . |     |     7     8     9 |       8.  9-6*       8×3
-  3 | .   w   .   |     | 10    11    12    |       9.  13-11!*    7×14
-  2 |   .   .   w |     |    13    14    15 |       10. 18×11*     3-6
-  1 | .   .   w   |     | 16    17    18    |       11. 15-12*     4-7
-    +-------------+     +-------------------+       12. 11×4*      6-9
-      a b c d e f                                   13. 12-8*      9-12
-                                                    14. 8×15*+
+  4 |   b   .   . |     |     7     8     9 |       9.  13-11!*    7×14
+  3 | .   .   .   |     | 10    11    12    |       10. 18×11*     3-6
+  2 |   w   .   w |     |    13    14    15 |       11. 15-12*     4-7
+  1 | .   .   w   |     | 16    17    18    |       12. 11×4*      6-9
+    +-------------+     +-------------------+       13. 12-8*      9-12
+      a b c d e f                                   14. 8×15*+
 ```
 
 #### Diagram 7.22, zwart aan zet: weerlegging 10. 12-8!*
 
-*na 7. 17-14: op drie van de vier zetten wint wit*
+*na 7. 17-14: op drie van de vier zetten wint wit*; boek: 7. … 7-10 8. 13-11* 4-7 9. 11×4* 10-13
 
 ```text
-    +-------------+     +-------------------+     zwart aan zet: L44
+    +-------------+     +-------------------+     wit aan zet: W39
   6 |   .   b   b |     |     1     2     3 |     boek:  D ❌
   5 | w   .   .   |     |  4     5     6    |
-  4 |   .   w   . |     |     7     8     9 |       7.  …          7-10
-  3 | .   .   .   |     | 10    11    12    |       8.  13-11*     4-7
-  2 |   b   w   . |     |    13    14    15 |       9.  11×4*      10-13
-  1 | .   .   w   |     | 16    17    18    |       10. 12-8!*     13-16
-    +-------------+     +-------------------+       11. 14-11*     2-5
-      a b c d e f                                   12. 8×1*       16×6
-                                                    13. 18-14      6-13
-                                                    14. 1-15*      13-6
-                                                    15. 4-1        6-13
+  4 |   .   .   . |     |     7     8     9 |       10. 12-8!*     13-16
+  3 | .   .   w   |     | 10    11    12    |       11. 14-11*     2-5
+  2 |   b   w   . |     |    13    14    15 |       12. 8×1*       16×6
+  1 | .   .   w   |     | 16    17    18    |       13. 18-14      6-13
+    +-------------+     +-------------------+       14. 1-15*      13-6
+      a b c d e f                                   15. 4-1        6-13
                                                     16. 1-4        13-6
                                                     17. 4-7        6-9
                                                     18. 14-11      9-2
@@ -268,10 +264,10 @@ Voor elke diagramclaim die niet klopt: de variant van het boek wordt gevolgd zol
 
 ```text
     +-------------+     +-------------------+     wit aan zet: W39
-  6 |   W   .   B |     |     1     2     3 |     boek:  D ❌
+  6 |   W   W   B |     |     1     2     3 |     boek:  D ❌
   5 | b   .   .   |     |  4     5     6    |
   4 |   .   .   . |     |     7     8     9 |       1.  2-10!      3-6
-  3 | W   .   .   |     | 10    11    12    |       2.  1-5        6-3
+  3 | .   .   .   |     | 10    11    12    |       2.  1-5        6-3
   2 |   .   w   w |     |    13    14    15 |       3.  10-17      3-16
   1 | .   .   .   |     | 16    17    18    |       4.  14-12      16-6
     +-------------+     +-------------------+       5.  5-10       6-16
@@ -298,11 +294,11 @@ Voor elke diagramclaim die niet klopt: de variant van het boek wordt gevolgd zol
 
 ```text
     +-------------+     +-------------------+     zwart aan zet: L40
-  6 |   W   W   . |     |     1     2     3 |     boek:  D ❌
+  6 |   W   W   B |     |     1     2     3 |     boek:  D ❌
   5 | b   .   .   |     |  4     5     6    |
   4 |   .   .   . |     |     7     8     9 |       1.  …          3-13!
   3 | .   .   .   |     | 10    11    12    |       2.  2-10       13-3
-  2 |   B   w   w |     |    13    14    15 |       3.  1-5        3-6
+  2 |   .   w   w |     |    13    14    15 |       3.  1-5        3-6
   1 | .   .   .   |     | 16    17    18    |       4.  10-17      6-16
     +-------------+     +-------------------+       5.  14-12      16-6
       a b c d e f                                   6.  5-10       6-16

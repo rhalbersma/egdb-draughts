@@ -128,8 +128,17 @@ table.tbl th { color: var(--muted); font-weight: 600; }
 @media (max-width: 760px) {
   .wrap { grid-template-columns: 1fr; gap: 16px; }
   .side { position: sticky; top: 0; background: var(--bg); padding-bottom: 6px; z-index: 2; }
-  #board { max-width: 300px; margin: 0 auto; }
-  .panel { display: none; }
+  #board { max-width: min(230px, 62vw); margin: 0 auto; }
+  .buttons { max-width: 360px; margin: 6px auto; }
+  .buttons button { padding: 4px 0; font-size: 15px; }
+  /* the moves of the position on display: a compact strip under the board */
+  .panel { max-height: 3.3em; overflow-y: auto; padding: 5px 8px; font-size: 13px; line-height: 1.5; }
+  .panel .stm { display: inline; margin: 0 10px 0 0; }
+  .panel table, .panel tbody { display: inline; }
+  .panel tr { display: inline-block; margin: 0 10px 0 0; white-space: nowrap; }
+  .panel td { display: inline; padding: 0 3px 0 0; }
+  .panel tr.played td { background: none; }
+  .panel tr.played { background: var(--active); border-radius: 3px; padding: 0 2px; }
   figure { float: none; margin: 8px 0; }
 }
 </style>

@@ -70,11 +70,13 @@ details.onpage a { margin-right: 12px; white-space: nowrap; }
 main { min-width: 0; }
 h1 { font-size: 30px; line-height: 1.2; margin: 0 0 16px; }
 h2 { font-size: 22px; margin: 36px 0 8px; }
-a.m1, a.m2 { text-decoration: none; white-space: nowrap; border-radius: 3px; padding: 0 1px; }
+a.m1, a.m2, a.m3 { text-decoration: none; white-space: nowrap; border-radius: 3px; padding: 0 1px; }
 a.m1 { color: var(--link); font-weight: 600; }
 a.m2 { color: var(--m2); }
 a.db { font-style: italic; }
-a.err { text-decoration: underline wavy var(--err); text-underline-offset: 3px; }
+a.m3 { color: var(--db); font-size: 95%; }
+.q { color: var(--err); font-weight: 700; }
+.aside { color: var(--muted); }
 a.only::after { content: "*"; color: var(--only); }
 a.cur { background: var(--active); }
 .val { font: 14px ui-monospace, Menlo, Consolas, monospace; color: var(--muted); }
@@ -180,7 +182,8 @@ variant. Waarden gelden voor de partij aan zet; bij een zet voor wie hem doet, m
 de partij, de zet meegeteld: W = winst (oneven), L = verlies (even), D = remise.
 <span style="color:var(--link);font-weight:600">Blauw</span> = hoofdvariant,
 <span style="color:var(--m2)">groen</span> = zijvariant, <em>cursief</em> = voortzetting van de database,
-<span style="text-decoration:underline wavy var(--err)">golflijn</span> = zet die het resultaat verandert,
+<span class="q">?</span> = zet die volgens de database het resultaat verandert, met tussen [ ] de betere zet of de
+weerlegging (<span style="color:var(--db)">≡</span> = terug naar de stelling vóór die zet),
 <span style="color:var(--only)">*</span> = enige zet die de winst of de remise behoudt.</p>
   </main>
 </div>

@@ -320,11 +320,12 @@ class Page:
 
 
 UI = {
-    'nl': {'back': 'Vorige stelling (←)', 'play': 'Variant automatisch afspelen', 'fwd': 'Volgende stelling (→)',
+    'nl': {'back': 'Vorige stelling (←)', 'play': 'Variant afspelen / pauzeren', 'fwd': 'Volgende stelling (→)',
+           'start': 'Begin van de variant (Home)', 'end': 'Einde van de variant (End)',
            'nums': 'Veldnamen op het bord aan/uit', 'nota': 'Wissel tussen numerieke (1, 2, …) en algebraïsche (a1, b2, …) notatie',
            'js': {'white': 'wit', 'black': 'zwart', 'tomove': 'aan zet', 'nomoves': 'geen zetten: verloren'},
-           'legend': 'Klik op een zet om de stelling op het grote bord te zien; ◀ ▶ (of de pijltjestoetsen) lopen door '
-                     'de variant. Waarden gelden voor de partij aan zet; bij een zet voor wie hem doet, met n het aantal '
+           'legend': 'Klik op een zet om de stelling op het grote bord te zien; ‹ › (of de pijltjestoetsen) lopen door '
+                     'de variant, ⏮︎ ⏭︎ springen naar het begin en het einde, ▶︎ speelt hem af. Waarden gelden voor de partij aan zet; bij een zet voor wie hem doet, met n het aantal '
                      'ply tot het einde van de partij, de zet meegeteld: W = winst (oneven), L = verlies (even), '
                      'D = remise. <span style="color:var(--link);font-weight:600">Blauw</span> = hoofdvariant, '
                      '<span style="color:var(--m2)">groen</span> = zijvariant, <em>cursief</em> = voortzetting van de '
@@ -333,11 +334,12 @@ UI = {
                      'stelling vóór die zet), <span style="color:var(--only)">*</span> = enige zet die de winst of de '
                      'remise behoudt. De knop # zet de veldnamen op het grote bord aan of uit; de knop met het bereik van de veldnamen (bv. 1…18 of '
                      'a1…f6 op 6×6) wisselt tussen numerieke en algebraïsche notatie, ook in de tekst.'},
-    'en': {'back': 'Previous position (←)', 'play': 'Play the line automatically', 'fwd': 'Next position (→)',
+    'en': {'back': 'Previous position (←)', 'play': 'Play / pause the line', 'fwd': 'Next position (→)',
+           'start': 'Start of the line (Home)', 'end': 'End of the line (End)',
            'nums': 'Square names on the board on/off', 'nota': 'Switch between numeric (1, 2, …) and algebraic (a1, b2, …) notation',
            'js': {'white': 'white', 'black': 'black', 'tomove': 'to move', 'nomoves': 'no moves: lost'},
-           'legend': 'Click a move to see the position on the large board; ◀ ▶ (or the arrow keys) step through the '
-                     'line. Values are for the side to move; for a move, for the side making it, with n the number of '
+           'legend': 'Click a move to see the position on the large board; ‹ › (or the arrow keys) step through the '
+                     'line, ⏮︎ ⏭︎ jump to its start and end, ▶︎ plays it. Values are for the side to move; for a move, for the side making it, with n the number of '
                      'plies to the end of the game, the move included: W = win (odd), L = loss (even), D = draw. '
                      '<span style="color:var(--link);font-weight:600">Blue</span> = main line, '
                      '<span style="color:var(--m2)">green</span> = side line, <em>italics</em> = continuation by the '
@@ -397,7 +399,7 @@ def write_page(path, title, nav, body, page, site_title, lang='nl'):
     alt = re.search(r'class="flag" href="([^"]+)"', nav)
     tpl = tpl.replace('{{STICKY}}', sticky_lang(site_key, lang, alt.group(1) if alt else ''))
     tpl = (tpl.replace('{{LANG}}', lang).replace('{{T_BACK}}', u['back']).replace('{{T_PLAY}}', u['play'])
-           .replace('{{T_FWD}}', u['fwd']).replace('{{T_NUMS}}', u['nums']).replace('{{T_NOTA}}', u['nota'])
+           .replace('{{T_FWD}}', u['fwd']).replace('{{T_START}}', u['start']).replace('{{T_END}}', u['end']).replace('{{T_NUMS}}', u['nums']).replace('{{T_NOTA}}', u['nota'])
            .replace('{{LEGEND}}', u['legend']).replace('{{UI}}', json.dumps(u['js'], ensure_ascii=False)))
     geoms = json.dumps(page.geoms, separators=(',', ':'))
     out = (tpl.replace('{{TITLE}}', esc(title)).replace('{{SITE}}', esc(site_title)).replace('{{NAV}}', nav)

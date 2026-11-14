@@ -5,7 +5,7 @@ Herm Jan Brascamp, *Strategie der 36 velden* ([hijkendtc.nl](https://www.hijkend
 Elke stelling is opgezocht of uitgerekend tot het einde van de partij: winst, remise of verlies, met de
 afstand tot het einde in ply (DTM).
 
-Herm Jan Brascamp schreef "dit werkje", zoals hij het zelf noemt, in 2016, zonder computer. In de inleiding
+Herm Jan Brascamp schreef "dit werkje", zoals hij het zelf noemt, in het najaar van 2016, zonder computer. In de inleiding
 merkt hij op: "Een groot voordeel is natuurlijk, dat er geen damprogramma voor het 36-ruitenbord bestaat." Het gaat
 hem om "overmachtseindspelen": "De witte strategie is er op gericht, tot drie dammen te komen met behoud van de lange
 lijn. Zwart probeert de lange lijn te veroveren of de doorgang van de witte schijven te belemmeren."

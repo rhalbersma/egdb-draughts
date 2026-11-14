@@ -22,10 +22,14 @@ Moeilijk, dammen op het 6×6-bord."
 
 De databases beslissen beide vragen:
 
-* **De conclusie van kerstmis 2013 was juist:** na 3. 16-13 wint wit (53 ply). De "nieuwe remise-conclusie" houdt
-  geen stand. Diagram 6.9 is op zichzelf wel remise, maar in de hoofdvariant geeft 10. 4-1 de winst weg: 10. 12-8!
-  wint. Daarmee vervalt ook de slotsom van 7.7 *Conclusie*, "dat zwart nog net remise kan bereiken na de opening
-  1. 13-11 6-8 2. 11×6 2×9??".
+* **De conclusie van kerstmis 2013 was juist:** na 3. 16-13 wint wit (53 ply). In *Zwaar manoeuvreren* (6.2)
+  schrijft hij: "Recentelijk zijn Hans Jansen en Herm Jan Brascamp tot de conclusie gekomen, dat zwart (aan zet) in
+  diagram 6.9 remise maakt – dus dat zwart na 2. … 2×9?? toch nog remise in handen heeft. Of, lezer, weet u een
+  winst te vinden?" Het eerste deel klopt: diagram 6.9 met zwart aan zet is remise. Maar het "dus" houdt geen
+  stand. Dat "het van beide kanten beste spel onafwendbaar tot diagram 6.9" leidt, noemt hij zelf "een bewering
+  die daar waargemaakt zal moeten worden", en die bewering klopt niet: in de hoofdvariant geeft 10. 4-1 de winst
+  weg, en 10. 12-8! wint. Daarmee vervalt ook de slotsom van 7.7 *Conclusie*, "dat zwart nog net remise kan
+  bereiken na de opening 1. 13-11 6-8 2. 11×6 2×9??".
 * **"Ook onjuist!" klopt:** 3. 16-13 is niet de beste zet. 3. 15-12 (hoofdstuk 7.1, *Een offervariant*) wint
   sneller, in 25 ply.
 * Over de beginstand, die in de jaren '90 werd geanalyseerd: die is remise (zie hieronder).
@@ -78,8 +82,8 @@ waard zijn.
   10. … 13-16 11. 14-11 2-5 12. 8×1 16×6 13. 18-14.
   * Diagram 7.22 (zwart aan zet na 7. 17-14) is daarmee verloren voor zwart.
   * Diagram 6.9 klopt op zichzelf: met wit aan zet wint wit (18-15 of 1-15), met zwart aan zet is het
-    remise. De nieuwe remise-conclusie van Jansen en Brascamp voor 6.9 houdt dus stand. Alleen ontstaat
-    6.9 pas na de witte fout 10. 4-1.
+    remise. De conclusie van "Hans Jansen en Herm Jan Brascamp, dat zwart (aan zet) in diagram 6.9 remise
+    maakt", houdt dus stand. Alleen ontstaat 6.9 pas na de witte fout 10. 4-1.
 #### De stelling na de randslag (diagram 7.1)
 
 1. 13-11 6-8 2. 11×6 2×9, wit aan zet; wit wint (w/b = witte/zwarte schijf, W/B = dam):

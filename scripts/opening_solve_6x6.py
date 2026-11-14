@@ -265,9 +265,9 @@ def main():
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'strategie36'))
     from board import diagram
     diagrams = ['## Diagrammen', '', 'w/b = witte/zwarte schijf, W/B = dam.', '',
-                f'Beginstand, wit aan zet: **{label(*root, "W", dtm.get(START))}**', '', '```', diagram(START), '```', '']
+                f'Beginstand, wit aan zet: **{label(*root, "W", dtm.get(START))}**', '', '```text', diagram(START), '```', '']
     for nota, c in best_first(children[START]):
-        diagrams += [f'1. {nota} (zwart aan zet): **{label(*iv[c], c[0], dtm.get(c), True)}**', '', '```', diagram(c), '```', '']
+        diagrams += [f'1. {nota} (zwart aan zet): **{label(*iv[c], c[0], dtm.get(c), True)}**', '', '```text', diagram(c), '```', '']
     md = ['# Openingen van 6×6-dammen', '',
           f'Beginstand, wit aan zet: **{label(*root, "W", dtm.get(START))}**.', '',
           'Notatie: D = remise, Wn = winst, Ln = verlies, met n het aantal ply tot het einde van de partij bij perfect '
@@ -282,7 +282,7 @@ def main():
           f'DAG: {len(children)} inwendige stellingen, bladeren: ' + ', '.join(f'{k} {v}' for k, v in kinds.items()) + '.',
           f'Onbekende bladeren die de beginstand nog kunnen beïnvloeden: {len(relevant)}.', '',
           *diagrams, '## Boom', '', 'Per stelling staan de zetten op volgorde van waarde voor wie ze doet: winst (snelste '
-          'eerst), remise, verlies (taaiste eerst); daarbinnen numeriek.', '', '```', *tree, '```', '',
+          'eerst), remise, verlies (taaiste eerst); daarbinnen numeriek.', '', '```text', *tree, '```', '',
           f'## Alle openingen van {args.table} ply', '', 'Numeriek gesorteerd.', '',
           f"{len(rows)} openingen: W {res['W']}, D {res['D']}, L {res['L']}.", '',
           '| # | opening | resultaat |', '|---|---|---|']

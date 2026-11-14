@@ -81,7 +81,7 @@ def main():
             width = max(len(b) for b in board)
             board = [b.ljust(width) for b in board]
             notes += [''] * (len(board) - len(notes))
-            out.extend([f'#### {title} (ply {ply})', '', '```'])
+            out.extend([f'#### {title} (ply {ply})', '', '```text'])
             out.extend((b + '     ' + n).rstrip() for b, n in zip(board, notes))
             out.extend(['```', ''])
         if ply < max(plies):

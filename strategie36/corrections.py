@@ -197,7 +197,7 @@ def main():
             cont, number = book.get(fen, ([], 1))
             r = refutation(eng, fen, cont, number, known, d['id'])
             head, col = render(r, stm)
-            col = [f"{side(stm)} aan zet: {sd['val']}  (boek: {claim_label(sd['claim'], stm)} ❌)", ''] + col
+            col = [f"{side(stm)} aan zet: {sd['val']}", f"boek:  {claim_label(sd['claim'], stm)} ❌", ''] + col
             out += [f"#### Diagram {d['id']}, {side(stm)} aan zet: {head}", '', f"*{d['note']}*", '',
                     '```text', with_columns(r['after'], [col]), '```', '']
             print(f"diagram {d['id']} {stm}: {head}", file=sys.stderr)

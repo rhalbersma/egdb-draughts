@@ -126,6 +126,7 @@ def main():
         f"Diagramclaims: {dcount['ok']} bevestigd, {dcount['fout']} onjuist. "
         f"Varianten: {len(data['lines'])}, waarvan " + ', '.join(f'{STATUS[k]} {k}: {v}' for k, v in sorted(counts.items())) + '.',
         '', '### Weerleggingen van onjuiste diagramclaims', '', (HERE / 'weerleggingen.md').read_text(),
+        '### Weerleggingen van onjuiste varianten', '', (HERE / 'weerleggingen_varianten.md').read_text(),
         '### Diagrammen', '', diagram_blocks(data['diagrams']), '', '### Varianten', '', lines_table(data['lines']), '',
         f"Database-statistiek: `{' '.join(data['stats'])}`", ''
     ]

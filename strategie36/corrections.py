@@ -4,15 +4,19 @@
 #    (See accompanying file LICENSE_1_0.txt or copy at
 #          http://www.boost.org/LICENSE_1_0.txt)
 
-"""Refutations of the diagram claims that are wrong, as diagrams with the main line next to them.
+"""Refutations of the diagram claims and of the variations of the book that are wrong, as diagrams with
+the main line next to them.
 
-If the side to move does better than the book says, the refutation is its best move; if it does worse,
-the refutation is the opponent's best reply to the book's move. The diagram shows the position after the
-refutation; the main line next to it starts at the diagram position: the fastest win (the defender
-resisting as long as possible), the longest defence, or for a draw a short continuation. It stops at the
-end of the game or when another diagram of the book with a claim is reached.
+Diagrams: the line of the book is followed as long as its moves keep the result; the first move of the book
+that changes the result is replaced by the best move: the refutation, marked "!". Variations: the book's
+claim is about the position at the end of the variation; the refutation replaces the last move of the
+variation after which the claim no longer holds. When no position on the variation agrees with the claim,
+there is no refutation and the main line continues from the end of the variation. After the refutation the
+main line is the fastest win against the longest defence (for a draw a short continuation), until the end of
+the game ("+") or another diagram of the book ("-> diagram X (value)"). "*" marks the only move that keeps
+a win or a draw, "?" a move of the book that changes the result.
 
-usage: corrections.py path/to/egdb_6x6 [--out weerleggingen.md]
+usage: corrections.py path/to/egdb_6x6 [--out weerleggingen.md] [--out-lines weerleggingen_varianten.md]
 """
 
 import argparse
@@ -26,9 +30,6 @@ sys.path.insert(0, str(HERE))
 from board import with_columns       # noqa: E402
 from check import Engine, parse_line  # noqa: E402
 from claims import DIAGRAMS, LINES    # noqa: E402
-
-RANK = {'W': 2, 'D': 1, 'L': 0}
-
 
 def score(v):
     """value of a move for the side that makes it -> sortable score (higher is better)"""
@@ -48,6 +49,103 @@ def best(legal):
     return max(legal, key=lambda m: (score(m[1]), [-int(x) for x in m[0].replace('x', '-').split('-')]))
 
 
+def absolute(fen, v):
+    """value for the side to move -> 'W' (white wins), 'Z' (black wins) or 'D'"""
+    if v == 'D':
+        return 'D'
+    return 'W' if (v[0] == 'W') == (fen[0] == 'W') else 'Z'
+
+
+def agrees(claim, a):
+    return {'W+': a == 'W', '=': a == 'D', 'Z+': a == 'Z', 'notW+': a != 'W'}[claim]
+
+
+def refutation(eng, fen, cont, number, known, own, refute_at=None, stop_on_book=True,
+               max_draw_plies=12, max_plies=120):
+    """Main line from fen. With refute_at=None (diagrams) the book's moves cont are followed while they keep
+    the result; otherwise (variations) they are followed up to ply refute_at, which is replaced by the best
+    move (refute_at = len(cont): no refutation, continue after the book)."""
+    seq, star, err, cur, refute, reached, ending = [], [], [], fen, None, None, None
+    while len(seq) < max_plies:
+        v, legal = eng.analyse(cur)
+        if not legal:
+            ending = 'mate'
+            break
+        k = len(seq)
+        on_book = refute is None and k < len(cont) and (refute_at is None or k < refute_at)
+        may_stop = stop_on_book or (not on_book and refute_at is not None and k > min(refute_at, len(cont) - 1))
+        if seq and may_stop and cur in known and known[cur] != own:
+            reached = (known[cur], v)
+            break
+        base = refute if refute is not None else len(cont)
+        if v == 'D' and not on_book and k >= base + max_draw_plies:
+            ending = 'draw'
+            break
+        bm = best(legal)
+        if on_book:
+            mb = [m for m in legal if m[0] == cont[k]][0]
+            if refute_at is not None or mb[1][0] == bm[1][0]:
+                mv = mb
+            else:
+                mv, refute = bm, k
+        else:
+            mv = bm
+            if refute is None and ((refute_at is not None and k == refute_at < len(cont))
+                                   or (refute_at is None and not cont)):
+                refute = k
+        keeping = [m for m in legal if m[1][0] == bm[1][0]]
+        star.append(len(keeping) == 1 and bm[1][0] in 'WD' and mv[1][0] == bm[1][0])
+        err.append(mv[1][0] != bm[1][0])
+        seq.append(mv)
+        cur = mv[2]
+    return {'seq': seq, 'star': star, 'err': err, 'refute': refute, 'reached': reached, 'ending': ending,
+            'after': seq[refute][2] if refute is not None else (seq[min(len(cont), len(seq)) - 1][2] if cont and seq else fen),
+            'number': number}
+
+
+def render(r, stm):
+    """-> (head, lines of the main line)"""
+    seq, refute, ending = r['seq'], r['refute'], r['ending']
+
+    def nota(i):
+        return (seq[i][0].replace('x', '×') + ('?' if r['err'][i] else '') + ('!' if i == refute else '')
+                + ('*' if r['star'][i] else '') + ('+' if ending == 'mate' and i == len(seq) - 1 else ''))
+    col = []
+    k, i = (1 if stm == 'B' else 0), 0
+    while i < len(seq):
+        num = f"{r['number'] + k // 2}.".ljust(4)
+        if k % 2 == 1:
+            col.append(f'  {num}…          {nota(i)}')
+            i += 1
+            k += 1
+            continue
+        col.append(f"  {num}{nota(i):10} {nota(i + 1) if i + 1 < len(seq) else ''}".rstrip())
+        i += 2
+        k += 2
+    if r['reached']:
+        col.append(f"  → diagram {r['reached'][0]} ({r['reached'][1]})")
+    elif ending == 'draw':
+        col.append('  … D')
+    if refute is not None:
+        kk = refute + (1 if stm == 'B' else 0)
+        head = f"weerlegging {r['number'] + kk // 2}. {'… ' if kk % 2 else ''}{nota(refute)}"
+    elif r['reached']:
+        head = f"variant naar diagram {r['reached'][0]} ({r['reached'][1]})"
+    else:
+        head = 'voortzetting na het boek'
+    return head, col
+
+
+def side(stm):
+    return 'wit' if stm == 'W' else 'zwart'
+
+
+INTRO = ('Het diagram toont de stelling na de weerlegging, ernaast de hoofdvariant vanaf het begin: na de '
+         'weerlegging de snelste winst tegen de taaiste verdediging (bij remise een korte voortzetting), tot het '
+         'einde van de partij ("+") of tot een ander diagram uit het boek. "!" = de weerlegging, "*" = de enige '
+         'zet die de winst of de remise behoudt, "?" = een zet uit het boek die het resultaat verandert.')
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('engine')
@@ -55,7 +153,7 @@ def main():
     ap.add_argument('--attach', default=str(HERE.parent / 'data' / '6x6_10.dtm'))
     ap.add_argument('--results', default=str(HERE / 'results.json'))
     ap.add_argument('--out', default=str(HERE / 'weerleggingen.md'))
-    ap.add_argument('--max-draw-plies', type=int, default=12)
+    ap.add_argument('--out-lines', default=str(HERE / 'weerleggingen_varianten.md'))
     args = ap.parse_args()
     eng = Engine(args.engine, 10, args.db, args.attach)
     results = json.loads(Path(args.results).read_text())
@@ -86,79 +184,52 @@ def main():
             cont = [m for _, m in played[k:]]
             if pos not in book or len(cont) > len(book[pos][0]):
                 book[pos] = (cont, n0 + kk // 2)
+
     out = ['Voor elke diagramclaim die niet klopt: de variant van het boek wordt gevolgd zolang die het resultaat '
-           'behoudt; de eerste zet van het boek die het resultaat verandert, wordt vervangen door de beste zet: de '
-           'weerlegging, gemarkeerd met "!". Het diagram toont de stelling na de weerlegging, ernaast de hoofdvariant '
-           'vanaf het diagram uit het boek: daarna de snelste winst tegen de taaiste verdediging (bij remise een korte '
-           'voortzetting), tot het einde of tot een ander diagram uit het boek. Zonder variant in het boek is de '
-           'eerste beste zet de weerlegging.', '']
+           'behoudt; de eerste zet van het boek die het resultaat verandert, wordt vervangen door de beste zet. '
+           'Zonder variant in het boek is de eerste beste zet de weerlegging. ' + INTRO, '']
     for d in results['diagrams']:
         for stm in ('W', 'B'):
             sd = d['sides'].get(stm, {})
             if sd.get('ok') is not False:
                 continue
             fen = stm + d['fen'][1:]
-            val = sd['val']
-            bk = claim_label(sd['claim'], stm)
             cont, number = book.get(fen, ([], 1))
-            seq, cur, refute, reached, ending = [], fen, None, None, None
-            while len(seq) < 120:
-                v, legal = eng.analyse(cur)
-                if not legal:
-                    ending = 'mate'
-                    break
-                if seq and cur in known and known[cur] != d['id']:
-                    reached = (known[cur], v)
-                    break
-                if v == 'D' and refute is not None and len(seq) >= refute + args.max_draw_plies:
-                    ending = 'draw'
-                    break
-                bm = best(legal)
-                k = len(seq)
-                if refute is None and k < len(cont):
-                    mb = [m for m in legal if m[0] == cont[k]][0]
-                    if mb[1][0] == bm[1][0]:            # the book's move keeps the result: follow the book
-                        mv = mb
-                    else:
-                        mv, refute = bm, k
-                else:
-                    mv = bm
-                    if refute is None:
-                        refute = k
-                seq.append(mv)
-                cur = mv[2]
-            after = seq[refute][2] if refute is not None else fen
-
-            def nota(i):
-                return (seq[i][0].replace('x', '×') + ('!' if i == refute else '')
-                        + ('+' if ending == 'mate' and i == len(seq) - 1 else ''))
-            col = [f"{'wit' if stm == 'W' else 'zwart'} aan zet: {val}  (boek: {bk} ❌)", '']
-            k, i = (1 if stm == 'B' else 0), 0
-            while i < len(seq):
-                num = f'{number + k // 2}.'.ljust(4)
-                if k % 2 == 1:
-                    col.append(f'  {num}…          {nota(i)}')
-                    i += 1
-                    k += 1
-                    continue
-                col.append(f"  {num}{nota(i):10} {nota(i + 1) if i + 1 < len(seq) else ''}".rstrip())
-                i += 2
-                k += 2
-            if reached:
-                col.append(f'  → diagram {reached[0]} ({reached[1]})')
-            elif ending == 'draw':
-                col.append('  … D')
-            if refute is not None:
-                kk = refute + (1 if stm == 'B' else 0)
-                n = number + kk // 2
-                head = f"weerlegging {n}. {'… ' if kk % 2 else ''}{nota(refute)}"
-            else:
-                head = f'variant naar diagram {reached[0]} ({reached[1]})' if reached else 'variant'
-
-            out += [f"#### Diagram {d['id']}, {'wit' if stm == 'W' else 'zwart'} aan zet: {head}", '', f"*{d['note']}*", '',
-                    '```text', with_columns(after, [col]), '```', '']
-            print(f"{d['id']} {stm}: {val} (boek {bk})  {head}", file=sys.stderr)
+            r = refutation(eng, fen, cont, number, known, d['id'])
+            head, col = render(r, stm)
+            col = [f"{side(stm)} aan zet: {sd['val']}  (boek: {claim_label(sd['claim'], stm)} ❌)", ''] + col
+            out += [f"#### Diagram {d['id']}, {side(stm)} aan zet: {head}", '', f"*{d['note']}*", '',
+                    '```text', with_columns(r['after'], [col]), '```', '']
+            print(f"diagram {d['id']} {stm}: {head}", file=sys.stderr)
     Path(args.out).write_text('\n'.join(out) + '\n')
+
+    out = ['Voor elke variant waarvan de eindclaim niet klopt: de claim van het boek gaat over de stelling aan het '
+           'einde van de variant. De weerlegging vervangt de laatste zet van de variant waarna de claim niet meer '
+           'opgaat. Klopt de claim in geen enkele stelling van de variant, dan is er geen weerlegging en loopt de '
+           'hoofdvariant door vanaf het einde van de variant; het diagram toont dan die eindstelling. ' + INTRO, '']
+    for ln in results['lines']:
+        if ln['status'] != 'onjuist':
+            continue
+        fen = ln['start_fen']
+        stm = fen[0]
+        cont = [p['move'] for p in ln['plies']]
+        absv = [absolute(p['fen'], p['val_before']) for p in ln['plies']]
+        ok = [i for i, a in enumerate(absv) if agrees(ln['claim'], a)]
+        refute_at = ok[-1] if ok else len(cont)
+        m0 = re.match(r'\s*(\d+)\.', ln['text'])
+        number = int(m0.group(1)) if m0 else 1
+        r = refutation(eng, fen, cont, number, known, ln['start'], refute_at=refute_at, stop_on_book=False)
+        head, col = render(r, stm)
+        e = ln['end_fen'][0]
+        if r['refute'] is None and not r['reached']:
+            head += f": {side(e)} aan zet {ln['end_val']}"
+        col = [f"{side(stm)} aan zet: {ln['plies'][0]['val_before']}", f"boek, einde variant: {side(e)} aan zet "
+               f"{claim_label(ln['claim'], e)} ❌, database: {ln['end_val']}", ''] + col
+        text = ln['text'] + (f" — {ln['note']}" if ln['note'] else '')
+        out += [f"#### Sectie {ln['section']}, vanaf diagram {ln['start']}: {head}", '', f'*{text}*', '',
+                '```text', with_columns(r['after'], [col]), '```', '']
+        print(f"line {ln['section']} {ln['start']}: {head}", file=sys.stderr)
+    Path(args.out_lines).write_text('\n'.join(out) + '\n')
 
 
 if __name__ == '__main__':

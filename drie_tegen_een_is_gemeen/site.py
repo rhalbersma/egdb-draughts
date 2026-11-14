@@ -98,7 +98,20 @@ class Site:
             pg.use(gid, eng, eng.g)
         return pg
 
+    @staticmethod
+    def width_height(html_):
+        """English: the board B × L (breedte, lengte) is W × H (width, height); only in text, not in tags"""
+        out = []
+        for part in re.split(r'(<[^>]+>)', html_):
+            if not part.startswith('<'):
+                part = re.sub(r'(?<![A-Za-z_])B(?![A-Za-z0-9_:])', '\0W', part)
+                part = re.sub(r'(?<![A-Za-z_])L(?![A-Za-z0-9_:]| = loss)', '\0H', part).replace('\0', '')   # L = loss stays
+            out.append(part)
+        return ''.join(out)
+
     def write(self, name, title, body, pg, gid=None):
+        if self.lang == 'en':
+            body = self.width_height(body)
         if gid is not None:              # algebraic moves in the running text follow the notation switch
             body = pg.prose_html(body, gid, 'alg')
         k = [p[0] for p in PAGES].index(name)

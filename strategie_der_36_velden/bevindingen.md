@@ -71,9 +71,17 @@ bovengrenzen over de hele boom teruggerekend. Voor de beginstand en voor alle st
 inclusief hun afstanden, vallen de grenzen samen: die waarden zijn bewezen, wat die onbekende stellingen ook
 waard zijn.
 
-### Vergelijking met Van Horssen (2018)
+### Eerdere oplossingen: Halbersma (2011) en Van Horssen (2018)
 
-Jan-Jaap van Horssen loste 6×6 al eerder zwak op: *Complexity of checkers and draughts on different board sizes*,
+In oktober 2011 loste Rein Halbersma alle 6×6-varianten zwak op (gewoon en *suicide*), met alpha-beta (PVS,
+iterative deepening en een transpositietabel) zonder eindspeldatabases, in minder dan een kwartier per variant.
+Internationaal 6×6 kwam uit op remise. Die remise werd gecontroleerd met twee zoektochten: met herhaling als winst
+voor wit gaf de beginstand W35, met herhaling als winst voor zwart L36, dus beide kanten kunnen een herhaling
+afdwingen. Omdat de zoektocht graph-history-interactie negeert, was dat geen sluitend bewijs. Het resultaat werd
+op 19 oktober 2011 privé gedeeld met Ed Gilbert en op 8 april 2017 gepubliceerd op het World Draughts Forum, in de
+draad *Search Algorithm* ([damforum.nl](https://damforum.nl/viewtopic.php?p=118055#p118055)).
+
+Jan-Jaap van Horssen loste 6×6 daarna opnieuw zwak op, nu wel sluitend: *Complexity of checkers and draughts on different board sizes*,
 ICGA Journal 40 (2018) 341–352. Hij bouwde een database met winst/remise/verlies voor alle stellingen tot en met
 8 stukken en bewees met proof-number search vanuit de beginstand dat 6×6 remise is. Onze databases en openingsboom
 zijn onafhankelijk daarvan gemaakt en komen op alle punten met hem overeen:

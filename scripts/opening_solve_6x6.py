@@ -181,6 +181,8 @@ def main():
         leaf[fen] = (nlo, nhi, 'unknown' if nlo < nhi else 'unknown, decided in one ply')
     kinds = Counter(k for _, _, k in leaf.values())
     log(f'one-ply bounds sharpened {sharpened} unknown leaves; leaves {dict(kinds)}')
+    n_unknown = sum(v for k, v in kinds.items() if k.startswith('unknown'))
+    n_decided1 = kinds.get('unknown, decided in one ply', 0)
 
     # back up intervals in post-order (the DAG is acyclic, but a position can be reached after different
     # numbers of plies, because men also capture backwards, so the layers are not a topological order)
@@ -360,6 +362,17 @@ def main():
           'als intervallen teruggerekend, vanuit wit gezien.', '',
           f'DAG: {len(children)} inwendige stellingen, bladeren: ' + ', '.join(f'{k} {v}' for k, v in kinds.items()) + '.',
           f'Onbekende bladeren die de beginstand nog kunnen beïnvloeden: {len(relevant)}.', '',
+          '### Stellingen met 11 of 12 stukken en dammen aan beide kanten', '',
+          f'Daarvoor bestaat geen database. In de DAG komen er {n_unknown} verschillende voor (vanaf ply 11, de '
+          'meeste tussen ply 15 en 30, bijna altijd met één dam per kant); in de getoonde boom tot ply '
+          f'{args.tree or args.table} zitten ze niet. Ze worden niet weggelaten en niet door een zoekalgoritme '
+          'weggesnoeid: elk zo\'n blad krijgt het ruimst mogelijke interval (van verlies tot winst, met elke '
+          f'afstand), verfijnd met zijn eigen zetten (een slag gaat de database in; zo liggen er {n_decided1} toch '
+          'vast). Minimax wordt daarna over de hele DAG zonder snoeien met onder- en bovengrenzen teruggerekend. '
+          'Waar die samenvallen is de waarde bewezen, ongeacht de werkelijke waarde van de onbekende bladeren: '
+          'er staat dan een zet naast die al minstens zo goed is. Dat geldt voor de beginstand en voor alle '
+          'getoonde stellingen, inclusief hun afstanden. (Een alpha-beta-zoektocht naar de exacte afstand liep '
+          'juist wél op deze stellingen vast; de intervalrekening maakt dat overbodig.)', '',
           *diagrams, '## Boom', '', 'Per stelling staan de zetten op volgorde van waarde voor wie ze doet: winst (snelste '
           'eerst), remise, verlies (taaiste eerst); daarbinnen numeriek.', '', '```text', *tree, '```', '',
           f'## Alle openingen van {args.table} ply', '', 'Numeriek gesorteerd.', '',

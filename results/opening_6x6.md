@@ -9,6 +9,10 @@ Methode: de volledige openings-DAG (transposities samengevoegd), uitgebreid zola
 DAG: 193708 inwendige stellingen, bladeren: database 175882, unknown 5101, unknown, decided in one ply 3848, no moves 56.
 Onbekende bladeren die de beginstand nog kunnen beïnvloeden: 0.
 
+### Stellingen met 11 of 12 stukken en dammen aan beide kanten
+
+Daarvoor bestaat geen database. In de DAG komen er 8949 verschillende voor (vanaf ply 11, de meeste tussen ply 15 en 30, bijna altijd met één dam per kant); in de getoonde boom tot ply 4 zitten ze niet. Ze worden niet weggelaten en niet door een zoekalgoritme weggesnoeid: elk zo'n blad krijgt het ruimst mogelijke interval (van verlies tot winst, met elke afstand), verfijnd met zijn eigen zetten (een slag gaat de database in; zo liggen er 3848 toch vast). Minimax wordt daarna over de hele DAG zonder snoeien met onder- en bovengrenzen teruggerekend. Waar die samenvallen is de waarde bewezen, ongeacht de werkelijke waarde van de onbekende bladeren: er staat dan een zet naast die al minstens zo goed is. Dat geldt voor de beginstand en voor alle getoonde stellingen, inclusief hun afstanden. (Een alpha-beta-zoektocht naar de exacte afstand liep juist wél op deze stellingen vast; de intervalrekening maakt dat overbodig.)
+
 ## Diagrammen
 
 w/b = witte/zwarte schijf, W/B = dam.

@@ -14,6 +14,13 @@ Met de databases tot en met 10 stukken en de volledige openingsboom is de begins
 Alle vijf eerste zetten van wit houden remise. Na 1. 13-11 6-8 2. 11×6 is het remise, maar 2. … 2×9?? (de
 randslag van hoofdstuk 7) verliest.
 
+Voor stellingen met 11 of 12 stukken waarin beide kanten een dam hebben, bestaat geen database. In de volledige
+openingsboom komen er 8.949 voor (vanaf ply 11). Ze worden niet weggelaten en niet weggesnoeid: ze krijgen het
+ruimst mogelijke interval (van verlies tot winst), verfijnd met hun eigen slagen, en minimax wordt met onder- en
+bovengrenzen over de hele boom teruggerekend. Voor de beginstand en voor alle stellingen tot en met ply 4,
+inclusief hun afstanden, vallen de grenzen samen: die waarden zijn bewezen, wat die onbekende stellingen ook
+waard zijn.
+
 ### Hoofdstuk 6/7: de randslag-opening 1. 13-11 6-8 2. 11×6 2×9
 
 * **3. 15-12 wint snel (bevestigd):** winst in 25 ply.

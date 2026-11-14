@@ -3,6 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<script>
+// the language of a site: its default, unless the visitor chose the other one on that site (remembered per site)
+(function () {
+  const key = 'lang:' + "drie_tegen_een_is_gemeen";
+  try { const pref = localStorage.getItem(key); if (pref && pref !== "en" && "../tien-zonder-veld.html") location.replace("../tien-zonder-veld.html" + location.hash); } catch (e) {}
+  document.addEventListener('click', function (e) {
+    const a = e.target.closest && e.target.closest('a[data-setlang]');
+    if (a) { try { localStorage.setItem(key, a.dataset.setlang); } catch (err) {} }
+  });
+})();
+</script>
 <title>10×10 with one square removed · Drie tegen een is gemeen</title>
 <style>
 :root {
@@ -157,7 +168,7 @@ table.tbl th { color: var(--muted); font-weight: 600; }
 </style>
 </head>
 <body>
-<header><a class="brand" href="index.html">Drie tegen een is gemeen</a><details class="menu"><summary>Pages</summary><nav class="menu-panel"><a href="index.html">Overview</a><a href="twee-tegen-een.html">2 kings against 1</a><a href="drie-tegen-een.html">3 kings against 1</a><a href="vangstellingen.html">Trapping positions</a><a href="tien-zonder-veld.html" aria-current="page">10×10 with one square removed</a></nav></details><a href="../../index.html">All sites</a><span class="langs"><a class="flag" href="../tien-zonder-veld.html" hreflang="nl" lang="nl" title="Nederlands" aria-label="Nederlands"><svg viewBox="0 0 9 6" aria-hidden="true"><rect width="9" height="6" fill="#21468B"/><rect width="9" height="4" fill="#fff"/><rect width="9" height="2" fill="#AE1C28"/></svg></a><span class="flag cur" title="English" aria-current="true"><svg viewBox="0 0 60 30" aria-hidden="true"><clipPath id="uk-t"><path d="M30,15h30v15zv15h-30zh-30v-15zv-15h30z"/></clipPath><path d="M0,0v30h60v-30z" fill="#012169"/><path d="M0,0L60,30M60,0L0,30" stroke="#fff" stroke-width="6"/><path d="M0,0L60,30M60,0L0,30" clip-path="url(#uk-t)" stroke="#C8102E" stroke-width="4"/><path d="M30,0v30M0,15h60" stroke="#fff" stroke-width="10"/><path d="M30,0v30M0,15h60" stroke="#C8102E" stroke-width="6"/></svg></span></span></header>
+<header><a class="brand" href="index.html">Drie tegen een is gemeen</a><details class="menu"><summary>Pages</summary><nav class="menu-panel"><a href="index.html">Overview</a><a href="twee-tegen-een.html">2 kings against 1</a><a href="drie-tegen-een.html">3 kings against 1</a><a href="vangstellingen.html">Trapping positions</a><a href="tien-zonder-veld.html" aria-current="page">10×10 with one square removed</a></nav></details><a href="../../index.html">All sites</a><span class="langs"><a class="flag" href="../tien-zonder-veld.html" hreflang="nl" lang="nl" data-setlang="nl" title="Nederlands" aria-label="Nederlands"><svg viewBox="0 0 9 6" aria-hidden="true"><rect width="9" height="6" fill="#21468B"/><rect width="9" height="4" fill="#fff"/><rect width="9" height="2" fill="#AE1C28"/></svg></a><span class="flag cur" title="English" aria-current="true"><svg viewBox="0 0 60 30" aria-hidden="true"><clipPath id="uk-t"><path d="M30,15h30v15zv15h-30zh-30v-15zv-15h30z"/></clipPath><path d="M0,0v30h60v-30z" fill="#012169"/><path d="M0,0L60,30M60,0L0,30" stroke="#fff" stroke-width="6"/><path d="M0,0L60,30M60,0L0,30" clip-path="url(#uk-t)" stroke="#C8102E" stroke-width="4"/><path d="M30,0v30M0,15h60" stroke="#fff" stroke-width="10"/><path d="M30,0v30M0,15h60" stroke="#C8102E" stroke-width="6"/></svg></span></span></header>
 <div class="wrap">
   <aside class="side">
     <div id="board"></div>

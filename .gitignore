@@ -1,4 +1,4 @@
 build*/
 data/
 __pycache__/
-site/
+_site/

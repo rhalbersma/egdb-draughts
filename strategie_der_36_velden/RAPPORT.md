@@ -60,7 +60,7 @@ databases op die enkele plaatsen verder kijken.
 ### De beginstand van 6×6 is remise
 
 Met de databases tot en met 10 stukken en de volledige openingsboom is de beginstand exact opgelost: remise
-(details en de tabel van alle 106 openingen van 3 ply in [`results/opening_6x6.md`](../results/opening_6x6.md)).
+(details en de tabel van alle 106 openingen van 3 ply in [`opening/opening_6x6.md`](opening/opening_6x6.md)).
 Alle vijf eerste zetten van wit houden remise. Na 1. 13-11 6-8 2. 11×6 is het remise, maar 2. … 2×9?? (de
 randslag van hoofdstuk 7) verliest.
 
@@ -70,6 +70,45 @@ ruimst mogelijke interval (van verlies tot winst), verfijnd met hun eigen slagen
 bovengrenzen over de hele boom teruggerekend. Voor de beginstand en voor alle stellingen tot en met ply 4,
 inclusief hun afstanden, vallen de grenzen samen: die waarden zijn bewezen, wat die onbekende stellingen ook
 waard zijn.
+
+### Eerdere oplossingen: Halbersma (2011) en Van Horssen (2018)
+
+Op 5 november 2009 publiceerde Rein Halbersma de eerste perft-getallen voor het 6×6-bord (draad *Perft for arbitrary
+board sizes*, [damforum.nl/viewtopic.php?p=76677](https://damforum.nl/viewtopic.php?p=76677#p76677)); onze
+zettengenerator geeft precies dezelfde getallen tot diepte 11. In oktober 2011 deed een zoektocht met alpha-beta vanuit de beginstand, zonder databases
+en zonder filter voor graph-history-interactie, vermoeden dat de beginstand remise is (met herhaling als winst voor
+wit gaf de zoektocht W35, met herhaling als winst voor zwart L36). Een bewijs van de juistheid was er nog niet. Het
+resultaat werd
+op 19 oktober 2011 privé gedeeld met Ed Gilbert en voor het eerst gepubliceerd op 8 april 2017, op het World Draughts
+Forum (damforum.nl, voorheen laatste.info) in de draad *Search Algorithm*:
+[damforum.nl/viewtopic.php?p=118055](https://damforum.nl/viewtopic.php?p=118055#p118055).
+
+Jan-Jaap van Horssen loste 6×6 in 2016 als eerste sluitend zwak op. Hij meldde dat op 7 augustus 2017 op het
+forum, in de draad *Breakthrough Draughts* ([damforum.nl/viewtopic.php?p=120014](https://damforum.nl/viewtopic.php?p=120014#p120014)),
+beschreef het op 13 augustus 2017 in de draad *Complexity of Checkers and Draughts on board sizes 6x6/8x8/10x10/12x12/14x14*
+([damforum.nl/viewtopic.php?p=120080](https://damforum.nl/viewtopic.php?p=120080#p120080)) en publiceerde het in: *Complexity of checkers and draughts on different board sizes*,
+ICGA Journal 40 (2018) 341–352. Hij bouwde een database met winst/remise/verlies voor alle stellingen tot en met
+8 stukken en bewees met proof-number search vanuit de beginstand dat 6×6 remise is. Onze databases en openingsboom
+zijn onafhankelijk daarvan gemaakt en komen op alle punten met hem overeen:
+
+| | Van Horssen (2018) | Hier |
+|---|---|---|
+| Beginstand | remise | remise |
+| Eerste zetten van wit | alle remise | alle vijf remise |
+| Antwoorden van zwart | direct verliezende antwoorden | idem, bijvoorbeeld 1. 13-10 4-7 (L60) |
+| Diepste verlies van zwart vanaf de beginstand | 61 ply | 61 ply (2 ply + 59 na 1. 13-10 4-7) |
+| Stellingen t/m 3, 4, 5, 6, 7 stukken (één kant aan zet) | 31.155 · 512.910 · 5.789.784 · 48.881.249 · 322.389.233 | precies dezelfde aantallen |
+| Stellingen t/m 8 stukken | 1.617.366.257 | 1.702.191.569 |
+
+Het verschil bij 8 stukken is precies 84.825.312: de stellingen met 7 stukken tegen 1. Van Horssen laat die
+terecht weg, want elke kant begint met 6 stukken. Onze databases rekenen ze (en bij 9 en 10 stukken 7-2, 7-3, 8-2,
+9-1, …) overbodig toch uit; aan de resultaten verandert dat niets. Hij noemt 83 ply als langste winst in zijn
+8-stukkendatabase (afstand tot de winst); hier is de langste winst tot en met 9 stukken 100 ply.
+
+Het verschil in aanpak: Van Horssen bewijst de waarde van de beginstand (proof-number search zonder
+transpositietabel, om graph-history-problemen te vermijden; met de 8-stukkendatabase in een fractie van een
+seconde). Hier zijn de afstanden tot het einde exact voor de hele openingsboom tot en met ply 4, en voor elke
+stelling uit het boek.
 
 ### Hoofdstuk 6/7: de randslag-opening 1. 13-11 6-8 2. 11×6 2×9
 
@@ -262,6 +301,14 @@ in het boek: veld 1 = b6, veld 16 = a1, en de lange lijn is 16-13-11-8-6-3. Wit 
     graph-history-problemen.
 
 ### Validatie
+
+* De zettengenerator geeft vanuit de beginstand exact de perft-getallen tot diepte 11 die Rein Halbersma op 5 november
+  2009 op het World Draughts Forum publiceerde (draad *Perft for arbitrary board sizes*,
+  [damforum.nl/viewtopic.php?p=76677](https://damforum.nl/viewtopic.php?p=76677#p76677)): 5, 25, 106, 369, 1.301,
+  4.214, 12.912, 39.526, 113.614, 329.982 en 933.564.
+
+* De aantallen stellingen tot en met 3, 4, 5, 6 en 7 stukken komen exact overeen met die van Van Horssen (ICGA
+  Journal 40, 2018); tot en met 8 stukken op de 7-tegen-1-stellingen na, die hij terecht weglaat.
 
 * De 6×6-cijfers voor drie dammen tegen één komen exact overeen met de bestaande kings-only-databases
   van deze repository: langste winst 17 ply, en 784 van de 4782 rustige stellingen met wit aan zet

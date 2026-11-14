@@ -1,7 +1,7 @@
 # Kings-only endgame databases for draughts and checkers on arbitrary boards
 
 Distance-to-mate (DTM) endgame databases for positions with only kings, on any rectangular
-chequered board `B × L` (optionally with squares removed), for two rule sets:
+chequered board `W × H` (optionally with squares removed), for two rule sets:
 
 * **international draughts**: flying kings, mandatory capture, majority capture, Turkish strike;
 * **English checkers**: short kings (one square), mandatory capture, free choice among captures.
@@ -9,6 +9,18 @@ chequered board `B × L` (optionally with squares removed), for two rule sets:
 The databases were used to check, extend and refine the results of a 1988 Dutch book on
 "three kings against one" on boards of every size, whose results were all found by hand.
 This page collects the programs, the tables and the most interesting findings.
+
+> **Companion sites** with clickable diagrams: [Strategie der 36 velden](https://rhalbersma.github.io/egdb-draughts/strategie_der_36_velden/) ·
+> [Drie tegen een is gemeen](https://rhalbersma.github.io/egdb-draughts/drie_tegen_een_is_gemeen/) ·
+> [English checkers 3 vs 2](https://rhalbersma.github.io/egdb-draughts/checkers/)
+>
+> **6×6 with men and kings**
+>
+> Exact databases up to 10 pieces for international draughts on the 6×6 board ([`src/egdb_6x6.cpp`](src/egdb_6x6.cpp))
+> solve the start position (a draw, [`opening_6x6.md`](strategie_der_36_velden/opening/opening_6x6.md)) and check every diagram and
+> variation of Herm Jan Brascamp's *Strategie der 36 velden* (2016). The companion site follows the chapters of the
+> book with clickable moves and the database value of every position; the full report (Dutch) is
+> [`strategie_der_36_velden/RAPPORT.md`](strategie_der_36_velden/RAPPORT.md).
 
 * [Programs](#programs)
 * [Conventions](#conventions)
@@ -86,7 +98,7 @@ cmake -B build && cmake --build build
 
 ## Conventions
 
-* **Board** `B × L`: `B` is the shorter side, `L` the longer one. In the diagrams the long side is horizontal.
+* **Board** `W × H`: `W` is the shorter side, `H` the longer one. In the diagrams the long side is horizontal.
 * **Parity** (tabula): **p1** = the corner squares are playable (a1 is a dark square), **p0** = they are not.
   This only matters for odd × odd boards; otherwise both parities are mirror images.
 * **Squares**: numbered 1..N in PDN order (square 1 top left) in FEN and in the text files; algebraic (a1 bottom left) in move sequences.
@@ -101,7 +113,7 @@ cmake -B build && cmake --build build
 ## International draughts: 2 kings vs 1
 
 ```
- B \ L−B     0        1       2        3
+ W \ H−W     0        1       2        3
  3         3/3*       7      11/9      11
  4          15*      13      13       21
  5        (7)/(3)    27     (9)/15    (9)
@@ -114,8 +126,8 @@ cmake -B build && cmake --build build
 12          (7)      (9)    (11)      (9)
 ```
 
-* For `B ≤ 4` (degenerate boards) two kings always win, on the square boards provided they hold the long diagonal(s).
-* For `B ≥ 5` only two boards are won: **5×6** (new) and **5×7 p1** (known). From `B = 6` on everything is drawn,
+* For `W ≤ 4` (degenerate boards) two kings always win, on the square boards provided they hold the long diagonal(s).
+* For `W ≥ 5` only two boards are won: **5×6** (new) and **5×7 p1** (known). From `W = 6` on everything is drawn,
   and the remaining wins are short combinations whose length does not depend on the board size.
 * With the single king to move there are a few exceptions on 5×6 (8) and 5×7 (16): double attacks (forks).
 
@@ -143,7 +155,7 @@ More than 80% of all quiet wins on these two boards end with black capturing int
 ## International draughts: 3 kings vs 1
 
 ```
- B \ L−B    0       1      2       3      4       5      6       7      8       9     10      11
+ W \ H−W    0       1      2       3      4       5      6       7      8       9     10      11
  3        0/3      5     7/9      9    9/11     13   15/15
  4         9*     11     11      13     17      23     29      37
  5      11/15*    23   13/13     15   17/15     17   19/19     21   23/23
@@ -163,27 +175,27 @@ with the single king to move 16,812 wins, 863,802 draws and 40,586 losses.
 
 ### The three families
 
-| Family | Result (B = 3 … 12) |
+| Family | Result (W = 3 … 12) |
 |---|---|
-| **L = B + 1** | won on every board |
-| **L = B + 2** | won, except the "wrong" colouring p0 for B = 9 and 11 |
-| **L = 2B − 1** | won, except p0 for B = 9 and 11 (10×19: 27 plies, 11×21 p1: 25 plies, 12×23: 27 plies) |
+| **H = W + 1** | won on every board |
+| **H = W + 2** | won, except the "wrong" colouring p0 for W = 9 and 11 |
+| **H = 2W − 1** | won, except p0 for W = 9 and 11 (10×19: 27 plies, 11×21 p1: 25 plies, 12×23: 27 plies) |
 
-The colouring rule of the book is confirmed: from B = 9 on, for odd B only the colouring with playable corners (p1) wins.
-On B = 7 the wrong colouring still wins (5×9 p0, 7×13 p0) because the general method still reaches that far.
+The colouring rule of the book is confirmed: from W = 9 on, for odd W only the colouring with playable corners (p1) wins.
+On W = 7 the wrong colouring still wins (5×9 p0, 7×13 p0) because the general method still reaches that far.
 
 ### The general method on narrow boards
 
-* **B = 5, 6**: every non-square board is won (checked up to 5×13 and 6×15). Three kings in a column
+* **W = 5, 6**: every non-square board is won (checked up to 5×13 and 6×15). Three kings in a column
   close off the full width and can be pushed along the board; the longest win grows by about 2 plies per extra column.
-* **B = 7**: won up to **7×14** and **7×15 p1** (book: up to 7×11). From L = 16 on it is drawn.
+* **W = 7**: won up to **7×14** and **7×15 p1** (book: up to 7×11). From H = 16 on it is drawn.
   The longest wins jump from 25 to 35, 49, 53 and 67–73 plies: the space becomes tight.
-* **B = 8**: won at L = 9, 10, 11 and 15 (= 2B − 1), drawn at L = 12–14 and 16–19.
-* **B ≥ 9**: only the families remain.
+* **W = 8**: won at H = 9, 10, 11 and 15 (= 2W − 1), drawn at H = 12–14 and 16–19.
+* **W ≥ 9**: only the families remain.
 
 ### Square boards: the long diagonal
 
-On square boards with B ≥ 5 the single king holds the long diagonal(s). Splitting the quiet positions with
+On square boards with W ≥ 5 the single king holds the long diagonal(s). Splitting the quiet positions with
 three kings to move by who occupies the long diagonal(s) (draws / positions):
 
 | Board | White on the long diagonal(s) | Nobody | Only black |
@@ -195,7 +207,7 @@ three kings to move by who occupies the long diagonal(s) (draws / positions):
 | 9×9 p1 (white on both) | 32,492 / 39,328 | | |
 | 10×10 | 177,548 / 206,466 | | |
 
-Up to B = 8 the long line decides; from B = 9 on three kings cannot win even when they hold it.
+Up to W = 8 the long line decides; from W = 9 on three kings cannot win even when they hold it.
 With one long diagonal the condition amounts to "black does not hold it" (self-evident for a method that
 starts by occupying it); with two diagonals white really needs both.
 
@@ -209,14 +221,14 @@ Kept at the same place on every board size, the conversion always takes exactly 
 
 | Family | White kings | Boards checked | Black to move | White to move |
 |---|---|---|---|---|
-| **B + 1** | b2, (L−1, B−2), (L−3, B−4) — e.g. 10×11: b2, k9, i7 | 6×7 … 11×12 | 10 | 9 |
-| **B + 2** | b2, (L−1, B−3), (L−3, B−5) — e.g. 10×12: b2, l8, j6 | 6×8 … 10×12 | 12 | 11 |
-| **2B − 1** | one above each leg of the V, one below its apex — e.g. 10×19: b2, j8, r2 | 5×9 … 9×17 | 8 | 7 |
+| **W + 1** | (2, 2), (H, W − 1), (H − 2, W − 3) — e.g. 10×11: b2, k9, i7 | 6×7 … 11×12 | 10 | 9 |
+| **W + 2** | (2, 2), (H, W − 2), (H − 2, W − 4) — e.g. 10×12: b2, l8, j6 | 6×8 … 10×12 | 12 | 11 |
+| **2W − 1** | (2, 2), (W, W − 2), (H − 1, 2) — e.g. 10×19: b2, j8, r2 | 5×9 … 9×17 | 8 | 7 |
 
-No draw is left on any of these boards. The strong side builds the trapping position from an arbitrary position
+Coordinates are (file, rank) counted from (1, 1) = a1 at the bottom left; for 2W − 1, (2, 2) and (H − 1, 2) stand on the legs of the V and (W, W − 2) below its apex. No draw is left on any of these boards. The strong side builds the trapping position from an arbitrary position
 and then converts quickly: on 9×17 the longest win is 23 plies, of which at most 8 are the conversion.
 
-**The V** (only for `L = 2B − 1`): the diagonals from the two corners of one long side meet exactly in the
+**The V** (only for `H = 2W − 1`): the diagonals from the two corners of one long side meet exactly in the
 middle of the opposite side. Shorter, and the legs cross below the edge; longer, and they hit the edge at two different squares.
 On 6×11:
 ```
@@ -230,9 +242,9 @@ On 6×11:
     +-----------------------+
       a b c d e f g h i j k
 ```
-Even B always has the two corners; odd B has them only with colouring p1. The trapping map is exactly symmetric about the apex file.
+Even W always has the two corners; odd W has them only with colouring p1. The trapping map is exactly symmetric about the apex file.
 
-**B + 1 and B + 2**: the king at b2 stands on the long diagonal, whose other end is an entrance at the top right;
+**W + 1 and W + 2**: the king at b2 stands on the long diagonal, whose other end is an entrance at the top right;
 the two kings at the top right form a half trap with it and the upper one can close the long line.
 Black king top left: b2 sacrifices and black is caught. Black king bottom right: the second king sacrifices and the upper one closes in.
 On 10×11 (book diagram 8) every square of the black king is won with white to move within 5 plies,
@@ -287,9 +299,9 @@ One square per symmetry class (the 4 symmetries of the board give 15 classes):
 
 ## Comparison with the 1988 book
 
-**Confirmed**: everything the book states firmly — 2-1 for B ≤ 4 (with the long-line condition on 3×3 and 4×4) and on 5×7 p1;
-3-1 on B = 5, 6 for every L > B (square boards with the long-line condition, explicit on 5×5 p1);
-B = 7 for L = 7–11; B = 8 for L = 9, 10, 11, 15; the families B + 1, B + 2 and 2B − 1 with the colouring rule;
+**Confirmed**: everything the book states firmly — 2-1 for W ≤ 4 (with the long-line condition on 3×3 and 4×4) and on 5×7 p1;
+3-1 on W = 5, 6 for every H > W (square boards with the long-line condition, explicit on 5×5 p1);
+W = 7 for H = 7–11; W = 8 for H = 9, 10, 11, 15; the families W + 1, W + 2 and 2W − 1 with the colouring rule;
 the lake boards 1, 2, 4, 5, 7, 8, 9, 18, 23.
 
 **New**:
@@ -298,12 +310,12 @@ the lake boards 1, 2, 4, 5, 7, 8, 9, 18, 23.
 |---|---|---|---|
 | 2-1 | 5×6 | won | 27 plies |
 | 3-1 | 7×12, 7×13 p0, 7×14, 7×15 p1 | won (general method) | 35, 49, 53, 67 |
-| 3-1 | 7×15 p0, 7×16, 7×17 | drawn: the limit of B = 7 | |
+| 3-1 | 7×15 p0, 7×16, 7×17 | drawn: the limit of W = 7 | |
 | 3-1 | 10×10 without g7 (19) | won | 33 |
 | 3-1 | 10×10 without f10, d8, f8 (3, 12, 13) | drawn | |
 
 **Refined**: 10×10 without i9 (isolated j10), without h8 (one artificial zugzwang), 8×8 with white on the long line
-(40 forks with black to move), and the exact limits of every row up to B = 12.
+(40 forks with black to move), and the exact limits of every row up to W = 12.
 
 ---
 
@@ -420,10 +432,10 @@ scripts/run_all.sh                 # all databases, a few minutes; writes data/ 
 ```
 
 * [`results/summary.txt`](results/summary.txt): one line per database run (board, time, verification, draws, longest win).
-* [`scripts/trap.py`](scripts/trap.py): DTM per square of the black king for a fixed placement of the white kings.
-* [`scripts/edge_corner.py`](scripts/edge_corner.py): checkers 3-2 draws by white kings on the edge × black kings in double corners.
-* [`scripts/checkers_draws.py`](scripts/checkers_draws.py): classifies checkers draws (immediate shots versus blockades).
-* [`scripts/force_capture.py`](scripts/force_capture.py): can black force the win of a white king, and how fast.
+* [`drie_tegen_een_is_gemeen/trap.py`](drie_tegen_een_is_gemeen/trap.py): DTM per square of the black king for a fixed placement of the white kings.
+* [`checkers/edge_corner.py`](checkers/edge_corner.py): checkers 3-2 draws by white kings on the edge × black kings in double corners.
+* [`checkers/checkers_draws.py`](checkers/checkers_draws.py): classifies checkers draws (immediate shots versus blockades).
+* [`checkers/force_capture.py`](checkers/force_capture.py): can black force the win of a white king, and how fast.
 
 ---
 

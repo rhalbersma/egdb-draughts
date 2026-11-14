@@ -111,7 +111,8 @@ class Site:
     def index(self):
         k21, e21 = self.engine(8, 8, 1, 2, 1)
         k78, e78 = self.engine(8, 7, 1)
-        pg = self.page((k21, e21), (k78, e78))
+        k88, e88 = self.engine(8, 8, 1)
+        pg = self.page((k21, e21), (k88, e88), (k78, e78))
         t = self.t
         body = [f'<h1>{esc(TITLE[self.lang])}</h1>', t('''
 <p>Eindspelen met alleen dammen in het Engelse damspel (<em>checkers</em>): korte dammen (één veld), slagplicht en
@@ -169,6 +170,38 @@ opposition. On odd × odd boards with playable corners there are no exceptions a
 <tr><td>7×9 p0 (four double corners)</td><td>124,148 (13.2%)</td><td>93</td><td>see <a href="vesting.html">fortress</a></td></tr>
 <tr><td>9×9 p0 (four double corners)</td><td>1,201,460 (29.5%)</td><td>99</td><td>see <a href="vesting.html">fortress</a></td></tr>
 </table>'''))
+        for fen, head, cap in (
+                ('W:WK4,K8,K29:BK1,K28', t('<h2>3 tegen 2 op 8×8: zwart in de dubbele hoeken</h2>',
+                                           '<h2>3 against 2 on 8×8: black in the double corners</h2>'),
+                 t('<p>De beste verdediging lijkt de twee zwarte dammen elk in een dubbele hoek te zetten: een dam op de twee '
+                   'randvelden van een dubbele hoek kan niet geslagen worden en heeft altijd een wachtzet (zie de '
+                   '<a href="vesting.html">vesting</a>). Op 8×8 helpt het niet: alle 13.320 rustige stellingen met zwart in '
+                   'beide dubbele hoeken zijn gewonnen, met wit aan zet én met zwart aan zet. De oppositie, die op 8×9 en '
+                   '9×10 precies de helft van zulke stellingen remise maakt, speelt op 8×8 dus geen rol. Hier liggen de twee '
+                   'dubbele hoeken diagonaal tegenover elkaar en dicht bij elkaar (in de afstandsregel van de vesting: '
+                   'D × d = 7 × 7, de vesting valt).</p><p>De langste van deze stellingen, met de witte dammen in de enkele '
+                   'hoeken, duurt {v} ply. Op zet 10 zet wit een dam op het tweede veld van de hoek linksboven: de zwarte '
+                   'dam daar kan niet meer pendelen, en zwart moet met de andere dam zetten. Op zet 18 dwingt wit met een '
+                   'offer een ruil af: zwart moet slaan, wit slaat terug, en 2 tegen 1 wint.</p>',
+                   '<p>The best defence seems to be to put each black king in a double corner: a king on the two edge '
+                   'squares of a double corner cannot be captured and always has a waiting move (see the '
+                   '<a href="vesting.html">fortress</a>). On 8×8 it does not help: all 13,320 quiet positions with black in '
+                   'both double corners are won, with white to move and with black to move. The opposition, which makes '
+                   'exactly half of such positions a draw on 8×9 and 9×10, plays no role on 8×8. Here the two double '
+                   'corners lie diagonally opposite and close together (in the distance rule of the fortress: '
+                   'D × d = 7 × 7, the fortress falls).</p><p>The longest of these positions, with the white kings in the '
+                   'single corners, takes {v} plies. On move 10 white puts a king on the second square of the top-left '
+                   'corner: the black king there can no longer shuttle, and black has to move the other king. On move 18 '
+                   'white forces an exchange with a sacrifice: black has to capture, white captures back, and 2 against 1 '
+                   'wins.</p>')),
+                ('W:WK3,K4,K30:BK11,K13', t('<h2>3 tegen 2 op 8×8: de langste winst</h2>',
+                                            '<h2>3 against 2 on 8×8: the longest win</h2>'),
+                 t('<p>De langste winst op 8×8 zonder slag voor beide kanten in de beginstelling: {v} ply.</p>',
+                   '<p>The longest win on 8×8 without a capture for either side in the start position: {v} plies.</p>'))):
+            v, _ = e88.analyse(fen)
+            fig, i0 = pg.diagram(fen, t(f'8×8, wit aan zet: {v}', f'8×8, white to move: {v}'), gid=k88)
+            h, *_ = pg.best_line(fen, 80, start=i0)
+            body += [head, fig, cap.format(v=v[1:]), f'<p class="var">{h}</p>', '<div style="clear:both"></div>']
         fen = 'W:WK1,K2,K3:BK10,K11'
         fig, i0 = pg.diagram(fen, t('7×8, wit aan zet', '7×8, white to move'), gid=k78)
         v, legal = e78.analyse(fen)

@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Overview · Drie tegen een is gemeen</title>
+<style>
+:root {
+  --bg: #fbfaf7; --fg: #1d1d1b; --muted: #6b6a66; --rule: #e3e0d8; --panel: #f3f1ec;
+  --light: #efe6d2; --dark: #9c7a54; --hl: #d8b24a; --num: rgba(255,255,255,.75);
+  --wpiece: #fbf8f1; --wstroke: #4a4440; --bpiece: #2a2623; --bstroke: #000;
+  --link: #1f5f8b; --m2: #5b7d3a; --err: #b3261e; --only: #8a5a00; --db: #6d4aa8;
+  --active: #fff1b8; --lake: #8fb3c9;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #161514; --fg: #e9e6df; --muted: #a29e95; --rule: #34312d; --panel: #201e1c;
+    --light: #c9b99a; --dark: #6e5236; --hl: #c79a2a; --num: rgba(255,255,255,.6);
+    --link: #7fb6dd; --m2: #9cc06e; --err: #f2766d; --only: #e0b04f; --db: #b79cf0; --active: #4a4020; --lake: #3d5a6c;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #161514; --fg: #e9e6df; --muted: #a29e95; --rule: #34312d; --panel: #201e1c;
+  --light: #c9b99a; --dark: #6e5236; --hl: #c79a2a; --num: rgba(255,255,255,.6);
+  --link: #7fb6dd; --m2: #9cc06e; --err: #f2766d; --only: #e0b04f; --db: #b79cf0; --active: #4a4020; --lake: #3d5a6c;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 17px/1.6 Charter, "Bitstream Charter", "Sitka Text", Cambria, Georgia, serif; }
+header { border-bottom: 1px solid var(--rule); padding: 8px 16px; font: 14px/1.4 system-ui, sans-serif;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 18px; position: relative; z-index: 5; }
+header > a { color: var(--muted); text-decoration: none; }
+header > a.brand { color: var(--fg); font-weight: 600; }
+header > a:hover { color: var(--fg); }
+header > a.lang { margin-left: auto; border: 1px solid var(--rule); border-radius: 6px; padding: 2px 8px; }
+.menu { position: relative; }
+.menu summary { list-style: none; cursor: pointer; color: var(--fg); border: 1px solid var(--rule); border-radius: 6px;
+  padding: 3px 10px; background: var(--panel); user-select: none; }
+.menu summary::-webkit-details-marker { display: none; }
+.menu summary::after { content: " ▾"; color: var(--muted); }
+.menu[open] summary::after { content: " ▴"; }
+.menu-panel { position: absolute; left: 0; top: calc(100% + 6px); min-width: 300px; max-height: 75vh; overflow-y: auto;
+  background: var(--bg); border: 1px solid var(--rule); border-radius: 8px; box-shadow: 0 6px 24px rgba(0,0,0,.18);
+  padding: 8px 0; }
+.menu-panel .mh { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); padding: 8px 14px 2px; }
+.menu-panel a { display: block; padding: 4px 14px 4px 22px; color: var(--fg); text-decoration: none; }
+.menu-panel a:hover { background: var(--panel); }
+.menu-panel a[aria-current="page"] { background: var(--active); font-weight: 600; }
+details.more { border: 1px solid var(--rule); border-radius: 8px; margin: 12px 0; background: var(--panel); }
+details.more > summary { cursor: pointer; padding: 10px 14px; font: 600 15px system-ui, sans-serif; }
+details.more > div { padding: 0 16px 8px; }
+details.onpage { font: 14px/1.6 system-ui, sans-serif; margin: 10px 0 0; }
+details.onpage summary { cursor: pointer; color: var(--muted); }
+details.onpage a { margin-right: 12px; white-space: nowrap; }
+@media (max-width: 760px) { .menu-panel { position: fixed; left: 8px; right: 8px; top: 48px; min-width: 0; } }
+.wrap { display: grid; grid-template-columns: minmax(280px, 420px) minmax(0, 1fr); gap: 40px;
+  max-width: 1180px; margin: 0 auto; padding: 24px 16px 64px; }
+.side { position: sticky; top: 16px; align-self: start; }
+#board svg { width: 100%; height: auto; display: block; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+.buttons { display: flex; gap: 8px; margin: 10px 0; }
+.buttons button { flex: 1; padding: 6px 0; font: 16px system-ui, sans-serif; color: var(--fg); background: var(--panel);
+  border: 1px solid var(--rule); border-radius: 6px; cursor: pointer; }
+.buttons button:hover { border-color: var(--muted); }
+.panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px;
+  font: 14px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+.panel .stm { font-weight: 600; margin-bottom: 4px; }
+.panel table { border-collapse: collapse; width: 100%; }
+.panel td { padding: 1px 6px 1px 0; }
+.panel tr.played td { background: var(--active); }
+.panel a { color: var(--link); text-decoration: none; }
+main { min-width: 0; }
+h1 { font-size: 30px; line-height: 1.2; margin: 0 0 16px; }
+h2 { font-size: 22px; margin: 36px 0 8px; }
+a.m1, a.m2, a.m3 { text-decoration: none; white-space: nowrap; border-radius: 3px; padding: 0 1px; }
+a.m1 { color: var(--link); font-weight: 600; }
+a.m2 { color: var(--m2); }
+a.db { font-style: italic; }
+a.m3 { color: var(--db); font-size: 95%; }
+.q { color: var(--err); font-weight: 700; }
+.aside { color: var(--muted); }
+a.only::after { content: "*"; color: var(--only); }
+a.cur { background: var(--active); }
+.val { font: 14px ui-monospace, Menlo, Consolas, monospace; color: var(--muted); }
+blockquote { margin: 16px 0; padding: 4px 16px; border-left: 3px solid var(--dark); font-style: italic; }
+figure { float: right; margin: 4px 0 12px 20px; text-align: center; }
+figure .smallboard { width: 150px; }
+figcaption { font: 13px system-ui, sans-serif; color: var(--muted); margin-top: 4px; }
+p.var { margin: 10px 0; }
+.verdict { font: 13px system-ui, sans-serif; padding: 1px 7px; border-radius: 10px; margin-left: 6px; white-space: nowrap; }
+.verdict.ok { background: rgba(60,140,60,.15); }
+.verdict.bad { background: rgba(179,38,30,.15); }
+.note { font-size: 15px; color: var(--muted); }
+.legend { font: 13px/1.6 system-ui, sans-serif; color: var(--muted); border-top: 1px solid var(--rule); margin-top: 32px; padding-top: 12px; }
+.src { font-size: 14px; color: var(--muted); }
+section.diag { clear: both; border-top: 1px solid var(--rule); padding-top: 8px; margin-top: 28px; }
+section.diag h3 { font-size: 19px; margin: 6px 0 4px; }
+.claim { margin: 6px 0; }
+.moves { font-size: 15px; }
+.issues { font: 14px/1.5 system-ui, sans-serif; color: var(--muted); margin: 2px 0 0; padding-left: 18px; }
+.refute { display: flow-root; background: var(--panel); border-left: 3px solid var(--err); padding: 6px 12px; margin: 10px 0; border-radius: 0 6px 6px 0; }
+.refute .t { font: 13px system-ui, sans-serif; color: var(--muted); }
+.toc { list-style: none; padding: 0; }
+.toc li { padding: 5px 0; border-bottom: 1px solid var(--rule); }
+.toc .h { color: var(--muted); font: 14px system-ui, sans-serif; display: inline-block; min-width: 205px; }
+@media (max-width: 760px) { .toc .h { display: block; } }
+.toc .cnt { font: 13px system-ui, sans-serif; color: var(--muted); margin-left: 8px; }
+.toc .orig { font: 13px system-ui, sans-serif; margin-left: 8px; }
+.pager { display: flex; justify-content: space-between; font: 14px system-ui, sans-serif; margin-top: 40px; clear: both; }
+.pager a, .toc a, .src a, main p a:not(.m1):not(.m2) { color: var(--link); }
+.optree h3 { font-size: 18px; margin: 22px 0 4px; }
+.optree p { margin: 4px 0 4px 18px; }
+pre.tbl { font: 13px/1.45 ui-monospace, Menlo, Consolas, monospace; background: var(--panel); border: 1px solid var(--rule);
+  border-radius: 6px; padding: 10px 12px; overflow-x: auto; }
+table.tbl { border-collapse: collapse; font: 14px/1.4 system-ui, sans-serif; margin: 10px 0; }
+table.tbl th, table.tbl td { border-bottom: 1px solid var(--rule); padding: 4px 10px 4px 0; text-align: left; vertical-align: top; }
+table.tbl th { color: var(--muted); font-weight: 600; }
+.hub { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin: 20px 0; }
+.hub a.card { display: block; border: 1px solid var(--rule); border-radius: 8px; padding: 14px 16px; background: var(--panel);
+  color: var(--fg); text-decoration: none; }
+.hub a.card:hover { border-color: var(--muted); }
+.hub a.card strong { display: block; font-size: 19px; margin-bottom: 4px; color: var(--link); }
+.hub a.card span { font-size: 15px; color: var(--muted); }
+@media (max-width: 760px) {
+  .wrap { grid-template-columns: 1fr; gap: 16px; }
+  .side { position: sticky; top: 0; background: var(--bg); padding-bottom: 6px; z-index: 2; }
+  #board { max-width: 300px; margin: 0 auto; }
+  .panel { display: none; }
+  figure { float: none; margin: 8px 0; }
+}
+</style>
+</head>
+<body>
+<header><a class="brand" href="index.html">Drie tegen een is gemeen</a><details class="menu"><summary>Pages</summary><nav class="menu-panel"><a href="index.html" aria-current="page">Overview</a><a href="twee-tegen-een.html">2 kings against 1</a><a href="drie-tegen-een.html">3 kings against 1</a><a href="vangstellingen.html">Trapping positions</a><a href="tien-zonder-veld.html">10×10 with one square removed</a></nav></details><a href="../../en/index.html">All sites</a><a class="lang" href="../index.html" hreflang="nl">Nederlands</a></header>
+<div class="wrap">
+  <aside class="side">
+    <div id="board"></div>
+    <div class="buttons">
+      <button id="back" title="previous position (←)">◀</button>
+      <button id="play" title="play automatically">▶︎▶︎</button>
+      <button id="fwd" title="next position (→)">▶</button>
+      <button id="nums" title="square names on/off">#</button>
+      <button id="nota" title="numeric or algebraic notation">1-2</button>
+    </div>
+    <div class="panel" id="panel"></div>
+  </aside>
+  <main>
+<h1>Drie tegen een is gemeen</h1>
+<figure><a class="diagram" href="#" data-i="0"><div class="smallboard" data-g="5x6" data-fen="W:WK1,K8:BK7"></div></a><figcaption>5×6: two kings win (27 plies)</figcaption></figure>
+
+<p>Endgames with kings only, on boards of any size <em>B × L</em>, under international rules: flying kings, mandatory
+capture, majority capture and the Turkish strike. A Dutch book of 1988 on three kings against one, <em>Drie tegen een is
+gemeen</em> ("three against one is mean"), found its results by hand, on boards of every size. The databases of
+<a href="https://github.com/rhalbersma/egdb-draughts/blob/main/src/egdb_fast.cpp"><code>egdb_fast</code></a> compute
+every position exactly, with the distance to the end of the game in plies, and confirm, refine and extend the results
+of the book.</p>
+<p>Every position on this site is clickable: the large board follows, and below it are the value and all moves. W = win,
+L = loss, with the number of plies to the end of the game; D = draw. Purely game-theoretic, without move-count
+rules.</p>
+<h2>Contents</h2><ul class="toc">
+<li><a href="twee-tegen-een.html">2 kings against 1</a></li>
+<li><a href="drie-tegen-een.html">3 kings against 1</a></li>
+<li><a href="vangstellingen.html">Trapping positions</a></li>
+<li><a href="tien-zonder-veld.html">10×10 with one square removed</a></li>
+</ul>
+
+<h2>Comparison with the book</h2>
+<p><strong>Confirmed</strong>: everything the book states firmly — 2-1 for <em>B</em> ≤ 4 (with the long-diagonal
+condition on 3×3 and 4×4) and on 5×7 p1; 3-1 on <em>B</em> = 5, 6 for every <em>L</em> &gt; <em>B</em> (square boards
+with the long-diagonal condition, explicit on 5×5 p1); <em>B</em> = 7 for <em>L</em> = 7–11; <em>B</em> = 8 for
+<em>L</em> = 9, 10, 11, 15; the families <em>B</em> + 1, <em>B</em> + 2 and 2<em>B</em> − 1 with the colouring rule; the
+boards with a square removed 1, 2, 4, 5, 7, 8, 9, 18, 23.</p>
+<p><strong>New</strong>:</p>
+<table class="tbl"><tr><th>Material</th><th>Board</th><th>Result</th><th>Longest win</th></tr>
+<tr><td>2-1</td><td><a href="twee-tegen-een.html">5×6</a></td><td>won</td><td>27 plies</td></tr>
+<tr><td>3-1</td><td>7×12, 7×13 p0, 7×14, 7×15 p1</td><td>won (general method)</td><td>35, 49, 53, 67</td></tr>
+<tr><td>3-1</td><td>7×15 p0, 7×16, 7×17</td><td>drawn: the limit of <em>B</em> = 7</td><td></td></tr>
+<tr><td>3-1</td><td><a href="tien-zonder-veld.html">10×10 without g7 (19)</a></td><td>won</td><td>33</td></tr>
+<tr><td>3-1</td><td><a href="tien-zonder-veld.html">10×10 without f10, d8, f8 (3, 12, 13)</a></td><td>drawn</td><td></td></tr>
+</table>
+<p><strong>Refined</strong>: 10×10 without i9 (isolated square j10), without h8 (one artificial zugzwang), 8×8 with white
+on the long diagonal (40 forks with black to move), and the exact limits of every row up to <em>B</em> = 12.</p>
+<p class="src">The programs, the tables and the explanation:
+<a href="https://github.com/rhalbersma/egdb-draughts">github.com/rhalbersma/egdb-draughts</a>.</p>
+<nav class="pager"><span></span><a href="twee-tegen-een.html">2 kings against 1 →</a></nav>
+<p class="legend">Click a move to see the position on the large board; ◀ ▶ (or the arrow keys) step through the line. Values are for the side to move; for a move, for the side making it, with n the number of plies to the end of the game, the move included: W = win (odd), L = loss (even), D = draw. <span style="color:var(--link);font-weight:600">Blue</span> = main line, <span style="color:var(--m2)">green</span> = side line, <em>italics</em> = continuation by the database, <span class="q">?</span> = a move that changes the result according to the database, with the better move or the refutation in [ ] (<span style="color:var(--db)">≡</span> = back to the position before that move), <span style="color:var(--only)">*</span> = the only move that keeps the win or the draw. The 1-2 / a1 button switches between numeric and algebraic notation.</p>
+  </main>
+</div>
+<script>
+const POS = [{"f":"W:WK1,K8:BK7","v":"W27","last":null,"prev":null,"next":null,"g":"5x6","m":[["8-5","c3-d4","W27",null],["8-3","c3-e5","W27",null],["8-11","c3-d2","W27",null],["8-13","c3-a1","W27",null],["8-15","c3-e1","W29",null],["1-4","a5-b4","D",null],["8-4","c3-b4","D",null],["8-10","c3-b2","D",null]]}];
+const UI = {"white": "white", "black": "black", "tomove": "to move", "nomoves": "no moves: lost"};
+const GEOMS = {"5x6":{"w":6,"h":5,"parity":1,"sq":{"1":[0,4],"2":[2,4],"3":[4,4],"4":[1,3],"5":[3,3],"6":[5,3],"7":[0,2],"8":[2,2],"9":[4,2],"10":[1,1],"11":[3,1],"12":[5,1],"13":[0,0],"14":[2,0],"15":[4,0]},"lake":[],"alg":true}};
+let cur = 0, showNums = true, timer = null, notation = 'alg';
+try { const n = localStorage.getItem('notation'); if (n === 'num' || n === 'alg') notation = n; } catch (e) {}
+
+function parse(fen) {
+  const cells = {};
+  for (const part of fen.split(':').slice(1)) {
+    const side = part[0];
+    for (const it of part.slice(1).split(',')) {
+      if (!it) continue;
+      const king = it[0] === 'K';
+      cells[+(king ? it.slice(1) : it)] = side === 'W' ? (king ? 'W' : 'w') : (king ? 'B' : 'b');
+    }
+  }
+  return cells;
+}
+
+// board geometry: GEOMS[id] = {w, h, sq: {pdn: [file, rank]}, lake: [[file, rank]], alg: bool}
+// rank 0 is the bottom row; every playable or removed square is a dark square
+function svg(fen, last, nums, gid) {
+  const G = GEOMS[gid], cells = parse(fen), hl = new Set(last || []);
+  const at = {};
+  for (const [n, [f, r]] of Object.entries(G.sq)) at[f + ',' + r] = +n;
+  const lake = new Set((G.lake || []).map(([f, r]) => f + ',' + r));
+  let s = `<svg viewBox="0 0 ${G.w} ${G.h}" xmlns="http://www.w3.org/2000/svg">`;
+  for (let y = 0; y < G.h; y++) for (let c = 0; c < G.w; c++) {
+    const key = c + ',' + (G.h - 1 - y), sq = at[key];
+    if (lake.has(key)) {
+      s += `<rect x="${c}" y="${y}" width="1" height="1" fill="var(--lake)"/>`;
+      continue;
+    }
+    s += `<rect x="${c}" y="${y}" width="1" height="1" fill="var(--${sq ? 'dark' : 'light'})"/>`;
+    if (!sq) continue;
+    if (hl.has(sq)) s += `<rect x="${c}" y="${y}" width="1" height="1" fill="var(--hl)" opacity=".55"/>`;
+    if (nums) {
+      const t = notation === 'alg' ? String.fromCharCode(97 + c) + (G.h - y) : sq;
+      s += `<text x="${c + .06}" y="${y + .22}" font-size=".19" font-family="system-ui,sans-serif" fill="var(--num)">${t}</text>`;
+    }
+    const p = cells[sq];
+    if (!p) continue;
+    const w = p === 'w' || p === 'W', cx = c + .5, cy = y + .5;
+    const fill = w ? 'var(--wpiece)' : 'var(--bpiece)', stroke = w ? 'var(--wstroke)' : 'var(--bstroke)';
+    s += `<circle cx="${cx}" cy="${cy + .035}" r=".37" fill="rgba(0,0,0,.25)"/>`;
+    s += `<circle cx="${cx}" cy="${cy}" r=".37" fill="${fill}" stroke="${stroke}" stroke-width=".03"/>`;
+    s += `<circle cx="${cx}" cy="${cy}" r=".25" fill="none" stroke="${stroke}" stroke-width=".02" opacity=".5"/>`;
+    if (p === 'W' || p === 'B') {
+      const col = w ? '#9a6b12' : '#e2b44a';
+      s += `<path d="M${cx - .17} ${cy + .09} L${cx - .2} ${cy - .1} L${cx - .08} ${cy - .01} L${cx} ${cy - .15} L${cx + .08} ${cy - .01} L${cx + .2} ${cy - .1} L${cx + .17} ${cy + .09} Z" fill="${col}"/>`;
+    }
+  }
+  return s + '</svg>';
+}
+
+function go(i) {
+  if (i === null || i === undefined || i < 0 || i >= POS.length) return;
+  cur = i;
+  const p = POS[i];
+  document.getElementById('board').innerHTML = svg(p.f, p.last, showNums, p.g);
+  document.querySelectorAll('a.cur').forEach(a => a.classList.remove('cur'));
+  document.querySelectorAll(`a[data-i="${i}"]`).forEach(a => a.classList.add('cur'));
+  const side = p.f[0] === 'W' ? UI.white : UI.black;
+  const next = p.next !== null ? POS[p.next].f : null;
+  let h = `<div class="stm">${side} ${UI.tomove}: ${p.v}</div>`;
+  if (!p.m.length) h += `<div>${UI.nomoves}</div>`;
+  h += '<table>';
+  for (const [num, alg, v, j] of p.m) {
+    const n = notation === 'alg' ? alg : num;
+    const played = j !== null && j !== undefined && POS[j].f === next;
+    const mv = j !== null && j !== undefined ? `<a href="#" data-go="${j}">${n}</a>` : n;
+    h += `<tr class="${played ? 'played' : ''}"><td>${mv}</td><td>${v}</td></tr>`;
+  }
+  document.getElementById('panel').innerHTML = h + '</table>';
+}
+
+document.addEventListener('click', e => {
+  const a = e.target.closest('a[data-i], a[data-go]');
+  if (!a) return;
+  e.preventDefault();
+  stop();
+  go(+(a.dataset.i ?? a.dataset.go));
+});
+function stop() { if (timer) { clearInterval(timer); timer = null; document.getElementById('play').textContent = '▶︎▶︎'; } }
+document.getElementById('back').onclick = () => { stop(); go(POS[cur].prev); };
+document.getElementById('fwd').onclick = () => { stop(); go(POS[cur].next); };
+document.getElementById('nums').onclick = () => { showNums = !showNums; go(cur); };
+function setNotation(n) {
+  notation = n;
+  try { localStorage.setItem('notation', n); } catch (e) {}
+  document.querySelectorAll('span.mv').forEach(s => { s.textContent = n === 'alg' ? s.dataset.a : s.dataset.n; });
+  document.getElementById('nota').textContent = n === 'alg' ? 'a1' : '1-2';
+  go(cur);
+}
+document.getElementById('nota').onclick = () => setNotation(notation === 'alg' ? 'num' : 'alg');
+document.getElementById('play').onclick = () => {
+  if (timer) return stop();
+  document.getElementById('play').textContent = '❚❚';
+  timer = setInterval(() => { if (POS[cur].next === null) stop(); else go(POS[cur].next); }, 900);
+};
+document.addEventListener('click', e => {
+  document.querySelectorAll('details.menu[open]').forEach(m => { if (!m.contains(e.target)) m.removeAttribute('open'); });
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') document.querySelectorAll('details.menu[open]').forEach(m => m.removeAttribute('open'));
+  if (e.key === 'ArrowLeft') { stop(); go(POS[cur].prev); }
+  if (e.key === 'ArrowRight') { stop(); go(POS[cur].next); }
+});
+document.querySelectorAll('.smallboard').forEach(d => { d.innerHTML = svg(d.dataset.fen, null, false, d.dataset.g); });
+const first = document.querySelector('figure a[data-i]');
+go(first ? +first.dataset.i : 0);
+setNotation(notation);
+</script>
+</body>
+</html>

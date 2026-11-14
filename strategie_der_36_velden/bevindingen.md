@@ -82,7 +82,10 @@ op 19 oktober 2011 privé gedeeld met Ed Gilbert en voor het eerst gepubliceerd 
 Forum (damforum.nl, voorheen laatste.info) in de draad *Search Algorithm*:
 [damforum.nl/viewtopic.php?p=118055](https://damforum.nl/viewtopic.php?p=118055#p118055).
 
-Jan-Jaap van Horssen loste 6×6 daarna opnieuw zwak op, nu wel sluitend: *Complexity of checkers and draughts on different board sizes*,
+Jan-Jaap van Horssen loste 6×6 in 2016 opnieuw zwak op, nu wel sluitend. Hij meldde dat op 7 augustus 2017 op het
+forum, in de draad *Breakthrough Draughts* ([damforum.nl/viewtopic.php?p=120014](https://damforum.nl/viewtopic.php?p=120014#p120014)),
+beschreef het op 13 augustus 2017 in de draad *Complexity of Checkers and Draughts on board sizes 6x6/8x8/10x10/12x12/14x14*
+([damforum.nl/viewtopic.php?p=120080](https://damforum.nl/viewtopic.php?p=120080#p120080)) en publiceerde het in: *Complexity of checkers and draughts on different board sizes*,
 ICGA Journal 40 (2018) 341–352. Hij bouwde een database met winst/remise/verlies voor alle stellingen tot en met
 8 stukken en bewees met proof-number search vanuit de beginstand dat 6×6 remise is. Onze databases en openingsboom
 zijn onafhankelijk daarvan gemaakt en komen op alle punten met hem overeen:

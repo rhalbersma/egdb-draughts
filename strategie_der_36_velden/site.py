@@ -529,6 +529,17 @@ class Site:
             'laatste.info) in the thread <a href="https://damforum.nl/viewtopic.php?p=118055#p118055"><em>Search '
             'Algorithm</em></a>.</p>'),
             '6x6'))
+        body.append(self.t(
+            '<p>Jan-Jaap van Horssen loste 6×6 in 2016 opnieuw zwak op, nu wel sluitend, met proof-number search en de '
+            'databases tot en met 8 stukken. Hij meldde dat op 7 augustus 2017 op het forum (draad '
+            '<a href="https://damforum.nl/viewtopic.php?p=120014#p120014"><em>Breakthrough Draughts</em></a>), beschreef '
+            'het op 13 augustus 2017 in de draad <a href="https://damforum.nl/viewtopic.php?p=120080#p120080"><em>Complexity '
+            'of Checkers and Draughts on board sizes 6x6/…/14x14</em></a> en publiceerde het in 2018 in het ICGA Journal.</p>',
+            '<p>Jan-Jaap van Horssen weakly solved 6×6 again in 2016, this time conclusively, with proof-number search and the '
+            'databases up to 8 pieces. He reported it on the forum on August 7, 2017 (thread '
+            '<a href="https://damforum.nl/viewtopic.php?p=120014#p120014"><em>Breakthrough Draughts</em></a>), described it '
+            'on August 13, 2017 in the thread <a href="https://damforum.nl/viewtopic.php?p=120080#p120080"><em>Complexity of '
+            'Checkers and Draughts on board sizes 6x6/…/14x14</em></a> and published it in the ICGA Journal in 2018.</p>'))
         body.append(self.t('<h3>Vergelijking met Van Horssen (2018)</h3>', '<h3>Comparison with Van Horssen (2018)</h3>'))
         body.append(self.t(
             '<p>Jan-Jaap van Horssen loste 6×6 al eerder zwak op, in <em>Complexity of checkers and draughts on different '

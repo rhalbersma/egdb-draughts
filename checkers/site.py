@@ -51,8 +51,8 @@ class Site:
 
     def nav(self, current=None):
         items = [(PAGES[k][0], self.title(k)) for k in range(len(PAGES))]
-        home = '../index.html' if self.lang == 'nl' else '../../en/index.html'
-        alt = f'en/{current}' if self.lang == 'nl' else f'../{current}'
+        home = '../index.html' if self.lang == 'en' else '../../nl/index.html'      # English: default, Dutch in nl/
+        alt = f'nl/{current}' if self.lang == 'en' else f'../{current}'
         return (f'<a class="brand" href="index.html">{esc(TITLE[self.lang])}</a>'
                 f'{menu([(None, items)], current, self.t("Pagina\'s", "Pages"))}'
                 f'<a href="{home}">{self.t("Alle sites", "All sites")}</a>{lang_link(self.lang, alt)}')
@@ -284,8 +284,8 @@ def main():
     ap.add_argument('--out', default=str(ROOT / '_site' / 'checkers'))
     args = ap.parse_args()
     engines = {}
-    for lang in ('nl', 'en'):
-        out = Path(args.out) / ('' if lang == 'nl' else 'en')
+    for lang in ('en', 'nl'):
+        out = Path(args.out) / ('' if lang == 'en' else 'nl')
         out.mkdir(parents=True, exist_ok=True)
         s = Site(args.engine, out, lang, engines)
         s.index()

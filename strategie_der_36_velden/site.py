@@ -245,7 +245,7 @@ class Site:
         groups.append((t('De opening', 'The opening'),
                        [('opening.html', t('De beginstand en alle openingen tot 3 ply',
                                            'The start position and all openings to 3 plies'))]))
-        home = '../index.html' if self.lang == 'nl' else '../../en/index.html'
+        home = '../nl/index.html' if self.lang == 'nl' else '../../index.html'      # Dutch: default, English in en/
         alt = f'en/{current}' if self.lang == 'nl' else f'../{current}'
         return (f'<a class="brand" href="index.html">Strategie der 36 velden</a>'
                 f'{menu(groups, current, t("Hoofdstukken", "Chapters"))}<a href="opening.html">Opening</a>'

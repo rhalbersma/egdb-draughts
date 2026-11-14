@@ -86,7 +86,7 @@ class Site:
 
     def nav(self, current=None):
         items = [(PAGES[k][0], self.title(k)) for k in range(len(PAGES))]
-        home = '../index.html' if self.lang == 'nl' else '../../en/index.html'
+        home = '../nl/index.html' if self.lang == 'nl' else '../../index.html'      # Dutch: default, English in en/
         alt = f'en/{current}' if self.lang == 'nl' else f'../{current}'
         return (f'<a class="brand" href="index.html">{esc(TITLE)}</a>'
                 f'{menu([(None, items)], current, self.t("Pagina\'s", "Pages"))}'

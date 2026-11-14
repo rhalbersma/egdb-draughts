@@ -21,23 +21,23 @@ ROOT = Path(__file__).resolve().parent.parent
 
 SITES = {
     'nl': [
-        ('strategie_der_36_velden/', 'Strategie der 36 velden',
+        ('../strategie_der_36_velden/', 'Strategie der 36 velden',
          'Herm Jan Brascamps reeks over het 6×6-bord (2016), hoofdstuk voor hoofdstuk nagerekend met exacte databases tot '
          '10 stukken; plus de oplossing van de beginstand: remise.'),
-        ('drie_tegen_een_is_gemeen/', 'Drie tegen een is gemeen',
+        ('../drie_tegen_een_is_gemeen/', 'Drie tegen een is gemeen',
          'Twee en drie dammen tegen één op borden van elke afmeting: de winst op 5×6, de families, de vangstellingen en '
          '10×10 met één veld weg.'),
-        ('checkers/', 'Checkers: 3 dammen tegen 2',
+        ('../checkers/nl/', 'Checkers: 3 dammen tegen 2',
          'Korte dammen op borden van elke afmeting: blokkades, de vesting in de dubbele hoek en de oppositie.'),
     ],
     'en': [
-        ('../strategie_der_36_velden/en/', 'Strategie der 36 velden',
+        ('strategie_der_36_velden/en/', 'Strategie der 36 velden',
          'Herm Jan Brascamp\'s series on the 6×6 board (2016), checked chapter by chapter with exact databases up to 10 '
          'pieces; plus the solution of the start position: a draw.'),
-        ('../drie_tegen_een_is_gemeen/en/', 'Drie tegen een is gemeen',
+        ('drie_tegen_een_is_gemeen/en/', 'Drie tegen een is gemeen',
          'Two and three kings against one on boards of any size: the win on 5×6, the families, the trapping positions '
          'and 10×10 with one square removed.'),
-        ('../checkers/en/', 'Checkers: 3 kings against 2',
+        ('checkers/', 'Checkers: 3 kings against 2',
          'Short kings on boards of any size: blockades, the double-corner fortress and opposition.'),
     ],
 }
@@ -47,12 +47,12 @@ TEXT = {
            'Exacte eindspeldatabases voor het internationale damspel en voor checkers, op borden van elke afmeting: elke '
            'stelling is uitgerekend tot het einde van de partij, met de afstand in ply. Drie sites spelen klassieke '
            'analyses na, met klikbare zetten en bij elke stelling de waarde en alle zetten.',
-           'De programma\'s, databases en rapporten', 'en/index.html', 'English'),
+           'De programma\'s, databases en rapporten', '../index.html', 'English'),
     'en': ('Endgame databases for draughts',
            'Exact endgame databases for international draughts and for checkers, on boards of any size: every position is '
            'computed to the end of the game, with the distance in plies. Three sites replay classic analyses, with '
            'clickable moves and for every position the value and all moves.',
-           'The programs, databases and reports', '../index.html', 'Nederlands'),
+           'The programs, databases and reports', 'nl/index.html', 'Nederlands'),
 }
 
 OLD = ['index.html', 'opening.html', 'voorbeeld-7-22.html'] + [f'{p}.html' for p in (
@@ -121,7 +121,7 @@ def main():
         for k, v in (('{cards}', cards), ('{lang}', lang), ('{h1}', h1), ('{intro}', intro), ('{src}', src),
                      ('{langs}', lang_link(lang, alt))):
             page = page.replace(k, v)
-        d = out if lang == 'nl' else out / 'en'
+        d = out if lang == 'en' else out / 'nl'          # English by default, Dutch in nl/
         d.mkdir(parents=True, exist_ok=True)
         (d / 'index.html').write_text(page)
     for f in OLD[1:]:

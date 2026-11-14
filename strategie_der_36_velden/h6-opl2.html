@@ -66,6 +66,19 @@ details.onpage a { margin-right: 12px; white-space: nowrap; }
 .buttons button { flex: 1; padding: 6px 0; font: 16px system-ui, sans-serif; color: var(--fg); background: var(--panel);
   border: 1px solid var(--rule); border-radius: 6px; cursor: pointer; }
 .buttons button:hover { border-color: var(--muted); }
+/* tooltips above the buttons, in the language of the page */
+.buttons button { position: relative; }
+.buttons button[data-tip]::after { content: attr(data-tip); position: absolute; bottom: calc(100% + 8px); left: 50%;
+  transform: translateX(-50%); background: var(--fg); color: var(--bg); font: 12px/1.35 system-ui, sans-serif;
+  padding: 5px 8px; border-radius: 5px; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity .12s;
+  z-index: 10; }
+.buttons button[data-tip]::before { content: ""; position: absolute; bottom: calc(100% + 3px); left: 50%;
+  transform: translateX(-50%); border: 5px solid transparent; border-top-color: var(--fg); opacity: 0;
+  transition: opacity .12s; pointer-events: none; z-index: 10; }
+.buttons button:hover::after, .buttons button:focus-visible::after,
+.buttons button:hover::before, .buttons button:focus-visible::before { opacity: 1; transition-delay: .25s; }
+.buttons button:first-child[data-tip]::after { left: 0; transform: none; }
+.buttons button:last-child[data-tip]::after { left: auto; right: 0; transform: none; }
 .panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px;
   font: 14px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
 .panel .stm { font-weight: 600; margin-bottom: 4px; }
@@ -149,11 +162,11 @@ table.tbl th { color: var(--muted); font-weight: 600; }
   <aside class="side">
     <div id="board"></div>
     <div class="buttons">
-      <button id="back" title="vorige stelling (←)">◀</button>
-      <button id="play" title="automatisch afspelen">▶︎▶︎</button>
-      <button id="fwd" title="volgende stelling (→)">▶</button>
-      <button id="nums" title="veldnamen aan/uit">#</button>
-      <button id="nota" title="numerieke of algebraïsche notatie">1-2</button>
+      <button id="back" data-tip="Vorige stelling (←)" aria-label="Vorige stelling (←)">◀</button>
+      <button id="play" data-tip="Variant automatisch afspelen" aria-label="Variant automatisch afspelen">▶︎▶︎</button>
+      <button id="fwd" data-tip="Volgende stelling (→)" aria-label="Volgende stelling (→)">▶</button>
+      <button id="nums" data-tip="Veldnamen op het bord aan/uit" aria-label="Veldnamen op het bord aan/uit">#</button>
+      <button id="nota" data-tip="Wissel tussen numerieke (13-10) en algebraïsche (d3-e4) notatie" aria-label="Wissel tussen numerieke (13-10) en algebraïsche (d3-e4) notatie">1-2</button>
     </div>
     <div class="panel" id="panel"></div>
   </aside>
@@ -217,7 +230,7 @@ table.tbl th { color: var(--muted); font-weight: 600; }
 </p>
 </section>
 <nav class="pager"><a href="h6-opl1.html">← Oplossingen zwaar manoeuvreren I</a><a href="h6-opl3.html">Oplossingen zwaar manoeuvreren III →</a></nav>
-<p class="legend">Klik op een zet om de stelling op het grote bord te zien; ◀ ▶ (of de pijltjestoetsen) lopen door de variant. Waarden gelden voor de partij aan zet; bij een zet voor wie hem doet, met n het aantal ply tot het einde van de partij, de zet meegeteld: W = winst (oneven), L = verlies (even), D = remise. <span style="color:var(--link);font-weight:600">Blauw</span> = hoofdvariant, <span style="color:var(--m2)">groen</span> = zijvariant, <em>cursief</em> = voortzetting van de database, <span class="q">?</span> = zet die volgens de database het resultaat verandert, met tussen [ ] de betere zet of de weerlegging (<span style="color:var(--db)">≡</span> = terug naar de stelling vóór die zet), <span style="color:var(--only)">*</span> = enige zet die de winst of de remise behoudt. De knop 1-2 / a1 wisselt tussen numerieke en algebraïsche notatie.</p>
+<p class="legend">Klik op een zet om de stelling op het grote bord te zien; ◀ ▶ (of de pijltjestoetsen) lopen door de variant. Waarden gelden voor de partij aan zet; bij een zet voor wie hem doet, met n het aantal ply tot het einde van de partij, de zet meegeteld: W = winst (oneven), L = verlies (even), D = remise. <span style="color:var(--link);font-weight:600">Blauw</span> = hoofdvariant, <span style="color:var(--m2)">groen</span> = zijvariant, <em>cursief</em> = voortzetting van de database, <span class="q">?</span> = zet die volgens de database het resultaat verandert, met tussen [ ] de betere zet of de weerlegging (<span style="color:var(--db)">≡</span> = terug naar de stelling vóór die zet), <span style="color:var(--only)">*</span> = enige zet die de winst of de remise behoudt. De knop # zet de veldnamen op het grote bord aan of uit; de knop 1-2 / a1 wisselt tussen numerieke en algebraïsche notatie, ook in de tekst.</p>
   </main>
 </div>
 <script>

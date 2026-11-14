@@ -66,6 +66,19 @@ details.onpage a { margin-right: 12px; white-space: nowrap; }
 .buttons button { flex: 1; padding: 6px 0; font: 16px system-ui, sans-serif; color: var(--fg); background: var(--panel);
   border: 1px solid var(--rule); border-radius: 6px; cursor: pointer; }
 .buttons button:hover { border-color: var(--muted); }
+/* tooltips above the buttons, in the language of the page */
+.buttons button { position: relative; }
+.buttons button[data-tip]::after { content: attr(data-tip); position: absolute; bottom: calc(100% + 8px); left: 50%;
+  transform: translateX(-50%); background: var(--fg); color: var(--bg); font: 12px/1.35 system-ui, sans-serif;
+  padding: 5px 8px; border-radius: 5px; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity .12s;
+  z-index: 10; }
+.buttons button[data-tip]::before { content: ""; position: absolute; bottom: calc(100% + 3px); left: 50%;
+  transform: translateX(-50%); border: 5px solid transparent; border-top-color: var(--fg); opacity: 0;
+  transition: opacity .12s; pointer-events: none; z-index: 10; }
+.buttons button:hover::after, .buttons button:focus-visible::after,
+.buttons button:hover::before, .buttons button:focus-visible::before { opacity: 1; transition-delay: .25s; }
+.buttons button:first-child[data-tip]::after { left: 0; transform: none; }
+.buttons button:last-child[data-tip]::after { left: auto; right: 0; transform: none; }
 .panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px;
   font: 14px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
 .panel .stm { font-weight: 600; margin-bottom: 4px; }
@@ -149,11 +162,11 @@ table.tbl th { color: var(--muted); font-weight: 600; }
   <aside class="side">
     <div id="board"></div>
     <div class="buttons">
-      <button id="back" title="vorige stelling (←)">◀</button>
-      <button id="play" title="automatisch afspelen">▶︎▶︎</button>
-      <button id="fwd" title="volgende stelling (→)">▶</button>
-      <button id="nums" title="veldnamen aan/uit">#</button>
-      <button id="nota" title="numerieke of algebraïsche notatie">1-2</button>
+      <button id="back" data-tip="Vorige stelling (←)" aria-label="Vorige stelling (←)">◀</button>
+      <button id="play" data-tip="Variant automatisch afspelen" aria-label="Variant automatisch afspelen">▶︎▶︎</button>
+      <button id="fwd" data-tip="Volgende stelling (→)" aria-label="Volgende stelling (→)">▶</button>
+      <button id="nums" data-tip="Veldnamen op het bord aan/uit" aria-label="Veldnamen op het bord aan/uit">#</button>
+      <button id="nota" data-tip="Wissel tussen numerieke (13-10) en algebraïsche (d3-e4) notatie" aria-label="Wissel tussen numerieke (13-10) en algebraïsche (d3-e4) notatie">1-2</button>
     </div>
     <div class="panel" id="panel"></div>
   </aside>
@@ -187,7 +200,7 @@ table.tbl th { color: var(--muted); font-weight: 600; }
 <p>Dit rapport is dus vooral een bevestiging van zijn werk. De weerleggingen hieronder laten zien waar de databases op die enkele plaatsen verder kijken.</p></div></details>
 <details class="more"><summary>Resultaten per hoofdstuk</summary><div><p>✅ bevestigd, ❌ onjuist; bij de varianten ook ⚠️ opmerking, ✏️ notatiefout, ℹ️ informatief.</p><table class="tbl"><tr><td>Hoofdstuk 1</td><td><a href="h1.html">Inleiding</a></td><td>diagrammen ✅ 2 · varianten ✏️ 1 ✅ 3</td></tr><tr><td>Hoofdstuk 2</td><td><a href="h2.html">De lange lijn</a></td><td>diagrammen ✅ 4 · varianten ✅ 9</td></tr><tr><td>Hoofdstuk 3</td><td><a href="h3.html">Een hinderlijke schijf</a></td><td>diagrammen ✅ 3 · varianten ℹ️ 3 ✏️ 2 ✅ 14 ⚠️ 1</td></tr><tr><td>Hoofdstuk 3.3</td><td><a href="h3-3.html">Moeizame remise en luchtig slot</a></td><td>diagrammen ✅ 1 · varianten ✅ 5 ❌ 1 ⚠️ 3</td></tr><tr><td>Hoofdstuk 4</td><td><a href="h4.html">Een zwarte schijf op 15 en een zwarte dam</a></td><td>diagrammen ✅ 14 ❌ 8 · varianten ✏️ 2 ✅ 17</td></tr><tr><td>Hoofdstuk 5a</td><td><a href="h5a.html">Scouppe I</a></td><td>diagrammen ✅ 15 · varianten ✅ 16</td></tr><tr><td>Hoofdstuk 5b</td><td><a href="h5b.html">Scouppe Trucs</a></td><td>diagrammen ✅ 4 · varianten ✅ 9</td></tr><tr><td>Hoofdstuk 5c</td><td><a href="h5c.html">Scouppe: Dam op 17</a></td><td>diagrammen ✅ 3 · varianten ✅ 7</td></tr><tr><td>Hoofdstuk 5d</td><td><a href="h5d.html">Compositie op finesse 5</a></td><td>diagrammen ✅ 1 · varianten ✏️ 3 ✅ 9 ❌ 1 ⚠️ 3</td></tr><tr><td>Hoofdstuk 6a</td><td><a href="h6a.html">Intermezzo: acht opgaven (sectie 6.1)</a></td><td>diagrammen ✅ 2 · varianten ✏️ 1 ✅ 4 ⚠️ 3</td></tr><tr><td>Hoofdstuk 6b</td><td><a href="h6b.html">Zwaar manoeuvreren (sectie 6.2)</a></td><td>diagrammen ✅ 2 · varianten ✅ 5</td></tr><tr><td>Hoofdstuk 7</td><td><a href="h7.html">De randslag-opening</a></td><td>diagrammen ✅ 1 · varianten ℹ️ 1 ✅ 4</td></tr><tr><td>Hoofdstuk 6a</td><td><a href="h6a-opl.html">Oplossingen (sectie 6.1)</a></td><td>diagrammen ✅ 2 · varianten ✅ 12</td></tr><tr><td></td><td><a href="h6-opl1.html">Oplossingen zwaar manoeuvreren I</a></td><td>diagrammen ✅ 4 · varianten ✅ 8</td></tr><tr><td></td><td><a href="h6-opl2.html">Oplossingen zwaar manoeuvreren II</a></td><td>diagrammen ✅ 1 · varianten ✏️ 1 ✅ 15</td></tr><tr><td></td><td><a href="h6-opl3.html">Oplossingen zwaar manoeuvreren III</a></td><td>diagrammen ✅ 6 · varianten ✏️ 2 ✅ 9</td></tr><tr><td>Hoofdstuk 7.2</td><td><a href="h7-2.html">De derde zet</a></td><td>diagrammen ✅ 1 ❌ 1 · varianten ✏️ 3 ✅ 11 ❌ 3</td></tr><tr><td>Hoofdstuk 7.3</td><td><a href="h7-3.html">De vierde zet</a></td><td>diagrammen ✅ 2 ❌ 2 · varianten ℹ️ 1 ✏️ 1 ✅ 12 ❌ 1</td></tr><tr><td>Hoofdstuk 7.4</td><td><a href="h7-4.html">Naar voren</a></td><td>diagrammen ✅ 4 ❌ 1 · varianten ℹ️ 1 ✅ 11 ❌ 2 ⚠️ 1</td></tr><tr><td>Hoofdstuk 7.5</td><td><a href="h7-5.html">Achteruit</a></td><td>varianten ✏️ 3 ✅ 15 ⚠️ 1</td></tr><tr><td>Hoofdstuk 7.6</td><td><a href="h7-6.html">Een dijk van een stand</a></td><td>diagrammen ✅ 3 · varianten ✏️ 2 ✅ 9</td></tr><tr><td>Hoofdstuk 7.7</td><td><a href="h7-7.html">Conclusie</a></td><td>diagrammen ✅ 1 ❌ 1 · varianten ✏️ 1 ✅ 8 ❌ 1</td></tr><tr><td>Hoofdstuk 8.0</td><td><a href="h8.html">Een schijf op 4</a></td><td>diagrammen ✅ 11 ❌ 2 · varianten ✏️ 1 ✅ 18 ⚠️ 1</td></tr><tr><td>Hoofdstuk 9.0</td><td><a href="h9.html">Het taaie eindspel</a></td><td>diagrammen ✅ 10 · varianten ℹ️ 1 ✏️ 5 ✅ 43 ⚠️ 3</td></tr></table></div></details>
 <p class="src">Het volledige rapport (Nederlands), de databases en de programma's: <a href="https://github.com/rhalbersma/egdb-draughts">https://github.com/rhalbersma/egdb-draughts</a>.</p>
-<p class="legend">Klik op een zet om de stelling op het grote bord te zien; ◀ ▶ (of de pijltjestoetsen) lopen door de variant. Waarden gelden voor de partij aan zet; bij een zet voor wie hem doet, met n het aantal ply tot het einde van de partij, de zet meegeteld: W = winst (oneven), L = verlies (even), D = remise. <span style="color:var(--link);font-weight:600">Blauw</span> = hoofdvariant, <span style="color:var(--m2)">groen</span> = zijvariant, <em>cursief</em> = voortzetting van de database, <span class="q">?</span> = zet die volgens de database het resultaat verandert, met tussen [ ] de betere zet of de weerlegging (<span style="color:var(--db)">≡</span> = terug naar de stelling vóór die zet), <span style="color:var(--only)">*</span> = enige zet die de winst of de remise behoudt. De knop 1-2 / a1 wisselt tussen numerieke en algebraïsche notatie.</p>
+<p class="legend">Klik op een zet om de stelling op het grote bord te zien; ◀ ▶ (of de pijltjestoetsen) lopen door de variant. Waarden gelden voor de partij aan zet; bij een zet voor wie hem doet, met n het aantal ply tot het einde van de partij, de zet meegeteld: W = winst (oneven), L = verlies (even), D = remise. <span style="color:var(--link);font-weight:600">Blauw</span> = hoofdvariant, <span style="color:var(--m2)">groen</span> = zijvariant, <em>cursief</em> = voortzetting van de database, <span class="q">?</span> = zet die volgens de database het resultaat verandert, met tussen [ ] de betere zet of de weerlegging (<span style="color:var(--db)">≡</span> = terug naar de stelling vóór die zet), <span style="color:var(--only)">*</span> = enige zet die de winst of de remise behoudt. De knop # zet de veldnamen op het grote bord aan of uit; de knop 1-2 / a1 wisselt tussen numerieke en algebraïsche notatie, ook in de tekst.</p>
   </main>
 </div>
 <script>

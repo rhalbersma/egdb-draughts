@@ -66,6 +66,19 @@ details.onpage a { margin-right: 12px; white-space: nowrap; }
 .buttons button { flex: 1; padding: 6px 0; font: 16px system-ui, sans-serif; color: var(--fg); background: var(--panel);
   border: 1px solid var(--rule); border-radius: 6px; cursor: pointer; }
 .buttons button:hover { border-color: var(--muted); }
+/* tooltips above the buttons, in the language of the page */
+.buttons button { position: relative; }
+.buttons button[data-tip]::after { content: attr(data-tip); position: absolute; bottom: calc(100% + 8px); left: 50%;
+  transform: translateX(-50%); background: var(--fg); color: var(--bg); font: 12px/1.35 system-ui, sans-serif;
+  padding: 5px 8px; border-radius: 5px; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity .12s;
+  z-index: 10; }
+.buttons button[data-tip]::before { content: ""; position: absolute; bottom: calc(100% + 3px); left: 50%;
+  transform: translateX(-50%); border: 5px solid transparent; border-top-color: var(--fg); opacity: 0;
+  transition: opacity .12s; pointer-events: none; z-index: 10; }
+.buttons button:hover::after, .buttons button:focus-visible::after,
+.buttons button:hover::before, .buttons button:focus-visible::before { opacity: 1; transition-delay: .25s; }
+.buttons button:first-child[data-tip]::after { left: 0; transform: none; }
+.buttons button:last-child[data-tip]::after { left: auto; right: 0; transform: none; }
 .panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px;
   font: 14px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
 .panel .stm { font-weight: 600; margin-bottom: 4px; }
@@ -149,11 +162,11 @@ table.tbl th { color: var(--muted); font-weight: 600; }
   <aside class="side">
     <div id="board"></div>
     <div class="buttons">
-      <button id="back" title="previous position (←)">◀</button>
-      <button id="play" title="play automatically">▶︎▶︎</button>
-      <button id="fwd" title="next position (→)">▶</button>
-      <button id="nums" title="square names on/off">#</button>
-      <button id="nota" title="numeric or algebraic notation">1-2</button>
+      <button id="back" data-tip="Previous position (←)" aria-label="Previous position (←)">◀</button>
+      <button id="play" data-tip="Play the line automatically" aria-label="Play the line automatically">▶︎▶︎</button>
+      <button id="fwd" data-tip="Next position (→)" aria-label="Next position (→)">▶</button>
+      <button id="nums" data-tip="Square names on the board on/off" aria-label="Square names on the board on/off">#</button>
+      <button id="nota" data-tip="Switch between numeric (13-10) and algebraic (d3-e4) notation" aria-label="Switch between numeric (13-10) and algebraic (d3-e4) notation">1-2</button>
     </div>
     <div class="panel" id="panel"></div>
   </aside>
@@ -197,7 +210,7 @@ capture.</p>
 <p><strong>The V</strong> (only for <em>L</em> = 2<em>B</em> − 1): the diagonals from the two corners of one long side meet exactly in the middle of the opposite side. Shorter, and the legs cross below the edge; longer, and they hit the edge at two different squares. Even <em>B</em> always has the two corners; odd <em>B</em> has them only with colouring p1.</p>
 <div style="clear:both"></div>
 <nav class="pager"><a href="drie-tegen-een.html">← 3 kings against 1</a><a href="tien-zonder-veld.html">10×10 with one square removed →</a></nav>
-<p class="legend">Click a move to see the position on the large board; ◀ ▶ (or the arrow keys) step through the line. Values are for the side to move; for a move, for the side making it, with n the number of plies to the end of the game, the move included: W = win (odd), L = loss (even), D = draw. <span style="color:var(--link);font-weight:600">Blue</span> = main line, <span style="color:var(--m2)">green</span> = side line, <em>italics</em> = continuation by the database, <span class="q">?</span> = a move that changes the result according to the database, with the better move or the refutation in [ ] (<span style="color:var(--db)">≡</span> = back to the position before that move), <span style="color:var(--only)">*</span> = the only move that keeps the win or the draw. The 1-2 / a1 button switches between numeric and algebraic notation.</p>
+<p class="legend">Click a move to see the position on the large board; ◀ ▶ (or the arrow keys) step through the line. Values are for the side to move; for a move, for the side making it, with n the number of plies to the end of the game, the move included: W = win (odd), L = loss (even), D = draw. <span style="color:var(--link);font-weight:600">Blue</span> = main line, <span style="color:var(--m2)">green</span> = side line, <em>italics</em> = continuation by the database, <span class="q">?</span> = a move that changes the result according to the database, with the better move or the refutation in [ ] (<span style="color:var(--db)">≡</span> = back to the position before that move), <span style="color:var(--only)">*</span> = the only move that keeps the win or the draw. The # button turns the square names on the large board on or off; the 1-2 / a1 button switches between numeric and algebraic notation, in the text as well.</p>
   </main>
 </div>
 <script>

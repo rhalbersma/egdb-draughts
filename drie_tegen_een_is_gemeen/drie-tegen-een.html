@@ -66,6 +66,19 @@ details.onpage a { margin-right: 12px; white-space: nowrap; }
 .buttons button { flex: 1; padding: 6px 0; font: 16px system-ui, sans-serif; color: var(--fg); background: var(--panel);
   border: 1px solid var(--rule); border-radius: 6px; cursor: pointer; }
 .buttons button:hover { border-color: var(--muted); }
+/* tooltips above the buttons, in the language of the page */
+.buttons button { position: relative; }
+.buttons button[data-tip]::after { content: attr(data-tip); position: absolute; bottom: calc(100% + 8px); left: 50%;
+  transform: translateX(-50%); background: var(--fg); color: var(--bg); font: 12px/1.35 system-ui, sans-serif;
+  padding: 5px 8px; border-radius: 5px; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity .12s;
+  z-index: 10; }
+.buttons button[data-tip]::before { content: ""; position: absolute; bottom: calc(100% + 3px); left: 50%;
+  transform: translateX(-50%); border: 5px solid transparent; border-top-color: var(--fg); opacity: 0;
+  transition: opacity .12s; pointer-events: none; z-index: 10; }
+.buttons button:hover::after, .buttons button:focus-visible::after,
+.buttons button:hover::before, .buttons button:focus-visible::before { opacity: 1; transition-delay: .25s; }
+.buttons button:first-child[data-tip]::after { left: 0; transform: none; }
+.buttons button:last-child[data-tip]::after { left: auto; right: 0; transform: none; }
 .panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px;
   font: 14px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
 .panel .stm { font-weight: 600; margin-bottom: 4px; }
@@ -149,11 +162,11 @@ table.tbl th { color: var(--muted); font-weight: 600; }
   <aside class="side">
     <div id="board"></div>
     <div class="buttons">
-      <button id="back" title="vorige stelling (←)">◀</button>
-      <button id="play" title="automatisch afspelen">▶︎▶︎</button>
-      <button id="fwd" title="volgende stelling (→)">▶</button>
-      <button id="nums" title="veldnamen aan/uit">#</button>
-      <button id="nota" title="numerieke of algebraïsche notatie">1-2</button>
+      <button id="back" data-tip="Vorige stelling (←)" aria-label="Vorige stelling (←)">◀</button>
+      <button id="play" data-tip="Variant automatisch afspelen" aria-label="Variant automatisch afspelen">▶︎▶︎</button>
+      <button id="fwd" data-tip="Volgende stelling (→)" aria-label="Volgende stelling (→)">▶</button>
+      <button id="nums" data-tip="Veldnamen op het bord aan/uit" aria-label="Veldnamen op het bord aan/uit">#</button>
+      <button id="nota" data-tip="Wissel tussen numerieke (13-10) en algebraïsche (d3-e4) notatie" aria-label="Wissel tussen numerieke (13-10) en algebraïsche (d3-e4) notatie">1-2</button>
     </div>
     <div class="panel" id="panel"></div>
   </aside>
@@ -211,7 +224,7 @@ er echt beide nodig.</p>
 <p>Met wit op de lange lijn wint wit altijd. Een van de langste winsten (25 ply):</p>
 <p class="var"><a class="m1 db" href="#" data-i="1" title="W25">1. <span class="mv" data-g="8x8" data-n="8-3" data-a="g7-f8">g7-f8</span></a> <a class="m1 db" href="#" data-i="2" title="L24"><span class="mv" data-g="8x8" data-n="14-23" data-a="c5-e3">c5-e3</span></a> <a class="m1 db" href="#" data-i="3" title="W23">2. <span class="mv" data-g="8x8" data-n="3-10" data-a="f8-d6">f8-d6</span></a> <a class="m1 db" href="#" data-i="4" title="L22"><span class="mv" data-g="8x8" data-n="23-27" data-a="e3-f2">e3-f2</span></a> <a class="m1 db" href="#" data-i="5" title="W21">3. <span class="mv" data-g="8x8" data-n="10-1" data-a="d6-b8">d6-b8</span></a> <a class="m1 db" href="#" data-i="6" title="L20"><span class="mv" data-g="8x8" data-n="27-23" data-a="f2-e3">f2-e3</span></a> <a class="m1 db" href="#" data-i="7" title="W19">4. <span class="mv" data-g="8x8" data-n="11-15" data-a="f6-e5">f6-e5</span></a> <a class="m1 db" href="#" data-i="8" title="L18"><span class="mv" data-g="8x8" data-n="23-16" data-a="e3-g5">e3-g5</span></a> <a class="m1 db" href="#" data-i="9" title="W17">5. <span class="mv" data-g="8x8" data-n="1-5" data-a="b8-a7">b8-a7</span></a> <a class="m1 db" href="#" data-i="10" title="L16"><span class="mv" data-g="8x8" data-n="16-12" data-a="g5-h6">g5-h6</span></a> <a class="m1 db" href="#" data-i="11" title="W15">6. <span class="mv" data-g="8x8" data-n="5-14" data-a="a7-c5">a7-c5</span></a> <a class="m1 db" href="#" data-i="12" title="L14"><span class="mv" data-g="8x8" data-n="12-16" data-a="h6-g5">h6-g5</span></a> <a class="m1 db" href="#" data-i="13" title="W13">7. <span class="mv" data-g="8x8" data-n="15-10" data-a="e5-d6">e5-d6</span></a> <a class="m1 db" href="#" data-i="14" title="L12"><span class="mv" data-g="8x8" data-n="16-2" data-a="g5-d8">g5-d8</span></a> <a class="m1 db" href="#" data-i="15" title="W11">8. <span class="mv" data-g="8x8" data-n="10-19" data-a="d6-f4">d6-f4</span></a> <a class="m1 db" href="#" data-i="16" title="L10"><span class="mv" data-g="8x8" data-n="2-20" data-a="d8-h4">d8-h4</span></a> <a class="m1 db" href="#" data-i="17" title="W9">9. <span class="mv" data-g="8x8" data-n="4-22" data-a="h8-c3">h8-c3</span></a> <a class="m1 db" href="#" data-i="18" title="L8"><span class="mv" data-g="8x8" data-n="20-2" data-a="h4-d8">h4-d8</span></a> <a class="m1 db" href="#" data-i="19" title="W7">10. <span class="mv" data-g="8x8" data-n="19-26" data-a="f4-d2">f4-d2</span></a> <a class="m1 db" href="#" data-i="20" title="L6"><span class="mv" data-g="8x8" data-n="2-20" data-a="d8-h4">d8-h4</span></a> <a class="m1 db" href="#" data-i="21" title="W5">11. <span class="mv" data-g="8x8" data-n="14-27" data-a="c5-f2">c5-f2</span></a> <a class="m1 db" href="#" data-i="22" title="L4"><span class="mv" data-g="8x8" data-n="20×31" data-a="h4×e1">h4×e1</span></a> <a class="m1 only db" href="#" data-i="23" title="W3">12. <span class="mv" data-g="8x8" data-n="22-13" data-a="c3-a5">c3-a5</span></a> <a class="m1 db" href="#" data-i="24" title="L2"><span class="mv" data-g="8x8" data-n="31×17" data-a="e1×b4">e1×b4</span></a> <a class="m1 db" href="#" data-i="25" title="W1">13. <span class="mv" data-g="8x8" data-n="13×22" data-a="a5×c3">a5×c3</span>+</a></p>
 <nav class="pager"><a href="twee-tegen-een.html">← 2 dammen tegen 1</a><a href="vangstellingen.html">Vangstellingen →</a></nav>
-<p class="legend">Klik op een zet om de stelling op het grote bord te zien; ◀ ▶ (of de pijltjestoetsen) lopen door de variant. Waarden gelden voor de partij aan zet; bij een zet voor wie hem doet, met n het aantal ply tot het einde van de partij, de zet meegeteld: W = winst (oneven), L = verlies (even), D = remise. <span style="color:var(--link);font-weight:600">Blauw</span> = hoofdvariant, <span style="color:var(--m2)">groen</span> = zijvariant, <em>cursief</em> = voortzetting van de database, <span class="q">?</span> = zet die volgens de database het resultaat verandert, met tussen [ ] de betere zet of de weerlegging (<span style="color:var(--db)">≡</span> = terug naar de stelling vóór die zet), <span style="color:var(--only)">*</span> = enige zet die de winst of de remise behoudt. De knop 1-2 / a1 wisselt tussen numerieke en algebraïsche notatie.</p>
+<p class="legend">Klik op een zet om de stelling op het grote bord te zien; ◀ ▶ (of de pijltjestoetsen) lopen door de variant. Waarden gelden voor de partij aan zet; bij een zet voor wie hem doet, met n het aantal ply tot het einde van de partij, de zet meegeteld: W = winst (oneven), L = verlies (even), D = remise. <span style="color:var(--link);font-weight:600">Blauw</span> = hoofdvariant, <span style="color:var(--m2)">groen</span> = zijvariant, <em>cursief</em> = voortzetting van de database, <span class="q">?</span> = zet die volgens de database het resultaat verandert, met tussen [ ] de betere zet of de weerlegging (<span style="color:var(--db)">≡</span> = terug naar de stelling vóór die zet), <span style="color:var(--only)">*</span> = enige zet die de winst of de remise behoudt. De knop # zet de veldnamen op het grote bord aan of uit; de knop 1-2 / a1 wisselt tussen numerieke en algebraïsche notatie, ook in de tekst.</p>
   </main>
 </div>
 <script>

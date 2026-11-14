@@ -66,6 +66,19 @@ details.onpage a { margin-right: 12px; white-space: nowrap; }
 .buttons button { flex: 1; padding: 6px 0; font: 16px system-ui, sans-serif; color: var(--fg); background: var(--panel);
   border: 1px solid var(--rule); border-radius: 6px; cursor: pointer; }
 .buttons button:hover { border-color: var(--muted); }
+/* tooltips above the buttons, in the language of the page */
+.buttons button { position: relative; }
+.buttons button[data-tip]::after { content: attr(data-tip); position: absolute; bottom: calc(100% + 8px); left: 50%;
+  transform: translateX(-50%); background: var(--fg); color: var(--bg); font: 12px/1.35 system-ui, sans-serif;
+  padding: 5px 8px; border-radius: 5px; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity .12s;
+  z-index: 10; }
+.buttons button[data-tip]::before { content: ""; position: absolute; bottom: calc(100% + 3px); left: 50%;
+  transform: translateX(-50%); border: 5px solid transparent; border-top-color: var(--fg); opacity: 0;
+  transition: opacity .12s; pointer-events: none; z-index: 10; }
+.buttons button:hover::after, .buttons button:focus-visible::after,
+.buttons button:hover::before, .buttons button:focus-visible::before { opacity: 1; transition-delay: .25s; }
+.buttons button:first-child[data-tip]::after { left: 0; transform: none; }
+.buttons button:last-child[data-tip]::after { left: auto; right: 0; transform: none; }
 .panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px;
   font: 14px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
 .panel .stm { font-weight: 600; margin-bottom: 4px; }
@@ -149,11 +162,11 @@ table.tbl th { color: var(--muted); font-weight: 600; }
   <aside class="side">
     <div id="board"></div>
     <div class="buttons">
-      <button id="back" title="vorige stelling (←)">◀</button>
-      <button id="play" title="automatisch afspelen">▶︎▶︎</button>
-      <button id="fwd" title="volgende stelling (→)">▶</button>
-      <button id="nums" title="veldnamen aan/uit">#</button>
-      <button id="nota" title="numerieke of algebraïsche notatie">1-2</button>
+      <button id="back" data-tip="Vorige stelling (←)" aria-label="Vorige stelling (←)">◀</button>
+      <button id="play" data-tip="Variant automatisch afspelen" aria-label="Variant automatisch afspelen">▶︎▶︎</button>
+      <button id="fwd" data-tip="Volgende stelling (→)" aria-label="Volgende stelling (→)">▶</button>
+      <button id="nums" data-tip="Veldnamen op het bord aan/uit" aria-label="Veldnamen op het bord aan/uit">#</button>
+      <button id="nota" data-tip="Wissel tussen numerieke (13-10) en algebraïsche (d3-e4) notatie" aria-label="Wissel tussen numerieke (13-10) en algebraïsche (d3-e4) notatie">1-2</button>
     </div>
     <div class="panel" id="panel"></div>
   </aside>
@@ -193,7 +206,11 @@ table.tbl th { color: var(--muted); font-weight: 600; }
 <p><a class="m1" href="#" data-i="128">1. … <span class="mv" data-g="6x6" data-n="5-8" data-a="c5-d4">5-8</span></a> <span class="val">L34</span> — <a class="m2" href="#" data-i="129">2. <span class="mv" data-g="6x6" data-n="12×5" data-a="e3×c5">12×5</span></a> <span class="val">W33</span></p>
 <p><a class="m1" href="#" data-i="130">1. … <span class="mv" data-g="6x6" data-n="5-7" data-a="c5-b4">5-7</span></a> <span class="val">L30</span> — <a class="m2" href="#" data-i="131">2. <span class="mv" data-g="6x6" data-n="12-9" data-a="e3-f4">12-9</span></a> <span class="val">W29</span>, <a class="m2" href="#" data-i="132">2. <span class="mv" data-g="6x6" data-n="12-8" data-a="e3-d4">12-8</span></a> <span class="val">D</span>, <a class="m2" href="#" data-i="133">2. <span class="mv" data-g="6x6" data-n="13-11" data-a="b2-c3">13-11</span></a> <span class="val">D</span>, <a class="m2" href="#" data-i="134">2. <span class="mv" data-g="6x6" data-n="18-15" data-a="e1-f2">18-15</span></a> <span class="val">L28</span>, <a class="m2" href="#" data-i="135">2. <span class="mv" data-g="6x6" data-n="13-10" data-a="b2-a3">13-10</span></a> <span class="val">L26</span>, <a class="m2" href="#" data-i="136">2. <span class="mv" data-g="6x6" data-n="14-11" data-a="d2-c3">14-11</span></a> <span class="val">L18</span></p>
 </div>
-<p class="legend">Klik op een zet om de stelling op het grote bord te zien; ◀ ▶ (of de pijltjestoetsen) lopen door de variant. Waarden gelden voor de partij aan zet; bij een zet voor wie hem doet, met n het aantal ply tot het einde van de partij, de zet meegeteld: W = winst (oneven), L = verlies (even), D = remise. <span style="color:var(--link);font-weight:600">Blauw</span> = hoofdvariant, <span style="color:var(--m2)">groen</span> = zijvariant, <em>cursief</em> = voortzetting van de database, <span class="q">?</span> = zet die volgens de database het resultaat verandert, met tussen [ ] de betere zet of de weerlegging (<span style="color:var(--db)">≡</span> = terug naar de stelling vóór die zet), <span style="color:var(--only)">*</span> = enige zet die de winst of de remise behoudt. De knop 1-2 / a1 wisselt tussen numerieke en algebraïsche notatie.</p>
+<h2>Vergelijking met Van Horssen (2018)</h2>
+<p>Jan-Jaap van Horssen loste 6×6 al eerder zwak op, in <em>Complexity of checkers and draughts on different board sizes</em>, ICGA Journal 40 (2018) 341–352: een database met winst/remise/verlies tot en met 8 stukken en proof-number search vanuit de beginstand. Onze databases en openingsboom zijn daar onafhankelijk van, en komen op alle punten met hem overeen:</p>
+<table class="tbl"><tr><th></th><th>Van Horssen (2018)</th><th>Hier</th></tr><tr><td>Beginstand</td><td>remise</td><td>remise</td></tr><tr><td>Eerste zetten van wit</td><td>alle remise</td><td>alle vijf remise</td></tr><tr><td>Antwoorden van zwart</td><td>direct verliezende antwoorden</td><td>idem, bv. 1. <span class="mv" data-g="6x6" data-n="13-10" data-a="b2-a3">13-10</span> <span class="mv" data-g="6x6" data-n="4-7" data-a="a5-b4">4-7</span> (L60)</td></tr><tr><td>Diepste verlies van zwart vanaf de beginstand</td><td>61 ply</td><td>61 ply (2 + 59 na 1. <span class="mv" data-g="6x6" data-n="13-10" data-a="b2-a3">13-10</span> <span class="mv" data-g="6x6" data-n="4-7" data-a="a5-b4">4-7</span>)</td></tr><tr><td>Stellingen t/m 3, 4, 5, 6, 7 stukken</td><td>31.155 · 512.910 · 5.789.784 · 48.881.249 · 322.389.233</td><td>precies dezelfde aantallen</td></tr><tr><td>Stellingen t/m 8 stukken</td><td>1.617.366.257</td><td>1.702.191.569 (incl. 7 tegen 1)</td></tr></table>
+<p>Het verschil bij 8 stukken is precies 84.825.312: de stellingen met 7 stukken tegen 1, die Van Horssen terecht weglaat, want elke kant begint met 6 stukken. Hij bewijst de waarde van de beginstand (zonder transpositietabel, om graph-history-problemen te vermijden); hier zijn de afstanden tot het einde exact voor de hele boom tot en met ply 4.</p>
+<p class="legend">Klik op een zet om de stelling op het grote bord te zien; ◀ ▶ (of de pijltjestoetsen) lopen door de variant. Waarden gelden voor de partij aan zet; bij een zet voor wie hem doet, met n het aantal ply tot het einde van de partij, de zet meegeteld: W = winst (oneven), L = verlies (even), D = remise. <span style="color:var(--link);font-weight:600">Blauw</span> = hoofdvariant, <span style="color:var(--m2)">groen</span> = zijvariant, <em>cursief</em> = voortzetting van de database, <span class="q">?</span> = zet die volgens de database het resultaat verandert, met tussen [ ] de betere zet of de weerlegging (<span style="color:var(--db)">≡</span> = terug naar de stelling vóór die zet), <span style="color:var(--only)">*</span> = enige zet die de winst of de remise behoudt. De knop # zet de veldnamen op het grote bord aan of uit; de knop 1-2 / a1 wisselt tussen numerieke en algebraïsche notatie, ook in de tekst.</p>
   </main>
 </div>
 <script>

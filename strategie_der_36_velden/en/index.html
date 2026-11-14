@@ -66,6 +66,19 @@ details.onpage a { margin-right: 12px; white-space: nowrap; }
 .buttons button { flex: 1; padding: 6px 0; font: 16px system-ui, sans-serif; color: var(--fg); background: var(--panel);
   border: 1px solid var(--rule); border-radius: 6px; cursor: pointer; }
 .buttons button:hover { border-color: var(--muted); }
+/* tooltips above the buttons, in the language of the page */
+.buttons button { position: relative; }
+.buttons button[data-tip]::after { content: attr(data-tip); position: absolute; bottom: calc(100% + 8px); left: 50%;
+  transform: translateX(-50%); background: var(--fg); color: var(--bg); font: 12px/1.35 system-ui, sans-serif;
+  padding: 5px 8px; border-radius: 5px; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity .12s;
+  z-index: 10; }
+.buttons button[data-tip]::before { content: ""; position: absolute; bottom: calc(100% + 3px); left: 50%;
+  transform: translateX(-50%); border: 5px solid transparent; border-top-color: var(--fg); opacity: 0;
+  transition: opacity .12s; pointer-events: none; z-index: 10; }
+.buttons button:hover::after, .buttons button:focus-visible::after,
+.buttons button:hover::before, .buttons button:focus-visible::before { opacity: 1; transition-delay: .25s; }
+.buttons button:first-child[data-tip]::after { left: 0; transform: none; }
+.buttons button:last-child[data-tip]::after { left: auto; right: 0; transform: none; }
 .panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px;
   font: 14px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
 .panel .stm { font-weight: 600; margin-bottom: 4px; }
@@ -149,11 +162,11 @@ table.tbl th { color: var(--muted); font-weight: 600; }
   <aside class="side">
     <div id="board"></div>
     <div class="buttons">
-      <button id="back" title="previous position (←)">◀</button>
-      <button id="play" title="play automatically">▶︎▶︎</button>
-      <button id="fwd" title="next position (→)">▶</button>
-      <button id="nums" title="square names on/off">#</button>
-      <button id="nota" title="numeric or algebraic notation">1-2</button>
+      <button id="back" data-tip="Previous position (←)" aria-label="Previous position (←)">◀</button>
+      <button id="play" data-tip="Play the line automatically" aria-label="Play the line automatically">▶︎▶︎</button>
+      <button id="fwd" data-tip="Next position (→)" aria-label="Next position (→)">▶</button>
+      <button id="nums" data-tip="Square names on the board on/off" aria-label="Square names on the board on/off">#</button>
+      <button id="nota" data-tip="Switch between numeric (13-10) and algebraic (d3-e4) notation" aria-label="Switch between numeric (13-10) and algebraic (d3-e4) notation">1-2</button>
     </div>
     <div class="panel" id="panel"></div>
   </aside>
@@ -187,7 +200,7 @@ table.tbl th { color: var(--muted); font-weight: 600; }
 <p>This check is therefore above all a confirmation of his work. The refutations show where the databases see further in those few places.</p></div></details>
 <details class="more"><summary>Results per chapter</summary><div><p>✅ confirmed, ❌ wrong; for the variations also ⚠️ remark, ✏️ notation error, ℹ️ information.</p><table class="tbl"><tr><td>Chapter 1</td><td><a href="h1.html">Inleiding</a></td><td>diagrams ✅ 2 · variations ✏️ 1 ✅ 3</td></tr><tr><td>Chapter 2</td><td><a href="h2.html">De lange lijn</a></td><td>diagrams ✅ 4 · variations ✅ 9</td></tr><tr><td>Chapter 3</td><td><a href="h3.html">Een hinderlijke schijf</a></td><td>diagrams ✅ 3 · variations ℹ️ 3 ✏️ 2 ✅ 14 ⚠️ 1</td></tr><tr><td>Chapter 3.3</td><td><a href="h3-3.html">Moeizame remise en luchtig slot</a></td><td>diagrams ✅ 1 · variations ✅ 5 ❌ 1 ⚠️ 3</td></tr><tr><td>Chapter 4</td><td><a href="h4.html">Een zwarte schijf op 15 en een zwarte dam</a></td><td>diagrams ✅ 14 ❌ 8 · variations ✏️ 2 ✅ 17</td></tr><tr><td>Chapter 5a</td><td><a href="h5a.html">Scouppe I</a></td><td>diagrams ✅ 15 · variations ✅ 16</td></tr><tr><td>Chapter 5b</td><td><a href="h5b.html">Scouppe Trucs</a></td><td>diagrams ✅ 4 · variations ✅ 9</td></tr><tr><td>Chapter 5c</td><td><a href="h5c.html">Scouppe: Dam op 17</a></td><td>diagrams ✅ 3 · variations ✅ 7</td></tr><tr><td>Chapter 5d</td><td><a href="h5d.html">Compositie op finesse 5</a></td><td>diagrams ✅ 1 · variations ✏️ 3 ✅ 9 ❌ 1 ⚠️ 3</td></tr><tr><td>Chapter 6a</td><td><a href="h6a.html">Intermezzo: acht opgaven (sectie 6.1)</a></td><td>diagrams ✅ 2 · variations ✏️ 1 ✅ 4 ⚠️ 3</td></tr><tr><td>Chapter 6b</td><td><a href="h6b.html">Zwaar manoeuvreren (sectie 6.2)</a></td><td>diagrams ✅ 2 · variations ✅ 5</td></tr><tr><td>Chapter 7</td><td><a href="h7.html">De randslag-opening</a></td><td>diagrams ✅ 1 · variations ℹ️ 1 ✅ 4</td></tr><tr><td>Chapter 6a</td><td><a href="h6a-opl.html">Oplossingen (sectie 6.1)</a></td><td>diagrams ✅ 2 · variations ✅ 12</td></tr><tr><td></td><td><a href="h6-opl1.html">Oplossingen zwaar manoeuvreren I</a></td><td>diagrams ✅ 4 · variations ✅ 8</td></tr><tr><td></td><td><a href="h6-opl2.html">Oplossingen zwaar manoeuvreren II</a></td><td>diagrams ✅ 1 · variations ✏️ 1 ✅ 15</td></tr><tr><td></td><td><a href="h6-opl3.html">Oplossingen zwaar manoeuvreren III</a></td><td>diagrams ✅ 6 · variations ✏️ 2 ✅ 9</td></tr><tr><td>Chapter 7.2</td><td><a href="h7-2.html">De derde zet</a></td><td>diagrams ✅ 1 ❌ 1 · variations ✏️ 3 ✅ 11 ❌ 3</td></tr><tr><td>Chapter 7.3</td><td><a href="h7-3.html">De vierde zet</a></td><td>diagrams ✅ 2 ❌ 2 · variations ℹ️ 1 ✏️ 1 ✅ 12 ❌ 1</td></tr><tr><td>Chapter 7.4</td><td><a href="h7-4.html">Naar voren</a></td><td>diagrams ✅ 4 ❌ 1 · variations ℹ️ 1 ✅ 11 ❌ 2 ⚠️ 1</td></tr><tr><td>Chapter 7.5</td><td><a href="h7-5.html">Achteruit</a></td><td>variations ✏️ 3 ✅ 15 ⚠️ 1</td></tr><tr><td>Chapter 7.6</td><td><a href="h7-6.html">Een dijk van een stand</a></td><td>diagrams ✅ 3 · variations ✏️ 2 ✅ 9</td></tr><tr><td>Chapter 7.7</td><td><a href="h7-7.html">Conclusie</a></td><td>diagrams ✅ 1 ❌ 1 · variations ✏️ 1 ✅ 8 ❌ 1</td></tr><tr><td>Chapter 8.0</td><td><a href="h8.html">Een schijf op 4</a></td><td>diagrams ✅ 11 ❌ 2 · variations ✏️ 1 ✅ 18 ⚠️ 1</td></tr><tr><td>Chapter 9.0</td><td><a href="h9.html">Het taaie eindspel</a></td><td>diagrams ✅ 10 · variations ℹ️ 1 ✏️ 5 ✅ 43 ⚠️ 3</td></tr></table></div></details>
 <p class="src">The full report (Dutch), the databases and the programs: <a href="https://github.com/rhalbersma/egdb-draughts">https://github.com/rhalbersma/egdb-draughts</a>.</p>
-<p class="legend">Click a move to see the position on the large board; ◀ ▶ (or the arrow keys) step through the line. Values are for the side to move; for a move, for the side making it, with n the number of plies to the end of the game, the move included: W = win (odd), L = loss (even), D = draw. <span style="color:var(--link);font-weight:600">Blue</span> = main line, <span style="color:var(--m2)">green</span> = side line, <em>italics</em> = continuation by the database, <span class="q">?</span> = a move that changes the result according to the database, with the better move or the refutation in [ ] (<span style="color:var(--db)">≡</span> = back to the position before that move), <span style="color:var(--only)">*</span> = the only move that keeps the win or the draw. The 1-2 / a1 button switches between numeric and algebraic notation.</p>
+<p class="legend">Click a move to see the position on the large board; ◀ ▶ (or the arrow keys) step through the line. Values are for the side to move; for a move, for the side making it, with n the number of plies to the end of the game, the move included: W = win (odd), L = loss (even), D = draw. <span style="color:var(--link);font-weight:600">Blue</span> = main line, <span style="color:var(--m2)">green</span> = side line, <em>italics</em> = continuation by the database, <span class="q">?</span> = a move that changes the result according to the database, with the better move or the refutation in [ ] (<span style="color:var(--db)">≡</span> = back to the position before that move), <span style="color:var(--only)">*</span> = the only move that keeps the win or the draw. The # button turns the square names on the large board on or off; the 1-2 / a1 button switches between numeric and algebraic notation, in the text as well.</p>
   </main>
 </div>
 <script>

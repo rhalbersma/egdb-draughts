@@ -66,6 +66,22 @@ p.var { margin: 10px 0; }
 .note { font-size: 15px; color: var(--muted); }
 .legend { font: 13px/1.6 system-ui, sans-serif; color: var(--muted); border-top: 1px solid var(--rule); margin-top: 32px; padding-top: 12px; }
 .src { font-size: 14px; color: var(--muted); }
+section.diag { clear: both; border-top: 1px solid var(--rule); padding-top: 8px; margin-top: 28px; }
+section.diag h3 { font-size: 19px; margin: 6px 0 4px; }
+.claim { margin: 6px 0; }
+.moves { font-size: 15px; }
+.issues { font: 14px/1.5 system-ui, sans-serif; color: var(--muted); margin: 2px 0 0; padding-left: 18px; }
+.refute { display: flow-root; background: var(--panel); border-left: 3px solid var(--err); padding: 6px 12px; margin: 10px 0; border-radius: 0 6px 6px 0; }
+.refute .t { font: 13px system-ui, sans-serif; color: var(--muted); }
+.toc { list-style: none; padding: 0; }
+.toc li { padding: 5px 0; border-bottom: 1px solid var(--rule); }
+.toc .h { color: var(--muted); font: 14px system-ui, sans-serif; display: inline-block; min-width: 150px; }
+.toc .cnt { font: 13px system-ui, sans-serif; color: var(--muted); margin-left: 8px; }
+.toc .orig { font: 13px system-ui, sans-serif; margin-left: 8px; }
+.pager { display: flex; justify-content: space-between; font: 14px system-ui, sans-serif; margin-top: 40px; clear: both; }
+.pager a, .toc a, .src a, main p a:not(.m1):not(.m2) { color: var(--link); }
+.optree h3 { font-size: 18px; margin: 22px 0 4px; }
+.optree p { margin: 4px 0 4px 18px; }
 @media (max-width: 760px) {
   .wrap { grid-template-columns: 1fr; gap: 16px; }
   .side { position: sticky; top: 0; background: var(--bg); padding-bottom: 6px; z-index: 2; }
@@ -76,7 +92,7 @@ p.var { margin: 10px 0; }
 </style>
 </head>
 <body>
-<header><a href="index.html">Strategie der 36 velden · gecontroleerd</a><a href="https://www.hijkendtc.nl/strategie-der-36-velden-hjb/">het origineel</a></header>
+<header>{{NAV}}</header>
 <div class="wrap">
   <aside class="side">
     <div id="board"></div>

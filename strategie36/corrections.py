@@ -175,24 +175,19 @@ INTRO = ('Het diagram toont de stelling waarin de weerlegging ("!") gespeeld wor
          'verandert.')
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument('engine')
-    ap.add_argument('--db', default=str(HERE.parent / 'data' / '6x6_le9.db'))
-    ap.add_argument('--attach', default=str(HERE.parent / 'data' / '6x6_10.dtm'))
-    ap.add_argument('--results', default=str(HERE / 'results.json'))
-    ap.add_argument('--out', default=str(HERE / 'weerleggingen.md'))
-    ap.add_argument('--out-lines', default=str(HERE / 'weerleggingen_varianten.md'))
-    args = ap.parse_args()
-    eng = Engine(args.engine, 10, args.db, args.attach)
-    results = json.loads(Path(args.results).read_text())
+def build_known():
+    """position (with the side to move) of every diagram the book makes a claim about -> diagram id"""
     known = {}
     for did, (fen, cw, cb, _) in DIAGRAMS.items():
         for stm, c in (('W', cw), ('B', cb)):
             if c is not None:
                 known.setdefault(stm + fen[1:], did)
-    # the book's continuation from every position on a line of the book (the longest one), with the move
-    # number in the book of its first move
+    return known
+
+
+def build_book(eng):
+    """the book's continuation from every position on a line of the book (the longest one), with the move
+    number in the book of its first move"""
     book = {}
     for _, start, text, _, _ in LINES:
         black_first, mv = parse_line(text)
@@ -213,6 +208,23 @@ def main():
             cont = [m for _, m in played[k:]]
             if pos not in book or len(cont) > len(book[pos][0]):
                 book[pos] = (cont, n0 + kk // 2)
+
+    return book
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument('engine')
+    ap.add_argument('--db', default=str(HERE.parent / 'data' / '6x6_le9.db'))
+    ap.add_argument('--attach', default=str(HERE.parent / 'data' / '6x6_10.dtm'))
+    ap.add_argument('--results', default=str(HERE / 'results.json'))
+    ap.add_argument('--out', default=str(HERE / 'weerleggingen.md'))
+    ap.add_argument('--out-lines', default=str(HERE / 'weerleggingen_varianten.md'))
+    args = ap.parse_args()
+    eng = Engine(args.engine, 10, args.db, args.attach)
+    results = json.loads(Path(args.results).read_text())
+    known = build_known()
+    book = build_book(eng)
 
     out = ['Voor elke diagramclaim die niet klopt: de variant van het boek wordt gevolgd zolang die het resultaat '
            'behoudt; de eerste zet van het boek die het resultaat verandert, wordt vervangen door de beste zet. '

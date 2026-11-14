@@ -82,6 +82,17 @@ section.diag h3 { font-size: 19px; margin: 6px 0 4px; }
 .pager a, .toc a, .src a, main p a:not(.m1):not(.m2) { color: var(--link); }
 .optree h3 { font-size: 18px; margin: 22px 0 4px; }
 .optree p { margin: 4px 0 4px 18px; }
+pre.tbl { font: 13px/1.45 ui-monospace, Menlo, Consolas, monospace; background: var(--panel); border: 1px solid var(--rule);
+  border-radius: 6px; padding: 10px 12px; overflow-x: auto; }
+table.tbl { border-collapse: collapse; font: 14px/1.4 system-ui, sans-serif; margin: 10px 0; }
+table.tbl th, table.tbl td { border-bottom: 1px solid var(--rule); padding: 4px 10px 4px 0; text-align: left; vertical-align: top; }
+table.tbl th { color: var(--muted); font-weight: 600; }
+.hub { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin: 20px 0; }
+.hub a.card { display: block; border: 1px solid var(--rule); border-radius: 8px; padding: 14px 16px; background: var(--panel);
+  color: var(--fg); text-decoration: none; }
+.hub a.card:hover { border-color: var(--muted); }
+.hub a.card strong { display: block; font-size: 19px; margin-bottom: 4px; color: var(--link); }
+.hub a.card span { font-size: 15px; color: var(--muted); }
 @media (max-width: 760px) {
   .wrap { grid-template-columns: 1fr; gap: 16px; }
   .side { position: sticky; top: 0; background: var(--bg); padding-bottom: 6px; z-index: 2; }

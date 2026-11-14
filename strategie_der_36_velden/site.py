@@ -129,6 +129,9 @@ NOTE_EN = [('ONMOGELIJK', 'IMPOSSIBLE'), ('is niet legaal in', 'is not legal in'
            ('(wit)', '(white)'), ('(zwart)', '(black)'), ('zet ', 'move '), ('tekst', 'text'), ('gecorrigeerd', 'corrected')]
 
 
+from notes_en import NOTES_EN, TITLES_EN   # noqa: E402
+
+
 def note_en(x):
     for a, b in NOTE_EN:
         x = x.replace(a, b)
@@ -232,6 +235,18 @@ class Site:
     def note(self, x):
         return x if self.lang == 'nl' else note_en(x)
 
+    def btext(self, x):
+        """a text of the book (a note at a diagram or a variation), translated on the English site"""
+        if self.lang == 'nl' or not x:
+            return x
+        if x not in NOTES_EN:
+            print(f'warning: no English for book text {x!r}', file=sys.stderr)
+        return NOTES_EN.get(x, x)
+
+    def ttl(self, title):
+        """the title of a page of the book, translated on the English site"""
+        return title if self.lang == 'nl' else TITLES_EN.get(title, title)
+
     def nav(self, orig=ORIGINAL, current=None):
         t = self.t
         groups = [('', [('index.html', t('Overzicht', 'Overview'))])]
@@ -240,7 +255,7 @@ class Site:
             for pid in pids:
                 _, lab, title, *_ = self.page_of[pid]
                 short = lab.replace('Hoofdstuk ', '') if lab else ''
-                items.append((f'{pid}.html', f'{short} {title}'.strip()))
+                items.append((f'{pid}.html', f'{short} {self.ttl(title)}'.strip()))
             groups.append((heading if self.lang == 'nl' else heading_en(heading), items))
         groups.append((t('De opening', 'The opening'),
                        [('opening.html', t('De beginstand en alle openingen tot 3 ply',
@@ -281,16 +296,18 @@ class Site:
         # lines added from the database (not from the book) are shown as refutations instead
         mylines = [r for r in self.lines[pid] if r['start'] == did and not (r['note'] or '').startswith('database:')]
         if home:
-            for stm in sides_to_show(did):
+            for k, stm in enumerate(sides_to_show(did)):
+                if k:                   # the other side to move starts below the first diagram, next to its own
+                    out.append('<div style="clear:right"></div>')
                 fen = stm + d['fen'][1:]
                 sd = d['sides'][stm]
                 fig, i0 = pg.diagram(fen, f'diagram {did}, {self.side(stm)} {self.t("aan zet", "to move")}')
                 out.append(fig)
                 if 'error' in sd:
-                    out.append(f'<p class="claim">{pg.prose(d['note'], '6x6')}: {pg.prose(sd['error'], '6x6')}</p>')
+                    out.append(f'<p class="claim">{pg.prose(self.btext(d['note']), '6x6')}: {pg.prose(sd['error'], '6x6')}</p>')
                     continue
                 v, legal = self.o.analyse(fen)
-                cl = f' · boek: <em>{pg.prose(d['note'], '6x6')}</em>' if sd['claim'] else ''
+                cl = f' · boek: <em>{pg.prose(self.btext(d['note']), '6x6')}</em>' if sd['claim'] else ''
                 ok = sd['ok']
                 b = (badge(ok, f'{self.t("boek", "book")}: {claim_label(sd["claim"], stm)} {"✓" if ok else "✗"}')
                      if sd['claim'] else '')
@@ -304,13 +321,13 @@ class Site:
                 if ok is False:
                     out.append(f'<p class="var">{self.claim_refutation(pg, fen, i0, did)}</p>')
             if d['note']:
-                out.insert(1, f'<p class="note">{pg.prose(d['note'], '6x6')}</p>')
+                out.insert(1, f'<p class="note">{pg.prose(self.btext(d['note']), '6x6')}</p>')
         elif mylines:
             r0 = mylines[0]
             fig, _ = pg.diagram(r0['start_fen'], f'diagram {did}, {self.side(r0["start_fen"][0])} '
                                                  f'{self.t("aan zet", "to move")}')
             out.append(fig + f'<p class="note">{self.t("zie ook", "see also")} <a href="{self.home[did]}.html#d{did}">'
-                             f'{esc(self.page_of[self.home[did]][2])}</a></p>')
+                             f'{esc(self.ttl(self.page_of[self.home[did]][2]))}</a></p>')
         starts = {}
         for r in mylines:
             out.append(self.line_html(pg, r, starts))
@@ -359,7 +376,7 @@ class Site:
                 verdict = badge(None, f'{icon} database: {self.side(e)} {self.t("aan zet", "to move")} {r["end_val"]}')
         out = [f'<p class="var">{body}{tail} {verdict}']
         if r['note']:
-            out.append(f'<br><span class="note">{pg.prose(r['note'], '6x6')}</span>')
+            out.append(f'<br><span class="note">{pg.prose(self.btext(r['note']), '6x6')}</span>')
         out.append('</p>')
         if notes:
             out.append('<ul class="issues">' + ''.join(f'<li>{pg.prose(self.note(x), '6x6')}</li>' for x in notes) + '</ul>')
@@ -385,13 +402,13 @@ class Site:
             b = base(did)
             return (listed.index(b) if b in listed else len(listed), list(DIAGRAMS).index(did))
         dids.sort(key=key)
-        body = [f'<p class="src">{esc(self.lab(lab))}</p>' if lab else '', f'<h1>{esc(title)}</h1>',
+        body = [f'<p class="src">{esc(self.lab(lab))}</p>' if lab else '', f'<h1>{esc(self.ttl(title))}</h1>',
                 f'<p class="src">Herm Jan Brascamp, <a href="{orig}">{esc(title)}</a>, <em>Strategie der 36 '
                 f'velden</em>, hijkendtc.nl. ' + self.t('Hieronder per diagram de claims van het boek, de varianten en '
                                                        'de weerleggingen, nagerekend met de databases.',
                                                        'Per diagram the claims of the book, the variations and the '
-                                                       'refutations, checked with the databases. The book\'s own notes '
-                                                       'are in Dutch.') + '</p>']
+                                                       'refutations, checked with the databases. The book\'s notes '
+                                                       'are translated from Dutch.') + '</p>']
         marks = []
         for did in dids:
             sides = self.diag[did]['sides'].values() if self.home[did] == pid else []
@@ -403,10 +420,10 @@ class Site:
                     + f'</summary>{" ".join(marks)}</details>')
         for did in dids:
             body.append(self.diagram_block(pg, did, pid))
-        prev = f'<a href="{PAGES[k - 1][0]}.html">← {esc(PAGES[k - 1][2])}</a>' if k > 0 else '<span></span>'
-        nxt = f'<a href="{PAGES[k + 1][0]}.html">{esc(PAGES[k + 1][2])} →</a>' if k + 1 < len(PAGES) else '<span></span>'
+        prev = f'<a href="{PAGES[k - 1][0]}.html">← {esc(self.ttl(PAGES[k - 1][2]))}</a>' if k > 0 else '<span></span>'
+        nxt = f'<a href="{PAGES[k + 1][0]}.html">{esc(self.ttl(PAGES[k + 1][2]))} →</a>' if k + 1 < len(PAGES) else '<span></span>'
         body.append(f'<nav class="pager">{prev}{nxt}</nav>')
-        self.write(f'{pid}.html', title, '\n'.join(body), pg, orig)
+        self.write(f'{pid}.html', self.ttl(title), '\n'.join(body), pg, orig)
         return len(pg.pos)
 
     def counts(self, pid):
@@ -441,11 +458,13 @@ class Site:
             for pid in pids:
                 _, lab, title, *_ = self.page_of[pid]
                 short = lab.replace('Hoofdstuk ', '') if lab and len(pids) > 1 else ''
-                links.append(f'<a href="{pid}.html">{esc((short + " " + title).strip())}</a>')
+                links.append(f'<a href="{pid}.html">{esc((short + " " + self.ttl(title)).strip())}</a>')
+            # one page per line, under its chapter, as on the book's website
+            items = links[0] if len(links) == 1 else ('<ul class="sub">' + ''.join(f'<li>{x}</li>' for x in links) + '</ul>')
             toc.append(f'<li><span class="h">{esc(heading if self.lang == "nl" else heading_en(heading))}</span>'
-                       f'{" · ".join(links)}</li>')
+                       f'{items}</li>')
         toc.append('</ul>')
-        rows = ''.join(f'<tr><td>{esc(self.lab(lab))}</td><td><a href="{pid}.html">{esc(title)}</a></td><td>{self.counts(pid)}</td></tr>'
+        rows = ''.join(f'<tr><td>{esc(self.lab(lab))}</td><td><a href="{pid}.html">{esc(self.ttl(title))}</a></td><td>{self.counts(pid)}</td></tr>'
                        for pid, lab, title, *_ in PAGES)
         t = self.t
         body = ['<h1>Strategie der 36 velden</h1>', fig, md(lead, 'strategie_der_36_velden/', lambda h: pg.prose_html(h, '6x6')),

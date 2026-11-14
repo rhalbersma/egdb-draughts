@@ -104,6 +104,7 @@ a.cur { background: var(--active); }
 blockquote { margin: 16px 0; padding: 4px 16px; border-left: 3px solid var(--dark); font-style: italic; }
 figure { float: right; margin: 4px 0 12px 20px; text-align: center; }
 figure .smallboard { width: 150px; }
+.diag figure { clear: right; width: 210px; }            /* the diagrams of a section below each other, not side by side */
 figcaption { font: 13px system-ui, sans-serif; color: var(--muted); margin-top: 4px; }
 p.var { margin: 10px 0; }
 .verdict { font: 13px system-ui, sans-serif; padding: 1px 7px; border-radius: 10px; margin-left: 6px; white-space: nowrap; }
@@ -121,6 +122,8 @@ section.diag h3 { font-size: 19px; margin: 6px 0 4px; }
 .refute .t { font: 13px system-ui, sans-serif; color: var(--muted); }
 .toc { list-style: none; padding: 0; }
 .toc li { padding: 5px 0; border-bottom: 1px solid var(--rule); }
+.toc ul.sub { display: inline-block; vertical-align: top; list-style: none; margin: 0; padding: 0; }
+.toc ul.sub li { padding: 0 0 2px; border: 0; }
 .toc .h { color: var(--muted); font: 14px system-ui, sans-serif; display: inline-block; min-width: 205px; }
 @media (max-width: 760px) { .toc .h { display: block; } }
 .toc .cnt { font: 13px system-ui, sans-serif; color: var(--muted); margin-left: 8px; }

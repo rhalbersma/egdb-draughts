@@ -517,15 +517,17 @@ class Site:
             '<p>In oktober 2011 loste Rein Halbersma alle 6×6-varianten zwak op, met alpha-beta en een transpositietabel '
             'maar zonder eindspeldatabases: internationaal 6×6 is remise. Met herhaling als winst voor wit gaf de '
             'beginstand W35, met herhaling als winst voor zwart L36, dus beide kanten kunnen een herhaling afdwingen; '
-            'omdat graph-history-interactie genegeerd werd, was dat geen sluitend bewijs. Privé gedeeld met Ed Gilbert '
-            '(19 oktober 2011), gepubliceerd op het World Draughts Forum op 8 april 2017 '
-            '(<a href="https://damforum.nl/viewtopic.php?p=118055#p118055">draad <em>Search Algorithm</em></a>).</p>',
+            'omdat graph-history-interactie genegeerd werd, was dat geen sluitend bewijs. Gedeeld met Ed Gilbert '
+            '(19 oktober 2011) en op het forum gemeld; op het World Draughts Forum (damforum.nl, voorheen laatste.info) '
+            'staat de tekst in het bericht van 8 april 2017 in de draad <a href="https://damforum.nl/viewtopic.php?p=118055#p118055">'
+            '<em>Search Algorithm</em></a>.</p>',
             '<p>In October 2011 Rein Halbersma weakly solved all 6×6 variants, with alpha-beta and a transposition table '
             'but without endgame databases: international 6×6 is a draw. Scoring a repetition as a white win gave W35 '
             'for the start position, scoring it as a black win gave L36, so both sides can force a repetition; since '
-            'graph-history interaction was ignored, this was no conclusive proof. Shared privately with Ed Gilbert '
-            '(October 19, 2011), published on the World Draughts Forum on April 8, 2017 '
-            '(<a href="https://damforum.nl/viewtopic.php?p=118055#p118055">thread <em>Search Algorithm</em></a>).</p>'),
+            'graph-history interaction was ignored, this was no conclusive proof. Shared with Ed Gilbert (October 19, 2011) '
+            'and reported on the forum; on the World Draughts Forum (damforum.nl, formerly laatste.info) the text is in the '
+            'post of April 8, 2017 in the thread <a href="https://damforum.nl/viewtopic.php?p=118055#p118055"><em>Search '
+            'Algorithm</em></a>.</p>'),
             '6x6'))
         body.append(self.t('<h3>Vergelijking met Van Horssen (2018)</h3>', '<h3>Comparison with Van Horssen (2018)</h3>'))
         body.append(self.t(

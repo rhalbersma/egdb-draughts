@@ -41,16 +41,8 @@ REPO = 'https://github.com/rhalbersma/egdb-draughts'
 TITLE = 'Strategie der 36 velden'
 H = 'https://www.hijkendtc.nl/'
 
-# the menu: the pages grouped per chapter of the book
-GROUPS = [
-    ('Hoofdstuk 1', ['h1']), ('Hoofdstuk 2', ['h2']), ('Hoofdstuk 3', ['h3', 'h3-3']), ('Hoofdstuk 4', ['h4']),
-    ('Hoofdstuk 5 · Scouppe', ['h5a', 'h5b', 'h5c', 'h5d']),
-    ('Hoofdstuk 6 · Opgaven en oplossingen', ['h6a', 'h6b', 'h6a-opl', 'h6-opl1', 'h6-opl2', 'h6-opl3']),
-    ('Hoofdstuk 7 · De randslag-opening', ['h7', 'h7-2', 'h7-3', 'h7-4', 'h7-5', 'h7-6', 'h7-7']),
-    ('Hoofdstuk 8', ['h8']), ('Hoofdstuk 9', ['h9']),
-]
-
-# the landing page: the same pages in the order of the book's website, consecutive pages of a chapter on one line
+# the menu and the landing page: the pages in the order of the book's website, consecutive pages of a chapter
+# grouped
 LANDING = [
     ('Hoofdstuk 1', ['h1']), ('Hoofdstuk 2', ['h2']), ('Hoofdstuk 3', ['h3', 'h3-3']), ('Hoofdstuk 4', ['h4']),
     ('Hoofdstuk 5 · Scouppe', ['h5a', 'h5b', 'h5c', 'h5d']), ('Hoofdstuk 6 · Opgaven', ['h6a', 'h6b']),
@@ -208,7 +200,7 @@ class Site:
 
     def nav(self, orig=ORIGINAL, current=None):
         groups = [('', [('index.html', 'Overzicht')])]
-        for heading, pids in GROUPS:
+        for heading, pids in LANDING:
             items = []
             for pid in pids:
                 _, lab, title, *_ = self.page_of[pid]

@@ -571,28 +571,20 @@ king in the middle of the white kings (the third diagram).</p>''')]
         v2, legal2 = e89.analyse(f2)
         h2, *_ = pg.moves(f2, self.plan('1. d6-c7!'), 1, False, 'm1', i2)
         body = [t('''
-<p>Een dam op de twee randvelden van een dubbele hoek kan nooit geslagen worden en heeft altijd een wachtzet. Op 9×8 en
-10×9 maakt een zwarte dam in elke dubbele hoek remise in de helft van de stellingen, en welke helft dat is, beslist de
+<p>Een dam op de twee randvelden van een dubbele hoek kan nooit geslagen worden en heeft altijd een wachtzet. Op 9×8
+maakt een zwarte dam in elke dubbele hoek remise in de helft van de stellingen, en welke helft dat is, beslist de
 <strong>oppositie</strong>: de pariteit (even of oneven) van de som van de rijnummers van alle stukken wisselt bij elke
 zet, en dammen kunnen geen tempo verliezen, dus met zwart aan zet ligt de pariteit vanaf het begin vast.</p>
 <p>De vraag kwam op in de draad <a href="https://damforum.nl/viewtopic.php?t=8915"><em>Draughts on a 10x11 or 8x9 board</em></a> op het World Draughts Forum (november 2026): houden twee dammen in beide dubbele hoeken op 9×8 stand, terwijl ze op 8×8 verliezen? Op 9×8 hangt het van de oppositie af; waarom 8×8 altijd verloren is, staat bij de <a href="val.html">vallen op 8×8</a>.</p>
-<table class="tbl"><tr><th>Zwart in beide dubbele hoeken, zwart aan zet</th><th>Even pariteit</th><th>Oneven pariteit</th></tr>
-<tr><td>9×8</td><td>100% remise</td><td>0% remise</td></tr>
-<tr><td>10×9</td><td>100%</td><td>0%</td></tr>
-<tr><td>11×10</td><td>100%</td><td>100%</td></tr></table>
-<p>Geteld zijn de rustige stellingen (niemand kan slaan) met de zwarte dammen op de randvelden van twee dubbele hoeken:
-8.228 en 8.244 op 9×8, 18.420 en 18.440 op 10×9, 37.030 en 37.050 op 11×10.</p>''', '''
-<p>A king on the two edge squares of a double corner can never be captured and always has a waiting move. On 9×8 and
-10×9 a black king in each double corner draws in half of the positions, and that half is decided by
+<p>Met zwart aan zet en de zwarte dammen op de randvelden van de twee dubbele hoeken (rustige stellingen, niemand kan
+slaan) is op 9×8 bij even pariteit elke stelling remise (8.228 stellingen) en bij oneven pariteit geen enkele (8.244).</p>''', '''
+<p>A king on the two edge squares of a double corner can never be captured and always has a waiting move. On 9×8 a
+black king in each double corner draws in half of the positions, and that half is decided by
 <strong>opposition</strong>: the parity (even or odd) of the sum of the rank numbers of all pieces flips with every
 move, and kings cannot lose a tempo, so with black to move the parity is fixed from the start.</p>
 <p>The question came up in the thread <a href="https://damforum.nl/viewtopic.php?t=8915"><em>Draughts on a 10x11 or 8x9 board</em></a> on the World Draughts Forum (November 2026): do two kings in both double corners hold on 9×8, while they lose on 8×8? On 9×8 it depends on the opposition; why 8×8 is always lost is explained at the <a href="val.html">traps on 8×8</a>.</p>
-<table class="tbl"><tr><th>Black in both double corners, black to move</th><th>Even parity</th><th>Odd parity</th></tr>
-<tr><td>9×8</td><td>100% draws</td><td>0% draws</td></tr>
-<tr><td>10×9</td><td>100%</td><td>0%</td></tr>
-<tr><td>11×10</td><td>100%</td><td>100%</td></tr></table>
-<p>Counted are the quiet positions (nobody can capture) with the black kings on the edge squares of two double corners:
-8,228 and 8,244 on 9×8, 18,420 and 18,440 on 10×9, 37,030 and 37,050 on 11×10.</p>'''),
+<p>With black to move and the black kings on the edge squares of the two double corners (quiet positions, nobody can
+capture), on 9×8 every position is drawn at even parity (8,228 positions) and none at odd parity (8,244).</p>'''),
                 fig,
                 t(f'<p>Zwart op a7 en i7 (pendelend met b8 en h8), wit op c7, e7 en g7. Met wit aan zet ({v}) houdt elke '
                   f'zet remise: zwart pendelt gewoon a7-b8-a7. ',
@@ -642,6 +634,11 @@ same side:</p>
             '<tr><td>8×8</td><td>3</td><td>3</td><td>de vesting valt altijd</td></tr>'
             '<tr><td>9×8, 10×9</td><td>0</td><td>3</td><td>de oppositie beslist: de helft remise</td></tr>'
             '<tr><td>10×10</td><td>0</td><td>0</td><td>de vesting houdt</td></tr></table>'
+            '<p>Zwart in beide dubbele hoeken, zwart aan zet (rustige stellingen):</p>'
+            '<table class="tbl"><tr><th>Bord</th><th>Even pariteit</th><th>Oneven pariteit</th></tr>'
+            '<tr><td>9×8</td><td>100% remise (8.228)</td><td>0% remise (8.244)</td></tr>'
+            '<tr><td>10×9</td><td>100% (18.420)</td><td>0% (18.440)</td></tr>'
+            '<tr><td>11×10</td><td>100% (37.030)</td><td>100% (37.050)</td></tr></table>'
             '<p>Zie <a href="val.html">de val</a> en <a href="vesting.html">de vesting op grotere borden</a>.</p>',
             '<p>The traps per board, with black to move and both black kings on the edge squares of two double corners '
             '(counted with <a href="https://github.com/rhalbersma/egdb-draughts/blob/main/checkers/traps.py"><code>traps.py</code></a>):</p>'
@@ -649,6 +646,11 @@ same side:</p>
             '<tr><td>8×8</td><td>3</td><td>3</td><td>the fortress always falls</td></tr>'
             '<tr><td>9×8, 10×9</td><td>0</td><td>3</td><td>the opposition decides: half are draws</td></tr>'
             '<tr><td>10×10</td><td>0</td><td>0</td><td>the fortress holds</td></tr></table>'
+            '<p>Black in both double corners, black to move (quiet positions):</p>'
+            '<table class="tbl"><tr><th>Board</th><th>Even parity</th><th>Odd parity</th></tr>'
+            '<tr><td>9×8</td><td>100% draws (8,228)</td><td>0% draws (8,244)</td></tr>'
+            '<tr><td>10×9</td><td>100% (18,420)</td><td>0% (18,440)</td></tr>'
+            '<tr><td>11×10</td><td>100% (37,030)</td><td>100% (37,050)</td></tr></table>'
             '<p>See <a href="val.html">the trap</a> and <a href="vesting.html">the fortress on larger boards</a>.</p>'),
             self.page((k89, e89)), None)
 

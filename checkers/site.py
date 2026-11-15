@@ -334,12 +334,16 @@ blockade of <a href="twee-blokkade.html">2 against 1</a>: two white kings in a s
              'A double blockade: in the single corner at the top right the same blockade as in 2 against 1, and the third white '
              'king is locked in the other single corner. If it leaves the corner, black captures it and it is 2 against 2. '),
             ('W:WK1,K3,K4:BK9,K11',
-             'Drie witte dammen aan de rand, de twee zwarte dammen er recht tegenover in oppositie: zwart op b6 tegenover b8, '
-             'zwart op f6 tegenover f8 en h8 (de blokkade van 2 tegen 1). Wit aan zet komt niet verder: elke zet houdt remise, '
-             'maar meer niet. ',
-             'Three white kings on the edge, the two black kings right opposite them in opposition: black on b6 opposite b8, '
-             'black on f6 opposite f8 and h8 (the blockade of 2 against 1). White to move makes no progress: every move keeps '
-             'the draw, but no more. '),
+             'Drie witte dammen aan de rand, de twee zwarte dammen er recht tegenover: zwart op b6 tegenover b8, zwart op f6 '
+             'tegenover f8 en h8. Wit aan zet komt niet verder: elke zet houdt remise, maar meer niet. Het werk doet de hoek, '
+             'niet de rand: van de 24 opstellingen met drie witte dammen op de bovenrand en twee zwarte op de zesde rij zijn er '
+             'maar 3 remise, en in alle drie houdt zwart op f6 de witte dammen op f8 en h8 vast (de blokkade van 2 tegen 1). '
+             'Wit op b8, d8 en f8 tegen zwart op d6 en f6, drie naast elkaar met twee recht tegenover, wint (W13). ',
+             'Three white kings on the edge, the two black kings right opposite them: black on b6 opposite b8, black on f6 '
+             'opposite f8 and h8. White to move makes no progress: every move keeps the draw, but no more. The corner does the '
+             'work, not the edge: of the 24 set-ups with three white kings on the top edge and two black kings on the sixth '
+             'rank only 3 are drawn, and in all three black on f6 holds the white kings on f8 and h8 (the blockade of 2 against '
+             '1). White on b8, d8 and f8 against black on d6 and f6, three side by side with two right opposite, wins (W13). '),
             ('W:WK7,K14,K23:BK13,K15',
              'Een van de 9 klassen zonder blokkade in de hoek: de zwarte dam op e5 staat midden tussen de drie witte dammen. Een '
              'witte dam die ernaast komt, wordt geslagen (1. e7-d6 e5×c7). Remise met wit én met zwart aan zet; met zwart aan '

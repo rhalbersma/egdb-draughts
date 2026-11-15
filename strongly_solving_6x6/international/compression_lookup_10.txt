@@ -1,0 +1,13 @@
+sample: every 16-th slice, 1148038588 positions, 2000000 lookups per measurement, 4 threads
+
+block    level      bits/pos    random, 1 thr  random, all thr runs + cache, 1 thr
+1 KiB    3             0.296          2.72 us          2.86 us            0.67 us
+1 KiB    19            0.254          2.85 us          2.99 us            0.80 us
+4 KiB    3             0.245          6.16 us          6.61 us            0.47 us
+4 KiB    19            0.210          5.85 us          5.97 us            0.48 us
+16 KiB   3             0.228         16.05 us         16.79 us            0.51 us
+16 KiB   19            0.192         14.13 us         13.95 us            0.47 us
+64 KiB   3             0.221         49.39 us         51.98 us            1.06 us
+64 KiB   19            0.185         44.09 us         46.99 us            0.95 us
+
+(time per lookup; "all thr" = wall time x threads / lookups, i.e. per lookup and thread)

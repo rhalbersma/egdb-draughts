@@ -306,7 +306,12 @@ by opposition; on odd × odd boards with playable corners this blockade does not
             f'<p>On 8×8 the two double corners lie diagonally opposite and close together (in the '
             f'<a href="afstandsregel.html">distance rule</a>: D × d = 7 × 7, the fortress falls). The opposition, which '
             f'makes half of such positions a draw on 8×9 and 9×10, plays no role on 8×8.</p>'),
-            f'<p class="var">{h}</p>', '<div style="clear:both"></div>']
+            f'<p class="var">{h}</p>',
+            t('<p>Zwart probeert zijn toevlucht te zoeken in een vesting door beide dubbele hoeken te bezetten, maar wit '
+              'breekt de vesting. Hoe wit dat doet, analyseren we in het hoofdstuk <a href="val.html">De val</a>.</p>',
+              '<p>Black tries to take refuge in a fortress by occupying both double corners, but white breaks the fortress. '
+              'How white achieves this is analysed in the chapter <a href="val.html">The trap</a>.</p>'),
+            '<div style="clear:both"></div>']
         flush('drie-langste.html')
         body, phases, pgp = self.traps88(pg, k88, e88)
         flush('val.html')

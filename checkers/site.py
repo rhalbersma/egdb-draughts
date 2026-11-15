@@ -38,7 +38,7 @@ CHAPTERS = [
         ('val.html', 'Twee vallen om de vesting te breken', 'Two traps to break the fortress'),
         ('val-pariteit.html', 'De winst is strategisch, de pariteit doet er niet toe', 'The win is strategic, parity does not matter')]),
     ('De vesting op grotere borden', 'The fortress on larger boards', [
-        ('vesting.html', 'De val doorbreken op 9×8', 'Breaking the trap on 9×8'),
+        ('vesting.html', 'Eén val om de vesting te breken op 9×8', 'A trap to break the fortress on 9×8'),
         ('afstandsregel.html', 'De afstandsregel', 'The distance rule'),
         ('vesting-9x9.html', '9×9 onspeelbare hoeken: de val en de diagonaal', '9×9 unplayable corners: the trap and the diagonal')]),
     ('Conclusie', 'Conclusion', [

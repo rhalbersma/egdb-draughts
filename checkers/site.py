@@ -31,14 +31,13 @@ CHAPTERS = [
         ('twee-langste.html', 'Gewonnen, op twee uitzonderingen na', 'Won, with two exceptions'),
         ('twee-blokkade.html', 'Uitzondering 1: de blokkade aan de rand', 'Exception 1: the blockade at the edge'),
         ('twee-4x4.html', 'Uitzondering 2: remise op 4×4', 'Exception 2: a draw on 4×4')]),
-    ('3 tegen 2 op 8×8', '3 against 2 on 8×8', [
-        ('drie-langste.html', 'De langste winst', 'The longest win')]),
+    ('3 tegen 2', '3 against 2', [
+        ('drie-langste.html', 'De langste winst op 8×8', 'The longest win on 8×8'),
+        ('blokkades.html', 'De blokkades', 'The blockades')]),
     ('De val', 'The trap', [
         ('val.html', 'De val bij beide pariteiten', 'The trap at both parities'),
         ('val-pariteit.html', 'Waarom beide pariteiten', 'Why both parities'),
         ('val-race.html', 'De race naar de val', 'The race to the trap')]),
-    ('Blokkades', 'Blockades', [
-        ('blokkades.html', 'De dubbele blokkade', 'The double blockade')]),
     ('De vesting op grotere borden', 'The fortress on larger boards', [
         ('vesting.html', 'Oppositie op 8×9', 'Opposition on 8×9'),
         ('afstandsregel.html', 'De afstandsregel', 'The distance rule'),

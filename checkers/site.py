@@ -21,7 +21,6 @@ ROOT = HERE.parent
 sys.path.insert(0, str(ROOT / 'common'))
 from sitekit import FastEngine, Page, esc, lang_link, menu, write_page   # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from traps import Race   # noqa: E402
 
 TITLE = {'nl': 'Checkers: 3 dammen tegen 2', 'en': 'Checkers: 3 kings against 2'}
 
@@ -37,8 +36,7 @@ CHAPTERS = [
         ('curiosa.html', 'Twee curiosa', 'Two curiosities')]),
     ('De val', 'The trap', [
         ('val.html', 'De val bij beide pariteiten', 'The trap at both parities'),
-        ('val-pariteit.html', 'Waarom beide pariteiten', 'Why both parities'),
-        ('val-race.html', 'De race naar de val', 'The race to the trap')]),
+        ('val-pariteit.html', 'Waarom beide pariteiten', 'Why both parities')]),
     ('De vesting op grotere borden', 'The fortress on larger boards', [
         ('vesting.html', 'Oppositie op 8×9', 'Opposition on 8×9'),
         ('afstandsregel.html', 'De afstandsregel', 'The distance rule'),
@@ -314,8 +312,6 @@ by opposition; on odd × odd boards with playable corners this blockade does not
         flush('val.html')
         body = phases
         flush('val-pariteit.html')
-        body = self.race88(pg, k88, e88)
-        flush('val-race.html')
         # the 3-2 blockades on 8x8: 1252 quiet draws with white to move, 316 up to symmetry; 307 of them contain the
         # 2-1 blockade in a single corner
         body += [t('''
@@ -489,72 +485,69 @@ king in the middle of the white kings (the third diagram).</p>''')]
                                             ', and 2 against 1 wins. All moves of black: ')
                      + self.moves_list(pg, i0, legal, '1. … ') + '.</p>', '<div style="clear:both"></div>']
         # why both parities: the diagonal of white decides the parity, and moving over to the other diagonal costs three
-        # moves (one per king), an odd number
-        ms = {m[3]: m for m in e88.analyse('W:WK14,K18,K23:BK5,K32')[1]}
-        shift = ', '.join(pg.label(k88, ms[x]) for x in ('14-10', '18-15', '23-19'))
+        # moves (one per king), an odd number. Squares in the text are written algebraically, so that the notation switch
+        # can show them either way.
+        sq88 = {int(n): fr for n, fr in e88.g['sq'].items()}
+        al = lambda n: f'{chr(97 + sq88[n][0])}{sq88[n][1] + 1}'
+        alg = lambda ns: ', '.join(al(n) for n in ns[:-1]) + t(' en ', ' and ') + al(ns[-1])
+        rows = [((5, 32), (14, 18, 23), '5…32', True), ((5, 32), (10, 15, 19), '1…28', False), ((5, 32), (6, 15, 24), '1…28', False),
+                ((1, 28), (14, 18, 23), '5…32', True), ((1, 28), (9, 18, 27), '5…32', True), ((1, 28), (10, 15, 19), '1…28', False)]
+        for B, W, _, even in rows:          # every row is a trap at the stated parity (checked with the database)
+            fen = f"B:W{','.join('K%d' % x for x in W)}:B{','.join('K%d' % x for x in B)}"
+            assert (rank_parity(e88, fen) == 0) == even and e88.analyse(fen)[0].startswith('L')
+        diag = lambda d: f'{al(int(d.split("…")[0]))}…{al(int(d.split("…")[1]))}'
+        table = (f'<table class="tbl"><tr><th>{t("Zwart", "Black")}</th><th>{t("Wit", "White")}</th>'
+                 f'<th>{t("Diagonaal van wit", "Diagonal of white")}</th><th>{t("Pariteit", "Parity")}</th></tr>'
+                 + ''.join(f'<tr><td>{alg(B)}</td><td>{alg(W)}</td><td>{diag(d)}</td>'
+                           f'<td>{t("even" if even else "oneven", "even" if even else "odd")}</td></tr>' for B, W, d, even in rows)
+                 + '</table>')
         phases = [t(
-            '<p>Op welke diagonaal zwart staat, maakt niet uit: met de witte dammen 14, 18 en 23 is er een val tegen de '
-            'zwarte dammen 5 en 32, dus op dezelfde diagonaal, en ook een tegen 1 en 28, op de andere. Wat de pariteit '
-            'bepaalt, is de diagonaal van wit:</p>',
-            '<p>Which diagonal black stands on does not matter: with the white kings 14, 18 and 23 there is a trap against '
-            'the black kings 5 and 32, on the same diagonal, and also one against 1 and 28, on the other. What decides the '
-            'parity is the diagonal of white:</p>'),
-            t('<table class="tbl"><tr><th>Zwart</th><th>Wit op diagonaal 5…32: even pariteit</th><th>Wit op diagonaal 1…28: oneven pariteit</th></tr>'
-              '<tr><td>5 en 32</td><td>14, 18, 23</td><td>10, 15, 19 · 6, 15, 24</td></tr>'
-              '<tr><td>1 en 28</td><td>14, 18, 23 · 9, 18, 27</td><td>10, 15, 19</td></tr></table>',
-              '<table class="tbl"><tr><th>Black</th><th>White on diagonal 5…32: even parity</th><th>White on diagonal 1…28: odd parity</th></tr>'
-              '<tr><td>5 and 32</td><td>14, 18, 23</td><td>10, 15, 19 · 6, 15, 24</td></tr>'
-              '<tr><td>1 and 28</td><td>14, 18, 23 · 9, 18, 27</td><td>10, 15, 19</td></tr></table>'),
-            t(f'<p>Van de val met 14, 18, 23 naar die met 10, 15, 19 gaat elke witte dam één stap naar de andere diagonaal: '
-              f'{shift}. Dat zijn drie zetten, een oneven aantal: het tempo draait om, en de pariteit wisselt. Met '
-              f'twee dammen zou zo\'n overstap twee zetten kosten, en dan wisselt het tempo niet.</p>',
-              f'<p>From the trap with 14, 18, 23 to the one with 10, 15, 19 every white king takes one step to the other '
-              f'diagonal: {shift}. That is three moves, an odd number: the tempo turns over, and the parity changes. '
-              f'With two kings such a change-over would take two moves, and then the tempo does not change.</p>')]
+            f'<p>Op welke diagonaal zwart staat, maakt niet uit: met de witte dammen op {alg((14, 18, 23))} is er een val tegen '
+            f'de zwarte dammen op {alg((5, 32))}, dus op dezelfde diagonaal, en ook een tegen {alg((1, 28))}, op de andere. Wat '
+            f'de pariteit bepaalt, is de diagonaal van wit. Elke regel van de tabel is een val:</p>',
+            f'<p>Which diagonal black stands on does not matter: with the white kings on {alg((14, 18, 23))} there is a trap '
+            f'against the black kings on {alg((5, 32))}, on the same diagonal, and also one against {alg((1, 28))}, on the other. '
+            f'What decides the parity is the diagonal of white. Every row of the table is a trap:</p>'), table]
+        # the change-over: white on the trap of the even parity, but white to move; three steps to the other diagonal
+        fen = 'W:WK14,K18,K23:BK5,K32'
+        v, _ = e88.analyse(fen)
+        fig, i0 = pg.diagram(fen, t(f'8×8, wit aan zet: {v}', f'8×8, white to move: {v}'), gid=k88)
+        plan = [((x,), '') for x in ('14-10', '5-1', '18-15', '1-5', '23-19')]
+        h, i_end, f_end, _ = pg.moves(fen, plan, 1, False, 'm1', i0, nbook=len(plan))
+        phases += [fig, t(
+            f'<p>Wit staat in de opstelling van de val bij even pariteit, maar is zelf aan zet, en dan is het geen val. Wit '
+            f'stapt over naar de andere diagonaal: elke witte dam één veld, terwijl zwart pendelt. ',
+            f'<p>White stands in the set-up of the trap at even parity, but is to move itself, and then it is no trap. White '
+            f'moves over to the other diagonal: every white king one square, while black shuttles. ')
+            + f'{h}. ' + t(
+            f'Dat zijn drie zetten, een oneven aantal: het tempo draait om, en zwart staat aan zet in de val bij oneven '
+            f'pariteit. Met twee dammen zou zo\'n overstap twee zetten kosten, en dan wisselt het tempo niet.</p>',
+            f'That is three moves, an odd number: the tempo turns over, and black is to move in the trap at odd parity. With '
+            f'two kings such a change-over would take two moves, and then the tempo does not change.</p>'),
+            '<div style="clear:both"></div>']
+        # the trap reached: every shuttle move of black is punished
+        v2, legal2 = e88.analyse(f_end)
+        fig2, j0 = pg.diagram(f_end, t(f'8×8, zwart aan zet (oneven pariteit): {v2}', f'8×8, black to move (odd parity): {v2}'),
+                              gid=k88)
+        lines = []
+        for m in legal2:
+            nb = [int(x.lstrip('K')) for x in m[2].split(':')[2][1:].split(',') if x]
+            if not set(nb) & {1, 28}:
+                continue
+            ex = self.exchange(e88, m[2])
+            if not ex:
+                continue
+            j1 = pg.child(j0, m)
+            parts = [f'<a class="m1" href="#" data-i="{j1}">1. … {pg.label(k88, m)}</a>']
+            j = j1
+            for k, mv in enumerate(ex):
+                j = pg.child(j, mv)
+                parts.append(f'<a class="m1" href="#" data-i="{j}">{"2. " if k == 0 else ("3. " if k == 2 else "")}{pg.label(k88, mv)}</a>')
+            lines.append(' '.join(parts))
+        phases += [fig2, t('<p>Elke pendelzet van zwart wordt gestraft: ', '<p>Every shuttle move of black is punished: ')
+                   + '; '.join(lines) + t(', en 2 tegen 1 wint. Alle zetten van zwart: ', ', and 2 against 1 wins. All moves of black: ')
+                   + self.moves_list(pg, j0, legal2, '1. … ') + '.</p>', '<div style="clear:both"></div>']
         return body, phases
-
-    def race88(self, pg, k88, e88):
-        """how fast white forces a trap on 8x8 against the longest defence inside the double corners"""
-        t = self.t
-        if not hasattr(e88, 'race'):            # computed once for both languages
-            e88.race = Race(e88)
-        r = e88.race
-        dist = sorted(r.distribution().items())
-        x = r.farthest()
-        fen = r.fen(x[0], x[1:], 'W')
-        n = r.wtm[x]
-        rows = ''.join(f'<td>{k}</td>' for k, _ in dist)
-        cnt = ''.join(f'<td>{c:,}</td>'.replace(',', '.' if self.lang == 'nl' else ',') for _, c in dist)
-        body = [t(
-            f'<p>Ja, zolang zwart in zijn dubbele hoeken blijft. Vanuit elke rustige stelling met zwart in beide dubbele '
-            f'hoeken en wit aan zet dwingt wit bij beide pariteiten een val af, tegen elke pendelverdediging, in hoogstens {n} '
-            f'zetten. Gerekend is het spel waarin zwart alleen pendelt en wit rustige zetten doet die zwart geen slag geven; '
-            f'een pendelzet die wit een slag geeft, kost zwart meteen een dam. Het aantal witte zetten tot de val:</p>',
-            f'<p>Yes, as long as black stays in its double corners. From every quiet position with black in both double '
-            f'corners and white to move, white forces a trap at both parities, against every shuttling defence, in at most '
-            f'{n} moves. The game computed: black only shuttles, and white makes quiet moves that leave black no capture; a '
-            f'shuttle move that gives white a capture costs black a king at once. The number of white moves to the trap:</p>'),
-            f'<table class="tbl"><tr><th>{t("Zetten", "Moves")}</th>{rows}</tr><tr><th>{t("Stellingen", "Positions")}</th>'
-            f'{cnt}</tr></table>']
-        fig, i0 = pg.diagram(fen, t(f'8×8, wit aan zet: de val na {n} zetten', f'8×8, white to move: the trap after {n} moves'),
-                             gid=k88)
-        parts, i, num = [], i0, 1
-        for k, m in enumerate(r.line(x)):
-            i = pg.child(i, m)
-            pre = f'{num}. ' if k % 2 == 0 else ''
-            num += k % 2
-            parts.append(f'<a class="m1" href="#" data-i="{i}">{pre}{pg.label(k88, m)}</a>')
-        body += [fig, t('<p>Het langste verweer: zwart pendelt zo lang mogelijk, wit bouwt de val zo snel mogelijk op en '
-                        'dwingt na de laatste pendelzet de ruil af.</p>',
-                        '<p>The longest defence: black shuttles as long as possible, white builds the trap as fast as '
-                        'possible and forces the exchange after the last shuttle move.</p>'),
-                 f'<p class="var">{" ".join(parts)}</p>',
-                 t('<p>Zwart kan ook zelf een hoek verlaten. Volgens de database is dat vaak even goed als pendelen, en '
-                   'meestal kan zwart later ook weer terug in de hoek. Het redt niets: alle stellingen blijven verloren.</p>',
-                   '<p>Black can also leave a corner itself. According to the database that is often just as good as '
-                   'shuttling, and usually black can later get back into the corner. It saves nothing: every position stays '
-                   'lost.</p>'), '<div style="clear:both"></div>']
-        return body
 
     def vesting(self):
         k89, e89 = self.engine(9, 8, 'playable')
@@ -745,6 +738,9 @@ def main():
         s.index()
         s.vesting()
         # pages that were renamed or merged
+        (out / 'val-race.html').write_text('<!DOCTYPE html><meta charset="utf-8"><meta http-equiv="refresh" '
+                                           'content="0; url=val.html"><link rel="canonical" href="val.html">'
+                                           '<title>Checkers</title><a href="val.html">val.html</a>\n')
         (out / 'dubbele-hoeken.html').write_text('<!DOCTYPE html><meta charset="utf-8"><meta http-equiv="refresh" '
                                                  'content="0; url=drie-langste.html"><link rel="canonical" href="drie-langste.html">'
                                                  '<title>Checkers</title><a href="drie-langste.html">drie-langste.html</a>\n')

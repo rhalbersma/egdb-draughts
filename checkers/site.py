@@ -320,13 +320,18 @@ by opposition; on odd × odd boards with playable corners this blockade does not
         body += [t('''
 <p>Op 7×8 en 8×8 is 3 tegen 2 in het algemeen gewonnen. De weinige remises ontstaan bijna alleen als wit tegen de rand
 gedrukt wordt (0,0% remise zonder witte dam aan de rand, 0,5% met drie), en zwart in beide dubbele hoeken maakt nooit
-remise. Op 8×8 zijn er 1.252 rustige remisestellingen met wit aan zet, 316 op spiegelingen van het bord na. In 307 daarvan
-zit de blokkade van <a href="twee-blokkade.html">2 tegen 1</a>: twee witte dammen in een enkele hoek, vastgehouden door
-één zwarte dam.</p>''', '''
+remise. Op 8×8 zijn er 1.252 rustige remisestellingen met wit aan zet, 316 op spiegelingen van het bord na, en bijna
+allemaal draaien ze om de enkele hoek. In 307 zit de blokkade van <a href="twee-blokkade.html">2 tegen 1</a>: twee witte
+dammen in een enkele hoek, vastgehouden door één zwarte dam. In 5 houdt zwart dezelfde twee witte dammen met twee dammen
+vast (op f6 en e5 tegen h8 en g7), in 2 zit één witte dam vast in de hoek. Alleen 2 klassen hebben niets met de hoek te
+maken (het derde diagram).</p>''', '''
 <p>On 7×8 and 8×8 3-2 is won generically. The few draws occur almost only when white is pushed against the edge (draw
 rate 0.0% with no white king on the edge, 0.5% with three), and black holding both double corners never draws. On 8×8
-there are 1,252 quiet drawn positions with white to move, 316 up to the symmetries of the board. 307 of them contain the
-blockade of <a href="twee-blokkade.html">2 against 1</a>: two white kings in a single corner, held by one black king.</p>''')]
+there are 1,252 quiet drawn positions with white to move, 316 up to the symmetries of the board, and nearly all of them
+turn on the single corner. 307 contain the blockade of <a href="twee-blokkade.html">2 against 1</a>: two white kings in a
+single corner, held by one black king. In 5 black holds the same two white kings with two kings (on f6 and e5 against h8
+and g7), in 2 one white king is locked in the corner. Only 2 classes have nothing to do with the corner (the third
+diagram).</p>''')]
         cases = [
             ('W:WK3,K4,K29:BK11,K22',
              'Een dubbele blokkade: in de enkele hoek rechtsboven dezelfde blokkade als bij 2 tegen 1, en de derde witte dam zit '

@@ -340,14 +340,20 @@ hetzelfde systeem: het verschil in lijn en het verschil in rij zijn allebei even
 staan, zolang de vrije witte dam de blokkade in de hoek niet kan opheffen. De oppositie is noodzakelijk: van de rustige
 stellingen met een van de drie motieven en de vrije dammen op verschillende systemen is er geen enkele remise; met de
 vrije dammen op hetzelfde systeem is ruwweg 4 op de 10 remise, en in de rest breekt de vrije witte dam de blokkade toch
-open.</p>''', '''
+open.</p>
+<p>Net als bij 1 tegen 2 is de blokkade dus nooit strategisch: van de 1.252 rustige remisestellingen met wit aan zet
+zijn er 1.244 verloren met zwart aan zet. De enige 8 die met wie ook aan zet remise zijn, zijn de twee klassen met de
+zwarte dam midden tussen de witte (het derde diagram).</p>''', '''
 <p>The general pattern: one of the three motifs of <a href="twee-blokkade.html">1 against 2 in the single corner</a>, and
 the remaining black king has the opposition against the remaining white king. With white to move those two then stand on
 the same system: the difference in files and the difference in ranks are both even. Otherwise they may stand anywhere
 on the board, as long as the free white king cannot lift the blockade in the corner. The opposition is necessary: of
 the quiet positions with one of the three motifs and the free kings on different systems not a single one is drawn;
 with the free kings on the same system roughly 4 in 10 are drawn, and in the rest the free white king breaks the
-blockade after all.</p>''')]
+blockade after all.</p>
+<p>As with 1 against 2, the blockade is therefore never strategic: of the 1,252 quiet drawn positions with white to
+move, 1,244 are lost with black to move. The only 8 that are drawn whoever is to move are the two classes with the black
+king in the middle of the white kings (the third diagram).</p>''')]
         cases = [
             ('W:WK3,K4,K29:BK11,K22',
              'Een dubbele blokkade: in de enkele hoek rechtsboven dezelfde blokkade als bij 2 tegen 1, en de derde witte dam zit '

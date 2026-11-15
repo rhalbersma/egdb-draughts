@@ -334,6 +334,9 @@ class Site:
         fb = HERE / 'international' / 'build_lookups_10.txt'
         if fb.exists():
             body.append(BUILD_TEXT(self, fb.read_text()))
+        fd = HERE / 'international' / 'compression_dtm_10.txt'
+        if fd.exists():
+            body.append(DTM_TEXT(self, fd.read_text()))
         else:
             body.append(t('<p>De meting loopt nog.</p>', '<p>The measurement is still running.</p>'))
         self.write('compression.html', '\n'.join(body), self.page())
@@ -555,6 +558,7 @@ def BUILD_TEXT(site, raw):
               f'only {f(dist, 1)} different blocks on average. With a cache that starts empty at every slice (a pessimistic '
               f'case) and 6 µs per miss:</p>')
             + f'<table class="tbl">{head}{rows}</table>'
+            + CAPTURE_TEXT(site, raw)
             + t('<p>Met een cache van 64 blokken (256 KB per kern) wordt 99,4% van de opvragingen uit de cache bediend, en '
                 'kost het opzoeken zo\'n 0,17 µs per stelling. Voor de 45,5 miljard stellingen met 11 of 12 stukken is dat '
                 'ruwweg 2 uur op één kern: gecomprimeerd opzoeken is dus geen bottleneck. Twee kanttekeningen: de slices met '
@@ -565,6 +569,68 @@ def BUILD_TEXT(site, raw):
                 'on one core: compressed lookup is no bottleneck. Two caveats: the 10-piece slices are small (1,350 positions '
                 'on average), and with compressed storage a looked-up position with a capture still costs one ply of '
                 'captures, which raises the number of lookups.</p>'))
+
+
+def CAPTURE_TEXT(site, raw):
+    """capture resolution: lookups that hit a position with a capture, stored as don't care"""
+    import re as _re
+    t = site.t
+    m = _re.search(r"([\d.]+)% of the lookups hit a capture position;\s*\nresolving captures until quiet positions takes "
+                   r"([\d.]+) stored lookups per lookup, ([\d.]+) per position", raw)
+    if not m:
+        return ''
+    pct, per_l, per_p = m.groups()
+    rows = _re.findall(r'^\s+(\d+) blocks: hit ([\d.]+), ([\d.]+) us per position', raw, _re.M)
+    f = (lambda x, d: f'{float(x):.{d}f}'.replace('.', ',')) if site.lang == 'nl' else (lambda x, d: f'{float(x):.{d}f}')
+    tbl = ''.join(f'<tr><td>{c}</td><td>{f(100 * float(h), 1)}%</td><td>{f(us, 2)} µs</td></tr>' for c, h, us in rows)
+    head = t('<tr><th>Cache (blokken)</th><th>Treffers</th><th>Tijd per stelling</th></tr>',
+             '<tr><th>Cache (blocks)</th><th>Hits</th><th>Time per position</th></tr>')
+    return (t(f'<p><strong>Met slagplicht als &quot;maakt niet uit&quot;.</strong> {f(pct, 1)}% van de opvragingen valt op een '
+              f'stelling waarin de partij aan zet kan slaan. In gecomprimeerde opslag staat daar geen waarde, dus worden de '
+              f'slagen uitgespeeld tot stellingen zonder slag (alle slagen, zonder afbreken: een bovengrens). Dat kost '
+              f'{f(per_l, 2)} opgeslagen opvragingen per opvraging, {f(per_p, 2)} per stelling:</p>',
+              f'<p><strong>With captures as &quot;don\'t care&quot;.</strong> {f(pct, 1)}% of the lookups hit a position where '
+              f'the side to move can capture. Compressed storage holds no value there, so the captures are played out to '
+              f'positions without a capture (all captures, no cut-off: an upper bound). That takes {f(per_l, 2)} stored lookups '
+              f'per lookup, {f(per_p, 2)} per position:</p>')
+            + f'<table class="tbl">{head}{tbl}</table>'
+            + t('<p>Met een cache van 256 blokken (1 MB per kern) is dat ruwweg 1 µs per stelling: voor de 45,5 miljard '
+                'stellingen met 11 of 12 stukken een uur of 3 op 4 kernen, de prijs voor een opslag die 2,7 keer kleiner is.</p>',
+                '<p>With a cache of 256 blocks (1 MB per core) that is roughly 1 µs per position: for the 45.5 billion '
+                'positions with 11 or 12 pieces some 3 hours on 4 cores, the price for storage that is 2.7 times smaller.</p>'))
+
+
+def DTM_TEXT(site, raw):
+    """the results of compression_dtm (depth to mate, one byte per position) as a table and conclusions"""
+    import re as _re
+    t = site.t
+    f = (lambda x, d: f'{float(x):.{d}f}'.replace('.', ',')) if site.lang == 'nl' else (lambda x, d: f'{float(x):.{d}f}')
+    names = {'zstd -3, as is': ('zstd -3, zoals het is', 'zstd -3, as is'),
+             'zstd -3, captures filled': ('zstd -3, slagplicht ingevuld', 'zstd -3, captures filled in'),
+             'zstd -19, captures filled': ('zstd -19, slagplicht ingevuld', 'zstd -19, captures filled in')}
+    rows, z19 = [], None
+    for k, (nl, en) in names.items():
+        m = _re.search(_re.escape(k) + r'\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)', raw)
+        if m:
+            rows.append(f'<tr><td>{nl if site.lang == "nl" else en}</td>' + ''.join(f'<td>{f(x, 3)}</td>' for x in m.groups()) + '</tr>')
+            if k.startswith('zstd -19'):
+                z19 = float(m.group(1))
+    gb = f(63_836_439_921 * z19 / 8 / 1e9, 1)
+    return (t('<h2>De afstand tot het einde (DTM)</h2><p>Met de afstand tot het einde per stelling (1 byte, 8 bits '
+              'ongecomprimeerd) in plaats van alleen winst, remise of verlies, gemeten met '
+              '<a href="https://github.com/rhalbersma/egdb-draughts/blob/main/strongly_solving_6x6/international/'
+              'compression_dtm.cpp"><code>compression_dtm</code></a> op dezelfde steekproef, in bits per stelling:</p>',
+              '<h2>The distance to the end (DTM)</h2><p>With the distance to the end per position (1 byte, 8 bits '
+              'uncompressed) instead of only win, draw or loss, measured with '
+              '<a href="https://github.com/rhalbersma/egdb-draughts/blob/main/strongly_solving_6x6/international/'
+              'compression_dtm.cpp"><code>compression_dtm</code></a> on the same sample, in bits per position:</p>')
+            + f'<table class="tbl"><tr><th></th><th>4 KiB</th><th>64 KiB</th><th>1 MiB</th></tr>{"".join(rows)}</table>'
+            + t(f'<p>Het invullen van de slagstellingen maakt DTM bijna drie keer kleiner. De keuze: <strong>zstd -19 met '
+                f'blokken van 4 KiB</strong>, {f(z19, 2)} bits per stelling. Daarmee wordt DTM voor alle databases tot en met '
+                f'12 stukken ongeveer {gb} GB.</p>',
+                f'<p>Filling in the capture positions makes DTM almost three times smaller. The choice: <strong>zstd -19 with '
+                f'blocks of 4 KiB</strong>, {f(z19, 2)} bits per position. With it DTM for all databases up to 12 pieces takes '
+                f'about {gb} GB.</p>'))
 
 
 def main():

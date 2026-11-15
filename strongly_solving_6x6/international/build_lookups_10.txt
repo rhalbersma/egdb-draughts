@@ -11,3 +11,13 @@ LRU cache per slice (blocks of 4 KiB): hit rate, and estimated time per position
     512 blocks (   2.0 MiB decoded): hit 0.9959, 0.15 us per position
    1024 blocks (   4.0 MiB decoded): hit 0.9959, 0.15 us per position
    4096 blocks (  16.0 MiB decoded): hit 0.9959, 0.15 us per position
+
+with capture positions stored as don't care: 75.3% of the lookups hit a capture position;
+resolving captures until quiet positions takes 3.39 stored lookups per lookup, 6.95 per position
+      1 blocks: hit 0.2894, 29.73 us per position
+      8 blocks: hit 0.5738, 17.97 us per position
+     64 blocks: hit 0.8986, 4.54 us per position
+    256 blocks: hit 0.9790, 1.21 us per position
+    512 blocks: hit 0.9879, 0.85 us per position
+   1024 blocks: hit 0.9896, 0.78 us per position
+   4096 blocks: hit 0.9898, 0.77 us per position

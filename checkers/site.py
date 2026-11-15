@@ -20,6 +20,8 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(ROOT / 'common'))
 from sitekit import FastEngine, Page, esc, lang_link, menu, write_page   # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from traps import Race   # noqa: E402
 
 TITLE = {'nl': 'Checkers: 3 dammen tegen 2', 'en': 'Checkers: 3 kings against 2'}
 
@@ -301,6 +303,49 @@ rate 0.0% with no white king on the edge, 0.5% with three), and black holding bo
                      + '; '.join(lines) + t(', en 2 tegen 1 wint. Alle zetten van zwart: ',
                                             ', and 2 against 1 wins. All moves of black: ')
                      + self.moves_list(pg, i0, legal, '1. … ') + '.</p>', '<div style="clear:both"></div>']
+        body += self.race88(pg, k88, e88)
+        return body
+
+    def race88(self, pg, k88, e88):
+        """how fast white forces a trap on 8x8 against the longest defence inside the double corners"""
+        t = self.t
+        if not hasattr(e88, 'race'):            # computed once for both languages
+            e88.race = Race(e88)
+        r = e88.race
+        dist = sorted(r.distribution().items())
+        x = r.farthest()
+        fen = r.fen(x[0], x[1:], 'W')
+        n = r.wtm[x]
+        rows = ''.join(f'<td>{k}</td>' for k, _ in dist)
+        cnt = ''.join(f'<td>{c:,}</td>'.replace(',', '.' if self.lang == 'nl' else ',') for _, c in dist)
+        body = [t('<h3>Kan wit de val altijd opbouwen?</h3>', '<h3>Can white always build the trap?</h3>'), t(
+            f'<p>Ja, zolang zwart in zijn dubbele hoeken blijft. Vanuit elke rustige stelling met zwart in beide dubbele '
+            f'hoeken en wit aan zet dwingt wit in beide fasen een val af, tegen elke pendelverdediging, in hoogstens {n} '
+            f'zetten. Gerekend is het spel waarin zwart alleen pendelt en wit rustige zetten doet die zwart geen slag geven; '
+            f'een pendelzet die wit een slag geeft, kost zwart meteen een dam. Het aantal witte zetten tot de val:</p>',
+            f'<p>Yes, as long as black stays in its double corners. From every quiet position with black in both double '
+            f'corners and white to move, white forces a trap in both phases, against every shuttling defence, in at most '
+            f'{n} moves. The game computed: black only shuttles, and white makes quiet moves that leave black no capture; a '
+            f'shuttle move that gives white a capture costs black a king at once. The number of white moves to the trap:</p>'),
+            f'<table class="tbl"><tr><th>{t("Zetten", "Moves")}</th>{rows}</tr><tr><th>{t("Stellingen", "Positions")}</th>'
+            f'{cnt}</tr></table>']
+        fig, i0 = pg.diagram(fen, t(f'8×8, wit aan zet: de val na {n} zetten', f'8×8, white to move: the trap after {n} moves'),
+                             gid=k88)
+        parts, i, num = [], i0, 1
+        for k, m in enumerate(r.line(x)):
+            i = pg.child(i, m)
+            pre = f'{num}. ' if k % 2 == 0 else ''
+            num += k % 2
+            parts.append(f'<a class="m1" href="#" data-i="{i}">{pre}{pg.label(k88, m)}</a>')
+        body += [fig, t('<p>Het langste verweer: zwart pendelt zo lang mogelijk, wit bouwt de val zo snel mogelijk op en '
+                        'dwingt na de laatste pendelzet de ruil af.</p>',
+                        '<p>The longest defence: black shuttles as long as possible, white builds the trap as fast as '
+                        'possible and forces the exchange after the last shuttle move.</p>'),
+                 f'<p class="var">{" ".join(parts)}</p>',
+                 t('<p>Verlaat zwart zelf een hoek, dan komt hij er niet meer in: die dam wordt aan de rand opgesloten, en '
+                   'de twee andere witte dammen nemen de laatste hoek.</p>',
+                   '<p>If black leaves a corner itself, it never gets back in: that king is locked in at the edge, and the '
+                   'other two white kings take the last corner.</p>'), '<div style="clear:both"></div>']
         return body
 
     def vesting(self):

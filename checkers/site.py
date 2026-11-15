@@ -36,7 +36,8 @@ CHAPTERS = [
         ('curiosa.html', 'Uitzondering 2: twee curiosa', 'Exception 2: two curiosities'),
         ('val.html', 'Twee vallen om de vesting te breken', 'Two traps to break the fortress'),
         ('val-pariteit.html', 'De winst is strategisch, de pariteit doet er niet toe', 'The win is strategic, parity does not matter')]),
-    ('3 tegen 2 op grotere borden', '3 against 2 on larger boards', [
+    ('3 tegen 2 op andere borden', '3 against 2 on other boards', [
+        ('langste-7x7.html', 'De langste winst op 7×7', 'The longest win on 7×7'),
         ('vesting-8x7.html', 'Langs de zijde van 7 valt de vesting op 8×7', 'Along the side of 7 the fortress falls on 8×7'),
         ('vesting.html', 'Eén val om de vesting te breken op 9×8', 'One trap to break the fortress on 9×8'),
         ('vesting-pariteit.html', 'De winst is niet strategisch, de pariteit doet ertoe op 9×8',
@@ -670,6 +671,49 @@ same side:</p>
         rule = next(k for k, x in enumerate(body) if isinstance(x, str) and 'D × d' in x)
         self.write('vesting.html', None, '\n'.join(body[:rule]), pg, k89)
         self.write('vesting-9x9.html', None, '\n'.join(self.fortress99(pg9, k99, e99)), pg9, k99)
+        # 7x7 with unplayable corners: the longest win (quiet start, white to move); black flees to two double corners on
+        # the g-file and white drives one king out of its double corner
+        k77, e77 = self.engine(7, 7, 'unplayable')
+        pg77 = self.page((k77, e77))
+        f77 = e77.fen(['b7', 'd7', 'a6'], ['d5', 'c4'], 'W')
+        v77, _ = e77.analyse(f77)
+        line77 = ('1. d7-c6 d5-e4 2. c6-b5 c4-d5 3. b5-a4 d5-e6 4. b7-c6 e6-f5 5. a6-b7 f5-e6 6. c6-d7 e6-f5 7. b7-c6 e4-f3 '
+                  '8. c6-d5 f3-g4 9. d5-e6 f5-g6 10. d7-c6 g6-f5 11. e6-f7 f5-g6 12. c6-d5 g4-f3 13. a4-b5 f3-g2 14. b5-c4 g2-f3 '
+                  '15. c4-d3 f3-g2 16. d5-e4 g2-f1 17. e4-f3 f1-g2 18. d3-e4 g2-f1 19. f3-g2! f1-e2 20. g2-f1 e2-d1 21. e4-d5 d1-c2 '
+                  '22. f1-e2 c2-b3 23. e2-d3 b3-a2 24. d3-c4 a2-b1 25. c4-b3 g6-f5 26. b3-c2! b1xd3 27. f7-g6 f5-e6 28. d5xf7')
+        g = f77
+        for (mv,), _ in self.plan(line77):     # white plays a strongest move, black a longest defence
+            ms = e77.analyse(g)[1]
+            m = next(x for x in ms if x[0] == mv)
+            w = g[0] == 'W'
+            assert m[1][0] == ('W' if w else 'L') and int(m[1][1:]) == (min if w else max)(
+                int(x[1][1:]) for x in ms if x[1][0] == m[1][0]), (mv, m[1])
+            g = m[2]
+        assert [len([x for x in side[1:].split(',') if x]) for side in g.split(':')[1:]] == [2, 1] and e77.analyse(g)[0][0] == 'L'
+        # the quiet start with the longest win, and black in two double corners: all lost but 16 (a shot)
+        fig77, i77 = pg77.diagram(f77, t(f'7×7, wit aan zet: {v77}', f'7×7, white to move: {v77}'), gid=k77)
+        h77, *_ = pg77.moves(f77, self.plan(line77), 1, False, 'm1', i77)
+        body77 = [t(f'''
+<p>Op 7×7 met onspeelbare hoekvelden is elke hoek een dubbele hoek: b1/a2, f1/g2, a6/b7 en g6/f7. De dubbele hoeken
+liggen 6 uit elkaar, aan dezelfde kant en diagonaal. Van de 28.276 rustige stellingen met zwart aan zet en beide zwarte
+dammen op de randvelden van twee dubbele hoeken zijn er maar 16 remise, en daarin heeft zwart een schot.</p>
+<p>De langste winst zonder slag voor beide kanten in de beginstelling duurt {v77[1:]} ply. Zwart vlucht met beide dammen
+naar de dubbele hoeken langs de g-lijn: na 13. … f3-g2 staan ze op g6 en g2. Wit breekt de vesting door een zwarte dam
+uit zijn dubbele hoek te verdrijven: met 19. f3-g2! bezet wit het vrije randveld naast de zwarte dam op f1, die gaat de hoek
+uit (19. … f1-e2), en na 20. g2-f1 kan hij niet meer terug. Hij vlucht naar de dubbele hoek b1/a2, maar daar dwingt wit
+met een offer de beslissing af: 26. b3-c2! b1×d3 27. f7-g6 f5-e6 28. d5×f7, en 2 tegen 1 wint.</p>''', f'''
+<p>On 7×7 with unplayable corner squares every corner is a double corner: b1/a2, f1/g2, a6/b7 and g6/f7. The double
+corners are 6 apart, on the same side and diagonally. Of the 28,276 quiet positions with black to move and both black
+kings on the edge squares of two double corners only 16 are drawn, and in those black has a shot.</p>
+<p>The longest win without a capture for either side in the start position takes {v77[1:]} plies. Black flees with both
+kings to the double corners along the g-file: after 13. … f3-g2 they stand on g6 and g2. White breaks the fortress by
+driving a black king out of its double corner: with 19. f3-g2! white occupies the free edge square next to the black king
+on f1, which leaves the corner (19. … f1-e2), and after 20. g2-f1 it cannot come back. It flees to the double corner
+b1/a2, but there white forces the decision with a sacrifice: 26. b3-c2! b1×d3 27. f7-g6 f5-e6 28. d5×f7, and 2 against 1
+wins.</p>'''), fig77, f'<p class="var">{h77}</p>', '<div style="clear:both"></div>',
+                  t('<p>Op 8×7 bekijken we de twee dubbele hoeken langs de zijde van 7 apart.</p>',
+                    '<p>On 8×7 we look at the two double corners along the side of 7 on their own.</p>')]
+        self.write('langste-7x7.html', None, '\n'.join(body77), pg77, k77)
         # 8x7: one pair of double corners, along the side of 7 (6 apart, closer than on 8x8): the fortress falls
         k87, e87 = self.engine(8, 7, 'unplayable')
         pg7 = self.page((k87, e87))
@@ -678,15 +722,17 @@ same side:</p>
         OW, OB = ['b3', 'c4', 'd7'], ['b1', 'a6']           # a trap at odd parity
         EW, EB = ['b3', 'c4', 'b5'], ['b1', 'b7']           # even parity: no trap, white drives a black king out
         body7 = [t('''
-<p>Op 8×8 liggen de twee dubbele hoeken 7 velden uit elkaar, en daar valt de vesting altijd. Wat gebeurt er als ze nog
-dichter bij elkaar liggen? Op 8×7 zijn er precies twee dubbele hoeken, b1/a2 en b7/a6, allebei langs de zijde van 7, en
+<p>Op 8×8 liggen de twee dubbele hoeken 7 velden uit elkaar, en daar valt de vesting altijd. Op
+<a href="langste-7x7.html">7×7</a> vluchtte zwart naar twee dubbele hoeken langs een zijde van 7, maar 6 uit elkaar. Op
+8×7 zijn er precies twee dubbele hoeken, b1/a2 en b7/a6, allebei langs de zijde van 7, en
 ze liggen maar 6 uit elkaar. (Met speelbare in plaats van onspeelbare hoekvelden is 8×7 het spiegelbeeld, met de dubbele
 hoeken langs de h-lijn.)</p>
 <p>Met zwart aan zet en beide zwarte dammen op de randvelden van hun dubbele hoeken (rustige stellingen) is bij oneven
 pariteit elke stelling verloren (3.172), en bij even pariteit alle op 4 na (3.153 van de 3.157). Maar het gaat op twee
 verschillende manieren: bij oneven pariteit zijn er 8 vallen, bij even pariteit geen enkele.</p>''', '''
-<p>On 8×8 the two double corners are 7 squares apart, and there the fortress always falls. What happens when they are
-even closer together? On 8×7 there are exactly two double corners, b1/a2 and b7/a6, both along the side of 7, and they are
+<p>On 8×8 the two double corners are 7 squares apart, and there the fortress always falls. On
+<a href="langste-7x7.html">7×7</a> black fled to two double corners along a side of 7, only 6 apart. On 8×7 there are
+exactly two double corners, b1/a2 and b7/a6, both along the side of 7, and they are
 only 6 apart. (With playable instead of unplayable corner squares 8×7 is the mirror image, with the double corners along
 the h-file.)</p>
 <p>With black to move and both black kings on the edge squares of their double corners (quiet positions) every position is
@@ -778,7 +824,7 @@ are 8 traps, at even parity not a single one.</p>''')]
             '<tr><td>9×8</td><td>100% remise (8.228)</td><td>0% remise (8.244)</td></tr>'
             '<tr><td>10×9</td><td>100% (18.420)</td><td>0% (18.440)</td></tr>'
             '<tr><td>11×10</td><td>100% (37.030)</td><td>100% (37.050)</td></tr></table>'
-            '<p>Zie <a href="val.html">de val</a> en <a href="vesting.html">3 tegen 2 op grotere borden</a>.</p>',
+            '<p>Zie <a href="val.html">de val</a> en <a href="langste-7x7.html">3 tegen 2 op andere borden</a>.</p>',
             '<p>The traps per board, with black to move and both black kings on the edge squares of two double corners '
             '(counted with <a href="https://github.com/rhalbersma/egdb-draughts/blob/main/checkers/traps.py"><code>traps.py</code></a>):</p>'
             '<table class="tbl"><tr><th>Board</th><th>Traps at even parity</th><th>Traps at odd parity</th><th>Consequence</th></tr>'
@@ -790,7 +836,7 @@ are 8 traps, at even parity not a single one.</p>''')]
             '<tr><td>9×8</td><td>100% draws (8,228)</td><td>0% draws (8,244)</td></tr>'
             '<tr><td>10×9</td><td>100% (18,420)</td><td>0% (18,440)</td></tr>'
             '<tr><td>11×10</td><td>100% (37,030)</td><td>100% (37,050)</td></tr></table>'
-            '<p>See <a href="val.html">the trap</a> and <a href="vesting.html">3 against 2 on larger boards</a>.</p>'),
+            '<p>See <a href="val.html">the trap</a> and <a href="langste-7x7.html">3 against 2 on other boards</a>.</p>'),
             self.page((k89, e89)), None)
 
 

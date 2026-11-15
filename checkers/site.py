@@ -308,9 +308,9 @@ by opposition; on odd × odd boards with playable corners this blockade does not
             f'makes half of such positions a draw on 8×9 and 9×10, plays no role on 8×8.</p>'),
             f'<p class="var">{h}</p>', '<div style="clear:both"></div>']
         flush('drie-langste.html')
-        body, phases = self.traps88(pg, k88, e88)
+        body, phases, pgp = self.traps88(pg, k88, e88)
         flush('val.html')
-        body = phases
+        body, pg = phases, pgp
         flush('val-pariteit.html')
         # the 3-2 blockades on 8x8: 1252 quiet draws with white to move, 316 up to symmetry; 307 of them contain the
         # 2-1 blockade in a single corner
@@ -484,6 +484,7 @@ king in the middle of the white kings (the third diagram).</p>''')]
                      + '; '.join(lines) + t(', en 2 tegen 1 wint. Alle zetten van zwart: ',
                                             ', and 2 against 1 wins. All moves of black: ')
                      + self.moves_list(pg, i0, legal, '1. … ') + '.</p>', '<div style="clear:both"></div>']
+        pgp = self.page((k88, e88))      # the parity page has a page (positions, boards) of its own
         # why both parities: the diagonal of white decides the parity, and moving over to the other diagonal costs three
         # moves (one per king), an odd number. Squares in the text are written algebraically, so that the notation switch
         # can show them either way.
@@ -511,9 +512,9 @@ king in the middle of the white kings (the third diagram).</p>''')]
         # the change-over: white on the trap of the even parity, but white to move; three steps to the other diagonal
         fen = 'W:WK14,K18,K23:BK5,K32'
         v, _ = e88.analyse(fen)
-        fig, i0 = pg.diagram(fen, t(f'8×8, wit aan zet: {v}', f'8×8, white to move: {v}'), gid=k88)
+        fig, i0 = pgp.diagram(fen, t(f'8×8, wit aan zet: {v}', f'8×8, white to move: {v}'), gid=k88)
         plan = [((x,), '') for x in ('14-10', '5-1', '18-15', '1-5', '23-19')]
-        h, i_end, f_end, _ = pg.moves(fen, plan, 1, False, 'm1', i0, nbook=len(plan))
+        h, i_end, f_end, _ = pgp.moves(fen, plan, 1, False, 'm1', i0, nbook=len(plan))
         phases += [fig, t(
             f'<p>Wit staat in de opstelling van de val bij even pariteit, maar is zelf aan zet, en dan is het geen val. Wit '
             f'stapt over naar de andere diagonaal: elke witte dam één veld, terwijl zwart pendelt. ',
@@ -527,7 +528,7 @@ king in the middle of the white kings (the third diagram).</p>''')]
             '<div style="clear:both"></div>']
         # the trap reached: every shuttle move of black is punished
         v2, legal2 = e88.analyse(f_end)
-        fig2, j0 = pg.diagram(f_end, t(f'8×8, zwart aan zet (oneven pariteit): {v2}', f'8×8, black to move (odd parity): {v2}'),
+        fig2, j0 = pgp.diagram(f_end, t(f'8×8, zwart aan zet (oneven pariteit): {v2}', f'8×8, black to move (odd parity): {v2}'),
                               gid=k88)
         lines = []
         for m in legal2:
@@ -537,17 +538,17 @@ king in the middle of the white kings (the third diagram).</p>''')]
             ex = self.exchange(e88, m[2])
             if not ex:
                 continue
-            j1 = pg.child(j0, m)
-            parts = [f'<a class="m1" href="#" data-i="{j1}">1. … {pg.label(k88, m)}</a>']
+            j1 = pgp.child(j0, m)
+            parts = [f'<a class="m1" href="#" data-i="{j1}">1. … {pgp.label(k88, m)}</a>']
             j = j1
             for k, mv in enumerate(ex):
-                j = pg.child(j, mv)
-                parts.append(f'<a class="m1" href="#" data-i="{j}">{"2. " if k == 0 else ("3. " if k == 2 else "")}{pg.label(k88, mv)}</a>')
+                j = pgp.child(j, mv)
+                parts.append(f'<a class="m1" href="#" data-i="{j}">{"2. " if k == 0 else ("3. " if k == 2 else "")}{pgp.label(k88, mv)}</a>')
             lines.append(' '.join(parts))
         phases += [fig2, t('<p>Elke pendelzet van zwart wordt gestraft: ', '<p>Every shuttle move of black is punished: ')
                    + '; '.join(lines) + t(', en 2 tegen 1 wint. Alle zetten van zwart: ', ', and 2 against 1 wins. All moves of black: ')
-                   + self.moves_list(pg, j0, legal2, '1. … ') + '.</p>', '<div style="clear:both"></div>']
-        return body, phases
+                   + self.moves_list(pgp, j0, legal2, '1. … ') + '.</p>', '<div style="clear:both"></div>']
+        return body, phases, pgp
 
     def vesting(self):
         k89, e89 = self.engine(9, 8, 'playable')

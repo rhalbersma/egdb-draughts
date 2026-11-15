@@ -136,9 +136,9 @@ class Site:
         e = self.engine('5x6', '--width', 6, '--height', 5, '--parity', 1, '--white', 2, '--black', 1)
         pg = self.page(('5x6', e))
         t = self.t
-        fig, _ = pg.diagram('W:WK1,K8:BK7', t('5×6: twee dammen winnen (27 ply)', '5×6: two kings win (27 plies)'))
+        fig, _ = pg.diagram('W:WK1,K8:BK7', t('6×5: twee dammen winnen (27 ply)', '6×5: two kings win (27 plies)'))
         body = [f'<h1>{TITLE}</h1>', fig, t('''
-<p>Eindspelen met alleen dammen, op borden van elke afmeting <em>B × L</em>, met internationale regels: vliegende
+<p>Eindspelen met alleen dammen, op borden van elke afmeting <em>B × L</em> (<em>B</em> ≤ <em>L</em>, met de families <em>L</em> = <em>B</em> + 1, <em>B</em> + 2 en 2<em>B</em> − 1, zoals in het boek), met internationale regels: vliegende
 dammen, slagplicht, meerslag en Turkse slag. Een Nederlands boek uit 1988 over drie dammen tegen één vond zijn
 resultaten met de hand, op borden van elke grootte. De databases van
 <a href="https://github.com/rhalbersma/egdb-draughts/blob/main/src/egdb_fast.cpp"><code>egdb_fast</code></a>
@@ -146,8 +146,13 @@ rekenen elke stelling exact uit, met de afstand tot het einde van de partij in p
 breiden de resultaten van het boek uit.</p>
 <p>Elke stelling op deze site is klikbaar: het grote bord volgt, en eronder staan de waarde en alle zetten. W = winst,
 L = verlies, met het aantal ply tot het einde van de partij; D = remise. Zuiver speltheoretisch, zonder
-zettenregels.</p>''', '''
-<p>Endgames with kings only, on boards of any size <em>B × L</em>, under international rules: flying kings, mandatory
+zettenregels.</p>
+<p>Omdat het eindspelen met alleen dammen zijn, zonder schijven en dus zonder voor- of achterkant, maakt het niet uit
+hoe het bord ligt: kantelen in de diagonaal door a1 verandert geen enkele waarde, en ook de kleuring (p0/p1) blijft
+gelijk. De diagrammen tonen de borden daarom gekanteld, liggend: <em>L</em> kolommen breed en <em>B</em> rijen hoog. Bij de
+diagrammen heten ze <em>L</em> × <em>B</em>, kolommen × rijen: 11×10 is het bord met <em>B</em> = 10 en
+<em>L</em> = 11 uit de familie <em>L</em> = <em>B</em> + 1.</p>''', '''
+<p>Endgames with kings only, on boards of any size <em>B × L</em> (<em>B</em> ≤ <em>L</em>, with the families <em>L</em> = <em>B</em> + 1, <em>B</em> + 2 and 2<em>B</em> − 1, as in the book), under international rules: flying kings, mandatory
 capture, majority capture and the Turkish strike. A Dutch book of 1988 on three kings against one, <em>Drie tegen een is
 gemeen</em> ("three against one is mean"), found its results by hand, on boards of every size. The databases of
 <a href="https://github.com/rhalbersma/egdb-draughts/blob/main/src/egdb_fast.cpp"><code>egdb_fast</code></a> compute
@@ -155,21 +160,26 @@ every position exactly, with the distance to the end of the game in plies, and c
 of the book.</p>
 <p>Every position on this site is clickable: the large board follows, and below it are the value and all moves. W = win,
 L = loss, with the number of plies to the end of the game; D = draw. Purely game-theoretic, without move-count
-rules.</p>'''), t('<h2>Inhoud</h2>', '<h2>Contents</h2>') + '<ul class="toc">']
+rules.</p>
+<p>Since these are endgames with kings only, without men and so without a front or back, it does not matter which way
+the board lies: turning it over the diagonal through a1 changes no value, and the colouring (p0/p1) stays the same too.
+The diagrams therefore show the boards on their side: <em>L</em> files wide and <em>B</em> ranks high. At the diagrams
+they are named <em>L</em> × <em>B</em>, files × ranks: 11×10 is the board with <em>B</em> = 10 and
+<em>L</em> = 11 from the family <em>L</em> = <em>B</em> + 1.</p>'''), t('<h2>Inhoud</h2>', '<h2>Contents</h2>') + '<ul class="toc">']
         for k in range(1, len(PAGES)):
             body.append(f'<li><a href="{PAGES[k][0]}">{esc(self.title(k))}</a></li>')
         body.append('</ul>')
         body.append(t('''
 <h2>Vergelijking met het boek</h2>
 <p><strong>Bevestigd</strong>: alles wat het boek stellig beweert: 2 tegen 1 voor <em>B</em> ≤ 4 (met de
-voorwaarde van de lange lijn op 3×3 en 4×4) en op 5×7 p1; 3 tegen 1 op <em>B</em> = 5 en 6 voor elke
+voorwaarde van de lange lijn op 3×3 en 4×4) en op 7×5 p1; 3 tegen 1 op <em>B</em> = 5 en 6 voor elke
 <em>L</em> &gt; <em>B</em> (vierkante borden met de voorwaarde van de lange lijn, expliciet op 5×5 p1);
 <em>B</em> = 7 voor <em>L</em> = 7–11; <em>B</em> = 8 voor <em>L</em> = 9, 10, 11 en 15; de families
 <em>B</em> + 1, <em>B</em> + 2 en 2<em>B</em> − 1 met de kleuringsregel; de borden met een weggehaald veld 1, 2, 4, 5,
 7, 8, 9, 18 en 23.</p>
 <p><strong>Nieuw</strong>:</p>
 <table class="tbl"><tr><th>Materiaal</th><th>Bord</th><th>Resultaat</th><th>Langste winst</th></tr>
-<tr><td>2-1</td><td><a href="twee-tegen-een.html">5×6</a></td><td>gewonnen</td><td>27 ply</td></tr>
+<tr><td>2-1</td><td><a href="twee-tegen-een.html">6×5</a></td><td>gewonnen</td><td>27 ply</td></tr>
 <tr><td>3-1</td><td>7×12, 7×13 p0, 7×14, 7×15 p1</td><td>gewonnen (algemene methode)</td><td>35, 49, 53, 67</td></tr>
 <tr><td>3-1</td><td>7×15 p0, 7×16, 7×17</td><td>remise: de grens van <em>B</em> = 7</td><td></td></tr>
 <tr><td>3-1</td><td><a href="tien-zonder-veld.html">10×10 zonder g7 (19)</a></td><td>gewonnen</td><td>33</td></tr>
@@ -181,13 +191,13 @@ op de lange lijn (40 vorken met zwart aan zet), en de precieze grenzen van elke 
 <a href="https://github.com/rhalbersma/egdb-draughts">github.com/rhalbersma/egdb-draughts</a>.</p>''', '''
 <h2>Comparison with the book</h2>
 <p><strong>Confirmed</strong>: everything the book states firmly — 2-1 for <em>B</em> ≤ 4 (with the long-diagonal
-condition on 3×3 and 4×4) and on 5×7 p1; 3-1 on <em>B</em> = 5, 6 for every <em>L</em> &gt; <em>B</em> (square boards
+condition on 3×3 and 4×4) and on 7×5 p1; 3-1 on <em>B</em> = 5, 6 for every <em>L</em> &gt; <em>B</em> (square boards
 with the long-diagonal condition, explicit on 5×5 p1); <em>B</em> = 7 for <em>L</em> = 7–11; <em>B</em> = 8 for
 <em>L</em> = 9, 10, 11, 15; the families <em>B</em> + 1, <em>B</em> + 2 and 2<em>B</em> − 1 with the colouring rule; the
 boards with a square removed 1, 2, 4, 5, 7, 8, 9, 18, 23.</p>
 <p><strong>New</strong>:</p>
 <table class="tbl"><tr><th>Material</th><th>Board</th><th>Result</th><th>Longest win</th></tr>
-<tr><td>2-1</td><td><a href="twee-tegen-een.html">5×6</a></td><td>won</td><td>27 plies</td></tr>
+<tr><td>2-1</td><td><a href="twee-tegen-een.html">6×5</a></td><td>won</td><td>27 plies</td></tr>
 <tr><td>3-1</td><td>7×12, 7×13 p0, 7×14, 7×15 p1</td><td>won (general method)</td><td>35, 49, 53, 67</td></tr>
 <tr><td>3-1</td><td>7×15 p0, 7×16, 7×17</td><td>drawn: the limit of <em>B</em> = 7</td><td></td></tr>
 <tr><td>3-1</td><td><a href="tien-zonder-veld.html">10×10 without g7 (19)</a></td><td>won</td><td>33</td></tr>
@@ -208,42 +218,42 @@ on the long diagonal (40 forks with black to move), and the exact limits of ever
                 f'<p class="note">{t(LEGEND, LEGEND_EN)}</p>', t('''<ul>
 <li>Voor <em>B</em> ≤ 4 (gedegenereerde borden) winnen twee dammen altijd, op de vierkante borden als ze de lange
 lijn(en) bezetten.</li>
-<li>Voor <em>B</em> ≥ 5 zijn maar twee borden gewonnen: <strong>5×6</strong> (nieuw) en <strong>5×7 p1</strong>
+<li>Voor <em>B</em> ≥ 5 zijn maar twee borden gewonnen: <strong>6×5</strong> (nieuw) en <strong>7×5 p1</strong>
 (bekend). Vanaf <em>B</em> = 6 is alles remise; de overige winsten zijn korte combinaties waarvan de lengte niet van
 de bordgrootte afhangt.</li>
-<li>Met de enkele dam aan zet zijn er op 5×6 (8) en 5×7 (16) een paar uitzonderingen: dubbele aanvallen (vorken).</li>
+<li>Met de enkele dam aan zet zijn er op 6×5 (8) en 7×5 (16) een paar uitzonderingen: dubbele aanvallen (vorken).</li>
 </ul>''', '''<ul>
 <li>For <em>B</em> ≤ 4 (degenerate boards) two kings always win, on the square boards provided they hold the long
 diagonal(s).</li>
-<li>For <em>B</em> ≥ 5 only two boards are won: <strong>5×6</strong> (new) and <strong>5×7 p1</strong> (known). From
+<li>For <em>B</em> ≥ 5 only two boards are won: <strong>6×5</strong> (new) and <strong>7×5 p1</strong> (known). From
 <em>B</em> = 6 on everything is drawn, and the remaining wins are short combinations whose length does not depend on the
 board size.</li>
-<li>With the single king to move there are a few exceptions on 5×6 (8) and 5×7 (16): double attacks (forks).</li>
+<li>With the single king to move there are a few exceptions on 6×5 (8) and 7×5 (16): double attacks (forks).</li>
 </ul>''')]
         fen = 'W:WK1,K8:BK7'
-        fig, i0 = pg.diagram(fen, t('5×6, wit aan zet', '5×6, white to move'), gid='5x6')
+        fig, i0 = pg.diagram(fen, t('6×5, wit aan zet', '6×5, white to move'), gid='5x6')
         line = ('1. c3-d4 a3-c5 2. d4-b2 c5-e3 3. a5-b4 e3-c5 4. b4-a3 c5-e3 5. b2-e5 e3-f2 6. a3-c5 f2-e1 '
                 '7. e5-f4 e1-c3 8. f4-c1 c3-e5 9. c5-e3 e5-c3 10. c1-a3 c3-e5 11. e3-f4 e5-d4 12. a3-b2! d4xa1 '
                 '13. f4-e5 a1-b2 14. e5xa1')
         h, *_ = pg.moves(fen, self.plan(line), 1, False, 'm1', i0)
         v, _ = e56.analyse(fen)
-        body += [t('<h2>5×6: de langste winst</h2>', '<h2>5×6: the longest win</h2>'), fig,
+        body += [t('<h2>6×5: de langste winst</h2>', '<h2>6×5: the longest win</h2>'), fig,
                  t(f'<p>Wit aan zet wint in {v[1:]} ply, de langste winst op dit bord:</p>',
                    f'<p>White to move wins in {v[1:]} plies, the longest win on this board:</p>'), f'<p class="var">{h}</p>',
                  t('<p>Het lange tempospel dient één doel: offeren zodat zwart <em>de hoek in</em> slaat, en dan de tweede '
-                   'dam achter hem op de hoekdiagonaal zetten. Ruim 80% van alle rustige winsten op 5×6 en 5×7 eindigt '
+                   'dam achter hem op de hoekdiagonaal zetten. Ruim 80% van alle rustige winsten op 6×5 en 7×5 eindigt '
                    'met een zwarte slag de hoek in.</p>',
                    '<p>The long tempo play serves one purpose: sacrifice so that black captures <em>into the corner</em>, '
-                   'then place the second king behind it on the corner diagonal. More than 80% of all quiet wins on 5×6 '
-                   'and 5×7 end with black capturing into a corner.</p>')]
+                   'then place the second king behind it on the corner diagonal. More than 80% of all quiet wins on 6×5 '
+                   'and 7×5 end with black capturing into a corner.</p>')]
         fen = 'W:WK1,K9:BK2'
-        fig, i0 = pg.diagram(fen, t('5×7 p1, wit aan zet', '5×7 p1, white to move'), gid='5x7')
+        fig, i0 = pg.diagram(fen, t('7×5 p1, wit aan zet', '7×5 p1, white to move'), gid='5x7')
         line = ('1. c3-e5 c5-a3 2. a5-d2 a3-c5 3. d2-c1 c5-f2 4. e5-g3 f2-c5 5. c1-a3 c5-d4 6. a3-b2! d4xa1 '
                 '7. g3-e5 a1-b2 8. e5xa1')
         h, *_ = pg.moves(fen, self.plan(line), 1, False, 'm1', i0)
-        body += [t('<h2>5×7 p1: hetzelfde slotmotief</h2>', '<h2>5×7 p1: the same final motif</h2>'), fig,
-                 t('<p>Op 5×7 p1 verschijnt hetzelfde slotmotief na 15 ply:</p>',
-                   '<p>On 5×7 p1 the same final motif appears after 15 plies:</p>'), f'<p class="var">{h}</p>']
+        body += [t('<h2>7×5 p1: hetzelfde slotmotief</h2>', '<h2>7×5 p1: the same final motif</h2>'), fig,
+                 t('<p>Op 7×5 p1 verschijnt hetzelfde slotmotief na 15 ply:</p>',
+                   '<p>On 7×5 p1 the same final motif appears after 15 plies:</p>'), f'<p class="var">{h}</p>']
         self.write('twee-tegen-een.html', '2 dammen tegen 1', '\n'.join(body), pg, '5x6')
 
     def drie(self):
@@ -416,7 +426,8 @@ capture.</p>''')]
                ('B + 2', '(2, 2), (L, B − 2), (L − 2, B − 4)', '10x12', '6×8 … 10×12', 12, 11),
                ('2B − 1', '(2, 2), (B, B − 2), (L − 1, 2)', '10x19', '5×9 … 9×17', 8, 7)]
         ex = {gid: wk for gid, w, h, wk, *_ in fams}
-        rows = ''.join(f'<tr><td><strong>{f}</strong></td><td>{c} — {t("bv.", "e.g.")} {g.replace("x", "×")}: '
+        shown = {gid: f'{w}×{h}' for gid, w, h, *_ in fams}       # as drawn: files × ranks (the book: 10×11 etc.)
+        rows = ''.join(f'<tr><td><strong>{f}</strong></td><td>{c} — {t("bv.", "e.g.")} {shown[g]}: '
                        f'{pg.prose(", ".join(ex[g]), g, "alg")}</td><td>{boards}</td><td>{lb}</td><td>{lw}</td></tr>'
                        for f, c, g, boards, lb, lw in gen)
         table = (t('<table class="tbl"><tr><th>Familie</th><th>Witte dammen (kolom, rij)</th><th>Gecontroleerd</th>'
@@ -424,10 +435,10 @@ capture.</p>''')]
                    '<table class="tbl"><tr><th>Family</th><th>White kings (file, rank)</th><th>Boards checked</th>'
                    '<th>Black to move</th><th>White to move</th></tr>') + rows + '</table>'
                  + t('<p class="note">Coördinaten (kolom, rij) gerekend vanaf (1, 1) = a1 linksonder; <em>B</em> × '
-                     '<em>L</em> met <em>L</em> kolommen en <em>B</em> rijen. Bij 2<em>B</em> − 1 staan (2, 2) en '
+                     '<em>L</em> gekanteld getoond, met <em>L</em> kolommen en <em>B</em> rijen. Bij 2<em>B</em> − 1 staan (2, 2) en '
                      '(<em>L</em> − 1, 2) op de benen van de V en (<em>B</em>, <em>B</em> − 2) onder de top.</p>',
                      '<p class="note">Coordinates (file, rank) counted from (1, 1) = a1 at the bottom left; <em>B</em> × '
-                     '<em>L</em> with <em>L</em> files and <em>B</em> ranks. For 2<em>B</em> − 1, (2, 2) and '
+                     '<em>L</em> shown on its side, with <em>L</em> files and <em>B</em> ranks. For 2<em>B</em> − 1, (2, 2) and '
                      '(<em>L</em> − 1, 2) stand on the legs of the V and (<em>B</em>, <em>B</em> − 2) below its apex.</p>'))
         body[1] = body[1].replace('{TABLE}', table)
         for gid, w, h, wk, fam, black in fams:
@@ -435,7 +446,7 @@ capture.</p>''')]
             if black is None:
                 black = self.hardest(e, wk)
             fen = e.fen(wk, [black])
-            fig, i0 = pg.diagram(fen, f'{gid.replace("x", "×")}: ' + t(f'familie {fam}, wit aan zet',
+            fig, i0 = pg.diagram(fen, f'{shown[gid]}: ' + t(f'familie {fam}, wit aan zet',
                                                                        f'family {fam}, white to move'), gid=gid)
             v, _ = e.analyse(fen)
             hl, *_ = pg.best_line(fen, 40, start=i0)
@@ -443,19 +454,19 @@ capture.</p>''')]
             ib = pg.add(fb, gid=gid)
             vb, _ = e.analyse(fb)
             hb, *_ = pg.best_line(fb, 40, start=ib)
-            body += [f'<h2>{t("Familie", "Family")} {fam}: {gid.replace("x", "×")}</h2>', fig,
+            body += [f'<h2>{t("Familie", "Family")} {fam}: {shown[gid]}</h2>', fig,
                      pg.prose_html(t(f'<p>Witte dammen op {", ".join(wk)}, de zwarte dam op {black}. Wit aan zet: {v}.</p>',
                        f'<p>White kings on {", ".join(wk)}, the black king on {black}. White to move: {v}.</p>'), gid, 'alg'),
                      f'<p class="var">{hl}</p>', t(f'<p>Dezelfde stelling met zwart aan zet: {vb}.</p>',
                                                    f'<p>The same position with black to move: {vb}.</p>'),
                      f'<p class="var">{hb}</p>']
             if gid == '10x11':
-                body.append(pg.prose_html(t('<p>Op 10×11 (diagram 8 van het boek) wint wit met wit aan zet op elk veld van de zwarte dam '
+                body.append(pg.prose_html(t('<p>Op 11×10 (in het boek 10×11, diagram 8) wint wit met wit aan zet op elk veld van de zwarte dam '
                             'binnen 5 ply, <strong>behalve op h10, het gearceerde veld in het boek, waar het 9 ply '
                             'kost</strong>. De dam op b2 staat op de lange lijn, waarvan het andere eind een ingang '
                             'rechtsboven is; de twee dammen rechtsboven vormen er een halve val mee en de bovenste kan '
                             'de lange lijn afsluiten.</p>',
-                              '<p>On 10×11 (diagram 8 of the book) white to move wins within 5 plies on every square of '
+                              '<p>On 11×10 (10×11 in the book, diagram 8) white to move wins within 5 plies on every square of '
                               'the black king, <strong>except h10, the hatched square in the book, which takes 9 '
                               'plies</strong>. The king at b2 stands on the long diagonal, whose other end is an entrance '
                               'at the top right; the two kings at the top right form a half trap with it and the upper one '

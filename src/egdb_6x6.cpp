@@ -45,6 +45,11 @@
 //   slicemax <n>    largest number of pieces for which every position comes from the slices
 //   verify [t]      recompute every value in every slice from its successors
 //   stats           number of slices and positions computed so far
+//   store <dir>     use the compressed units in dir (all positions with at most 12 pieces, at most 6 per side)
+//   unitbuild <dir> <n> <m> [t]          build unit (n pieces, m men) as a raw file (continues an interrupted build)
+//   unitverify <dir> <n> <m> raw|cdb [t] recompute the values of the unit from their successors
+//   unitcompress <dir> <n> <m> [t]       compress the raw file of the unit
+//   unitcompare <dir> <n> <m> [t]        compare the compressed unit with the raw file, both ways
 // FEN: W:W17,K16:B2,K15 (side to move, white pieces, black pieces; K = king).
 // Values: "W<n>" win in n plies, "L<n>" loss in n plies, "D" draw (for the side to move).
 
@@ -54,6 +59,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -64,6 +70,9 @@
 #include <unistd.h>
 #include <unordered_map>
 #include <vector>
+#include <omp.h>
+#define ZSTD_STATIC_LINKING_ONLY
+#include <zstd.h>
 
 namespace {
 
@@ -486,9 +495,12 @@ bool in_slices(Pos const& p)
 }
 
 std::uint16_t from_successors(Pos const& p);
+bool store_on = false;                 // positions come from the store of compressed units (see below)
+std::uint16_t store_lookup(Pos const& p);
 
 std::uint16_t lookup_slice(Pos const& p0)
 {
+        if (store_on) return store_lookup(p0);
         Pos const p = canonical_key(key_of(p0)) ? p0 : mirror(p0);
         Key const key = key_of(p);
         thread_local SliceRef last;
@@ -1048,6 +1060,588 @@ std::string notation(Move const& mv)
         return std::to_string(mv.from + 1) + (mv.captured ? "x" : "-") + std::to_string(mv.to + 1);
 }
 
+// ---------------------------------------------------------------- store: units of compressed DTM
+//
+// The databases with at most 12 pieces and at most 6 pieces per side are kept in "units": one unit per number of
+// pieces n and number of men m. A unit holds the materials (white men, black men, white kings, black kings) with
+// those counts in which both sides have a piece, one of each pair (material, mirrored material); a symmetric
+// material keeps white to move only (black to move is the mirror image). Within a material the positions are
+// numbered without gaps as [placement of the men][side to move][placement of the kings]: the men by a
+// combinatorial rank (men_rank), the kings as within a slice (index_of). Every slice is a contiguous range, so no
+// table of slices is needed, and the stored positions are exactly the positions of the counts with white to move.
+//
+// Positions in which a side has no pieces are not stored: the side to move without pieces has lost (0 plies), and
+// a position in which the side not to move has no pieces cannot arise in a game; its value follows from its moves.
+//
+// A unit is built as a raw file of one byte of DTM per position (unit_build); a unit depends only on the units with
+// fewer pieces and on the unit with the same number of pieces and one man fewer (a promotion), so the units are
+// built in the order (n, m). After the checks the raw file is compressed (unit_compress): blocks of 4096 positions,
+// each compressed on its own with zstd -19 (frames without magic number and content size), in which the positions
+// where the side to move can capture repeat the previous value of the block; their values follow from the captures
+// and are resolved at lookup (captures are compulsory, so a capture position takes the best of its captures).
+
+constexpr std::uint32_t MEN_W = FULL & ~PROMO_WHITE;      // squares where a white man can stand
+constexpr std::uint32_t MEN_B = FULL & ~PROMO_BLACK;      // squares where a black man can stand
+constexpr std::uint32_t MEN_MID = MEN_W & MEN_B;          // squares 4-15
+constexpr std::uint64_t BLOCK = 4096;                     // positions (bytes) per compressed block
+constexpr std::uint64_t CDB_MAGIC = 0x3678364244424331ull;
+constexpr int ZLEVEL = 19;
+
+// placements of nwm white and nbm black men with j white men on squares 16-18
+std::uint64_t men_part(int nwm, int nbm, int j)
+{
+        if (j > 3 || j > nwm || nwm - j > 12 || nbm > 15 - (nwm - j)) return 0;
+        return binom[3][j] * binom[12][nwm - j] * binom[15 - (nwm - j)][nbm];
+}
+
+std::uint64_t men_count(int nwm, int nbm)
+{
+        std::uint64_t c = 0;
+        for (int j = 0; j <= 3; ++j) c += men_part(nwm, nbm, j);
+        return c;
+}
+
+// rank of a placement of men: [white men on 16-18 (count j)][white men on 16-18][white men on 4-15][black men]
+std::uint64_t men_rank(std::uint32_t wm, std::uint32_t bm)
+{
+        int const nwm = __builtin_popcount(wm), nbm = __builtin_popcount(bm), j = __builtin_popcount(wm & PROMO_BLACK);
+        std::uint64_t r = 0;
+        for (int i = 0; i < j; ++i) r += men_part(nwm, nbm, i);
+        std::uint64_t const cm = binom[12][nwm - j], cb = binom[15 - (nwm - j)][nbm];
+        return r + (rank_in(wm & PROMO_BLACK, PROMO_BLACK) * cm + rank_in(wm & MEN_MID, MEN_MID)) * cb + rank_in(bm, MEN_B & ~wm);
+}
+
+void men_unrank(int nwm, int nbm, std::uint64_t r, std::uint32_t& wm, std::uint32_t& bm)
+{
+        int j = 0;
+        while (r >= men_part(nwm, nbm, j)) r -= men_part(nwm, nbm, j++);
+        std::uint64_t const cm = binom[12][nwm - j], cb = binom[15 - (nwm - j)][nbm];
+        std::uint64_t const c = r % cb;
+        r /= cb;
+        wm = unrank_in(r / cm, j, PROMO_BLACK) | unrank_in(r % cm, nwm - j, MEN_MID);
+        bm = unrank_in(c, nbm, MEN_B & ~wm);
+}
+
+struct UnitMat {
+        int wm, bm, wk, bk;          // numbers of white men, black men, white kings, black kings
+        std::uint64_t base, men, P;  // first position, placements of the men, placements of the kings
+        int S;                       // sides to move stored: 2, or 1 for a symmetric material (white to move)
+        std::uint64_t code() const { return std::uint64_t(wm) | std::uint64_t(bm) << 8 | std::uint64_t(wk) << 16 | std::uint64_t(bk) << 24 | std::uint64_t(S) << 32; }
+        std::uint64_t size() const { return men * std::uint64_t(S) * P; }
+};
+
+std::vector<UnitMat> unit_layout(int n, int m)
+{
+        std::vector<UnitMat> v;
+        std::uint64_t base = 0;
+        for (int wm = 0; wm <= m; ++wm)
+                for (int wk = 0; wk <= n - m; ++wk) {
+                        int const bm = m - wm, bk = n - m - wk;
+                        if (wm + wk > 6 || bm + bk > 6 || wm + wk == 0 || bm + bk == 0) continue;
+                        auto const a = std::tuple(wm, bm, wk, bk), b = std::tuple(bm, wm, bk, wk);
+                        if (b < a) continue;
+                        int const F = N - m;
+                        UnitMat u{ wm, bm, wk, bk, base, men_count(wm, bm), binom[F][wk] * binom[F - wk][bk], a == b ? 1 : 2 };
+                        base += u.size();
+                        v.push_back(u);
+                }
+        return v;
+}
+
+std::uint64_t unit_positions(std::vector<UnitMat> const& lay) { return lay.empty() ? 0 : lay.back().base + lay.back().size(); }
+
+// the stored representative of a position: the canonical material, white to move for a symmetric one
+Pos canon(Pos const& p)
+{
+        auto const a = std::tuple(__builtin_popcount(p.m[0]), __builtin_popcount(p.m[1]), __builtin_popcount(p.k[0]), __builtin_popcount(p.k[1]));
+        auto const b = std::tuple(std::get<1>(a), std::get<0>(a), std::get<3>(a), std::get<2>(a));
+        if (a < b) return p;
+        if (b < a) return mirror(p);
+        return p.stm == 0 ? p : mirror(p);
+}
+
+std::uint64_t king_index(Pos const& p)
+{
+        std::uint32_t const free = ~(p.m[0] | p.m[1]) & FULL;
+        int const F = __builtin_popcount(free);
+        std::uint64_t const nb = binom[F - __builtin_popcount(p.k[0])][__builtin_popcount(p.k[1])];
+        return rank_in(p.k[0], free) * nb + rank_in(p.k[1], free & ~p.k[0]);
+}
+
+struct Unit {
+        int n = 0, m = 0;
+        bool raw = false;
+        std::uint8_t* p = nullptr;          // the mapped file
+        std::size_t size = 0;
+        std::uint64_t npos = 0, nblocks = 0;
+        std::uint64_t const* off = nullptr; // compressed: block offsets (nblocks + 1) relative to data
+        std::uint8_t const* data = nullptr;
+        std::uint64_t id = 0;               // unique per opened unit (block cache tag)
+};
+
+struct MatRef { int unit = -1; int S = 0; std::uint64_t base = 0, P = 0; };
+
+std::vector<Unit> units;
+MatRef mat_ref[7][7][7][7];
+std::uint64_t next_unit_id = 1;
+
+std::string unit_path(std::string const& dir, int n, int m, char const* ext)
+{
+        return dir + "/6x6_" + std::to_string(n) + "_" + std::to_string(m) + ext;
+}
+
+// mode 0: read only; 1: create (truncate) for writing; 2: open existing for writing
+std::uint8_t* map_any(std::string const& path, std::size_t& size, int mode, std::size_t want = 0)
+{
+        int fd = ::open(path.c_str(), mode == 0 ? O_RDONLY : mode == 1 ? (O_RDWR | O_CREAT | O_TRUNC) : O_RDWR, 0644);
+        if (fd < 0) return nullptr;
+        if (mode == 1 && ::ftruncate(fd, off_t(want)) != 0) { ::close(fd); return nullptr; }
+        struct stat st;
+        if (::fstat(fd, &st) != 0 || (want && std::size_t(st.st_size) != want) || st.st_size == 0) { ::close(fd); return nullptr; }
+        size = std::size_t(st.st_size);
+        void* q = ::mmap(nullptr, size, mode == 0 ? PROT_READ : (PROT_READ | PROT_WRITE), MAP_SHARED, fd, 0);
+        ::close(fd);
+        return q == MAP_FAILED ? nullptr : static_cast<std::uint8_t*>(q);
+}
+
+void store_close()
+{
+        for (auto& u : units) ::munmap(u.p, u.size);
+        units.clear();
+        for (auto& a : mat_ref) for (auto& b : a) for (auto& c : b) for (auto& d : c) d = MatRef{};
+}
+
+// open a unit: raw (mode 0 read only, 1 create, 2 existing for writing) or compressed (mode 3)
+bool unit_open(std::string const& dir, int n, int m, int mode)
+{
+        auto const lay = unit_layout(n, m);
+        if (lay.empty()) return true;
+        Unit u;
+        u.n = n; u.m = m; u.npos = unit_positions(lay); u.raw = mode != 3; u.id = next_unit_id++;
+        if (u.raw) {
+                u.p = map_any(unit_path(dir, n, m, ".raw"), u.size, mode, u.npos);
+                if (!u.p) { std::cerr << "store: cannot map " << unit_path(dir, n, m, ".raw") << std::endl; return false; }
+        } else {
+                std::string const path = unit_path(dir, n, m, ".cdb");
+                u.p = map_any(path, u.size, 0);
+                if (!u.p) { std::cerr << "store: cannot map " << path << std::endl; return false; }
+                auto const* h = reinterpret_cast<std::uint64_t const*>(u.p);
+                bool ok = u.size >= 64 && h[0] == CDB_MAGIC && h[1] == std::uint64_t(n) && h[2] == std::uint64_t(m) && h[3] == lay.size()
+                       && h[4] == u.npos && h[5] == BLOCK && h[6] == (u.npos + BLOCK - 1) / BLOCK;
+                for (std::size_t i = 0; ok && i < lay.size(); ++i) ok = h[8 + 2 * i] == lay[i].code() && h[9 + 2 * i] == lay[i].base;
+                if (!ok) { std::cerr << "store: bad header in " << path << std::endl; ::munmap(u.p, u.size); return false; }
+                u.nblocks = h[6];
+                u.off = h + 8 + 2 * lay.size();
+                u.data = reinterpret_cast<std::uint8_t const*>(u.off + u.nblocks + 1);
+                if (std::size_t(u.data - u.p) + u.off[u.nblocks] != u.size) { std::cerr << "store: bad size of " << path << std::endl; ::munmap(u.p, u.size); return false; }
+        }
+        units.push_back(u);
+        for (auto const& x : lay) mat_ref[x.wm][x.bm][x.wk][x.bk] = MatRef{ int(units.size()) - 1, x.S, x.base, x.P };
+        return true;
+}
+
+bool unit_before(int n1, int m1, int n2, int m2) { return n1 < n2 || (n1 == n2 && m1 < m2); }
+
+// open the compressed units before (n, m); own: -1 nothing more, else unit_open's mode for (n, m) itself
+bool store_open(std::string const& dir, int n, int m, int own)
+{
+        store_close();
+        for (int a = 2; a <= 12; ++a)
+                for (int b = 0; b <= a; ++b)
+                        if (unit_before(a, b, n, m) && !unit_open(dir, a, b, 3)) return false;
+        if (own >= 0 && !unit_open(dir, n, m, own)) return false;
+        store_on = true;
+        slice_max = std::max(slice_max, 12);
+        return true;
+}
+
+// zstd contexts and a block cache per thread (direct mapped, 4096 blocks = 16 MiB)
+ZSTD_DCtx* new_dctx()
+{
+        ZSTD_DCtx* dx = ZSTD_createDCtx();
+        ZSTD_DCtx_setParameter(dx, ZSTD_d_format, ZSTD_f_zstd1_magicless);
+        return dx;
+}
+
+ZSTD_CCtx* new_cctx()
+{
+        ZSTD_CCtx* cx = ZSTD_createCCtx();
+        ZSTD_CCtx_setParameter(cx, ZSTD_c_compressionLevel, ZLEVEL);
+        ZSTD_CCtx_setParameter(cx, ZSTD_c_format, ZSTD_f_zstd1_magicless);
+        ZSTD_CCtx_setParameter(cx, ZSTD_c_contentSizeFlag, 0);
+        ZSTD_CCtx_setParameter(cx, ZSTD_c_checksumFlag, 0);
+        ZSTD_CCtx_setParameter(cx, ZSTD_c_dictIDFlag, 0);
+        return cx;
+}
+
+void decode_block(ZSTD_DCtx* dx, Unit const& u, std::uint64_t b, std::uint8_t* out)
+{
+        std::size_t const want = std::size_t(std::min(BLOCK, u.npos - b * BLOCK));
+        std::size_t const r = ZSTD_decompressDCtx(dx, out, BLOCK, u.data + u.off[b], std::size_t(u.off[b + 1] - u.off[b]));
+        if (ZSTD_isError(r) || r != want) {
+                std::cerr << "store: block " << b << " of unit " << u.n << "/" << u.m << " does not decode" << std::endl;
+                std::abort();
+        }
+}
+
+struct BlockCache {
+        static constexpr std::size_t SLOTS = 4096;
+        std::vector<std::uint64_t> tag = std::vector<std::uint64_t>(SLOTS, 0);
+        std::vector<std::uint8_t> buf = std::vector<std::uint8_t>(SLOTS * BLOCK);
+        ZSTD_DCtx* dx = new_dctx();
+        std::uint64_t hits = 0, misses = 0;
+        ~BlockCache() { ZSTD_freeDCtx(dx); }
+        std::uint8_t byte(Unit const& u, std::uint64_t off)
+        {
+                std::uint64_t const b = off / BLOCK, id = u.id << 40 | b;
+                std::size_t const s = std::size_t((id * 0x9E3779B97F4A7C15ull) >> 52) & (SLOTS - 1);
+                std::uint8_t* d = buf.data() + s * BLOCK;
+                if (tag[s] != id) { decode_block(dx, u, b, d); tag[s] = id; ++misses; }
+                else ++hits;
+                return d[off % BLOCK];
+        }
+};
+thread_local BlockCache block_cache;
+
+std::uint64_t stored_offset(MatRef const& r, Pos const& q)
+{
+        return r.base + (men_rank(q.m[0], q.m[1]) * std::uint64_t(r.S) + std::uint64_t(r.S == 2 ? q.stm : 0)) * r.P + king_index(q);
+}
+
+MatRef const& mat_of(Pos const& q)
+{
+        return mat_ref[__builtin_popcount(q.m[0])][__builtin_popcount(q.m[1])][__builtin_popcount(q.k[0])][__builtin_popcount(q.k[1])];
+}
+
+std::uint16_t store_lookup(Pos const& p)
+{
+        int const w = __builtin_popcount(p.m[0] | p.k[0]), b = __builtin_popcount(p.m[1] | p.k[1]);
+        if ((p.stm ? b : w) == 0) return 0;                     // no pieces: no moves
+        if (w == 0 || b == 0) return from_successors(p);
+        if (w > 6 || b > 6) throw NotInDatabase{};
+        Pos const q = canon(p);
+        MatRef const& r = mat_of(q);
+        if (r.unit < 0) throw NotInDatabase{};
+        Unit const& u = units[std::size_t(r.unit)];
+        if (!u.raw && has_capture(q)) return from_successors(q);
+        std::uint64_t const off = stored_offset(r, q);
+        std::uint8_t const v = u.raw ? u.p[off] : block_cache.byte(u, off);
+        if (v > DRAW8) { std::cerr << "store: no value yet for " << fen_of(p) << std::endl; std::abort(); }
+        return widen(v);
+}
+
+// the stored positions of a unit in storage order: one slice (placement of the men, side to move) at a time
+struct Cursor {
+        std::vector<UnitMat> const& lay;
+        std::size_t mi = 0;
+        std::uint64_t slot = 0, k = 0;     // slot = men rank * S + side to move; k = placement of the kings
+        Meta meta{};
+        int stm = 0;
+        explicit Cursor(std::vector<UnitMat> const& l) : lay(l) {}
+        void set_slice()
+        {
+                if (mi >= lay.size()) return;
+                UnitMat const& x = lay[mi];
+                std::uint32_t wm, bm;
+                men_unrank(x.wm, x.bm, slot / std::uint64_t(x.S), wm, bm);
+                stm = x.S == 2 ? int(slot % 2) : 0;
+                meta = meta_of(Key{ wm, bm, x.wk, x.bk });
+        }
+        void seek(std::uint64_t off)
+        {
+                mi = 0;
+                while (mi + 1 < lay.size() && lay[mi + 1].base <= off) ++mi;
+                std::uint64_t const rel = off - lay[mi].base;
+                slot = rel / lay[mi].P;
+                k = rel % lay[mi].P;
+                set_slice();
+        }
+        Pos pos() const { return pos_of(meta, k, stm); }
+        void next()
+        {
+                if (++k < lay[mi].P) return;
+                k = 0;
+                if (++slot == lay[mi].men * std::uint64_t(lay[mi].S)) { slot = 0; ++mi; }
+                set_slice();
+        }
+};
+
+// the block as stored: capture positions repeat the previous value of the block
+void filled_block(std::vector<UnitMat> const& lay, std::uint8_t const* raw, std::uint64_t npos, std::uint64_t b, std::uint8_t* out)
+{
+        Cursor c(lay);
+        c.seek(b * BLOCK);
+        std::uint64_t const end = std::min(npos, (b + 1) * BLOCK);
+        int prev = -1;
+        for (std::uint64_t o = b * BLOCK; o < end; ++o, c.next()) {
+                int v = raw[o];
+                if (prev >= 0 && has_capture(c.pos())) v = prev;
+                out[o - b * BLOCK] = std::uint8_t(v);
+                prev = v;
+        }
+}
+
+double seconds_since(std::chrono::steady_clock::time_point t0)
+{
+        return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+}
+
+void write_progress(std::string const& path, std::string const& text)
+{
+        std::string const tmp = path + ".tmp";
+        if (std::FILE* f = std::fopen(tmp.c_str(), "w")) {
+                std::fputs(text.c_str(), f);
+                std::fflush(f);
+                ::fsync(::fileno(f));
+                std::fclose(f);
+                std::rename(tmp.c_str(), path.c_str());
+        }
+}
+
+// build unit (n, m) as a raw file, with the units before it compressed; resumes from the progress file if there is one
+bool unit_build(std::string const& dir, int n, int m, int threads)
+{
+        auto const lay = unit_layout(n, m);
+        if (lay.empty()) { std::cout << "empty " << n << " " << m << '\n'; return true; }
+        std::uint64_t const npos = unit_positions(lay);
+        std::string const raw = unit_path(dir, n, m, ".raw"), prog = raw + ".progress";
+        std::size_t start = 0;
+        bool resume = false;
+        if (std::FILE* f = std::fopen(prog.c_str(), "r")) {
+                unsigned long long s = 0;
+                if (std::fscanf(f, "%llu", &s) == 1) { start = std::size_t(s); resume = true; }
+                std::fclose(f);
+        }
+        if (!store_open(dir, n, m, resume ? 2 : 1)) return false;
+        Unit& u = units.back();
+        if (!resume) {
+                #pragma omp parallel for schedule(static) num_threads(threads)
+                for (std::uint64_t c = 0; c < (npos + (1u << 24) - 1) >> 24; ++c)
+                        std::memset(u.p + (c << 24), UNKNOWN8, std::size_t(std::min<std::uint64_t>(1u << 24, npos - (c << 24))));
+                write_progress(prog, "0\n");
+        }
+        // the slices to solve: every slice of an asymmetric material, the canonical slices of a symmetric one
+        // (whose positions with black to move are stored as the mirrored slice with white to move)
+        std::vector<std::pair<int, std::uint64_t>> jobs;
+        for (auto const& x : lay)
+                for (std::uint64_t r = 0; r < x.men; ++r) {
+                        std::uint32_t wm, bm;
+                        men_unrank(x.wm, x.bm, r, wm, bm);
+                        Key const k{ wm, bm, x.wk, x.bk };
+                        if (x.S == 1 && !canonical_key(k)) continue;
+                        jobs.push_back({ distance(k), k.pack() });
+                }
+        std::sort(jobs.begin(), jobs.end());
+        std::cerr << "unit " << n << "/" << m << ": " << lay.size() << " materials, " << jobs.size() << " slices, " << npos << " positions"
+                  << (resume ? ", resuming after slice " + std::to_string(start) : std::string()) << std::endl;
+        auto const t0 = std::chrono::steady_clock::now();
+        std::uint64_t bad = 0;
+        auto put = [&](std::uint64_t off, std::uint16_t v) {
+                if (v != DRAW && v > MAXDTM8) { std::cerr << "DTM overflow (" << v << ")" << std::endl; std::abort(); }
+                std::uint8_t const b = v == DRAW ? DRAW8 : std::uint8_t(v);
+                return std::pair(off, b);
+        };
+        for (std::size_t g = start; g < jobs.size();) {
+                std::size_t h = g;
+                while (h < jobs.size() && jobs[h].first == jobs[g].first) ++h;
+                #pragma omp parallel for schedule(dynamic, 1) reduction(+ : bad) num_threads(threads)
+                for (std::size_t i = g; i < h; ++i) {
+                        Meta const s = meta_of(Key::unpack(jobs[i].second));
+                        std::vector<std::uint16_t> tmp(2 * s.P);
+                        solve_slice(s, tmp.data());
+                        MatRef const r = mat_of(pos_of(s, 0, 0));
+                        std::uint64_t const base = stored_offset(r, pos_of(s, 0, 0));    // king placement 0, white to move
+                        std::uint64_t const sides = std::uint64_t(r.S);
+                        for (std::uint64_t x = 0; x < sides * s.P; ++x) { auto [o, b] = put(base + x, tmp[x]); u.p[o] = b; }
+                        if (r.S == 1)    // black to move: the mirrored position with white to move (in this slice or its mirror)
+                                for (std::uint64_t x = 0; x < s.P; ++x) {
+                                        Pos const q = mirror(pos_of(s, x, 1));
+                                        auto [o, b] = put(stored_offset(r, q), tmp[s.P + x]);
+                                        if (u.p[o] != UNKNOWN8 && u.p[o] != b && Key::unpack(jobs[i].second).pack() == key_of(q).pack()) ++bad;
+                                        u.p[o] = b;
+                                }
+                }
+                if (bad) { std::cerr << "unit " << n << "/" << m << ": " << bad << " mirrored positions disagree" << std::endl; return false; }
+                ::msync(u.p, u.size, MS_SYNC);
+                write_progress(prog, std::to_string(h) + "\n");
+                std::cerr << "unit " << n << "/" << m << ": distance " << jobs[g].first << " done, " << h << " / " << jobs.size() << " slices, "
+                          << seconds_since(t0) << " s" << std::endl;
+                g = h;
+        }
+        std::uint64_t unknown = 0;
+        #pragma omp parallel for schedule(static) reduction(+ : unknown) num_threads(threads)
+        for (std::uint64_t o = 0; o < npos; ++o) unknown += u.p[o] == UNKNOWN8;
+        if (unknown) { std::cerr << "unit " << n << "/" << m << ": " << unknown << " positions without value" << std::endl; return false; }
+        write_progress(prog, std::to_string(jobs.size()) + " complete\n");
+        std::cout << "built " << n << " " << m << " positions " << npos << " slices " << jobs.size() << " seconds " << seconds_since(t0) << '\n';
+        return true;
+}
+
+// every stored position of unit (n, m): compare(position, offset) for each, in parallel over the slices
+template <class F>
+void for_each_stored(std::vector<UnitMat> const& lay, int threads, char const* what, F&& f)
+{
+        std::vector<std::pair<std::size_t, std::uint64_t>> slices;   // (material, men rank)
+        for (std::size_t i = 0; i < lay.size(); ++i)
+                for (std::uint64_t r = 0; r < lay[i].men; ++r) slices.push_back({ i, r });
+        auto const t0 = std::chrono::steady_clock::now();
+        std::uint64_t done = 0;
+        std::size_t const step = std::max<std::size_t>(1, slices.size() / 20);
+        #pragma omp parallel for schedule(dynamic, 16) num_threads(threads)
+        for (std::size_t j = 0; j < slices.size(); ++j) {
+                UnitMat const& x = lay[slices[j].first];
+                std::uint32_t wm, bm;
+                men_unrank(x.wm, x.bm, slices[j].second, wm, bm);
+                Meta const s = meta_of(Key{ wm, bm, x.wk, x.bk });
+                for (int stm = 0; stm < x.S; ++stm)
+                        for (std::uint64_t k = 0; k < s.P; ++k)
+                                f(pos_of(s, k, stm), x.base + (slices[j].second * std::uint64_t(x.S) + std::uint64_t(stm)) * s.P + k);
+                std::uint64_t d;
+                #pragma omp atomic capture
+                d = ++done;
+                if (d % step == 0) {
+                        #pragma omp critical
+                        std::cerr << what << ": " << d << " / " << slices.size() << " slices, " << seconds_since(t0) << " s" << std::endl;
+                }
+        }
+}
+
+// self-consistency: every stored value equals the value recomputed from the successors (raw: every position;
+// compressed: the positions without capture, since a capture position is resolved from its successors anyway)
+bool unit_verify(std::string const& dir, int n, int m, bool compressed, int threads)
+{
+        auto const lay = unit_layout(n, m);
+        if (lay.empty()) { std::cout << "empty " << n << " " << m << '\n'; return true; }
+        if (!store_open(dir, n, m, compressed ? 3 : 0)) return false;
+        Unit const& u = units.back();
+        std::uint64_t checked = 0, skipped = 0, errors = 0;
+        auto const t0 = std::chrono::steady_clock::now();
+        std::vector<std::uint64_t> c(3 * std::size_t(threads), 0);
+        for_each_stored(lay, threads, "verify", [&](Pos const& q, std::uint64_t off) {
+                std::uint64_t* t = &c[3 * std::size_t(omp_get_thread_num())];
+                if (compressed && has_capture(q)) { ++t[1]; return; }
+                std::uint16_t const a = widen(compressed ? block_cache.byte(u, off) : u.p[off]), b = from_successors(q);
+                ++t[0];
+                if (a != b) {
+                        if (++t[2] <= 10) {
+                                #pragma omp critical
+                                std::cerr << "verify: " << fen_of(q) << " stored " << show(a) << ", from the successors " << show(b) << std::endl;
+                        }
+                }
+        });
+        for (int i = 0; i < threads; ++i) { checked += c[3 * i]; skipped += c[3 * i + 1]; errors += c[3 * i + 2]; }
+        std::cout << "verify " << n << " " << m << (compressed ? " cdb" : " raw") << " positions " << unit_positions(lay) << " checked " << checked
+                  << " captures " << skipped << " errors " << errors << " seconds " << seconds_since(t0) << '\n';
+        return errors == 0 && checked + skipped == unit_positions(lay);
+}
+
+// compress the raw file of unit (n, m) into blocks of 4096 positions (zstd -19)
+// file: magic, n, m, materials, positions, block, blocks, 0; per material (code, base); offsets[blocks + 1]; data
+bool unit_compress(std::string const& dir, int n, int m, int threads)
+{
+        auto const lay = unit_layout(n, m);
+        if (lay.empty()) { std::cout << "empty " << n << " " << m << '\n'; return true; }
+        std::uint64_t const npos = unit_positions(lay), nb = (npos + BLOCK - 1) / BLOCK;
+        std::size_t rsize = 0;
+        std::uint8_t* raw = map_any(unit_path(dir, n, m, ".raw"), rsize, 0, npos);
+        if (!raw) return false;
+        std::string const path = unit_path(dir, n, m, ".cdb"), tmp = path + ".tmp";
+        std::FILE* f = std::fopen(tmp.c_str(), "wb");
+        if (!f) return false;
+        std::vector<std::uint64_t> head{ CDB_MAGIC, std::uint64_t(n), std::uint64_t(m), lay.size(), npos, BLOCK, nb, 0 };
+        for (auto const& x : lay) { head.push_back(x.code()); head.push_back(x.base); }
+        std::vector<std::uint64_t> off(nb + 1, 0);
+        std::fwrite(head.data(), 8, head.size(), f);
+        std::fwrite(off.data(), 8, off.size(), f);
+        auto const t0 = std::chrono::steady_clock::now();
+        std::uint64_t const batch = 16384;
+        std::vector<std::vector<std::uint8_t>> out(batch);
+        std::uint64_t total = 0;
+        for (std::uint64_t b0 = 0; b0 < nb; b0 += batch) {
+                std::uint64_t const b1 = std::min(nb, b0 + batch);
+                #pragma omp parallel num_threads(threads)
+                {
+                        ZSTD_CCtx* cx = new_cctx();
+                        std::vector<std::uint8_t> blk(BLOCK);
+                        #pragma omp for schedule(dynamic, 16)
+                        for (std::uint64_t b = b0; b < b1; ++b) {
+                                filled_block(lay, raw, npos, b, blk.data());
+                                std::size_t const len = std::size_t(std::min(BLOCK, npos - b * BLOCK));
+                                auto& o = out[b - b0];
+                                o.resize(ZSTD_compressBound(len));
+                                std::size_t const r = ZSTD_compress2(cx, o.data(), o.size(), blk.data(), len);
+                                if (ZSTD_isError(r)) { std::cerr << "zstd: " << ZSTD_getErrorName(r) << std::endl; std::abort(); }
+                                o.resize(r);
+                        }
+                        ZSTD_freeCCtx(cx);
+                }
+                for (std::uint64_t b = b0; b < b1; ++b) {
+                        off[b] = total;
+                        total += out[b - b0].size();
+                        std::fwrite(out[b - b0].data(), 1, out[b - b0].size(), f);
+                }
+                if ((b0 / batch) % 64 == 63) std::cerr << "compress: " << b1 << " / " << nb << " blocks, " << seconds_since(t0) << " s" << std::endl;
+        }
+        off[nb] = total;
+        bool ok = ::fseeko(f, off_t(head.size() * 8), SEEK_SET) == 0 && std::fwrite(off.data(), 8, off.size(), f) == off.size();
+        ok = ok && std::fflush(f) == 0 && ::fsync(::fileno(f)) == 0;
+        ok = std::fclose(f) == 0 && ok;
+        ::munmap(raw, rsize);
+        if (!ok || std::rename(tmp.c_str(), path.c_str()) != 0) return false;
+        std::uint64_t const fsize = head.size() * 8 + off.size() * 8 + total;
+        std::cout << "compressed " << n << " " << m << " positions " << npos << " blocks " << nb << " bytes " << fsize
+                  << " bits_per_position " << 8.0 * double(fsize) / double(npos) << " seconds " << seconds_since(t0) << '\n';
+        return true;
+}
+
+// compare the compressed unit with the raw one, both ways:
+//   compressed -> raw: every block decoded and compared byte for byte with the block as it should be stored;
+//   raw -> compressed: every position looked up through the compressed unit (capture positions resolved) and
+//   compared with its raw value.
+bool unit_compare(std::string const& dir, int n, int m, int threads)
+{
+        auto const lay = unit_layout(n, m);
+        if (lay.empty()) { std::cout << "empty " << n << " " << m << '\n'; return true; }
+        std::uint64_t const npos = unit_positions(lay);
+        if (!store_open(dir, n, m, 3)) return false;
+        Unit const& u = units.back();
+        std::size_t rsize = 0;
+        std::uint8_t* raw = map_any(unit_path(dir, n, m, ".raw"), rsize, 0, npos);
+        if (!raw) return false;
+        auto const t0 = std::chrono::steady_clock::now();
+        std::uint64_t bad_bytes = 0;
+        #pragma omp parallel num_threads(threads) reduction(+ : bad_bytes)
+        {
+                ZSTD_DCtx* dx = new_dctx();
+                std::vector<std::uint8_t> want(BLOCK), got(BLOCK);
+                #pragma omp for schedule(dynamic, 64)
+                for (std::uint64_t b = 0; b < u.nblocks; ++b) {
+                        decode_block(dx, u, b, got.data());
+                        filled_block(lay, raw, npos, b, want.data());
+                        std::size_t const len = std::size_t(std::min(BLOCK, npos - b * BLOCK));
+                        for (std::size_t i = 0; i < len; ++i) bad_bytes += want[i] != got[i];
+                }
+                ZSTD_freeDCtx(dx);
+        }
+        double const s1 = seconds_since(t0);
+        std::vector<std::uint64_t> c(2 * std::size_t(threads), 0);
+        for_each_stored(lay, threads, "compare", [&](Pos const& q, std::uint64_t off) {
+                std::uint64_t* t = &c[2 * std::size_t(omp_get_thread_num())];
+                ++t[0];
+                std::uint16_t const a = widen(raw[off]), b = store_lookup(q);
+                if (a != b && ++t[1] <= 10) {
+                        #pragma omp critical
+                        std::cerr << "compare: " << fen_of(q) << " raw " << show(a) << ", compressed " << show(b) << std::endl;
+                }
+        });
+        std::uint64_t looked = 0, bad = 0;
+        for (int i = 0; i < threads; ++i) { looked += c[2 * i]; bad += c[2 * i + 1]; }
+        ::munmap(raw, rsize);
+        std::cout << "compare " << n << " " << m << " positions " << npos << " blocks " << u.nblocks << " block_byte_errors " << bad_bytes
+                  << " looked_up " << looked << " lookup_errors " << bad << " seconds " << s1 << " " << seconds_since(t0) - s1 << '\n';
+        return bad_bytes == 0 && bad == 0 && looked == npos;
+}
+
 // order: best move first (fastest win, then draw, then slowest loss)
 int score(std::uint16_t v_after)
 {
@@ -1104,6 +1698,26 @@ int main()
                         rs >> slice_max;
                         slice_max = std::max(slice_max, built_max);
                         std::cout << "slicemax " << slice_max << "\nend" << std::endl;
+                        continue;
+                }
+                if (cmd == "store") {
+                        std::string dir;
+                        rs >> dir;
+                        bool ok = store_open(dir, 13, 0, -1);
+                        std::cout << (ok ? "store ok " : "error store failed ") << dir << " units " << units.size() << "\nend" << std::endl;
+                        continue;
+                }
+                if (cmd == "unitbuild" || cmd == "unitverify" || cmd == "unitcompress" || cmd == "unitcompare") {
+                        std::string dir, kind;
+                        int n = 0, m = 0, threads = 4;
+                        rs >> dir >> n >> m;
+                        if (cmd == "unitverify") rs >> kind;
+                        rs >> threads;
+                        bool ok = cmd == "unitbuild" ? unit_build(dir, n, m, threads)
+                                : cmd == "unitverify" ? unit_verify(dir, n, m, kind == "cdb", threads)
+                                : cmd == "unitcompress" ? unit_compress(dir, n, m, threads)
+                                : unit_compare(dir, n, m, threads);
+                        std::cout << (ok ? cmd + " ok" : "error " + cmd + " failed") << "\nend" << std::endl;
                         continue;
                 }
                 if (cmd == "verify") {

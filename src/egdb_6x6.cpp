@@ -55,12 +55,14 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
+#include <new>
 #include <sstream>
 #include <string>
 #include <tuple>
@@ -144,16 +146,40 @@ struct Move {
         Pos next;
 };
 
+// the moves of a position, without heap allocation (at most 12 pieces on 18 squares: far fewer than 128 moves)
+struct MoveList {
+        static constexpr std::size_t CAP = 128;
+        alignas(Move) unsigned char buf[CAP * sizeof(Move)];   // uninitialised: no zeroing of 128 moves per call
+        std::size_t n = 0;
+        Move* data() { return std::launder(reinterpret_cast<Move*>(buf)); }
+        Move const* data() const { return std::launder(reinterpret_cast<Move const*>(buf)); }
+        Move* begin() { return data(); }
+        Move* end() { return data() + n; }
+        Move const* begin() const { return data(); }
+        Move const* end() const { return data() + n; }
+        std::size_t size() const { return n; }
+        bool empty() const { return n == 0; }
+        Move& operator[](std::size_t i) { return data()[i]; }
+        Move const& operator[](std::size_t i) const { return data()[i]; }
+        void clear() { n = 0; }
+        void push_back(Move const& m)
+        {
+                if (n == CAP) { std::cerr << "too many moves" << std::endl; std::abort(); }
+                ::new (static_cast<void*>(data() + n)) Move(m);
+                ++n;
+        }
+};
+
 struct Gen {
         Pos const& p;
         int us, them;
         std::uint32_t enemy, empty0;
         int best = 0;
-        std::vector<Move>* out;
+        MoveList* out;
         int from = 0;
         bool is_king = false;
 
-        Gen(Pos const& pp, std::vector<Move>* o) : p(pp), us(pp.stm), them(1 - pp.stm), out(o)
+        Gen(Pos const& pp, MoveList* o) : p(pp), us(pp.stm), them(1 - pp.stm), out(o)
         {
                 enemy = p.m[them] | p.k[them];
         }
@@ -223,9 +249,9 @@ struct Gen {
         }
 };
 
-std::vector<Move> moves(Pos const& p)
+MoveList moves(Pos const& p)
 {
-        std::vector<Move> out;
+        MoveList out;
         Gen g(p, &out);
         g.run();
         return out;
@@ -1258,7 +1284,7 @@ bool store_open(std::string const& dir, int n, int m, int own)
         return true;
 }
 
-// zstd contexts and a block cache per thread (direct mapped, 4096 blocks = 16 MiB)
+// zstd contexts and a block cache per thread (direct mapped, 2^cache_bits blocks of 4 KiB; EGDB_CACHE_BITS, default 14 = 64 MiB)
 ZSTD_DCtx* new_dctx()
 {
         ZSTD_DCtx* dx = ZSTD_createDCtx();
@@ -1287,8 +1313,10 @@ void decode_block(ZSTD_DCtx* dx, Unit const& u, std::uint64_t b, std::uint8_t* o
         }
 }
 
+std::size_t cache_bits = [] { char const* e = std::getenv("EGDB_CACHE_BITS"); return std::size_t(e ? std::atoi(e) : 14); }();
+std::atomic<std::uint64_t> cache_hits{0}, cache_misses{0};
 struct BlockCache {
-        static constexpr std::size_t SLOTS = 4096;
+        std::size_t const SLOTS = std::size_t(1) << cache_bits;
         std::vector<std::uint64_t> tag = std::vector<std::uint64_t>(SLOTS, 0);
         std::vector<std::uint8_t> buf = std::vector<std::uint8_t>(SLOTS * BLOCK);
         ZSTD_DCtx* dx = new_dctx();
@@ -1297,7 +1325,7 @@ struct BlockCache {
         std::uint8_t byte(Unit const& u, std::uint64_t off)
         {
                 std::uint64_t const b = off / BLOCK, id = u.id << 40 | b;
-                std::size_t const s = std::size_t((id * 0x9E3779B97F4A7C15ull) >> 52) & (SLOTS - 1);
+                std::size_t const s = std::size_t((id * 0x9E3779B97F4A7C15ull) >> (64 - cache_bits));
                 std::uint8_t* d = buf.data() + s * BLOCK;
                 if (tag[s] != id) { decode_block(dx, u, b, d); tag[s] = id; ++misses; }
                 else ++hits;
@@ -1568,8 +1596,15 @@ bool unit_verify(std::string const& dir, int n, int m, bool compressed, int thre
                 }
         });
         for (int i = 0; i < threads; ++i) { checked += c[3 * i]; skipped += c[3 * i + 1]; errors += c[3 * i + 2]; }
+        double const sec = seconds_since(t0);
+        #pragma omp parallel num_threads(threads)
+        {
+                cache_hits += block_cache.hits; cache_misses += block_cache.misses;
+                block_cache.hits = block_cache.misses = 0;
+        }
         std::cout << "verify " << n << " " << m << (compressed ? " cdb" : " raw") << " positions " << unit_positions(lay) << " checked " << checked
-                  << " captures " << skipped << " errors " << errors << " seconds " << seconds_since(t0) << '\n';
+                  << " captures " << skipped << " errors " << errors << " seconds " << sec << " block_reads " << cache_hits + cache_misses
+                  << " block_misses " << cache_misses << '\n';
         return errors == 0 && checked + skipped == unit_positions(lay);
 }
 

@@ -43,7 +43,7 @@ CHAPTERS = [
     ('De vesting op grotere borden', 'The fortress on larger boards', [
         ('vesting.html', 'Oppositie op 8×9', 'Opposition on 8×9'),
         ('afstandsregel.html', 'De afstandsregel', 'The distance rule'),
-        ('vesting-9x9.html', '9×9 p0: drie dammen voor één hoek', '9×9 p0: three kings for one corner')]),
+        ('vesting-9x9.html', '9×9 p0: de val en de diagonaal', '9×9 p0: the trap and the diagonal')]),
 ]
 # every page in reading order: (file, Dutch, English, chapter number or None)
 PAGES = [('index.html', 'Overzicht', 'Overview', None)] + [(f, nl, en, c) for c, (_, _, secs) in enumerate(CHAPTERS)
@@ -473,9 +473,6 @@ rate 0.0% with no white king on the edge, 0.5% with three), and black holding bo
         fig2, i2 = pg.diagram(f2, t('8×9, wit aan zet', '8×9, white to move'), gid=k89)
         v2, legal2 = e89.analyse(f2)
         h2, *_ = pg.moves(f2, self.plan('1. d6-c7!'), 1, False, 'm1', i2)
-        f9 = e99.fen(['a2', 'c2', 'd3'], ['b1', 'i8'])
-        fig9, i9 = pg9.diagram(f9, t('9×9 p0, wit aan zet', '9×9 p0, white to move'), gid=k99)
-        v9, legal9 = e99.analyse(f9)
         body = [t('''
 <p>Een dam op de twee randvelden van een dubbele hoek kan nooit geslagen worden en heeft altijd een wachtzet. Op 8×9 en
 9×10 maakt een zwarte dam in elke dubbele hoek remise in precies de helft van de stellingen, en welke helft dat is,
@@ -530,16 +527,103 @@ same side:</p>
 <tr><td>8×10, 10×10, 10×11, 10×12</td><td>≥ 9</td><td>holds</td></tr></table>
 <p><em>D</em> ≤ 7: the fortress falls · <em>D</em> = 8: opposition decides, unless also <em>d</em> = 8 ·
 <em>D</em> ≥ 9: the fortress holds.</p>'''),
-                fig9,
-                t(f'<p>Op 9×9 p0 kost het bevriezen van één hoek al alle drie de witte dammen (één op het pendelveld, één die '
-                  f'de uitgang blokkeert, één die de blokkeerder dekt), dus de andere zwarte dam pendelt gewoon ({v9}): ',
-                  f'<p>On 9×9 p0, freezing one corner already takes all three white kings (one on the shuttle square, one '
-                  f'blocking the exit, one guarding the blocker), so the other black king simply shuttles ({v9}): ')
-                + f'{self.moves_list(pg9, i9, legal9, "1. ")}.</p>']
+                ]
         rule = next(k for k, x in enumerate(body) if isinstance(x, str) and 'D × d' in x)
         self.write('vesting.html', None, '\n'.join(body[:rule]), pg, k89)
         self.write('afstandsregel.html', None, body[rule], self.page((k89, e89)), k89)
-        self.write('vesting-9x9.html', None, '\n'.join(body[rule + 1:]), pg9, k99)
+        self.write('vesting-9x9.html', None, '\n'.join(self.fortress99(pg9, k99, e99)), pg9, k99)
+
+
+    def shuttles(self, pg, gid, e, i0, legal, shuttle):
+        """the shuttle moves of black (algebraic, e.g. 'h1-i2') with the forced exchange that punishes each, if any"""
+        out = []
+        for m in legal:
+            if m[0] not in shuttle:
+                continue
+            i1 = pg.child(i0, m)
+            parts = [f'<a class="m1" href="#" data-i="{i1}">1. … {pg.label(gid, m)}</a>']
+            ex = self.exchange(e, m[2])
+            if ex:
+                i = i1
+                for k, mv in enumerate(ex):
+                    i = pg.child(i, mv)
+                    pre = '2. ' if k == 0 else ('3. ' if k == 2 else '')
+                    parts.append(f'<a class="m1" href="#" data-i="{i}">{pre}{pg.label(gid, mv)}</a>')
+            out.append((m[0], ex is not None, ' '.join(parts)))
+        return out
+
+    def fortress99(self, pg, k99, e99):
+        """9x9 p0: the trap works for two double corners on the same side, not for the diagonal pair"""
+        t = self.t
+        body = [t('''
+<p>Op 9×9 p0 zijn alle vier de hoekvelden licht, dus elke hoek is een dubbele hoek: b1/a2, h1/i2, a8/b9 en h9/i8.
+Zwart kan twee dubbele hoeken aan dezelfde kant bezetten (afstand 8 × 0) of twee diagonaal tegenover elkaar
+(8 × 8). Beslissend is weer de <a href="val.html">val</a>: een opstelling van de drie witte dammen waarin elke
+pendelzet van zwart een gedwongen ruil toelaat. De database telt de vallen met zwart aan zet en beide zwarte dammen
+op de randvelden van hun dubbele hoeken:</p>
+<table class="tbl"><tr><th>Zwart in</th><th>Vallen in fase 0</th><th>Vallen in fase 1</th><th>Gevolg</th></tr>
+<tr><td>twee dubbele hoeken aan dezelfde kant</td><td colspan="2">3 in één van de twee fasen</td><td>de oppositie beslist</td></tr>
+<tr><td>twee diagonaal tegenover elkaar</td><td>0</td><td>0</td><td>de vesting houdt</td></tr></table>
+<p>Per paar dubbele hoeken zijn er 12.100 beginstellingen in elke fase.</p>''', '''
+<p>On 9×9 p0 all four corner squares are light, so every corner is a double corner: b1/a2, h1/i2, a8/b9 and h9/i8.
+Black can occupy two double corners on the same side (distance 8 × 0) or two diagonally opposite ones (8 × 8). What
+decides is again the <a href="val.html">trap</a>: a set-up of the three white kings in which every shuttle move of
+black allows a forced exchange. The database counts the traps with black to move and both black kings on the edge
+squares of their double corners:</p>
+<table class="tbl"><tr><th>Black in</th><th>Traps in phase 0</th><th>Traps in phase 1</th><th>Consequence</th></tr>
+<tr><td>two double corners on the same side</td><td colspan="2">3 in one of the two phases</td><td>the opposition decides</td></tr>
+<tr><td>two diagonally opposite ones</td><td>0</td><td>0</td><td>the fortress holds</td></tr></table>
+<p>Per pair of double corners there are 12,100 starting positions in each phase.</p>''')]
+        # the trap along the side of the i-file: black h1 and h9, white h3, h5, h7
+        fen = e99.fen(['h3', 'h5', 'h7'], ['h1', 'h9'], 'B')
+        v, legal = e99.analyse(fen)
+        fig, i0 = pg.diagram(fen, t(f'9×9 p0, zwart aan zet: {v}', f'9×9 p0, black to move: {v}'), gid=k99)
+        sh = self.shuttles(pg, k99, e99, i0, legal, {'h1-i2', 'h9-i8'})
+        assert len(sh) == 2 and all(ok for _, ok, _ in sh)
+        body += [fig, t('<p>Twee dubbele hoeken aan dezelfde kant, h1/i2 en h9/i8, met de witte dammen op h3, h5 en h7 '
+                        'ertussen: elke pendelzet van zwart wordt gestraft: ',
+                        '<p>Two double corners on the same side, h1/i2 and h9/i8, with the white kings on h3, h5 and h7 '
+                        'between them: every shuttle move of black is punished: ')
+                 + '; '.join(x for _, _, x in sh)
+                 + t(', en 2 tegen 1 wint. Alle zetten van zwart: ', ', and 2 against 1 wins. All moves of black: ')
+                 + self.moves_list(pg, i0, legal, '1. … ')
+                 + t('. Net als op 8×9 en 9×10 werkt deze val alleen in de fase die bij de oppositie past.</p>',
+                     '. As on 8×9 and 9×10 this trap only works in the phase that fits the opposition.</p>'),
+                 '<div style="clear:both"></div>']
+        # the diagonal pair: the 8x8 trap (three kings in a row on the connecting diagonal) catches only one shuttle
+        figs = []
+        for W in (['d3', 'e4', 'f5'], ['e4', 'f5', 'g6']):
+            fen = e99.fen(W, ['b1', 'i8'], 'B')
+            v, legal = e99.analyse(fen)
+            fig, i0 = pg.diagram(fen, t(f'9×9 p0, zwart aan zet: {v}', f'9×9 p0, black to move: {v}'), gid=k99)
+            sh = self.shuttles(pg, k99, e99, i0, legal, {'b1-a2', 'i8-h9'})
+            assert v == 'D' and len(sh) == 2 and sorted(ok for _, ok, _ in sh) == [False, True]
+            hit = next(x for _, ok, x in sh if ok)
+            free = next(x for _, ok, x in sh if not ok)
+            figs.append((v, fig, i0, legal, hit, free))
+        (v1, fig1, i1, legal1, hit1, free1), (v2, fig2, i2, legal2, hit2, free2) = figs
+        body += [t('''
+<p>Bij twee diagonaal tegenover elkaar liggende dubbele hoeken staan de zwarte dammen op b1 en i8 aan de twee
+uiteinden van de diagonaal b1–i8. Op 8×8 staat de val precies zo: drie witte dammen op een rij midden op de
+verbindingsdiagonaal, met 5 velden tussen de zwarte dammen. Op 9×9 zijn dat er 6, en die afstand is te lang: de drie
+dammen kunnen maar één van de twee pendelzetten straffen.</p>''', '''
+<p>With two diagonally opposite double corners the black kings on b1 and i8 stand at the two ends of the diagonal
+b1–i8. On 8×8 the trap stands exactly like that: three white kings in a row in the middle of the connecting diagonal,
+with 5 squares between the black kings. On 9×9 there are 6, and that distance is too long: the three kings can punish
+only one of the two shuttle moves.</p>'''), fig1,
+                 t(f'<p>Met wit op d3, e4 en f5 ({v1}) wordt {hit1} gestraft, maar {free1} niet: de dammen staan te ver '
+                   f'van b1. Alle zetten van zwart: ',
+                   f'<p>With white on d3, e4 and f5 ({v1}), {hit1} is punished, but {free1} is not: the kings are too far '
+                   f'from b1. All moves of black: ') + self.moves_list(pg, i1, legal1, '1. … ') + '.</p>',
+                 '<div style="clear:both"></div>', fig2,
+                 t(f'<p>Eén veld verder, op e4, f5 en g6 ({v2}), is het omgekeerd: {hit2} wordt gestraft, {free2} niet. '
+                   f'Alle zetten van zwart: ',
+                   f'<p>One square further, on e4, f5 and g6 ({v2}), it is the other way round: {hit2} is punished, '
+                   f'{free2} is not. All moves of black: ') + self.moves_list(pg, i2, legal2, '1. … ')
+                 + t('. In geen van beide fasen straft één opstelling beide pendelzetten, dus de vesting houdt.</p>',
+                     '. In neither phase does one set-up punish both shuttle moves, so the fortress holds.</p>'),
+                 '<div style="clear:both"></div>']
+        return body
 
 
 def main():

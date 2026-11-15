@@ -45,7 +45,8 @@
 //   slicemax <n>    largest number of pieces for which every position comes from the slices
 //   verify [t]      recompute every value in every slice from its successors
 //   stats           number of slices and positions computed so far
-//   store <dir>     use the compressed units in dir (all positions with at most 12 pieces, at most 6 per side)
+//   store <dir>     use the compressed units in dir (all positions with at most 12 pieces, at most 6 per side;
+//                   units that are not there answer "error not in database")
 //   unitbuild <dir> <n> <m> [t]          build unit (n pieces, m men) as a raw file (continues an interrupted build)
 //   unitverify <dir> <n> <m> raw|cdb [t] recompute the values of the unit from their successors
 //   unitcompress <dir> <n> <m> [t]       compress the raw file of the unit
@@ -1270,13 +1271,17 @@ bool unit_open(std::string const& dir, int n, int m, int mode)
 
 bool unit_before(int n1, int m1, int n2, int m2) { return n1 < n2 || (n1 == n2 && m1 < m2); }
 
-// open the compressed units before (n, m); own: -1 nothing more, else unit_open's mode for (n, m) itself
-bool store_open(std::string const& dir, int n, int m, int own)
+// open the compressed units before (n, m); own: -1 nothing more, else unit_open's mode for (n, m) itself;
+// partial: skip units that are not there (their positions answer "not in database")
+bool store_open(std::string const& dir, int n, int m, int own, bool partial = false)
 {
         store_close();
         for (int a = 2; a <= 12; ++a)
-                for (int b = 0; b <= a; ++b)
-                        if (unit_before(a, b, n, m) && !unit_open(dir, a, b, 3)) return false;
+                for (int b = 0; b <= a; ++b) {
+                        if (!unit_before(a, b, n, m)) continue;
+                        if (partial && !unit_layout(a, b).empty() && ::access(unit_path(dir, a, b, ".cdb").c_str(), R_OK) != 0) continue;
+                        if (!unit_open(dir, a, b, 3)) return false;
+                }
         if (own >= 0 && !unit_open(dir, n, m, own)) return false;
         store_on = true;
         store_gen = next_unit_id;
@@ -1764,7 +1769,7 @@ int main()
                 if (cmd == "store") {
                         std::string dir;
                         rs >> dir;
-                        bool ok = store_open(dir, 13, 0, -1);
+                        bool ok = store_open(dir, 13, 0, -1, true);
                         std::cout << (ok ? "store ok " : "error store failed ") << dir << " units " << units.size() << "\nend" << std::endl;
                         continue;
                 }

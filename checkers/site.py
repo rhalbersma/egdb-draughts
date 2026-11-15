@@ -401,6 +401,7 @@ rate 0.0% with no white king on the edge, 0.5% with three), and black holding bo
 9×10 maakt een zwarte dam in elke dubbele hoek remise in precies de helft van de stellingen, en welke helft dat is,
 beslist de <strong>oppositie</strong>: de pariteit van de som van de rijen van alle stukken wisselt bij elke zet, en
 dammen kunnen geen tempo verliezen, dus wie de oppositie heeft, ligt vanaf het begin vast.</p>
+<p>De vraag kwam op in de draad <a href="https://damforum.nl/viewtopic.php?t=8915"><em>Draughts on a 10x11 or 8x9 board</em></a> op het World Draughts Forum (november 2026): houden twee dammen in beide dubbele hoeken op 8×9 stand, terwijl ze op 8×8 verliezen? Op 8×9 hangt het van de oppositie af; waarom 8×8 altijd verloren is, staat bij de <a href="index.html">vallen op 8×8</a>.</p>
 <table class="tbl"><tr><th>Zwart in beide dubbele hoeken</th><th>Pariteit 0</th><th>Pariteit 1</th></tr>
 <tr><td>8×9</td><td>99,5% remise</td><td>0,0% remise</td></tr>
 <tr><td>9×10</td><td>99,8%</td><td>0,0%</td></tr>
@@ -409,6 +410,7 @@ dammen kunnen geen tempo verliezen, dus wie de oppositie heeft, ligt vanaf het b
 9×10 a black king in each double corner draws in exactly half of the positions, and that half is decided by
 <strong>opposition</strong>: the parity of the sum of the ranks of all pieces flips with every move, and kings cannot
 lose a tempo, so who has the opposition is fixed from the start.</p>
+<p>The question came up in the thread <a href="https://damforum.nl/viewtopic.php?t=8915"><em>Draughts on a 10x11 or 8x9 board</em></a> on the World Draughts Forum (November 2026): do two kings in both double corners hold on 8×9, while they lose on 8×8? On 8×9 it depends on the opposition; why 8×8 is always lost is explained at the <a href="index.html">traps on 8×8</a>.</p>
 <table class="tbl"><tr><th>Black in both double corners</th><th>Parity 0</th><th>Parity 1</th></tr>
 <tr><td>8×9</td><td>99.5% draws</td><td>0.0% draws</td></tr>
 <tr><td>9×10</td><td>99.8%</td><td>0.0%</td></tr>

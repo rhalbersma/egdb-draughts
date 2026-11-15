@@ -47,7 +47,8 @@
 //   stats           number of slices and positions computed so far
 //   store <dir>     use the compressed units in dir (all positions with at most 12 pieces, at most 6 per side;
 //                   units that are not there answer "error not in database")
-//   unitbuild <dir> <n> <m> [t]          build unit (n pieces, m men) as a raw file (continues an interrupted build)
+//   unitbuild <dir> <n> <m> [t] [GB]     build unit (n pieces, m men) as a raw file (continues an interrupted build);
+//                                        t threads, at most GB of memory for the threads (0 = no limit)
 //   unitverify <dir> <n> <m> raw|cdb [t] recompute the values of the unit from their successors
 //   unitcompress <dir> <n> <m> [t]       compress the raw file of the unit
 //   unitcompare <dir> <n> <m> [t]        compare every block of the compressed unit with the raw file
@@ -56,6 +57,11 @@
 
 #include <algorithm>
 #include <array>
+#include <barrier>
+#include <condition_variable>
+#include <functional>
+#include <mutex>
+#include <thread>
 #include <atomic>
 #include <chrono>
 #include <cstdint>
@@ -715,6 +721,192 @@ void solve_slice(Meta const& s, std::uint16_t* out)
         }
         for (std::uint64_t i = 0; i < T; ++i)
                 if (out[i] == UNKNOWN16) out[i] = DRAW;
+}
+
+// ---------------------------------------------------------------- one slice solved by several threads
+//
+// A persistent pool of std::jthread workers (the calling thread takes part as worker 0), so that the per-thread caches
+// (blocks, resolved captures) survive from one slice to the next. Synchronisation is std::mutex/condition_variable for
+// starting and finishing a job and std::barrier between the phases of a job, all understood by ThreadSanitizer.
+
+class Pool {
+public:
+        explicit Pool(int n) : n_(n)
+        {
+                for (int t = 1; t < n; ++t) th_.emplace_back([this, t] { loop(t); });
+        }
+        ~Pool()
+        {
+                { std::lock_guard l(m_); stop_ = true; ++gen_; }
+                cv_.notify_all();
+                th_.clear();                    // join the workers while the members they use still exist
+        }
+        int size() const { return n_; }
+        void run(std::function<void(int)> const& job)
+        {
+                {
+                        std::lock_guard l(m_);
+                        job_ = &job;
+                        left_ = n_ - 1;
+                        ++gen_;
+                }
+                cv_.notify_all();
+                job(0);
+                std::unique_lock l(m_);
+                done_.wait(l, [&] { return left_ == 0; });
+                job_ = nullptr;
+        }
+private:
+        void loop(int t)
+        {
+                std::uint64_t seen = 0;
+                for (;;) {
+                        std::function<void(int)> const* j;
+                        {
+                                std::unique_lock l(m_);
+                                cv_.wait(l, [&] { return gen_ != seen; });
+                                seen = gen_;
+                                if (stop_) return;
+                                j = job_;
+                        }
+                        (*j)(t);
+                        std::lock_guard l(m_);
+                        if (--left_ == 0) done_.notify_one();
+                }
+        }
+        int n_;
+        std::mutex m_;
+        std::condition_variable cv_, done_;
+        std::uint64_t gen_ = 0;
+        int left_ = 0;
+        bool stop_ = false;
+        std::function<void(int)> const* job_ = nullptr;
+        std::vector<std::jthread> th_;          // last: destroyed (joined) first
+};
+
+// The leapfrog of solve_slice, level-synchronous and race-free, with the same result for any number of threads (and
+// the same as solve_slice). The positions are cut into blocks of 512 positions (8 words of a bitmap, one cache line of
+// bits). The cheap phases (scan, ewin) give thread t a fixed contiguous range of blocks; the others hand out blocks one
+// at a time, and a thread writes only the positions and words of the blocks it claimed. Per iteration n:
+//   scan    each thread marks its positions with value n - 1 in the frontier bitmap (own words only);
+//   push    from its frontier positions each thread walks the king unmoves: a predecessor that is still unknown becomes
+//           a win in n (n odd: atomic_ref<uint16_t> relaxed load and store, every writer writes the same value) or a
+//           loss candidate (n even: atomic_ref<uint64_t> relaxed fetch_or on the candidate bitmap); nothing else is
+//           written in this phase;
+//   n odd   each thread applies the wins through an exit (ewin) to its own positions;
+//   n even  each thread verifies its own candidates (successors are only read in this phase) into a private list,
+//           and after a barrier writes the losses to its own positions. A successor candidate decided in the same
+//           phase would read as unknown or as a loss: either way "not lost", as in the sequential order.
+// Barriers separate the phases, so no value is read while another thread writes it.
+void solve_slice_par(Meta const& s, std::uint16_t* out, Pool& pool)
+{
+        static_assert(sizeof(std::size_t) == 8, "64-bit indices");
+        static_assert(std::atomic_ref<std::uint64_t>::is_always_lock_free && std::atomic_ref<std::uint16_t>::is_always_lock_free);
+        std::uint64_t const T = 2 * s.P, W = (T + 63) / 64, B = (W + 7) / 8;     // positions, words, blocks of 8 words
+        int const nt = pool.size();
+        std::vector<std::uint16_t> ewin(T, NONE16);
+        std::vector<std::uint64_t> front(W, 0), cand(W, 0);
+        std::vector<int> tmax(static_cast<std::size_t>(nt), 0);
+        std::vector<std::vector<std::pair<std::uint64_t, std::uint16_t>>> res(static_cast<std::size_t>(nt));
+        std::barrier<> bar(nt);
+        // blocks handed out one at a time in the phases whose cost per position varies (pass 0, push, verify): the
+        // writes of a block stay with the thread that claimed it; the counters are reset in the scan phase, between
+        // barriers
+        std::atomic<std::uint64_t> next0{ 0 }, next_push{ 0 }, next_verify{ 0 };
+        pool.run([&](int t) {
+                std::uint64_t const w0 = std::min(W, B * std::uint64_t(t) / std::uint64_t(nt) * 8);
+                std::uint64_t const w1 = std::min(W, B * std::uint64_t(t + 1) / std::uint64_t(nt) * 8);
+                std::uint64_t const i0 = std::min(T, w0 * 64), i1 = std::min(T, w1 * 64);
+                auto claim = [&](std::atomic<std::uint64_t>& next, std::uint64_t& wa, std::uint64_t& wb) {
+                        std::uint64_t const k = next.fetch_add(1, std::memory_order_relaxed);
+                        if (k >= B) return false;
+                        wa = k * 8; wb = std::min(W, wa + 8);
+                        return true;
+                };
+                int mx = 0;
+                std::uint64_t wa = 0, wb = 0;
+                // pass 0: exits looked up; positions without king moves inside the slice decided at once
+                while (claim(next0, wa, wb))
+                for (std::uint64_t i = wa * 64; i < std::min(T, wb * 64); ++i) {
+                        Pos p = pos_of(s, i % s.P, int(i / s.P));
+                        int c = 0, ew = INF, el = 0;
+                        bool ed = false;
+                        for (auto const& mv : moves(p)) {
+                                if (internal_move(p, mv)) { ++c; continue; }
+                                std::uint16_t v = lookup(mv.next);
+                                if (v == DRAW) ed = true;
+                                else if (v & 1) el = std::max(el, v + 1);
+                                else ew = std::min(ew, v + 1);
+                        }
+                        if (c == 0) {
+                                out[i] = ew < INF ? std::uint16_t(ew) : ed ? DRAW : std::uint16_t(el);
+                                if (out[i] != DRAW) mx = std::max(mx, int(out[i]));
+                        } else {
+                                out[i] = UNKNOWN16;
+                                if (ew < INF) { ewin[i] = std::uint16_t(ew); mx = std::max(mx, ew); }
+                        }
+                }
+                tmax[std::size_t(t)] = mx;
+                bar.arrive_and_wait();
+                auto global_max = [&] { int g = 0; for (int x : tmax) g = std::max(g, x); return g; };
+                if (global_max() >= 0xFF00) { std::cerr << "DTM overflow" << std::endl; std::abort(); }
+                for (int n = 1; n <= global_max() + 1; ++n) {
+                        std::uint16_t const prev = std::uint16_t(n - 1);
+                        bool const wins = n & 1;
+                        if (t == 0) { next_push.store(0, std::memory_order_relaxed); next_verify.store(0, std::memory_order_relaxed); }
+                        for (std::uint64_t w = w0; w < w1; ++w) {             // scan
+                                std::uint64_t bits = 0;
+                                for (std::uint64_t i = w * 64; i < std::min(T, w * 64 + 64); ++i)
+                                        if (out[i] == prev) bits |= 1ull << (i - w * 64);
+                                front[w] = bits;
+                        }
+                        bar.arrive_and_wait();
+                        while (claim(next_push, wa, wb))                    // push
+                        for (std::uint64_t w = wa; w < wb; ++w)
+                                for (std::uint64_t b = front[w]; b; b &= b - 1) {
+                                        std::uint64_t const i = w * 64 + std::uint64_t(__builtin_ctzll(b));
+                                        for_each_predecessor(s, pos_of(s, i % s.P, int(i / s.P)), [&](std::uint64_t j) {
+                                                std::atomic_ref<std::uint16_t> a(out[j]);
+                                                if (a.load(std::memory_order_relaxed) != UNKNOWN16) return;
+                                                if (wins) { a.store(std::uint16_t(n), std::memory_order_relaxed); mx = std::max(mx, n); }
+                                                else std::atomic_ref<std::uint64_t>(cand[j / 64]).fetch_or(1ull << (j % 64), std::memory_order_relaxed);
+                                        });
+                                }
+                        bar.arrive_and_wait();
+                        if (wins) {
+                                for (std::uint64_t i = i0; i < i1; ++i)
+                                        if (ewin[i] == n && out[i] == UNKNOWN16) { out[i] = std::uint16_t(n); mx = std::max(mx, n); }
+                        } else {
+                                auto& r = res[std::size_t(t)];
+                                r.clear();
+                                while (claim(next_verify, wa, wb))
+                                for (std::uint64_t w = wa; w < wb; ++w)
+                                        for (std::uint64_t b = cand[w]; b; b &= b - 1) {
+                                                std::uint64_t const j = w * 64 + std::uint64_t(__builtin_ctzll(b));
+                                                if (out[j] != UNKNOWN16) continue;
+                                                Pos p = pos_of(s, j % s.P, int(j / s.P));
+                                                int worst = 0;
+                                                bool lost = true;
+                                                for (auto const& mv : moves(p)) {
+                                                        std::uint16_t v = internal_move(p, mv)
+                                                                ? out[std::uint64_t(1 - p.stm) * s.P + index_of(s, mv.next)]
+                                                                : lookup(mv.next);
+                                                        if (v >= UNKNOWN16 || !(v & 1)) { lost = false; break; }
+                                                        worst = std::max(worst, int(v));
+                                                }
+                                                if (lost) r.push_back({ j, std::uint16_t(worst + 1) });
+                                        }
+                                bar.arrive_and_wait();
+                                for (auto const& [j, v] : r) { out[j] = v; mx = std::max(mx, int(v)); }
+                                for (std::uint64_t w = w0; w < w1; ++w) cand[w] = 0;
+                        }
+                        tmax[std::size_t(t)] = mx;
+                        bar.arrive_and_wait();
+                        if (global_max() >= 0xFF00) { std::cerr << "DTM overflow" << std::endl; std::abort(); }
+                }
+                for (std::uint64_t i = i0; i < i1; ++i)
+                        if (out[i] == UNKNOWN16) out[i] = DRAW;
+        });
 }
 
 // ---------------------------------------------------------------- building all slices up to n pieces
@@ -1456,7 +1648,18 @@ void write_progress(std::string const& path, std::string const& text)
 }
 
 // build unit (n, m) as a raw file, with the units before it compressed; resumes from the progress file if there is one
-bool unit_build(std::string const& dir, int n, int m, int threads)
+// slices with at least this many positions that are more than one thread's share of their group are solved by all
+// threads together (solve_slice_par)
+std::uint64_t const BIG_SLICE = [] { char const* e = std::getenv("EGDB_BIG_SLICE"); return e ? std::uint64_t(std::atoll(e)) : std::uint64_t(1) << 20; }();   // EGDB_BIG_SLICE: for tests
+
+// memory per thread for the slices spread over the threads: the solver's arrays (2 + 2 bytes and a bit per position)
+// for the largest such slice, and the per-thread caches (blocks and resolved captures)
+std::uint64_t thread_bytes(std::uint64_t largest)
+{
+        return largest * 4 + largest / 8 + (std::uint64_t(1) << cache_bits) * (BLOCK + 8) + CaptureCache::SLOTS * 26;
+}
+
+bool unit_build(std::string const& dir, int n, int m, int threads, double mem_gb = 0)
 {
         auto const lay = unit_layout(n, m);
         if (lay.empty()) { std::cout << "empty " << n << " " << m << '\n'; return true; }
@@ -1489,6 +1692,15 @@ bool unit_build(std::string const& dir, int n, int m, int threads)
                         jobs.push_back({ distance(k), k.pack() });
                 }
         std::sort(jobs.begin(), jobs.end());
+        // the number of threads for the small slices from the memory budget (0 = no budget)
+        int small_threads = threads;
+        if (mem_gb > 0) {
+                std::uint64_t largest = 0;
+                for (auto const& [d, k] : jobs) largest = std::max(largest, 2 * meta_of(Key::unpack(k)).P);
+                small_threads = int(std::clamp<double>(mem_gb * 1e9 / double(thread_bytes(largest)), 1, threads));
+        }
+        static std::unique_ptr<Pool> pool;
+        if (!pool || pool->size() != threads) { pool.reset(); pool = std::make_unique<Pool>(threads); }
         std::cerr << "unit " << n << "/" << m << ": " << lay.size() << " materials, " << jobs.size() << " slices, " << npos << " positions"
                   << (resume ? ", resuming after slice " + std::to_string(start) : std::string()) << std::endl;
         auto const t0 = std::chrono::steady_clock::now();
@@ -1498,25 +1710,46 @@ bool unit_build(std::string const& dir, int n, int m, int threads)
                 std::uint8_t const b = v == DRAW ? DRAW8 : std::uint8_t(v);
                 return std::pair(off, b);
         };
+        // write a solved slice to the unit (a slice is a contiguous range; for a symmetric material the positions with
+        // black to move go to the mirrored slice, which is never solved itself)
+        auto store = [&](std::size_t i, Meta const& s, std::vector<std::uint16_t> const& tmp) {
+                std::uint64_t bad1 = 0;
+                MatRef const r = mat_of(pos_of(s, 0, 0));
+                std::uint64_t const base = stored_offset(r, pos_of(s, 0, 0));    // king placement 0, white to move
+                std::uint64_t const sides = std::uint64_t(r.S);
+                for (std::uint64_t x = 0; x < sides * s.P; ++x) { auto [o, b] = put(base + x, tmp[x]); u.p[o] = b; }
+                if (r.S == 1)    // black to move: the mirrored position with white to move (in this slice or its mirror)
+                        for (std::uint64_t x = 0; x < s.P; ++x) {
+                                Pos const q = mirror(pos_of(s, x, 1));
+                                auto [o, b] = put(stored_offset(r, q), tmp[s.P + x]);
+                                if (u.p[o] != UNKNOWN8 && u.p[o] != b && Key::unpack(jobs[i].second).pack() == key_of(q).pack()) ++bad1;
+                                u.p[o] = b;
+                        }
+                return bad1;
+        };
         for (std::size_t g = start; g < jobs.size();) {
                 std::size_t h = g;
                 while (h < jobs.size() && jobs[h].first == jobs[g].first) ++h;
-                #pragma omp parallel for schedule(dynamic, 1) reduction(+ : bad) num_threads(threads)
+                // a slice that alone is more than one thread's share of the group is solved by all threads together
+                std::uint64_t group = 0;
+                for (std::size_t i = g; i < h; ++i) group += 2 * meta_of(Key::unpack(jobs[i].second)).P;
+                std::vector<std::size_t> big, small;
                 for (std::size_t i = g; i < h; ++i) {
+                        std::uint64_t const T = 2 * meta_of(Key::unpack(jobs[i].second)).P;
+                        (T >= BIG_SLICE && T * std::uint64_t(threads) > group ? big : small).push_back(i);
+                }
+                for (std::size_t i : big) {                                     // one at a time, all threads
                         Meta const s = meta_of(Key::unpack(jobs[i].second));
                         std::vector<std::uint16_t> tmp(2 * s.P);
+                        solve_slice_par(s, tmp.data(), *pool);
+                        bad += store(i, s, tmp);
+                }
+                #pragma omp parallel for schedule(dynamic, 1) reduction(+ : bad) num_threads(small_threads)
+                for (std::size_t k = 0; k < small.size(); ++k) {
+                        Meta const s = meta_of(Key::unpack(jobs[small[k]].second));
+                        std::vector<std::uint16_t> tmp(2 * s.P);
                         solve_slice(s, tmp.data());
-                        MatRef const r = mat_of(pos_of(s, 0, 0));
-                        std::uint64_t const base = stored_offset(r, pos_of(s, 0, 0));    // king placement 0, white to move
-                        std::uint64_t const sides = std::uint64_t(r.S);
-                        for (std::uint64_t x = 0; x < sides * s.P; ++x) { auto [o, b] = put(base + x, tmp[x]); u.p[o] = b; }
-                        if (r.S == 1)    // black to move: the mirrored position with white to move (in this slice or its mirror)
-                                for (std::uint64_t x = 0; x < s.P; ++x) {
-                                        Pos const q = mirror(pos_of(s, x, 1));
-                                        auto [o, b] = put(stored_offset(r, q), tmp[s.P + x]);
-                                        if (u.p[o] != UNKNOWN8 && u.p[o] != b && Key::unpack(jobs[i].second).pack() == key_of(q).pack()) ++bad;
-                                        u.p[o] = b;
-                                }
+                        bad += store(small[k], s, tmp);
                 }
                 if (bad) { std::cerr << "unit " << n << "/" << m << ": " << bad << " mirrored positions disagree" << std::endl; return false; }
                 ::msync(u.p, u.size, MS_SYNC);
@@ -1776,10 +2009,12 @@ int main()
                 if (cmd == "unitbuild" || cmd == "unitverify" || cmd == "unitcompress" || cmd == "unitcompare") {
                         std::string dir, kind;
                         int n = 0, m = 0, threads = 4;
+                        double mem_gb = 0;
                         rs >> dir >> n >> m;
                         if (cmd == "unitverify") rs >> kind;
                         rs >> threads;
-                        bool ok = cmd == "unitbuild" ? unit_build(dir, n, m, threads)
+                        if (cmd == "unitbuild") rs >> mem_gb;
+                        bool ok = cmd == "unitbuild" ? unit_build(dir, n, m, threads, mem_gb)
                                 : cmd == "unitverify" ? unit_verify(dir, n, m, kind == "cdb", threads)
                                 : cmd == "unitcompress" ? unit_compress(dir, n, m, threads)
                                 : unit_compare(dir, n, m, threads);

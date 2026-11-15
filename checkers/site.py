@@ -525,31 +525,43 @@ king in the middle of the white kings (the third diagram).</p>''')]
             f'<p>Which diagonal black stands on does not matter: with the white kings on {alg((14, 18, 23))} there is a trap '
             f'against the black kings on {alg((5, 32))}, on the same diagonal, and also one against {alg((1, 28))}, on the other. '
             f'What decides the parity is the diagonal of white. Every row of the table is a trap:</p>'), table]
-        # the change-over: white on the trap of the odd parity, but white to move; three steps to the other diagonal. (From
-        # the set-up of the even trap with white to move white forces the exchange at once, so that is shown separately.)
-        fen = 'W:WK10,K15,K19:BK5,K32'
+        # the change-over, with the strongest moves: white in the set-up of the second trap (odd parity) but white to move;
+        # five moves later black is to move in the first trap (even parity). (From the set-up of the first trap with white
+        # to move white forces the exchange at once, shown below.)
+        fen = 'W:WK6,K15,K24:BK5,K32'
         assert self.exchange(e88, fen) is None
         for B in ((5, 32), (1, 28)):           # after two shuttle moves black is back on 5/32 or on 1/28: both traps
             fb = f"B:WK14,K18,K23:B{','.join('K%d' % x for x in B)}"
             assert e88.analyse(fb)[0].startswith('L') and rank_parity(e88, fb) == 0
         v, _ = e88.analyse(fen)
         fig, i0 = pgp.diagram(fen, t(f'8×8, wit aan zet: {v}', f'8×8, white to move: {v}'), gid=k88)
-        plan = [((x,), '') for x in ('10-14', '5-1', '15-18', '1-5', '19-23')]
+        line = ('15-18', '5-1', '6-10', '1-5', '10-14', '32-28', '24-27', '28-32', '27-23')
+        f = fen
+        for k, mv in enumerate(line):          # white plays a strongest move, black a longest defence
+            ms = e88.analyse(f)[1]
+            m = next(x for x in ms if x[3] == mv)
+            n = lambda x: int(x[1][1:])
+            assert m[1][0] == ('W' if k % 2 == 0 else 'L') and n(m) == (min if k % 2 == 0 else max)(n(x) for x in ms if x[1][0] == m[1][0])
+            f = m[2]
+        assert f == 'B:WK14,K18,K23:BK5,K32'
+        plan = [((x,), '') for x in line]
         h, i_end, f_end, _ = pgp.moves(fen, plan, 1, False, 'm1', i0, nbook=len(plan))
         phases += [fig, t(
-            f'<p>Wit staat in de opstelling van de val bij oneven pariteit, maar is zelf aan zet, en dan is het geen val. Wit '
-            f'stapt over naar de andere diagonaal: elke witte dam één veld, terwijl zwart pendelt. ',
-            f'<p>White stands in the set-up of the trap at odd parity, but is to move itself, and then it is no trap. White '
-            f'moves over to the other diagonal: every white king one square, while black shuttles. ')
+            f'<p>Wit staat in de opstelling van de <a href="val.html">tweede val</a>, bij oneven pariteit, maar is zelf aan '
+            f'zet, en dan is het geen val. Met de sterkste zetten stapt wit over naar de andere diagonaal, terwijl zwart '
+            f'pendelt: {al(15)}-{al(18)}, {al(6)} via {al(10)} naar {al(14)} en {al(24)} via {al(27)} naar {al(23)}. ',
+            f'<p>White stands in the set-up of the <a href="val.html">second trap</a>, at odd parity, but is to move itself, '
+            f'and then it is no trap. With the strongest moves white moves over to the other diagonal, while black shuttles: '
+            f'{al(15)}-{al(18)}, {al(6)} via {al(10)} to {al(14)} and {al(24)} via {al(27)} to {al(23)}. ')
             + f'{h}. ' + t(
-            f'Dat zijn drie zetten, een oneven aantal: het tempo draait om, en zwart staat aan zet in de val bij even '
-            f'pariteit. Hoe zwart ook pendelt, na twee pendelzetten staat zwart weer op {alg((5, 32))} of op {alg((1, 28))}, '
-            f'en tegen allebei is wit op {alg((14, 18, 23))} een val. Met twee dammen zou zo\'n overstap twee zetten kosten, '
-            f'en dan wisselt het tempo niet.</p>',
-            f'That is three moves, an odd number: the tempo turns over, and black is to move in the trap at even parity. '
-            f'However black shuttles, after two shuttle moves black stands on {alg((5, 32))} or on {alg((1, 28))} again, and '
-            f'against both white on {alg((14, 18, 23))} is a trap. With two kings such a change-over would take two moves, '
-            f'and then the tempo does not change.</p>'),
+            f'Dat zijn vijf zetten, een oneven aantal: het tempo draait om, en zwart staat aan zet in de '
+            f'<a href="val.html">eerste val</a>, bij even pariteit. Pendelt zwart anders, dan komt wit met de sterkste zetten '
+            f'net zo na vijf zetten in een val op de diagonaal {diag("5…32")}: deze, of {alg((9, 18, 27))} tegen '
+            f'{alg((1, 28))}.</p>',
+            f'That is five moves, an odd number: the tempo turns over, and black is to move in the '
+            f'<a href="val.html">first trap</a>, at even parity. If black shuttles differently, white with the strongest '
+            f'moves likewise reaches a trap on the diagonal {diag("5…32")} after five moves: this one, or {alg((9, 18, 27))} '
+            f'against {alg((1, 28))}.</p>'),
             '<div style="clear:both"></div>']
         # the trap reached: every shuttle move of black is punished
         v2, legal2 = e88.analyse(f_end)
@@ -584,10 +596,11 @@ king in the middle of the white kings (the third diagram).</p>''')]
         for k, mv in enumerate(exw):
             i = pgp.child(i, mv)
             parts.append(f'<a class="m1" href="#" data-i="{i}">{("1. ", "", "2. ")[k]}{pgp.label(k88, mv)}</a>')
-        phases += [figw, t('<p>Andersom hoeft wit niet eens over te stappen. Staat wit in de opstelling van de val bij even '
-                           'pariteit en is wit zelf aan zet, dan dwingt wit de ruil meteen af: ',
-                           '<p>The other way round white need not even move over. If white stands in the set-up of the trap '
-                           'at even parity and is to move itself, white forces the exchange at once: ')
+        assert min(int(m[1][1:]) for m in legalw if m[1][0] == 'W') == int(exw[0][1][1:])   # the exchange is strongest
+        phases += [figw, t('<p>Andersom hoeft wit niet eens over te stappen. Staat wit in de opstelling van de eerste val en '
+                           'is wit zelf aan zet, dan dwingt wit met de sterkste zet de ruil meteen af: ',
+                           '<p>The other way round white need not even move over. If white stands in the set-up of the first '
+                           'trap and is to move itself, white forces the exchange at once with the strongest move: ')
                    + ' '.join(parts) + t(', en 2 tegen 1 wint. Alle zetten van wit: ', ', and 2 against 1 wins. All moves of white: ')
                    + self.moves_list(pgp, iw, legalw, '1. ') + '.</p>', '<div style="clear:both"></div>']
         return body, phases, pgp

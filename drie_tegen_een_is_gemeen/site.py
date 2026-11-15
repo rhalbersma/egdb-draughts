@@ -344,12 +344,20 @@ both.</p>''')]
             tri = pg.pos[k]['f']
             fig2, _ = pg.diagram(tri, t('na 9. h8-c3: de driehoek van Petrov', 'after 9. h8-c3: Petrov\'s triangle'))
             body += ['<div style="clear:both"></div>', fig2, t(
-                '<p>Met 9. h8-c3 bouwt wit de <strong>driehoek van Petrov</strong>, het motief waarmee drie dammen de '
-                'enkele dam vangen als die niet op de lange lijn staat, bekend sinds 1827. Daarna is zwart snel '
-                'uitgeteld: wit offert twee keer (11. c5-f2 en 12. c3-a5) en slaat de zwarte dam met 13. a5×c3.</p>',
-                '<p>With 9. h8-c3 white builds <strong>Petrov\'s triangle</strong>, the motif by which three kings catch '
-                'the single king when it is not on the long diagonal, known since 1827. After that black is soon counted '
-                'out: white sacrifices twice (11. c5-f2 and 12. c3-a5) and captures the black king with 13. a5×c3.</p>')]
+                '<p>Met 9. h8-c3 staat de <strong>driehoek van Petrov</strong>: de drie witte dammen vormen een driehoek '
+                'waarvan de punt naar de zwarte dam aan de rand wijst; het gebruikelijke diagram (wit d6, c3, e3 tegen '
+                'zwart d8) is hier gespiegeld in de lange lijn. Het is de klassieke methode waarmee drie dammen die de '
+                'lange lijn bezetten de enkele dam vangen. In het Russische damspel publiceerde A.D. Petrov haar in '
+                '1827, maar Pedro Ruiz Montero beschreef haar al in 1591; buiten Rusland heet ze ook de methode van '
+                'Montero (<a href="https://ru.wikipedia.org/wiki/%D0%A2%D1%80%D0%B5%D1%83%D0%B3%D0%BE%D0%BB%D1%8C%D0%BD%D0%B8%D0%BA_%D0%9F%D0%B5%D1%82%D1%80%D0%BE%D0%B2%D0%B0">Wikipedia</a>). Daarna is zwart snel uitgeteld: wit offert twee keer '
+                '(11. c5-f2 en 12. c3-a5) en slaat de zwarte dam met 13. a5×c3.</p>',
+                '<p>After 9. h8-c3 the white kings form <strong>Petrov\'s triangle</strong>: a triangle whose point is '
+                'aimed at the black king on the edge; the usual diagram (white d6, c3, e3 against black d8) is mirrored '
+                'in the long diagonal here. It is the classic method by which three kings holding the long diagonal '
+                'catch the single king. In Russian draughts A.D. Petrov published it in 1827, but Pedro Ruiz Montero '
+                'described it as early as 1591; outside Russia it is also known as Montero\'s method '
+                '(<a href="https://ru.wikipedia.org/wiki/%D0%A2%D1%80%D0%B5%D1%83%D0%B3%D0%BE%D0%BB%D1%8C%D0%BD%D0%B8%D0%BA_%D0%9F%D0%B5%D1%82%D1%80%D0%BE%D0%B2%D0%B0">Wikipedia</a>). After that black is soon counted out: white sacrifices twice '
+                '(11. c5-f2 and 12. c3-a5) and captures the black king with 13. a5×c3.</p>')]
         self.write('drie-tegen-een.html', '3 dammen tegen 1', '\n'.join(body), pg, '8x8')
 
     @staticmethod

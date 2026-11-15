@@ -214,13 +214,13 @@ is clickable.</p>''')]
         body += [fig, t('''
 <p>2 tegen 1 is op elk voldoende groot bord gewonnen, met twee uitzonderingen:</p>
 <ul><li><a href="twee-blokkade.html">de blokkade aan de rand</a>: in een vast handjevol stellingen (8 of 10,
-onafhankelijk van de bordgrootte) zitten de twee witte dammen opgesloten in de enkele hoek en houdt de zwarte dam ze
+onafhankelijk van de bordgrootte; op 8×8 op spiegelingen na 3) zitten de twee witte dammen opgesloten in de enkele hoek en houdt de zwarte dam ze
 daar met oppositie; op oneven × oneven borden met speelbare hoeken bestaat die blokkade niet;</li>
 <li>en, verrassend, <a href="twee-4x4.html">het 4×4-bord</a>: daar is 2 tegen 1 remise.</li></ul>
 <p>De langste winst groeit gestaag met het bord: 33 ply op 8×8, 41 op 10×10, 49 op 12×12, 61 op 12×15.</p>''', '''
 <p>2 against 1 is won on every board that is large enough, with two exceptions:</p>
 <ul><li><a href="twee-blokkade.html">the blockade at the edge</a>: in a fixed handful of positions (8 or 10,
-independent of the board size) the two white kings are locked in the single corner and the black king keeps them there
+independent of the board size; on 8×8 up to symmetry 3) the two white kings are locked in the single corner and the black king keeps them there
 by opposition; on odd × odd boards with playable corners this blockade does not exist;</li>
 <li>and, surprisingly, <a href="twee-4x4.html">the 4×4 board</a>: there 2 against 1 is a draw.</li></ul>
 <p>The longest win grows steadily with the board: 33 plies on 8×8, 41 on 10×10, 49 on 12×12, 61 on 12×15.</p>'''),
@@ -228,21 +228,37 @@ by opposition; on odd × odd boards with playable corners this blockade does not
                  f'<p class="var">{h}</p>',
                  '<div style="clear:both"></div>']
         flush('twee-langste.html')
-        # the 2-1 blockade on 8x8: two white kings locked in the single corner, the black king keeps the opposition
-        fen = 'W:WK3,K4:BK11'
-        v, legal = e21.analyse(fen)
-        vb, _ = e21.analyse('B' + fen[1:])
-        fig, i0 = pg.diagram(fen, t(f'8×8, 2 tegen 1, wit aan zet: {v}', f'8×8, 2 against 1, white to move: {v}'), gid=k21)
-        h, *_ = pg.best_line(fen, 12, start=i0)
-        body += [fig, t('<p>De blokkade: de twee witte dammen zitten in de enkele hoek en de zwarte dam houdt ze daar met '
-                        'oppositie. Op 8×8 zijn er precies 10 zulke rustige remisestellingen met wit aan zet, 5 in elke '
-                        f'enkele hoek. Met zwart aan zet is dezelfde stelling verloren ({vb}). Alle zetten van wit: ',
-                        '<p>The blockade: the two white kings are in the single corner and the black king keeps them there '
-                        'by opposition. On 8×8 there are exactly 10 such quiet drawn positions with white to move, 5 in each '
-                        f'single corner. With black to move the same position is lost ({vb}). All moves of white: ')
-                 + self.moves_list(pg, i0, legal, '1. ') + '.</p>',
-                 t('<p>Zwart houdt de oppositie gewoon vast:</p>', '<p>Black simply keeps the opposition:</p>'),
-                 f'<p class="var">{h}</p>', '<div style="clear:both"></div>']
+        # the 2-1 blockade on 8x8: two white kings locked in the single corner, the black king keeps the opposition.
+        # 10 quiet draws with white to move, 5 in each single corner, 3 up to the symmetries of the board: two that
+        # turn into each other (the repetition) and one in which every white move gives a king away
+        body += [t('<p>De blokkade: de twee witte dammen zitten in de enkele hoek en de zwarte dam houdt ze daar met '
+                   'oppositie. Op 8×8 zijn er precies 10 rustige remisestellingen met wit aan zet, 5 in elke enkele hoek; '
+                   'op spiegelingen van het bord na zijn het er 3. Met zwart aan zet is elk van de drie verloren.</p>',
+                   '<p>The blockade: the two white kings are in the single corner and the black king keeps them there by '
+                   'opposition. On 8×8 there are exactly 10 quiet drawn positions with white to move, 5 in each single '
+                   'corner; up to the symmetries of the board there are 3. With black to move each of the three is '
+                   'lost.</p>')]
+        notes = {
+            'W:WK3,K4:BK11': ('Wit op h8 en f8, zwart op f6. Alleen f8-g7 houdt beide dammen (h8-g7 geeft er een weg, f8-e7 verliest), '
+                              'en na 1. f8-g7 f6-e7 staat de volgende stelling op het bord: ',
+                              'White on h8 and f8, black on f6. Only f8-g7 keeps both kings (h8-g7 gives one away, f8-e7 loses), '
+                              'and after 1. f8-g7 f6-e7 the next position is on the board: '),
+            'W:WK4,K8:BK7': ('Wit op h8 en g7, zwart op e7 (of gespiegeld op g5). De dam op h8 kan niet weg; na 1. g7-f8 e7-f6 is '
+                             'de vorige stelling terug, en zo gaan de twee in elkaar over: herhaling. ',
+                             'White on h8 and g7, black on e7 (or mirrored on g5). The king on h8 cannot move; after 1. g7-f8 '
+                             'e7-f6 the previous position is back, and so the two turn into each other: repetition. '),
+            'W:WK3,K12:BK11': ('Wit op f8 en h6, zwart op f6: wit staat in zetdwang. Elke witte zet geeft een dam weg, en 1 tegen 1 '
+                               'is remise. ',
+                               'White on f8 and h6, black on f6: white is in zugzwang. Every white move gives a king away, '
+                               'and 1 against 1 is a draw. ')}
+        for k, fen in enumerate(('W:WK3,K4:BK11', 'W:WK4,K8:BK7', 'W:WK3,K12:BK11')):
+            v, legal = e21.analyse(fen)
+            vb, _ = e21.analyse('B' + fen[1:])
+            fig, i0 = pg.diagram(fen, t(f'8×8, 2 tegen 1, wit aan zet: {v} (zwart aan zet: {vb})',
+                                        f'8×8, 2 against 1, white to move: {v} (black to move: {vb})'), gid=k21)
+            nl, en = notes[fen]
+            body += [fig, f'<p>{t(nl, en)}{t("Alle zetten van wit: ", "All moves of white: ")}'
+                     f'{self.moves_list(pg, i0, legal, "1. ")}.</p>', '<div style="clear:both"></div>']
         flush('twee-blokkade.html')
         # 4x4: the draw; driven out of one double corner, black escapes through the centre to the other one
         fen = 'W:WK6,K8:BK3'

@@ -28,9 +28,9 @@ TITLE = {'nl': 'Checkers: 3 dammen tegen 2', 'en': 'Checkers: 3 kings against 2'
 # the chapters, each with one page per section: (Dutch, English, [(file, Dutch, English)])
 CHAPTERS = [
     ('2 tegen 1', '2 against 1', [
-        ('twee-langste.html', 'De langste winst op 8×8', 'The longest win on 8×8'),
-        ('twee-blokkade.html', 'De blokkade in de enkele hoek', 'The blockade in the single corner'),
-        ('twee-4x4.html', 'Remise op 4×4', 'A draw on 4×4')]),
+        ('twee-langste.html', 'Gewonnen, op twee uitzonderingen na', 'Won, with two exceptions'),
+        ('twee-blokkade.html', 'Uitzondering 1: de blokkade aan de rand', 'Exception 1: the blockade at the edge'),
+        ('twee-4x4.html', 'Uitzondering 2: remise op 4×4', 'Exception 2: a draw on 4×4')]),
     ('3 tegen 2 op 8×8', '3 against 2 on 8×8', [
         ('drie-langste.html', 'De langste winst', 'The longest win')]),
     ('De val', 'The trap', [
@@ -213,14 +213,18 @@ is clickable.</p>''')]
         fig, i0 = pg.diagram(fen, t(f'8×8, 2 tegen 1, wit aan zet: {v}', f'8×8, 2 against 1, white to move: {v}'), gid=k21)
         h, *_ = pg.best_line(fen, 60, start=i0)
         body += [fig, t('''
-<p>Remise op 4×4. Op elk groter bord gewonnen, op een vast handjevol stellingen na (8 of 10, onafhankelijk van de
-bordgrootte) waarin de twee witte dammen opgesloten zitten in de enkele hoek en de zwarte dam ze daar houdt met
-oppositie. Op oneven × oneven borden met speelbare hoeken zijn er geen uitzonderingen. De langste winst groeit
-gestaag: 33 ply op 8×8, 41 op 10×10, 49 op 12×12, 61 op 12×15.</p>''', '''
-<p>Drawn on 4×4. On every larger board it is won, except for a fixed handful of positions (8 or 10, independent of the
-board size) in which the two white kings are locked in the single corner and the black king keeps them there by
-opposition. On odd × odd boards with playable corners there are no exceptions at all. The longest win grows steadily:
-33 plies on 8×8, 41 on 10×10, 49 on 12×12, 61 on 12×15.</p>'''),
+<p>2 tegen 1 is op elk voldoende groot bord gewonnen, met twee uitzonderingen:</p>
+<ul><li><a href="twee-blokkade.html">de blokkade aan de rand</a>: in een vast handjevol stellingen (8 of 10,
+onafhankelijk van de bordgrootte) zitten de twee witte dammen opgesloten in de enkele hoek en houdt de zwarte dam ze
+daar met oppositie; op oneven × oneven borden met speelbare hoeken bestaat die blokkade niet;</li>
+<li>en, verrassend, <a href="twee-4x4.html">het 4×4-bord</a>: daar is 2 tegen 1 remise.</li></ul>
+<p>De langste winst groeit gestaag met het bord: 33 ply op 8×8, 41 op 10×10, 49 op 12×12, 61 op 12×15.</p>''', '''
+<p>2 against 1 is won on every board that is large enough, with two exceptions:</p>
+<ul><li><a href="twee-blokkade.html">the blockade at the edge</a>: in a fixed handful of positions (8 or 10,
+independent of the board size) the two white kings are locked in the single corner and the black king keeps them there
+by opposition; on odd × odd boards with playable corners this blockade does not exist;</li>
+<li>and, surprisingly, <a href="twee-4x4.html">the 4×4 board</a>: there 2 against 1 is a draw.</li></ul>
+<p>The longest win grows steadily with the board: 33 plies on 8×8, 41 on 10×10, 49 on 12×12, 61 on 12×15.</p>'''),
                  t(f'<p>De langste winst op 8×8 ({v[1:]} ply):</p>', f'<p>The longest win on 8×8 ({v[1:]} plies):</p>'),
                  f'<p class="var">{h}</p>',
                  '<div style="clear:both"></div>']

@@ -349,11 +349,23 @@ diagram).</p>''')]
              'work, not the edge: of the 24 set-ups with three white kings on the top edge and two black kings on the sixth '
              'rank only 3 are drawn, and in all three black on f6 holds the white kings on f8 and h8 (the blockade of 2 against '
              '1). White on b8, d8 and f8 against black on d6 and f6, three side by side with two right opposite, wins (W13). '),
+            ('W:WK2,K4,K11:BK10,K12',
+             'Eén witte dam zit vast in de hoek: na h8-g7 slaat zwart h6×f8. Tegen de zwarte dam op d6 komen de twee andere '
+             'witte dammen niet verder, en f6-g7 en f6-g5 verliezen zelfs. ',
+             'One white king is locked in the corner: after h8-g7 black captures h6×f8. Against the black king on d6 the two '
+             'other white kings make no progress, and f6-g7 and f6-g5 even lose. '),
+            ('W:WK4,K11,K15:BK3,K8',
+             'De zwarte dammen staan in de enkele hoek van wit, op f8 en g7, voor de witte dam op h8. Die kan niet bewegen: g7 '
+             'is bezet, en slaan kan niet omdat f6 bezet is. Alleen f6-e7 houdt remise; de andere zetten verliezen. ',
+             'The black kings stand in white\'s single corner, on f8 and g7, in front of the white king on h8. It cannot move: '
+             'g7 is occupied, and it cannot capture because f6 is occupied. Only f6-e7 keeps the draw; the other moves lose. '),
             ('W:WK7,K14,K23:BK13,K15',
-             'Een van de 9 klassen zonder blokkade in de hoek: de zwarte dam op e5 staat midden tussen de drie witte dammen. Een '
+             'Een van de 2 klassen die niets met de hoek te maken hebben (de andere: zwart op h4 in plaats van a5): de zwarte '
+             'dam op e5 staat midden tussen de drie witte dammen. Een '
              'witte dam die ernaast komt, wordt geslagen (1. e7-d6 e5×c7). Remise met wit én met zwart aan zet; met zwart aan '
              'zet houden alleen e5-d6 en e5-d4 remise. ',
-             'One of the 9 classes without a corner blockade: the black king on e5 stands in the middle of the three white kings. '
+             'One of the 2 classes that have nothing to do with the corner (the other: black on h4 instead of a5): the black '
+             'king on e5 stands in the middle of the three white kings. '
              'A white king that steps next to it is captured (1. e7-d6 e5×c7). A draw with white and with black to move; with '
              'black to move only e5-d6 and e5-d4 keep the draw. ')]
         for fen, nl, en in cases:

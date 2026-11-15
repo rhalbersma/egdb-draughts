@@ -25,10 +25,61 @@ from traps import Race   # noqa: E402
 
 TITLE = {'nl': 'Checkers: 3 dammen tegen 2', 'en': 'Checkers: 3 kings against 2'}
 
-PAGES = [
-    ('index.html', 'Overzicht', 'Overview'),
-    ('vesting.html', 'De vesting in de dubbele hoek', 'The double-corner fortress'),
+# the chapters, each with one page per section: (Dutch, English, [(file, Dutch, English)])
+CHAPTERS = [
+    ('2 tegen 1', '2 against 1', [
+        ('twee-langste.html', 'De langste winst op 8×8', 'The longest win on 8×8'),
+        ('twee-blokkade.html', 'De blokkade in de enkele hoek', 'The blockade in the single corner'),
+        ('twee-4x4.html', 'Remise op 4×4', 'A draw on 4×4')]),
+    ('3 tegen 2 op 8×8', '3 against 2 on 8×8', [
+        ('dubbele-hoeken.html', 'Zwart in de dubbele hoeken', 'Black in the double corners'),
+        ('drie-langste.html', 'De langste winst', 'The longest win')]),
+    ('De val', 'The trap', [
+        ('val.html', 'De val in beide fasen', 'The trap in both phases'),
+        ('val-fasen.html', 'Waarom beide fasen', 'Why both phases'),
+        ('val-race.html', 'De race naar de val', 'The race to the trap')]),
+    ('Blokkades', 'Blockades', [
+        ('blokkades.html', 'De dubbele blokkade', 'The double blockade')]),
+    ('De vesting op grotere borden', 'The fortress on larger boards', [
+        ('vesting.html', 'Oppositie op 8×9', 'Opposition on 8×9'),
+        ('afstandsregel.html', 'De afstandsregel', 'The distance rule'),
+        ('vesting-9x9.html', '9×9 p0: drie dammen voor één hoek', '9×9 p0: three kings for one corner')]),
 ]
+# every page in reading order: (file, Dutch, English, chapter number or None)
+PAGES = [('index.html', 'Overzicht', 'Overview', None)] + [(f, nl, en, c) for c, (_, _, secs) in enumerate(CHAPTERS)
+                                                        for f, nl, en in secs]
+
+
+TABLE32 = {'nl': '''<h2>3 dammen tegen 2 per bord</h2>
+<table class="tbl"><tr><th>Bord</th><th>Rustige remises (3 dammen aan zet)</th><th>Langste winst</th>
+<th>Zwart in beide dubbele hoeken: remises</th></tr>
+<tr><td>6×7</td><td>273</td><td>63</td><td>0%</td></tr>
+<tr><td>7×8</td><td>792 (0,16%)</td><td>75</td><td>0%</td></tr>
+<tr><td>8×8</td><td>1.252 (0,11%)</td><td>67</td><td>0%</td></tr>
+<tr><td>8×9</td><td>87.670 (4,0%)</td><td>79</td><td>50% (oppositie)</td></tr>
+<tr><td>9×10</td><td>344.907 (4,4%)</td><td>93</td><td>50% (oppositie)</td></tr>
+<tr><td>8×10</td><td>288.748</td><td>97</td><td>~100%</td></tr>
+<tr><td>10×10</td><td>1.012.242 (7,1%)</td><td>115</td><td>~100%</td></tr>
+<tr><td>10×11</td><td>1.810.258 (7,5%)</td><td>109</td><td>~100%</td></tr>
+<tr><td>10×12</td><td>2.744.990</td><td>127</td><td>~100%</td></tr>
+<tr><td>7×9 p0 (vier dubbele hoeken)</td><td>124.148 (13,2%)</td><td>93</td><td>zie <a href="vesting.html">vesting</a></td></tr>
+<tr><td>9×9 p0 (vier dubbele hoeken)</td><td>1.201.460 (29,5%)</td><td>99</td><td>zie <a href="vesting.html">vesting</a></td></tr>
+</table>''',
+           'en': '''<h2>3 kings against 2 per board</h2>
+<table class="tbl"><tr><th>Board</th><th>Quiet draws (3 kings to move)</th><th>Longest win</th>
+<th>Black in both double corners: draws</th></tr>
+<tr><td>6×7</td><td>273</td><td>63</td><td>0%</td></tr>
+<tr><td>7×8</td><td>792 (0.16%)</td><td>75</td><td>0%</td></tr>
+<tr><td>8×8</td><td>1,252 (0.11%)</td><td>67</td><td>0%</td></tr>
+<tr><td>8×9</td><td>87,670 (4.0%)</td><td>79</td><td>50% (opposition)</td></tr>
+<tr><td>9×10</td><td>344,907 (4.4%)</td><td>93</td><td>50% (opposition)</td></tr>
+<tr><td>8×10</td><td>288,748</td><td>97</td><td>~100%</td></tr>
+<tr><td>10×10</td><td>1,012,242 (7.1%)</td><td>115</td><td>~100%</td></tr>
+<tr><td>10×11</td><td>1,810,258 (7.5%)</td><td>109</td><td>~100%</td></tr>
+<tr><td>10×12</td><td>2,744,990</td><td>127</td><td>~100%</td></tr>
+<tr><td>7×9 p0 (four double corners)</td><td>124,148 (13.2%)</td><td>93</td><td>see <a href="vesting.html">fortress</a></td></tr>
+<tr><td>9×9 p0 (four double corners)</td><td>1,201,460 (29.5%)</td><td>99</td><td>see <a href="vesting.html">fortress</a></td></tr>
+</table>'''}
 
 
 class Site:
@@ -51,12 +102,16 @@ class Site:
                                            '--white', nw, '--black', nb)
         return key, self.engines[key]
 
+    def chapter(self, c):
+        return CHAPTERS[c][0] if self.lang == 'nl' else CHAPTERS[c][1]
+
     def nav(self, current=None):
-        items = [(PAGES[k][0], self.title(k)) for k in range(len(PAGES))]
+        groups = [('', [(PAGES[0][0], self.title(0))])] + [
+            (self.chapter(c), [(f, nl if self.lang == 'nl' else en) for f, nl, en in secs]) for c, (_, _, secs) in enumerate(CHAPTERS)]
         home = '../index.html' if self.lang == 'en' else '../../nl/index.html'      # English: default, Dutch in nl/
         alt = f'nl/{current}' if self.lang == 'en' else f'../{current}'
         return (f'<a class="brand" href="index.html">{esc(TITLE[self.lang])}</a>'
-                f'{menu([(None, items)], current, self.t("Pagina\'s", "Pages"))}'
+                f'{menu(groups, current, self.t("Hoofdstukken", "Chapters"))}'
                 f'<a href="{home}">{self.t("Alle sites", "All sites")}</a>{lang_link(self.lang, alt)}')
 
     def page(self, *boards):
@@ -69,6 +124,8 @@ class Site:
         if gid is not None:              # algebraic moves in the running text follow the notation switch
             body = pg.prose_html(body, gid, 'alg')
         k = [p[0] for p in PAGES].index(name)
+        if PAGES[k][3] is not None:      # a section page: its chapter above its title
+            body = f'<p class="src">{esc(self.chapter(PAGES[k][3]))}</p><h1>{esc(self.title(k))}</h1>\n' + body
         prev = f'<a href="{PAGES[k - 1][0]}">← {esc(self.title(k - 1))}</a>' if k > 0 else '<span></span>'
         nxt = f'<a href="{PAGES[k + 1][0]}">{esc(self.title(k + 1))} →</a>' if k + 1 < len(PAGES) else '<span></span>'
         body += f'\n<nav class="pager">{prev}{nxt}</nav>'
@@ -127,11 +184,27 @@ captures. On boards of any size, computed exactly with
 <a href="https://github.com/rhalbersma/egdb-draughts/blob/main/src/egdb_fast.cpp"><code>egdb_fast</code></a>. Values in
 plies for the side to move: W = win, L = loss, D = draw; purely game-theoretic, without move-count rules. Every position
 is clickable.</p>''')]
+        toc = ['<h2>' + t('Hoofdstukken', 'Chapters') + '</h2><ul class="toc">']
+        for c, (_, _, secs) in enumerate(CHAPTERS):
+            links = [f'<a href="{f}">{esc(nl if self.lang == "nl" else en)}</a>' for f, nl, en in secs]
+            items = links[0] if len(links) == 1 else '<ul class="sub">' + ''.join(f'<li>{x}</li>' for x in links) + '</ul>'
+            toc.append(f'<li><span class="h">{esc(self.chapter(c))}</span>{items}</li>')
+        fig, _ = pg.diagram('W:WK4,K8,K29:BK1,K28', t('8×8, zwart in beide dubbele hoeken: wit wint (W61)',
+                                                       '8×8, black in both double corners: white wins (W61)'), gid=k88)
+        body.insert(1, fig)
+        body += toc + ['</ul>', TABLE32[self.lang]]
+
+        def flush(name):                # finish the page so far, start the next one
+            nonlocal body, pg
+            self.write(name, None, '\n'.join(body), pg, k88)
+            pg = self.page((k21, e21), (k44, e44), (k88, e88))
+            body = []
+        flush('index.html')
         fen = self.longest_21(e21)
         v, _ = e21.analyse(fen)
         fig, i0 = pg.diagram(fen, t(f'8×8, 2 tegen 1, wit aan zet: {v}', f'8×8, 2 against 1, white to move: {v}'), gid=k21)
         h, *_ = pg.best_line(fen, 60, start=i0)
-        body += [t('<h2>2 dammen tegen 1</h2>', '<h2>2 kings against 1</h2>'), fig, t('''
+        body += [fig, t('''
 <p>Remise op 4×4. Op elk groter bord gewonnen, op een vast handjevol stellingen na (8 of 10, onafhankelijk van de
 bordgrootte) waarin de twee witte dammen opgesloten zitten in de enkele hoek en de zwarte dam ze daar houdt met
 oppositie. Op oneven × oneven borden met speelbare hoeken zijn er geen uitzonderingen. De langste winst groeit
@@ -143,6 +216,7 @@ opposition. On odd × odd boards with playable corners there are no exceptions a
                  t(f'<p>De langste winst op 8×8 ({v[1:]} ply):</p>', f'<p>The longest win on 8×8 ({v[1:]} plies):</p>'),
                  f'<p class="var">{h}</p>',
                  '<div style="clear:both"></div>']
+        flush('twee-langste.html')
         # the 2-1 blockade on 8x8: two white kings locked in the single corner, the black king keeps the opposition
         fen = 'W:WK3,K4:BK11'
         v, legal = e21.analyse(fen)
@@ -158,6 +232,7 @@ opposition. On odd × odd boards with playable corners there are no exceptions a
                  + self.moves_list(pg, i0, legal, '1. ') + '.</p>',
                  t('<p>Zwart houdt de oppositie gewoon vast:</p>', '<p>Black simply keeps the opposition:</p>'),
                  f'<p class="var">{h}</p>', '<div style="clear:both"></div>']
+        flush('twee-blokkade.html')
         # 4x4: the draw; driven out of one double corner, black escapes through the centre to the other one
         fen = 'W:WK6,K8:BK3'
         fig, i0 = pg.diagram(fen, t(f'4×4, 2 tegen 1, wit aan zet: {e44.analyse(fen)[0]}',
@@ -176,38 +251,9 @@ opposition. On odd × odd boards with playable corners there are no exceptions a
                  f'<p class="var">{" ".join(parts)}</p>',
                  t('<p>Daarna begint het opnieuw in de andere hoek.</p>', '<p>Then it starts again in the other corner.</p>'),
                  '<div style="clear:both"></div>']
-        body.append(t('''<h2>3 dammen tegen 2</h2>
-<table class="tbl"><tr><th>Bord</th><th>Rustige remises (3 dammen aan zet)</th><th>Langste winst</th>
-<th>Zwart in beide dubbele hoeken: remises</th></tr>
-<tr><td>6×7</td><td>273</td><td>63</td><td>0%</td></tr>
-<tr><td>7×8</td><td>792 (0,16%)</td><td>75</td><td>0%</td></tr>
-<tr><td>8×8</td><td>1.252 (0,11%)</td><td>67</td><td>0%</td></tr>
-<tr><td>8×9</td><td>87.670 (4,0%)</td><td>79</td><td>50% (oppositie)</td></tr>
-<tr><td>9×10</td><td>344.907 (4,4%)</td><td>93</td><td>50% (oppositie)</td></tr>
-<tr><td>8×10</td><td>288.748</td><td>97</td><td>~100%</td></tr>
-<tr><td>10×10</td><td>1.012.242 (7,1%)</td><td>115</td><td>~100%</td></tr>
-<tr><td>10×11</td><td>1.810.258 (7,5%)</td><td>109</td><td>~100%</td></tr>
-<tr><td>10×12</td><td>2.744.990</td><td>127</td><td>~100%</td></tr>
-<tr><td>7×9 p0 (vier dubbele hoeken)</td><td>124.148 (13,2%)</td><td>93</td><td>zie <a href="vesting.html">vesting</a></td></tr>
-<tr><td>9×9 p0 (vier dubbele hoeken)</td><td>1.201.460 (29,5%)</td><td>99</td><td>zie <a href="vesting.html">vesting</a></td></tr>
-</table>''', '''<h2>3 kings against 2</h2>
-<table class="tbl"><tr><th>Board</th><th>Quiet draws (3 kings to move)</th><th>Longest win</th>
-<th>Black in both double corners: draws</th></tr>
-<tr><td>6×7</td><td>273</td><td>63</td><td>0%</td></tr>
-<tr><td>7×8</td><td>792 (0.16%)</td><td>75</td><td>0%</td></tr>
-<tr><td>8×8</td><td>1,252 (0.11%)</td><td>67</td><td>0%</td></tr>
-<tr><td>8×9</td><td>87,670 (4.0%)</td><td>79</td><td>50% (opposition)</td></tr>
-<tr><td>9×10</td><td>344,907 (4.4%)</td><td>93</td><td>50% (opposition)</td></tr>
-<tr><td>8×10</td><td>288,748</td><td>97</td><td>~100%</td></tr>
-<tr><td>10×10</td><td>1,012,242 (7.1%)</td><td>115</td><td>~100%</td></tr>
-<tr><td>10×11</td><td>1,810,258 (7.5%)</td><td>109</td><td>~100%</td></tr>
-<tr><td>10×12</td><td>2,744,990</td><td>127</td><td>~100%</td></tr>
-<tr><td>7×9 p0 (four double corners)</td><td>124,148 (13.2%)</td><td>93</td><td>see <a href="vesting.html">fortress</a></td></tr>
-<tr><td>9×9 p0 (four double corners)</td><td>1,201,460 (29.5%)</td><td>99</td><td>see <a href="vesting.html">fortress</a></td></tr>
-</table>'''))
+        flush('twee-4x4.html')
         for fen, head, cap in (
-                ('W:WK4,K8,K29:BK1,K28', t('<h2>3 tegen 2 op 8×8: zwart in de dubbele hoeken</h2>',
-                                           '<h2>3 against 2 on 8×8: black in the double corners</h2>'),
+                ('W:WK4,K8,K29:BK1,K28', '',
                  t('<p>De beste verdediging lijkt de twee zwarte dammen elk in een dubbele hoek te zetten: een dam op de twee '
                    'randvelden van een dubbele hoek kan niet geslagen worden en heeft altijd een wachtzet (zie de '
                    '<a href="vesting.html">vesting</a>). Op 8×8 helpt het niet: alle 13.320 rustige stellingen met zwart in '
@@ -217,7 +263,8 @@ opposition. On odd × odd boards with playable corners there are no exceptions a
                    'D × d = 7 × 7, de vesting valt).</p><p>De langste van deze stellingen, met de witte dammen in de enkele '
                    'hoeken, duurt {v} ply. Op zet 10 zet wit een dam op het tweede veld van de hoek linksboven: de zwarte '
                    'dam daar kan niet meer pendelen, en zwart moet met de andere dam zetten. Op zet 18 dwingt wit met een '
-                   'offer een ruil af: zwart moet slaan, wit slaat terug, en 2 tegen 1 wint.</p>',
+                   'offer een ruil af: zwart moet slaan, wit slaat terug, en 2 tegen 1 wint. Hoe die val werkt, staat bij '
+                   '<a href="val.html">de val</a>.</p>',
                    '<p>The best defence seems to be to put each black king in a double corner: a king on the two edge '
                    'squares of a double corner cannot be captured and always has a waiting move (see the '
                    '<a href="vesting.html">fortress</a>). On 8×8 it does not help: all 13,320 quiet positions with black in '
@@ -228,23 +275,27 @@ opposition. On odd × odd boards with playable corners there are no exceptions a
                    'single corners, takes {v} plies. On move 10 white puts a king on the second square of the top-left '
                    'corner: the black king there can no longer shuttle, and black has to move the other king. On move 18 '
                    'white forces an exchange with a sacrifice: black has to capture, white captures back, and 2 against 1 '
-                   'wins.</p>')),
-                ('W:WK3,K4,K30:BK11,K13', t('<h2>3 tegen 2 op 8×8: de langste winst</h2>',
-                                            '<h2>3 against 2 on 8×8: the longest win</h2>'),
+                   'wins. How that trap works is shown at <a href="val.html">the trap</a>.</p>')),
+                ('W:WK3,K4,K30:BK11,K13', '',
                  t('<p>De langste winst op 8×8 zonder slag voor beide kanten in de beginstelling: {v} ply.</p>',
                    '<p>The longest win on 8×8 without a capture for either side in the start position: {v} plies.</p>'))):
             v, _ = e88.analyse(fen)
             fig, i0 = pg.diagram(fen, t(f'8×8, wit aan zet: {v}', f'8×8, white to move: {v}'), gid=k88)
             h, *_ = pg.best_line(fen, 80, start=i0)
             body += [head, fig, cap.format(v=v[1:]), f'<p class="var">{h}</p>', '<div style="clear:both"></div>']
-            if fen == 'W:WK4,K8,K29:BK1,K28':
-                body += self.traps88(pg, k88, e88)
+            flush('dubbele-hoeken.html' if fen == 'W:WK4,K8,K29:BK1,K28' else 'drie-langste.html')
+        body, phases = self.traps88(pg, k88, e88)
+        flush('val.html')
+        body = phases
+        flush('val-fasen.html')
+        body = self.race88(pg, k88, e88)
+        flush('val-race.html')
         fen = 'W:WK3,K4,K29:BK11,K22'
         v, legal = e88.analyse(fen)
         vb, _ = e88.analyse('B' + fen[1:])
         fig, i0 = pg.diagram(fen, t(f'8×8, wit aan zet: {v}', f'8×8, white to move: {v}'), gid=k88)
         h, *_ = pg.best_line(fen, 12, start=i0)
-        body += [t('<h2>3 tegen 2 op 8×8: blokkades</h2>', '<h2>3 against 2 on 8×8: blockades</h2>'), fig, t('''
+        body += [fig, t('''
 <p>Op 7×8 en 8×8 is 3 tegen 2 in het algemeen gewonnen. De weinige remises ontstaan bijna alleen als wit tegen de rand
 gedrukt wordt (0,0% remise zonder witte dam aan de rand, 0,5% met drie), en zwart in beide dubbele hoeken maakt nooit
 remise.</p>''', '''
@@ -260,7 +311,7 @@ rate 0.0% with no white king on the edge, 0.5% with three), and black holding bo
                    f'({vb}). All moves of white: ') + self.moves_list(pg, i0, legal, '1. ') + '.</p>',
                  t('<p>Een remisevariant van de database:</p>', '<p>A drawing line of the database:</p>'),
                  f'<p class="var">{h}</p>', '<div style="clear:both"></div>']
-        self.write('index.html', 'Overzicht', '\n'.join(body), pg, k88)
+        flush('blokkades.html')
 
     @staticmethod
     def exchange(e, fen):
@@ -281,8 +332,7 @@ rate 0.0% with no white king on the edge, 0.5% with three), and black holding bo
     def traps88(self, pg, k88, e88):
         """the trap in both phases on 8x8: every shuttle move of black allows a forced exchange"""
         t = self.t
-        body = [t('<h2>3 tegen 2 op 8×8: de val in beide fasen</h2>', '<h2>3 against 2 on 8×8: the trap in both phases</h2>'),
-                t('<p>Wit breekt de dubbele hoeken met een val: een opstelling waarin elke pendelzet van zwart een '
+        body = [t('<p>Wit breekt de dubbele hoeken met een val: een opstelling waarin elke pendelzet van zwart een '
                   'gedwongen ruil toelaat: met een rustige zet dwingt wit zwart een witte dam te slaan, wit slaat terug, en 2 tegen 1 wint. Zwart '
                   'heeft twee dammen en dus twee pendelzetten; de val moet ze allebei straffen, ook als de ruil de andere zwarte dam treft. Of zo\'n val werkt, hangt '
                   'af van de fase: de pariteit van de som van de rijen van alle dammen, met zwart aan zet. Die verandert '
@@ -338,7 +388,7 @@ rate 0.0% with no white king on the edge, 0.5% with three), and black holding bo
         # moves (one per king), an odd number
         ms = {m[3]: m for m in e88.analyse('W:WK14,K18,K23:BK5,K32')[1]}
         shift = ', '.join(pg.label(k88, ms[x]) for x in ('14-10', '18-15', '23-19'))
-        body += [t('<h3>Waarom wit in beide fasen een val heeft</h3>', '<h3>Why white has a trap in both phases</h3>'), t(
+        phases = [t(
             '<p>Op welke diagonaal zwart staat, maakt niet uit: met de witte dammen 14, 18 en 23 is er een val tegen de '
             'zwarte dammen 5 en 32, dus op dezelfde diagonaal, en ook een tegen 1 en 28, op de andere. Wat de fase '
             'bepaalt, is de diagonaal van wit:</p>',
@@ -357,8 +407,7 @@ rate 0.0% with no white king on the edge, 0.5% with three), and black holding bo
               f'<p>From the trap with 14, 18, 23 to the one with 10, 15, 19 every white king takes one step to the other '
               f'diagonal: {shift}. That is three moves, an odd number: the tempo turns over, and white is in the other phase. '
               f'With two kings such a change-over would take two moves, and then the tempo does not change.</p>')]
-        body += self.race88(pg, k88, e88)
-        return body
+        return body, phases
 
     def race88(self, pg, k88, e88):
         """how fast white forces a trap on 8x8 against the longest defence inside the double corners"""
@@ -372,7 +421,7 @@ rate 0.0% with no white king on the edge, 0.5% with three), and black holding bo
         n = r.wtm[x]
         rows = ''.join(f'<td>{k}</td>' for k, _ in dist)
         cnt = ''.join(f'<td>{c:,}</td>'.replace(',', '.' if self.lang == 'nl' else ',') for _, c in dist)
-        body = [t('<h3>Kan wit de val altijd opbouwen?</h3>', '<h3>Can white always build the trap?</h3>'), t(
+        body = [t(
             f'<p>Ja, zolang zwart in zijn dubbele hoeken blijft. Vanuit elke rustige stelling met zwart in beide dubbele '
             f'hoeken en wit aan zet dwingt wit in beide fasen een val af, tegen elke pendelverdediging, in hoogstens {n} '
             f'zetten. Gerekend is het spel waarin zwart alleen pendelt en wit rustige zetten doet die zwart geen slag geven; '
@@ -398,17 +447,18 @@ rate 0.0% with no white king on the edge, 0.5% with three), and black holding bo
                  f'<p class="var">{" ".join(parts)}</p>',
                  t('<p>Zwart kan ook zelf een hoek verlaten. Volgens de database is dat vaak even goed als pendelen, en '
                    'meestal kan zwart later ook weer terug in de hoek, zoals de zwarte dam rechtsonder in de hoofdvariant '
-                   'van het eerste diagram (zet 10 tot en met 13). Het redt niets: alle stellingen blijven verloren.</p>',
+                   'bij <a href="dubbele-hoeken.html">zwart in de dubbele hoeken</a> (zet 10 tot en met 13). Het redt niets: alle stellingen blijven verloren.</p>',
                    '<p>Black can also leave a corner itself. According to the database that is often just as good as '
                    'shuttling, and usually black can later get back into the corner, as the black king at the bottom right '
-                   'does in the main line of the first diagram (moves 10 to 13). It saves nothing: every position stays '
+                   'does in the main line at <a href="dubbele-hoeken.html">black in the double corners</a> (moves 10 to 13). It saves nothing: every position stays '
                    'lost.</p>'), '<div style="clear:both"></div>']
         return body
 
     def vesting(self):
         k89, e89 = self.engine(9, 8, 1)
         k99, e99 = self.engine(9, 9, 0)
-        pg = self.page((k89, e89), (k99, e99))
+        pg = self.page((k89, e89))
+        pg9 = self.page((k99, e99))
         fen = e89.fen(['c7', 'e7', 'g7'], ['a7', 'i7'])
         t = self.t
         fig, i0 = pg.diagram(fen, t('8×9, wit aan zet', '8×9, white to move'), gid=k89)
@@ -424,14 +474,14 @@ rate 0.0% with no white king on the edge, 0.5% with three), and black holding bo
         v2, legal2 = e89.analyse(f2)
         h2, *_ = pg.moves(f2, self.plan('1. d6-c7!'), 1, False, 'm1', i2)
         f9 = e99.fen(['a2', 'c2', 'd3'], ['b1', 'i8'])
-        fig9, i9 = pg.diagram(f9, t('9×9 p0, wit aan zet', '9×9 p0, white to move'), gid=k99)
+        fig9, i9 = pg9.diagram(f9, t('9×9 p0, wit aan zet', '9×9 p0, white to move'), gid=k99)
         v9, legal9 = e99.analyse(f9)
-        body = [t('<h1>De vesting in de dubbele hoek</h1>', '<h1>The double-corner fortress</h1>'), t('''
+        body = [t('''
 <p>Een dam op de twee randvelden van een dubbele hoek kan nooit geslagen worden en heeft altijd een wachtzet. Op 8×9 en
 9×10 maakt een zwarte dam in elke dubbele hoek remise in precies de helft van de stellingen, en welke helft dat is,
 beslist de <strong>oppositie</strong>: de pariteit van de som van de rijen van alle stukken wisselt bij elke zet, en
 dammen kunnen geen tempo verliezen, dus wie de oppositie heeft, ligt vanaf het begin vast.</p>
-<p>De vraag kwam op in de draad <a href="https://damforum.nl/viewtopic.php?t=8915"><em>Draughts on a 10x11 or 8x9 board</em></a> op het World Draughts Forum (november 2026): houden twee dammen in beide dubbele hoeken op 8×9 stand, terwijl ze op 8×8 verliezen? Op 8×9 hangt het van de oppositie af; waarom 8×8 altijd verloren is, staat bij de <a href="index.html">vallen op 8×8</a>.</p>
+<p>De vraag kwam op in de draad <a href="https://damforum.nl/viewtopic.php?t=8915"><em>Draughts on a 10x11 or 8x9 board</em></a> op het World Draughts Forum (november 2026): houden twee dammen in beide dubbele hoeken op 8×9 stand, terwijl ze op 8×8 verliezen? Op 8×9 hangt het van de oppositie af; waarom 8×8 altijd verloren is, staat bij de <a href="val.html">vallen op 8×8</a>.</p>
 <table class="tbl"><tr><th>Zwart in beide dubbele hoeken</th><th>Pariteit 0</th><th>Pariteit 1</th></tr>
 <tr><td>8×9</td><td>99,5% remise</td><td>0,0% remise</td></tr>
 <tr><td>9×10</td><td>99,8%</td><td>0,0%</td></tr>
@@ -440,12 +490,12 @@ dammen kunnen geen tempo verliezen, dus wie de oppositie heeft, ligt vanaf het b
 9×10 a black king in each double corner draws in exactly half of the positions, and that half is decided by
 <strong>opposition</strong>: the parity of the sum of the ranks of all pieces flips with every move, and kings cannot
 lose a tempo, so who has the opposition is fixed from the start.</p>
-<p>The question came up in the thread <a href="https://damforum.nl/viewtopic.php?t=8915"><em>Draughts on a 10x11 or 8x9 board</em></a> on the World Draughts Forum (November 2026): do two kings in both double corners hold on 8×9, while they lose on 8×8? On 8×9 it depends on the opposition; why 8×8 is always lost is explained at the <a href="index.html">traps on 8×8</a>.</p>
+<p>The question came up in the thread <a href="https://damforum.nl/viewtopic.php?t=8915"><em>Draughts on a 10x11 or 8x9 board</em></a> on the World Draughts Forum (November 2026): do two kings in both double corners hold on 8×9, while they lose on 8×8? On 8×9 it depends on the opposition; why 8×8 is always lost is explained at the <a href="val.html">traps on 8×8</a>.</p>
 <table class="tbl"><tr><th>Black in both double corners</th><th>Parity 0</th><th>Parity 1</th></tr>
 <tr><td>8×9</td><td>99.5% draws</td><td>0.0% draws</td></tr>
 <tr><td>9×10</td><td>99.8%</td><td>0.0%</td></tr>
 <tr><td>10×11</td><td>99.9%</td><td>99.9%</td></tr></table>'''),
-                t('<h2>8×9: oppositie</h2>', '<h2>8×9: opposition</h2>'), fig,
+                fig,
                 t(f'<p>Zwart op a7 en i7 (pendelend met b8 en h8), wit op c7, e7 en g7. Met wit aan zet ({v}) houdt elke '
                   f'zet remise: zwart pendelt gewoon a7-b8-a7. ',
                   f'<p>Black on a7 and i7 (shuttling with b8 and h8), white on c7, e7 and g7. With white to move ({v}) every '
@@ -456,7 +506,6 @@ lose a tempo, so who has the opposition is fixed from the start.</p>
                 t(f'<p>Met de witte dam op d6 in plaats van c7 ({v2}) wint wit met {h2}, en bereikt zo dezelfde stelling met '
                   f'zwart aan zet.</p>', f'<p>With the white king on d6 instead of c7 ({v2}) white wins with {h2}, reaching '
                   f'the same position with black to move.</p>'), '<div style="clear:both"></div>', t('''
-<h2>De afstandsregel</h2>
 <p>Wat beslist, is de afstand tussen de hoeken van de dubbele hoeken die zwart bezet (<em>D</em> = grootste,
 <em>d</em> = kleinste coördinaatverschil; <em>d</em> = 0 als ze aan dezelfde kant liggen), niet of ze aan dezelfde
 kant liggen:</p>
@@ -469,7 +518,6 @@ kant liggen:</p>
 <tr><td>8×10, 10×10, 10×11, 10×12</td><td>≥ 9</td><td>houdt</td></tr></table>
 <p><em>D</em> ≤ 7: de vesting valt · <em>D</em> = 8: de oppositie beslist, tenzij ook <em>d</em> = 8 ·
 <em>D</em> ≥ 9: de vesting houdt.</p>''', '''
-<h2>The distance rule</h2>
 <p>What decides is the distance between the corners of the double corners black occupies (<em>D</em> = largest,
 <em>d</em> = smallest coordinate difference; <em>d</em> = 0 when they are on the same side), not whether they lie on the
 same side:</p>
@@ -482,14 +530,16 @@ same side:</p>
 <tr><td>8×10, 10×10, 10×11, 10×12</td><td>≥ 9</td><td>holds</td></tr></table>
 <p><em>D</em> ≤ 7: the fortress falls · <em>D</em> = 8: opposition decides, unless also <em>d</em> = 8 ·
 <em>D</em> ≥ 9: the fortress holds.</p>'''),
-                t('<h2>9×9 p0: één hoek bevriezen kost drie dammen</h2>', '<h2>9×9 p0: freezing one corner takes three kings</h2>'),
                 fig9,
                 t(f'<p>Op 9×9 p0 kost het bevriezen van één hoek al alle drie de witte dammen (één op het pendelveld, één die '
                   f'de uitgang blokkeert, één die de blokkeerder dekt), dus de andere zwarte dam pendelt gewoon ({v9}): ',
                   f'<p>On 9×9 p0, freezing one corner already takes all three white kings (one on the shuttle square, one '
                   f'blocking the exit, one guarding the blocker), so the other black king simply shuttles ({v9}): ')
-                + f'{self.moves_list(pg, i9, legal9, "1. ")}.</p>']
-        self.write('vesting.html', 'De vesting in de dubbele hoek', '\n'.join(body), pg, k89)
+                + f'{self.moves_list(pg9, i9, legal9, "1. ")}.</p>']
+        rule = next(k for k, x in enumerate(body) if isinstance(x, str) and 'D × d' in x)
+        self.write('vesting.html', None, '\n'.join(body[:rule]), pg, k89)
+        self.write('afstandsregel.html', None, body[rule], self.page((k89, e89)), k89)
+        self.write('vesting-9x9.html', None, '\n'.join(body[rule + 1:]), pg9, k99)
 
 
 def main():

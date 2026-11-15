@@ -20,6 +20,8 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(ROOT / 'common'))
 from sitekit import FastEngine, Page, esc, lang_link, menu, write_page   # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from traps import Race   # noqa: E402
 
 TITLE = {'nl': 'Checkers: 3 dammen tegen 2', 'en': 'Checkers: 3 kings against 2'}
 
@@ -301,6 +303,76 @@ rate 0.0% with no white king on the edge, 0.5% with three), and black holding bo
                      + '; '.join(lines) + t(', en 2 tegen 1 wint. Alle zetten van zwart: ',
                                             ', and 2 against 1 wins. All moves of black: ')
                      + self.moves_list(pg, i0, legal, '1. … ') + '.</p>', '<div style="clear:both"></div>']
+        # why both phases: the diagonal of white decides the phase, and moving over to the other diagonal costs three
+        # moves (one per king), an odd number (no "op <number>" or algebraic squares in this prose: the page converts
+        # those on the 7x8 board)
+        ms = {m[3]: m for m in e88.analyse('W:WK14,K18,K23:BK5,K32')[1]}
+        shift = ', '.join(pg.label(k88, ms[x]) for x in ('14-10', '18-15', '23-19'))
+        body += [t('<h3>Waarom wit in beide fasen een val heeft</h3>', '<h3>Why white has a trap in both phases</h3>'), t(
+            '<p>Op welke diagonaal zwart staat, maakt niet uit: met de witte dammen 14, 18 en 23 is er een val tegen de '
+            'zwarte dammen 5 en 32, dus op dezelfde diagonaal, en ook een tegen 1 en 28, op de andere. Wat de fase '
+            'bepaalt, is de diagonaal van wit:</p>',
+            '<p>Which diagonal black stands on does not matter: with the white kings 14, 18 and 23 there is a trap against '
+            'the black kings 5 and 32, on the same diagonal, and also one against 1 and 28, on the other. What decides the '
+            'phase is the diagonal of white:</p>'),
+            t('<table class="tbl"><tr><th>Zwart</th><th>Wit op diagonaal 5…32: fase 1</th><th>Wit op diagonaal 1…28: fase 0</th></tr>'
+              '<tr><td>5 en 32</td><td>14, 18, 23</td><td>10, 15, 19 · 6, 15, 24</td></tr>'
+              '<tr><td>1 en 28</td><td>14, 18, 23 · 9, 18, 27</td><td>10, 15, 19</td></tr></table>',
+              '<table class="tbl"><tr><th>Black</th><th>White on diagonal 5…32: phase 1</th><th>White on diagonal 1…28: phase 0</th></tr>'
+              '<tr><td>5 and 32</td><td>14, 18, 23</td><td>10, 15, 19 · 6, 15, 24</td></tr>'
+              '<tr><td>1 and 28</td><td>14, 18, 23 · 9, 18, 27</td><td>10, 15, 19</td></tr></table>'),
+            t(f'<p>Van de val met 14, 18, 23 naar die met 10, 15, 19 gaat elke witte dam één stap naar de andere diagonaal: '
+              f'{shift}. Dat zijn drie zetten, een oneven aantal: het tempo draait om, en wit staat in de andere fase. Met '
+              f'twee dammen zou zo\'n overstap twee zetten kosten, en dan wisselt het tempo niet.</p>',
+              f'<p>From the trap with 14, 18, 23 to the one with 10, 15, 19 every white king takes one step to the other '
+              f'diagonal: {shift}. That is three moves, an odd number: the tempo turns over, and white is in the other phase. '
+              f'With two kings such a change-over would take two moves, and then the tempo does not change.</p>')]
+        body += self.race88(pg, k88, e88)
+        return body
+
+    def race88(self, pg, k88, e88):
+        """how fast white forces a trap on 8x8 against the longest defence inside the double corners"""
+        t = self.t
+        if not hasattr(e88, 'race'):            # computed once for both languages
+            e88.race = Race(e88)
+        r = e88.race
+        dist = sorted(r.distribution().items())
+        x = r.farthest()
+        fen = r.fen(x[0], x[1:], 'W')
+        n = r.wtm[x]
+        rows = ''.join(f'<td>{k}</td>' for k, _ in dist)
+        cnt = ''.join(f'<td>{c:,}</td>'.replace(',', '.' if self.lang == 'nl' else ',') for _, c in dist)
+        body = [t('<h3>Kan wit de val altijd opbouwen?</h3>', '<h3>Can white always build the trap?</h3>'), t(
+            f'<p>Ja, zolang zwart in zijn dubbele hoeken blijft. Vanuit elke rustige stelling met zwart in beide dubbele '
+            f'hoeken en wit aan zet dwingt wit in beide fasen een val af, tegen elke pendelverdediging, in hoogstens {n} '
+            f'zetten. Gerekend is het spel waarin zwart alleen pendelt en wit rustige zetten doet die zwart geen slag geven; '
+            f'een pendelzet die wit een slag geeft, kost zwart meteen een dam. Het aantal witte zetten tot de val:</p>',
+            f'<p>Yes, as long as black stays in its double corners. From every quiet position with black in both double '
+            f'corners and white to move, white forces a trap in both phases, against every shuttling defence, in at most '
+            f'{n} moves. The game computed: black only shuttles, and white makes quiet moves that leave black no capture; a '
+            f'shuttle move that gives white a capture costs black a king at once. The number of white moves to the trap:</p>'),
+            f'<table class="tbl"><tr><th>{t("Zetten", "Moves")}</th>{rows}</tr><tr><th>{t("Stellingen", "Positions")}</th>'
+            f'{cnt}</tr></table>']
+        fig, i0 = pg.diagram(fen, t(f'8×8, wit aan zet: de val na {n} zetten', f'8×8, white to move: the trap after {n} moves'),
+                             gid=k88)
+        parts, i, num = [], i0, 1
+        for k, m in enumerate(r.line(x)):
+            i = pg.child(i, m)
+            pre = f'{num}. ' if k % 2 == 0 else ''
+            num += k % 2
+            parts.append(f'<a class="m1" href="#" data-i="{i}">{pre}{pg.label(k88, m)}</a>')
+        body += [fig, t('<p>Het langste verweer: zwart pendelt zo lang mogelijk, wit bouwt de val zo snel mogelijk op en '
+                        'dwingt na de laatste pendelzet de ruil af.</p>',
+                        '<p>The longest defence: black shuttles as long as possible, white builds the trap as fast as '
+                        'possible and forces the exchange after the last shuttle move.</p>'),
+                 f'<p class="var">{" ".join(parts)}</p>',
+                 t('<p>Zwart kan ook zelf een hoek verlaten. Volgens de database is dat vaak even goed als pendelen, en '
+                   'meestal kan zwart later ook weer terug in de hoek, zoals de zwarte dam rechtsonder in de hoofdvariant '
+                   'van het eerste diagram (zet 10 tot en met 13). Het redt niets: alle stellingen blijven verloren.</p>',
+                   '<p>Black can also leave a corner itself. According to the database that is often just as good as '
+                   'shuttling, and usually black can later get back into the corner, as the black king at the bottom right '
+                   'does in the main line of the first diagram (moves 10 to 13). It saves nothing: every position stays '
+                   'lost.</p>'), '<div style="clear:both"></div>']
         return body
 
     def vesting(self):
@@ -329,6 +401,7 @@ rate 0.0% with no white king on the edge, 0.5% with three), and black holding bo
 9×10 maakt een zwarte dam in elke dubbele hoek remise in precies de helft van de stellingen, en welke helft dat is,
 beslist de <strong>oppositie</strong>: de pariteit van de som van de rijen van alle stukken wisselt bij elke zet, en
 dammen kunnen geen tempo verliezen, dus wie de oppositie heeft, ligt vanaf het begin vast.</p>
+<p>De vraag kwam op in de draad <a href="https://damforum.nl/viewtopic.php?t=8915"><em>Draughts on a 10x11 or 8x9 board</em></a> op het World Draughts Forum (november 2026): houden twee dammen in beide dubbele hoeken op 8×9 stand, terwijl ze op 8×8 verliezen? Op 8×9 hangt het van de oppositie af; waarom 8×8 altijd verloren is, staat bij de <a href="index.html">vallen op 8×8</a>.</p>
 <table class="tbl"><tr><th>Zwart in beide dubbele hoeken</th><th>Pariteit 0</th><th>Pariteit 1</th></tr>
 <tr><td>8×9</td><td>99,5% remise</td><td>0,0% remise</td></tr>
 <tr><td>9×10</td><td>99,8%</td><td>0,0%</td></tr>
@@ -337,6 +410,7 @@ dammen kunnen geen tempo verliezen, dus wie de oppositie heeft, ligt vanaf het b
 9×10 a black king in each double corner draws in exactly half of the positions, and that half is decided by
 <strong>opposition</strong>: the parity of the sum of the ranks of all pieces flips with every move, and kings cannot
 lose a tempo, so who has the opposition is fixed from the start.</p>
+<p>The question came up in the thread <a href="https://damforum.nl/viewtopic.php?t=8915"><em>Draughts on a 10x11 or 8x9 board</em></a> on the World Draughts Forum (November 2026): do two kings in both double corners hold on 8×9, while they lose on 8×8? On 8×9 it depends on the opposition; why 8×8 is always lost is explained at the <a href="index.html">traps on 8×8</a>.</p>
 <table class="tbl"><tr><th>Black in both double corners</th><th>Parity 0</th><th>Parity 1</th></tr>
 <tr><td>8×9</td><td>99.5% draws</td><td>0.0% draws</td></tr>
 <tr><td>9×10</td><td>99.8%</td><td>0.0%</td></tr>

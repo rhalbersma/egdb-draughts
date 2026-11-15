@@ -83,6 +83,120 @@ def run(w, h, p):
         print('  ', k, v)
     sys.stdout.flush()
 
+class Race:
+    """8x8: how fast can white force a trap against black's longest defence inside the double corners?
+
+    The game: black only shuttles inside its two double corners (if it cannot, it is frozen and must leave them);
+    white makes quiet moves that leave black no capture. White reaches its goal at a trap (black to move, both
+    shuttle moves allow a forced exchange); a shuttle move that gives white a capture loses a king at once."""
+
+    CA, CB = (1, 5), (28, 32)
+
+    def __init__(self, e):
+        self.e = e
+        self.sq = {n: tuple(fr) for n, fr in e.g['sq'].items()}
+        self.at = {fr: n for n, fr in self.sq.items()}
+        self.nb = {n: [self.at[(f + df, r + dr)] for df in (-1, 1) for dr in (-1, 1) if (f + df, r + dr) in self.at]
+                   for n, (f, r) in self.sq.items()}
+        states = [(W, a, b) for a in self.CA for b in self.CB
+                  for W in combinations([n for n in self.sq if n not in (a, b)], 3)]
+        self.capt = {x for x in states if self.captures(x[0], x[1:])}
+        self.quiet = [x for x in states if x not in self.capt and not self.captures(x[1:], x[0])]
+        traps = {x for x in self.quiet if len(self.shuttles(*x)) == 2
+                 and all(self.exchange(self.fen(x[0], y, 'W')) for y in self.shuttles(*x))}
+        self.btm = {x: 0 for x in traps}         # black to move: white moves needed to force a trap
+        self.wtm = {}                            # white to move: likewise
+        wq = [x for x in states if x not in self.capt]
+        bq = [x for x in states if not self.captures(x[1:], x[0])]
+        n = 0
+        while True:
+            n += 1
+            neww = {x: n for x in wq if x not in self.wtm and any((W2, *x[1:]) in self.btm for W2 in self.wmoves(*x))}
+            self.wtm.update(neww)
+            newb = {x: n for x in bq if x not in self.btm and self.shuttles(*x)
+                    and all((x[0], *y) in self.wtm or (x[0], *y) in self.capt for y in self.shuttles(*x))}
+            self.btm.update(newb)
+            if not neww and not newb:
+                break
+
+    @staticmethod
+    def fen(W, B, stm):
+        return f"{stm}:W{','.join('K%d' % x for x in sorted(W))}:B{','.join('K%d' % x for x in sorted(B))}"
+
+    def captures(self, side, other):
+        occ = set(side) | set(other)
+        for s in side:
+            f, r = self.sq[s]
+            for df in (-1, 1):
+                for dr in (-1, 1):
+                    m, l = self.at.get((f + df, r + dr)), self.at.get((f + 2 * df, r + 2 * dr))
+                    if m in other and l is not None and l not in occ:
+                        return True
+        return False
+
+    def shuttles(self, W, a, b):
+        o = lambda c, x: c[1] if x == c[0] else c[0]
+        return [y for y, free in (((o(self.CA, a), b), o(self.CA, a) not in W), ((a, o(self.CB, b)), o(self.CB, b) not in W))
+                if free]
+
+    def wmoves(self, W, a, b):
+        occ = set(W) | {a, b}
+        for i, s in enumerate(W):
+            for t in self.nb[s]:
+                if t not in occ:
+                    W2 = tuple(sorted(W[:i] + (t,) + W[i + 1:]))
+                    if not self.captures((a, b), W2):
+                        yield W2
+
+    def exchange(self, f):
+        """white to move: a quiet move after which black must capture and white captures back, as three moves"""
+        e = self.e
+        for off in e.analyse(f)[1]:
+            if npieces(off[2]) != (3, 2):
+                continue
+            replies = e.analyse(off[2])[1]
+            if not replies or any(npieces(r[2]) != (2, 2) for r in replies):
+                continue
+            backs = [next((m for m in e.analyse(r[2])[1] if npieces(m[2])[1] < 2), None) for r in replies]
+            if all(backs):
+                return off, replies[0], backs[0]
+        return None
+
+    def distribution(self):
+        return Counter(self.wtm[x] for x in self.quiet if x in self.wtm)
+
+    def farthest(self):
+        """the start (white to move, white kings off the double corners) that takes white longest"""
+        corner = set(self.CA) | set(self.CB)
+        return min((x for x in self.quiet if x in self.wtm and not corner & set(x[0])), key=lambda x: (-self.wtm[x], x))
+
+    def line(self, x):
+        """the moves (engine move tuples) from white-to-move state x: white fastest, black longest, to the trap,
+        then a shuttle and the exchange"""
+        def step(fen, target):
+            key = lambda f: (f.split(':')[1], f.split(':')[2])
+            norm = lambda f: tuple(sorted(int(v.lstrip('K')) for v in f[1:].split(',') if v))
+            want = tuple(norm(z) for z in key(target))
+            return next(m for m in self.e.analyse(fen)[1] if tuple(norm(z) for z in key(m[2])) == want)
+        moves, W, a, b = [], *x
+        while True:
+            fen = self.fen(W, (a, b), 'W')
+            W2 = min((y for y in self.wmoves(W, a, b) if (y, a, b) in self.btm), key=lambda y: self.btm[(y, a, b)])
+            moves.append(step(fen, self.fen(W2, (a, b), 'B')))
+            W = W2
+            sh = [y for y in self.shuttles(W, a, b) if (W, *y) not in self.capt]
+            if self.btm[(W, a, b)] == 0:          # the trap: a shuttle and the forced exchange
+                a2, b2 = sh[0]
+                moves.append(step(self.fen(W, (a, b), 'B'), self.fen(W, (a2, b2), 'W')))
+                return moves + list(self.exchange(self.fen(W, (a2, b2), 'W')))
+            a2, b2 = max(sh, key=lambda y: self.wtm[(W, *y)])
+            moves.append(step(self.fen(W, (a, b), 'B'), self.fen(W, (a2, b2), 'W')))
+            a, b = a2, b2
+
+
 if __name__ == '__main__':
     for w, h, p in ((8, 8, 1), (9, 8, 1), (10, 9, 1), (10, 10, 1)):    # width, height, parity
         run(w, h, p)
+    r = Race(FastEngine(EXE, '--width', 8, '--height', 8, '--parity', 1, '--rules', 'checkers', '--white', 3, '--black', 2))
+    print('8x8: white moves to force a trap, white to move:', dict(sorted(r.distribution().items())))
+    print('   farthest:', r.fen(r.farthest()[0], r.farthest()[1:], 'W'), [m[0] for m in r.line(r.farthest())])

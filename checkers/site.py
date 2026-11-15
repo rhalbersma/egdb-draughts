@@ -630,7 +630,9 @@ same side:</p>
             '<p>Although there are three traps, they turn into each other with an even number of moves: from trap 2 to the '
             'position above two white kings take one step each (d8-c7 and f8-g7), and from trap 2 to trap 1 both black kings '
             'shuttle. All three lie at the same parity (odd). White therefore cannot change the tempo, as on 8×8 with the '
-            'change-over of three kings to the other diagonal. The win here is not strategic: the opposition decides.</p>')]
+            'change-over of three kings to the other diagonal. The win here is not strategic: the opposition decides.</p>')] \
+            + self.no_tempo(pg, k89, e89, '9×8', ['c7', 'e7', 'g7'], ['a7', 'i7'], '1. c7-d8 a7-b8 2. g7-f8 b8-a7',
+                            t('val 2', 'trap 2'))
         rule = next(k for k, x in enumerate(body) if isinstance(x, str) and 'D × d' in x)
         self.write('vesting.html', None, '\n'.join(body[:rule]), pg, k89)
         self.write('afstandsregel.html', None, body[rule], self.page((k89, e89)), k89)
@@ -701,6 +703,27 @@ same side:</p>
                     + self.moves_list(pg, i0, legal, '1. … ') + '.</p>', '<div style="clear:both"></div>']
         return out
 
+    def no_tempo(self, pg, gid, e, name, W, B, line, target):
+        """from a trap set-up with white to move, white steps over to another trap while black shuttles: an even number
+        of moves, so white is to move again and it stays a draw"""
+        t = self.t
+        fen = e.fen(W, B, 'W')
+        v, _ = e.analyse(fen)
+        fig, i0 = pg.diagram(fen, t(f'{name}, wit aan zet: {v}', f'{name}, white to move: {v}'), gid=gid)
+        h, i_end, f_end, _ = pg.moves(fen, self.plan(line), 1, False, 'm1', i0, nbook=len(self.plan(line)))
+        v2, _ = e.analyse(f_end)
+        assert v == v2 == 'D' and f_end[0] == 'W'
+        fig2, _ = pg.diagram(f_end, t(f'{name}, wit aan zet: {v2}', f'{name}, white to move: {v2}'), gid=gid)
+        return [fig, t(f'<p>Met wit aan zet is de opstelling van de val geen val. Stapt wit over naar {target}, terwijl zwart '
+                       f'pendelt, ', f'<p>With white to move the set-up of the trap is no trap. If white steps over to '
+                       f'{target} while black shuttles, ') + f'{h}' + t(
+                       ', dan is dat na een even aantal zetten bereikt, en is wit weer aan zet: het tempo is niet '
+                       'omgedraaid, en het blijft remise.</p>',
+                       ', it is reached after an even number of moves, and white is to move again: the tempo has not turned '
+                       'over, and it stays a draw.</p>'), '<div style="clear:both"></div>',
+                fig2, t('<p>Dezelfde opstelling als de val, maar met wit aan zet: remise.</p>',
+                        '<p>The same set-up as the trap, but with white to move: a draw.</p>'), '<div style="clear:both"></div>']
+
     def fortress99(self, pg, k99, e99):
         """9x9 with unplayable corners: the trap works for two double corners on the same side, not for the diagonal pair"""
         t = self.t
@@ -744,6 +767,8 @@ to move and both black kings on the edge squares of their double corners:</p>
                       '<p>Here too the three traps turn into each other with an even number of moves (h3-i4 and h7-i6; the '
                       'black kings shuttle), and all three lie at the same parity. White cannot change the tempo: the win is '
                       'not strategic but depends on the opposition.</p>'))
+        body += self.no_tempo(pg, k99, e99, t('9×9 onspeelbare hoeken', '9×9 unplayable corners'), ['h3', 'h5', 'h7'],
+                              ['h1', 'h9'], '1. h3-i4 h9-i8 2. h7-i6 i8-h9', t('val 2', 'trap 2'))
         # the diagonal pair: the 8x8 trap (three kings in a row on the connecting diagonal) catches only one shuttle
         figs = []
         for W in (['d3', 'e4', 'f5'], ['e4', 'f5', 'g6']):

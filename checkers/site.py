@@ -621,7 +621,16 @@ same side:</p>
         body[rule:rule] = [t('<p>Dat is een van de drie vallen op 9×8. De andere twee:</p>',
                              '<p>That is one of the three traps on 9×8. The other two:</p>')] + self.trap_blocks(
             pg, k89, e89, '9×8', '', [(['d8', 'e7', 'f8'], ['b8', 'h8']), (['d8', 'e7', 'f8'], ['a7', 'i7'])],
-            {'b8': 'a7', 'a7': 'b8', 'h8': 'i7', 'i7': 'h8'})
+            {'b8': 'a7', 'a7': 'b8', 'h8': 'i7', 'i7': 'h8'}) + [t(
+            '<p>Hoewel er drie vallen zijn, gaan ze in elkaar over met een even aantal zetten: van val 2 naar de stelling '
+            'hierboven doen twee witte dammen elk één stap (d8-c7 en f8-g7), en van val 2 naar val 1 pendelen beide zwarte '
+            'dammen. Alle drie liggen ze bij dezelfde pariteit (oneven). Wit kan het tempo dus niet wisselen, zoals op 8×8 '
+            'met de overstap van drie dammen naar de andere diagonaal. De winst is hier niet strategisch: de oppositie '
+            'beslist.</p>',
+            '<p>Although there are three traps, they turn into each other with an even number of moves: from trap 2 to the '
+            'position above two white kings take one step each (d8-c7 and f8-g7), and from trap 2 to trap 1 both black kings '
+            'shuttle. All three lie at the same parity (odd). White therefore cannot change the tempo, as on 8×8 with the '
+            'change-over of three kings to the other diagonal. The win here is not strategic: the opposition decides.</p>')]
         rule = next(k for k, x in enumerate(body) if isinstance(x, str) and 'D × d' in x)
         self.write('vesting.html', None, '\n'.join(body[:rule]), pg, k89)
         self.write('afstandsregel.html', None, body[rule], self.page((k89, e89)), k89)
@@ -729,6 +738,12 @@ to move and both black kings on the edge squares of their double corners:</p>
                                  [(['h3', 'h5', 'h7'], ['h1', 'h9']), (['i4', 'h5', 'i6'], ['h1', 'h9']),
                                   (['i4', 'h5', 'i6'], ['i2', 'i8'])],
                                  {'h1': 'i2', 'i2': 'h1', 'h9': 'i8', 'i8': 'h9'})
+        body.append(t('<p>Ook hier gaan de drie vallen in elkaar over met een even aantal zetten (h3-i4 en h7-i6; de zwarte '
+                      'dammen pendelen), en liggen ze alle drie bij dezelfde pariteit. Wit kan het tempo niet wisselen: de '
+                      'winst is niet strategisch maar hangt af van de oppositie.</p>',
+                      '<p>Here too the three traps turn into each other with an even number of moves (h3-i4 and h7-i6; the '
+                      'black kings shuttle), and all three lie at the same parity. White cannot change the tempo: the win is '
+                      'not strategic but depends on the opposition.</p>'))
         # the diagonal pair: the 8x8 trap (three kings in a row on the connecting diagonal) catches only one shuttle
         figs = []
         for W in (['d3', 'e4', 'f5'], ['e4', 'f5', 'g6']):

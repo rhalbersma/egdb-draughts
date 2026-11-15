@@ -36,8 +36,10 @@ CHAPTERS = [
         ('curiosa.html', 'Uitzondering 2: twee curiosa', 'Exception 2: two curiosities'),
         ('val.html', 'Twee vallen om de vesting te breken', 'Two traps to break the fortress'),
         ('val-pariteit.html', 'De winst is strategisch, de pariteit doet er niet toe', 'The win is strategic, parity does not matter')]),
-    ('De vesting op grotere borden', 'The fortress on larger boards', [
-        ('vesting.html', 'Eén val om de vesting te breken op 9×8', 'A trap to break the fortress on 9×8'),
+    ('3 tegen 2 op grotere borden', '3 against 2 on larger boards', [
+        ('vesting.html', 'Eén val om de vesting te breken op 9×8', 'One trap to break the fortress on 9×8'),
+        ('vesting-pariteit.html', 'De winst is niet strategisch, de pariteit doet ertoe op 9×8',
+         'The win is non-strategic, parity matters on 9×8'),
         ('vesting-9x9.html', '9×9 onspeelbare hoeken: de val en de diagonaal', '9×9 unplayable corners: the trap and the diagonal'),
         ('afstandsregel.html', 'De afstandsregel', 'The distance rule')]),
     ('Conclusie', 'Conclusion', [
@@ -627,23 +629,26 @@ same side:</p>
 <p><em>D</em> ≤ 7: the fortress falls · <em>D</em> = 8: opposition decides, unless also <em>d</em> = 8 ·
 <em>D</em> ≥ 9: the fortress holds.</p>'''),
                 ]
-        # the other two of the three traps on 9x8 (the position above with black to move is the third)
-        rule = next(k for k, x in enumerate(body) if isinstance(x, str) and 'D × d' in x)
-        body[rule:rule] = [t('<p>Dat is een van de drie vallen op 9×8. De andere twee:</p>',
-                             '<p>That is one of the three traps on 9×8. The other two:</p>')] + self.trap_blocks(
-            pg, k89, e89, '9×8', '', [(['d8', 'e7', 'f8'], ['b8', 'h8']), (['d8', 'e7', 'f8'], ['a7', 'i7'])],
+        # the other two of the three traps on 9x8 (the trap of the previous page is the third), on a page of their own
+        pgp = self.page((k89, e89))
+        extra = [t('<p>De val op de <a href="vesting.html">vorige pagina</a> is een van de drie vallen op 9×8. De andere '
+                   'twee:</p>', '<p>The trap on the <a href="vesting.html">previous page</a> is one of the three traps on '
+                   '9×8. The other two:</p>')] + self.trap_blocks(
+            pgp, k89, e89, '9×8', '', [(['d8', 'e7', 'f8'], ['b8', 'h8']), (['d8', 'e7', 'f8'], ['a7', 'i7'])],
             {'b8': 'a7', 'a7': 'b8', 'h8': 'i7', 'i7': 'h8'}) + [t(
-            '<p>Hoewel er drie vallen zijn, gaan ze in elkaar over met een even aantal zetten: van val 2 naar de stelling '
-            'hierboven doen twee witte dammen elk één stap (d8-c7 en f8-g7), en van val 2 naar val 1 pendelen beide zwarte '
-            'dammen. Alle drie liggen ze bij dezelfde pariteit (oneven). Wit kan het tempo dus niet wisselen, zoals op 8×8 '
-            'met de overstap van drie dammen naar de andere diagonaal. De winst is hier niet strategisch: de oppositie '
-            'beslist.</p>',
+            '<p>Hoewel er drie vallen zijn, gaan ze in elkaar over met een even aantal zetten: van val 2 naar de val van de '
+            'vorige pagina (wit op c7, e7 en g7) doen twee witte dammen elk één stap (d8-c7 en f8-g7), en van val 2 naar '
+            'val 1 pendelen beide zwarte dammen. Alle drie liggen ze bij dezelfde pariteit (oneven). Wit kan het tempo dus '
+            'niet wisselen, zoals op 8×8 met de overstap van drie dammen naar de andere diagonaal. De winst is hier niet '
+            'strategisch: de oppositie beslist.</p>',
             '<p>Although there are three traps, they turn into each other with an even number of moves: from trap 2 to the '
-            'position above two white kings take one step each (d8-c7 and f8-g7), and from trap 2 to trap 1 both black kings '
-            'shuttle. All three lie at the same parity (odd). White therefore cannot change the tempo, as on 8×8 with the '
-            'change-over of three kings to the other diagonal. The win here is not strategic: the opposition decides.</p>')] \
-            + self.no_tempo(pg, k89, e89, '9×8', ['c7', 'e7', 'g7'], ['a7', 'i7'], '1. c7-d8 a7-b8 2. g7-f8 b8-a7',
+            'trap of the previous page (white on c7, e7 and g7) two white kings take one step each (d8-c7 and f8-g7), and '
+            'from trap 2 to trap 1 both black kings shuttle. All three lie at the same parity (odd). White therefore cannot '
+            'change the tempo, as on 8×8 with the change-over of three kings to the other diagonal. The win here is not '
+            'strategic: the opposition decides.</p>')] \
+            + self.no_tempo(pgp, k89, e89, '9×8', ['c7', 'e7', 'g7'], ['a7', 'i7'], '1. c7-d8 a7-b8 2. g7-f8 b8-a7',
                             t('val 2', 'trap 2'))
+        self.write('vesting-pariteit.html', None, '\n'.join(extra), pgp, k89)
         rule = next(k for k, x in enumerate(body) if isinstance(x, str) and 'D × d' in x)
         self.write('vesting.html', None, '\n'.join(body[:rule]), pg, k89)
         self.write('afstandsregel.html', None, body[rule], self.page((k89, e89)), k89)
@@ -662,7 +667,7 @@ same side:</p>
             '<tr><td>9×8</td><td>100% remise (8.228)</td><td>0% remise (8.244)</td></tr>'
             '<tr><td>10×9</td><td>100% (18.420)</td><td>0% (18.440)</td></tr>'
             '<tr><td>11×10</td><td>100% (37.030)</td><td>100% (37.050)</td></tr></table>'
-            '<p>Zie <a href="val.html">de val</a> en <a href="vesting.html">de vesting op grotere borden</a>.</p>',
+            '<p>Zie <a href="val.html">de val</a> en <a href="vesting.html">3 tegen 2 op grotere borden</a>.</p>',
             '<p>The traps per board, with black to move and both black kings on the edge squares of two double corners '
             '(counted with <a href="https://github.com/rhalbersma/egdb-draughts/blob/main/checkers/traps.py"><code>traps.py</code></a>):</p>'
             '<table class="tbl"><tr><th>Board</th><th>Traps at even parity</th><th>Traps at odd parity</th><th>Consequence</th></tr>'
@@ -674,7 +679,7 @@ same side:</p>
             '<tr><td>9×8</td><td>100% draws (8,228)</td><td>0% draws (8,244)</td></tr>'
             '<tr><td>10×9</td><td>100% (18,420)</td><td>0% (18,440)</td></tr>'
             '<tr><td>11×10</td><td>100% (37,030)</td><td>100% (37,050)</td></tr></table>'
-            '<p>See <a href="val.html">the trap</a> and <a href="vesting.html">the fortress on larger boards</a>.</p>'),
+            '<p>See <a href="val.html">the trap</a> and <a href="vesting.html">3 against 2 on larger boards</a>.</p>'),
             self.page((k89, e89)), None)
 
 

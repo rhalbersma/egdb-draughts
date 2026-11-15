@@ -98,7 +98,7 @@ Voor elke variant waarvan de eindclaim niet klopt: de claim van het boek gaat ov
                                                     … D
 ```
 
-#### Sectie 7.4, vanaf diagram 7.10: weerlegging 7. … 4-7!*
+#### Sectie 7.4, vanaf diagram 7.12: weerlegging 7. … 4-7!*
 
 *6. 17-14 9-12 7. 14×9 5-7 — diagram 7.13*
 

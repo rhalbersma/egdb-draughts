@@ -118,6 +118,7 @@ NOTES_EN = {
     'de enige remise is 7. … 3-6!': 'the only draw is 7. … 3-6!',
     'na 4. 14-11': 'after 4. 14-11',
     'na 6. 18-14 wint wit, na 6. 17-14 remise': 'after 6. 18-14 white wins, after 6. 17-14 a draw',
+    'de stand na 5. … 3×8 (als diagram 7.10): na 6. 18-14 wint wit, na 6. 17-14 remise': 'the position after 5. … 3×8 (as diagram 7.10): after 6. 18-14 white wins, after 6. 17-14 a draw',
     'hoofdvariant na 5. … 9x2': 'main line after 5. … 9x2',
     'wit aan zet, remise': 'white to move, draw',
     'met schijf 18 op 17 gewonnen door 13-11': 'with the man from 18 on 17, won by 13-11',

@@ -775,7 +775,7 @@ Voor elke variant waarvan de eindclaim niet klopt: de claim van het boek gaat ov
                                                     … D
 ```
 
-#### Sectie 7.4, vanaf diagram 7.10: weerlegging 7. … 4-7!*
+#### Sectie 7.4, vanaf diagram 7.12: weerlegging 7. … 4-7!*
 
 *6. 17-14 9-12 7. 14×9 5-7 — diagram 7.13*
 
@@ -3359,11 +3359,11 @@ De waarden gelden voor de partij die aan het einde van de variant aan zet is (ko
 
 | | vanaf | variant | aan zet | boek | database | toelichting |
 |---|---|---|---|---|---|---|
-| ✅ | 7.10 | 6. 18-14 9-12 7. 14×9 4-7 8. 13-11 8×13 9. 17×10 7-11 10. 15-12 | zwart | L | L26 |  |
-| ✅ | 7.10 | 6. 18-14 4-7 7. 13-11 8×13 8. 17×10 | zwart | L | L4 |  |
-| ✅ | 7.10 | 6. 18-14 9-12 7. 14×9 4-7 8. 17-14 | zwart | D | D | *17-14 is remise*<br>zet 5 (wit) 17-14 geeft de winst weg (remise) (behoudend: 13-11) |
-| ❌ | 7.10 | 6. 17-14 9-12 7. 14×9 5-7 | wit | D | W13 | *diagram 7.13*<br>zet 4 (zwart) 5-7: verliest; behoudend waren: 4-7<br>zet 1 (wit) 17-14 geeft de winst weg (remise) (behoudend: 18-14) |
-| ✅ | 7.10 | 6. 17-14 9-12 7. 14×9 4-7 | wit | D | D | *diagram 7.14*<br>zet 1 (wit) 17-14 geeft de winst weg (remise) (behoudend: 18-14) |
+| ✅ | 7.12 | 6. 18-14 9-12 7. 14×9 4-7 8. 13-11 8×13 9. 17×10 7-11 10. 15-12 | zwart | L | L26 |  |
+| ✅ | 7.12 | 6. 18-14 4-7 7. 13-11 8×13 8. 17×10 | zwart | L | L4 |  |
+| ✅ | 7.12 | 6. 18-14 9-12 7. 14×9 4-7 8. 17-14 | zwart | D | D | *17-14 is remise*<br>zet 5 (wit) 17-14 geeft de winst weg (remise) (behoudend: 13-11) |
+| ❌ | 7.12 | 6. 17-14 9-12 7. 14×9 5-7 | wit | D | W13 | *diagram 7.13*<br>zet 4 (zwart) 5-7: verliest; behoudend waren: 4-7<br>zet 1 (wit) 17-14 geeft de winst weg (remise) (behoudend: 18-14) |
+| ✅ | 7.12 | 6. 17-14 9-12 7. 14×9 4-7 | wit | D | D | *diagram 7.14*<br>zet 1 (wit) 17-14 geeft de winst weg (remise) (behoudend: 18-14) |
 | ✅ | 7.13b | 1. 13-11 | zwart | L | L4 |  |
 | ✅ | 7.14b | 1. 13-11 | zwart | L | L30 |  |
 | ✅ | 7.13 | 8. 13-10 7-11 9. 10-7?? 8-12 | wit | L | L12 | bevestigd: 10-7?? verliest, terecht als fout gemarkeerd (beter: 9-6, 15-12)<br>zet 1 (wit) 13-10 geeft de winst weg (remise) (behoudend: 9-6) |

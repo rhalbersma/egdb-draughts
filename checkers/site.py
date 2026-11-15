@@ -342,10 +342,13 @@ rate 0.0% with no white king on the edge, 0.5% with three), and black holding bo
                         '<p>The longest defence: black shuttles as long as possible, white builds the trap as fast as '
                         'possible and forces the exchange after the last shuttle move.</p>'),
                  f'<p class="var">{" ".join(parts)}</p>',
-                 t('<p>Verlaat zwart zelf een hoek, dan komt hij er niet meer in: die dam wordt aan de rand opgesloten, en '
-                   'de twee andere witte dammen nemen de laatste hoek.</p>',
-                   '<p>If black leaves a corner itself, it never gets back in: that king is locked in at the edge, and the '
-                   'other two white kings take the last corner.</p>'), '<div style="clear:both"></div>']
+                 t('<p>Zwart kan ook zelf een hoek verlaten. Volgens de database is dat vaak even goed als pendelen, en '
+                   'meestal kan zwart later ook weer terug in de hoek, zoals de zwarte dam rechtsonder in de hoofdvariant '
+                   'van het eerste diagram (zet 10 tot en met 13). Het redt niets: alle stellingen blijven verloren.</p>',
+                   '<p>Black can also leave a corner itself. According to the database that is often just as good as '
+                   'shuttling, and usually black can later get back into the corner, as the black king at the bottom right '
+                   'does in the main line of the first diagram (moves 10 to 13). It saves nothing: every position stays '
+                   'lost.</p>'), '<div style="clear:both"></div>']
         return body
 
     def vesting(self):

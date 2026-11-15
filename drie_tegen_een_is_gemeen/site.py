@@ -133,10 +133,10 @@ class Site:
     # ---- pages -------------------------------------------------------------------
 
     def index(self):
-        e = self.engine('5x6', '--width', 5, '--height', 6, '--parity', 1, '--white', 2, '--black', 1)
+        e = self.engine('5x6', '--width', 6, '--height', 5, '--parity', 1, '--white', 2, '--black', 1)
         pg = self.page(('5x6', e))
         t = self.t
-        fig, _ = pg.diagram(e.fen(['e1', 'c3'], ['c1']), t('5×6: twee dammen winnen (27 ply)', '5×6: two kings win (27 plies)'))
+        fig, _ = pg.diagram('W:WK1,K8:BK7', t('5×6: twee dammen winnen (27 ply)', '5×6: two kings win (27 plies)'))
         body = [f'<h1>{TITLE}</h1>', fig, t('''
 <p>Eindspelen met alleen dammen, op borden van elke afmeting <em>B × L</em>, met internationale regels: vliegende
 dammen, slagplicht, meerslag en Turkse slag. Een Nederlands boek uit 1988 over drie dammen tegen één vond zijn
@@ -200,8 +200,8 @@ on the long diagonal (40 forks with black to move), and the exact limits of ever
         self.write('index.html', 'Overzicht', '\n'.join(body), pg)
 
     def twee(self):
-        e56 = self.engine('5x6', '--width', 5, '--height', 6, '--parity', 1, '--white', 2, '--black', 1)
-        e57 = self.engine('5x7', '--width', 5, '--height', 7, '--parity', 1, '--white', 2, '--black', 1)
+        e56 = self.engine('5x6', '--width', 6, '--height', 5, '--parity', 1, '--white', 2, '--black', 1)
+        e57 = self.engine('5x7', '--width', 7, '--height', 5, '--parity', 1, '--white', 2, '--black', 1)
         pg = self.page(('5x6', e56), ('5x7', e57))
         t = self.t
         body = [t('<h1>2 dammen tegen 1</h1>', '<h1>2 kings against 1</h1>'), f'<pre class="tbl">{esc(TABLE_21)}</pre>',
@@ -220,11 +220,11 @@ diagonal(s).</li>
 board size.</li>
 <li>With the single king to move there are a few exceptions on 5×6 (8) and 5×7 (16): double attacks (forks).</li>
 </ul>''')]
-        fen = e56.fen(['e1', 'c3'], ['c1'])
+        fen = 'W:WK1,K8:BK7'
         fig, i0 = pg.diagram(fen, t('5×6, wit aan zet', '5×6, white to move'), gid='5x6')
-        line = ('1. c3-d4 c1-e3 2. d4-b2 e3-c5 3. e1-d2 c5-e3 4. d2-c1 e3-c5 5. b2-e5 c5-b6 6. c1-e3 b6-a5 '
-                '7. e5-d6 a5-c3 8. d6-a3 c3-e5 9. e3-c5 e5-c3 10. a3-c1 c3-e5 11. c5-d6 e5-d4 12. c1-b2! d4xa1 '
-                '13. d6-e5 a1-b2 14. e5xa1')
+        line = ('1. c3-d4 a3-c5 2. d4-b2 c5-e3 3. a5-b4 e3-c5 4. b4-a3 c5-e3 5. b2-e5 e3-f2 6. a3-c5 f2-e1 '
+                '7. e5-f4 e1-c3 8. f4-c1 c3-e5 9. c5-e3 e5-c3 10. c1-a3 c3-e5 11. e3-f4 e5-d4 12. a3-b2! d4xa1 '
+                '13. f4-e5 a1-b2 14. e5xa1')
         h, *_ = pg.moves(fen, self.plan(line), 1, False, 'm1', i0)
         v, _ = e56.analyse(fen)
         body += [t('<h2>5×6: de langste winst</h2>', '<h2>5×6: the longest win</h2>'), fig,
@@ -236,10 +236,10 @@ board size.</li>
                    '<p>The long tempo play serves one purpose: sacrifice so that black captures <em>into the corner</em>, '
                    'then place the second king behind it on the corner diagonal. More than 80% of all quiet wins on 5×6 '
                    'and 5×7 end with black capturing into a corner.</p>')]
-        fen = e57.fen(['e1', 'c3'], ['e3'])
+        fen = 'W:WK1,K9:BK2'
         fig, i0 = pg.diagram(fen, t('5×7 p1, wit aan zet', '5×7 p1, white to move'), gid='5x7')
-        line = ('1. c3-e5 e3-c1 2. e1-b4 c1-e3 3. b4-a3 e3-b6 4. e5-c7 b6-e3 5. a3-c1 e3-d4 6. c1-b2! d4xa1 '
-                '7. c7-e5 a1-b2 8. e5xa1')
+        line = ('1. c3-e5 c5-a3 2. a5-d2 a3-c5 3. d2-c1 c5-f2 4. e5-g3 f2-c5 5. c1-a3 c5-d4 6. a3-b2! d4xa1 '
+                '7. g3-e5 a1-b2 8. e5xa1')
         h, *_ = pg.moves(fen, self.plan(line), 1, False, 'm1', i0)
         body += [t('<h2>5×7 p1: hetzelfde slotmotief</h2>', '<h2>5×7 p1: the same final motif</h2>'), fig,
                  t('<p>Op 5×7 p1 verschijnt hetzelfde slotmotief na 15 ply:</p>',
@@ -271,9 +271,9 @@ speelbare hoeken (p1). Op <em>B</em> = 7 wint de verkeerde kleuring nog (5×9 p0
 daar nog reikt. Hoe de families winnen, staat bij de <a href="vangstellingen.html">vangstellingen</a>.</p>
 <h2>De algemene methode op smalle borden</h2>
 <ul>
-<li><strong>B = 5, 6</strong>: elk niet-vierkant bord is gewonnen (gecontroleerd tot 5×13 en 6×15). Drie dammen op
-één rij sluiten de volle breedte af en worden over het bord geschoven; de langste winst groeit met ongeveer 2 ply per
-extra rij.</li>
+<li><strong>B = 5, 6</strong>: elk niet-vierkant bord is gewonnen (gecontroleerd tot 5×13 en 6×15). Drie dammen in
+een kolom sluiten de volle breedte af en worden over het bord geschoven; de langste winst groeit met ongeveer 2 ply per
+extra kolom.</li>
 <li><strong>B = 7</strong>: gewonnen tot en met <strong>7×14</strong> en <strong>7×15 p1</strong> (boek: tot 7×11).
 Vanaf <em>L</em> = 16 is het remise. De langste winsten springen van 25 naar 35, 49, 53 en 67–73 ply: de ruimte wordt
 krap.</li>
@@ -305,9 +305,9 @@ method still reaches that far. How the families win is shown with the <a href="v
 positions</a>.</p>
 <h2>The general method on narrow boards</h2>
 <ul>
-<li><strong>B = 5, 6</strong>: every non-square board is won (checked up to 5×13 and 6×15). Three kings on one rank
+<li><strong>B = 5, 6</strong>: every non-square board is won (checked up to 5×13 and 6×15). Three kings in a column
 close off the full width and can be pushed along the board; the longest win grows by about 2 plies per extra
-rank.</li>
+column.</li>
 <li><strong>B = 7</strong>: won up to <strong>7×14</strong> and <strong>7×15 p1</strong> (book: up to 7×11). From
 <em>L</em> = 16 on it is drawn. The longest wins jump from 25 to 35, 49, 53 and 67–73 plies: the space becomes
 tight.</li>
@@ -385,9 +385,9 @@ both.</p>''')]
         return best[1] if best else None
 
     def traps(self):
-        fams = [('10x11', 10, 11, ['b2', 'i11', 'g9'], 'B + 1', 'j8'),       # (gid, width B, height L, ...)
-                ('10x12', 10, 12, ['b2', 'h12', 'f10'], 'B + 2', None),
-                ('10x19', 10, 19, ['b2', 'h10', 'b18'], '2B − 1', None)]
+        fams = [('10x11', 11, 10, ['b2', 'k9', 'i7'], 'B + 1', 'h10'),
+                ('10x12', 12, 10, ['b2', 'l8', 'j6'], 'B + 2', None),
+                ('10x19', 19, 10, ['b2', 'j8', 'r2'], '2B − 1', None)]
         engines = {gid: self.engine(gid, '--width', w, '--height', h, '--parity', 1) for gid, w, h, *_ in fams}
         pg = self.page(*engines.items())
         t = self.t
@@ -412,9 +412,9 @@ to move cannot capture. Counting only the squares where neither side can capture
 capture.</p>''')]
         # the trapping positions in general coordinates (file, rank), counted from (1, 1) = a1 at the bottom left;
         # checked on every board of the column "boards" with the databases
-        gen = [('B + 1', '(2, 2), (B − 1, L), (B − 3, L − 2)', '10x11', '6×7 … 11×12', 10, 9),
-               ('B + 2', '(2, 2), (B − 2, L), (B − 4, L − 2)', '10x12', '6×8 … 10×12', 12, 11),
-               ('2B − 1', '(2, 2), (B − 2, B), (2, L − 1)', '10x19', '5×9 … 9×17', 8, 7)]
+        gen = [('B + 1', '(2, 2), (L, B − 1), (L − 2, B − 3)', '10x11', '6×7 … 11×12', 10, 9),
+               ('B + 2', '(2, 2), (L, B − 2), (L − 2, B − 4)', '10x12', '6×8 … 10×12', 12, 11),
+               ('2B − 1', '(2, 2), (B, B − 2), (L − 1, 2)', '10x19', '5×9 … 9×17', 8, 7)]
         ex = {gid: wk for gid, w, h, wk, *_ in fams}
         rows = ''.join(f'<tr><td><strong>{f}</strong></td><td>{c} — {t("bv.", "e.g.")} {g.replace("x", "×")}: '
                        f'{pg.prose(", ".join(ex[g]), g, "alg")}</td><td>{boards}</td><td>{lb}</td><td>{lw}</td></tr>'
@@ -424,13 +424,11 @@ capture.</p>''')]
                    '<table class="tbl"><tr><th>Family</th><th>White kings (file, rank)</th><th>Boards checked</th>'
                    '<th>Black to move</th><th>White to move</th></tr>') + rows + '</table>'
                  + t('<p class="note">Coördinaten (kolom, rij) gerekend vanaf (1, 1) = a1 linksonder; <em>B</em> × '
-                     '<em>L</em> met <em>B</em> kolommen en <em>L</em> rijen. Bij 2<em>B</em> − 1 staan (2, 2) en '
-                     '(2, <em>L</em> − 1) op de benen van de V en (<em>B</em> − 2, <em>B</em>) twee velden links van '
-                     'de top.</p>',
+                     '<em>L</em> met <em>L</em> kolommen en <em>B</em> rijen. Bij 2<em>B</em> − 1 staan (2, 2) en '
+                     '(<em>L</em> − 1, 2) op de benen van de V en (<em>B</em>, <em>B</em> − 2) onder de top.</p>',
                      '<p class="note">Coordinates (file, rank) counted from (1, 1) = a1 at the bottom left; <em>B</em> × '
-                     '<em>L</em> with <em>B</em> files and <em>L</em> ranks. For 2<em>B</em> − 1, (2, 2) and '
-                     '(2, <em>L</em> − 1) stand on the legs of the V and (<em>B</em> − 2, <em>B</em>) two squares left '
-                     'of its apex.</p>'))
+                     '<em>L</em> with <em>L</em> files and <em>B</em> ranks. For 2<em>B</em> − 1, (2, 2) and '
+                     '(<em>L</em> − 1, 2) stand on the legs of the V and (<em>B</em>, <em>B</em> − 2) below its apex.</p>'))
         body[1] = body[1].replace('{TABLE}', table)
         for gid, w, h, wk, fam, black in fams:
             e = engines[gid]
@@ -453,24 +451,24 @@ capture.</p>''')]
                      f'<p class="var">{hb}</p>']
             if gid == '10x11':
                 body.append(pg.prose_html(t('<p>Op 10×11 (diagram 8 van het boek) wint wit met wit aan zet op elk veld van de zwarte dam '
-                            'binnen 5 ply, <strong>behalve op j8, het gearceerde veld in het boek, waar het 9 ply '
+                            'binnen 5 ply, <strong>behalve op h10, het gearceerde veld in het boek, waar het 9 ply '
                             'kost</strong>. De dam op b2 staat op de lange lijn, waarvan het andere eind een ingang '
                             'rechtsboven is; de twee dammen rechtsboven vormen er een halve val mee en de bovenste kan '
                             'de lange lijn afsluiten.</p>',
                               '<p>On 10×11 (diagram 8 of the book) white to move wins within 5 plies on every square of '
-                              'the black king, <strong>except j8, the hatched square in the book, which takes 9 '
+                              'the black king, <strong>except h10, the hatched square in the book, which takes 9 '
                               'plies</strong>. The king at b2 stands on the long diagonal, whose other end is an entrance '
                               'at the top right; the two kings at the top right form a half trap with it and the upper one '
                               'can close the long diagonal.</p>'), gid, 'alg'))
             if gid == '10x19':
                 body.append(t('<p><strong>De V</strong> (alleen bij <em>L</em> = 2<em>B</em> − 1): de diagonalen vanuit '
                             'de twee hoeken van één lange zijde ontmoeten elkaar precies in het midden van de overkant. '
-                            'Korter, en de benen kruisen vóór de overkant; langer, en ze raken de overkant op twee '
-                            'verschillende velden. Even <em>B</em> heeft altijd de twee hoeken; oneven <em>B</em> alleen met kleuring '
+                            'Korter, en de benen kruisen onder de rand; langer, en ze raken de rand op twee verschillende '
+                            'velden. Even <em>B</em> heeft altijd de twee hoeken; oneven <em>B</em> alleen met kleuring '
                             'p1.</p>',
                               '<p><strong>The V</strong> (only for <em>L</em> = 2<em>B</em> − 1): the diagonals from the '
                               'two corners of one long side meet exactly in the middle of the opposite side. Shorter, and '
-                              'the legs cross before the opposite side; longer, and they hit it at two different squares. Even '
+                              'the legs cross below the edge; longer, and they hit the edge at two different squares. Even '
                               '<em>B</em> always has the two corners; odd <em>B</em> has them only with colouring p1.</p>'))
             body.append('<div style="clear:both"></div>')
         self.write('vangstellingen.html', 'Vangstellingen', '\n'.join(body), pg)

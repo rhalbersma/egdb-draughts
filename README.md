@@ -99,7 +99,7 @@ cmake -B build && cmake --build build
 
 ## Conventions
 
-* **Board** `W × H`: `W` files (the width, the shorter side) and `H` ranks (the height, the longer side). In the diagrams the long side is vertical.
+* **Board** `W × H`: `W` is the shorter side, `H` the longer one. In the diagrams the long side is horizontal.
 * **Parity** (tabula): **p1** = the corner squares are playable (a1 is a dark square), **p0** = they are not.
   This only matters for odd × odd boards; otherwise both parities are mirror images.
 * **Squares**: numbered 1..N in PDN order (square 1 top left) in FEN and in the text files; algebraic (a1 bottom left) in move sequences.
@@ -187,8 +187,8 @@ On W = 7 the wrong colouring still wins (5×9 p0, 7×13 p0) because the general 
 
 ### The general method on narrow boards
 
-* **W = 5, 6**: every non-square board is won (checked up to 5×13 and 6×15). Three kings on one rank
-  close off the full width and can be pushed along the board; the longest win grows by about 2 plies per extra rank.
+* **W = 5, 6**: every non-square board is won (checked up to 5×13 and 6×15). Three kings in a column
+  close off the full width and can be pushed along the board; the longest win grows by about 2 plies per extra column.
 * **W = 7**: won up to **7×14** and **7×15 p1** (book: up to 7×11). From H = 16 on it is drawn.
   The longest wins jump from 25 to 35, 49, 53 and 67–73 plies: the space becomes tight.
 * **W = 8**: won at H = 9, 10, 11 and 15 (= 2W − 1), drawn at H = 12–14 and 16–19.
@@ -222,54 +222,48 @@ Kept at the same place on every board size, the conversion always takes exactly 
 
 | Family | White kings | Boards checked | Black to move | White to move |
 |---|---|---|---|---|
-| **W + 1** | (2, 2), (W − 1, H), (W − 3, H − 2) — e.g. 10×11: b2, i11, g9 | 6×7 … 11×12 | 10 | 9 |
-| **W + 2** | (2, 2), (W − 2, H), (W − 4, H − 2) — e.g. 10×12: b2, h12, f10 | 6×8 … 10×12 | 12 | 11 |
-| **2W − 1** | (2, 2), (W − 2, W), (2, H − 1) — e.g. 10×19: b2, h10, b18 | 5×9 … 9×17 | 8 | 7 |
+| **W + 1** | (2, 2), (H, W − 1), (H − 2, W − 3) — e.g. 10×11: b2, k9, i7 | 6×7 … 11×12 | 10 | 9 |
+| **W + 2** | (2, 2), (H, W − 2), (H − 2, W − 4) — e.g. 10×12: b2, l8, j6 | 6×8 … 10×12 | 12 | 11 |
+| **2W − 1** | (2, 2), (W, W − 2), (H − 1, 2) — e.g. 10×19: b2, j8, r2 | 5×9 … 9×17 | 8 | 7 |
 
-Coordinates are (file, rank) counted from (1, 1) = a1 at the bottom left; for 2W − 1, (2, 2) and (2, H − 1) stand on the legs of the V and (W − 2, W) two squares left of its apex. No draw is left on any of these boards. The strong side builds the trapping position from an arbitrary position
+Coordinates are (file, rank) counted from (1, 1) = a1 at the bottom left; for 2W − 1, (2, 2) and (H − 1, 2) stand on the legs of the V and (W, W − 2) below its apex. No draw is left on any of these boards. The strong side builds the trapping position from an arbitrary position
 and then converts quickly: on 9×17 the longest win is 23 plies, of which at most 8 are the conversion.
 
 **The V** (only for `H = 2W − 1`): the diagonals from the two corners of one long side meet exactly in the
-middle of the opposite side. Shorter, and the legs cross before the opposite side; longer, and they hit it at two different squares.
+middle of the opposite side. Shorter, and the legs cross below the edge; longer, and they hit the edge at two different squares.
 On 6×11:
 ```
-    +-------------+
- 11 | *   .   .   |
- 10 |   *   .   . |
-  9 | .   *   .   |
-  8 |   .   *   . |
-  7 | .   .   *   |
-  6 |   .   .   * |
-  5 | .   .   *   |
-  4 |   .   *   . |
-  3 | .   *   .   |
-  2 |   *   .   . |
-  1 | *   .   .   |
-    +-------------+
-      a b c d e f
+    +-----------------------+
+  6 |   .   .   *   .   .   |
+  5 | .   .   *   *   .   . |
+  4 |   .   *   .   *   .   |
+  3 | .   *   .   .   *   . |
+  2 |   *   .   .   .   *   |
+  1 | *   .   .   .   .   * |
+    +-----------------------+
+      a b c d e f g h i j k
 ```
-Even W always has the two corners; odd W has them only with colouring p1. The trapping map is exactly symmetric about the apex rank.
+Even W always has the two corners; odd W has them only with colouring p1. The trapping map is exactly symmetric about the apex file.
 
 **W + 1 and W + 2**: the king at b2 stands on the long diagonal, whose other end is an entrance at the top right;
 the two kings at the top right form a half trap with it and the upper one can close the long line.
-Black king bottom right: b2 sacrifices and black is caught. Black king top left: the second king sacrifices and the upper one closes in.
+Black king top left: b2 sacrifices and black is caught. Black king bottom right: the second king sacrifices and the upper one closes in.
 On 10×11 (book diagram 8) every square of the black king is won with white to move within 5 plies,
-**except j8, the hatched square in the book, which takes 9 plies**:
+**except h10, the hatched square in the book, which takes 9 plies**:
 ```
-    +-----------------------------------------+
- 11 | +5      +5      +5      +5      W       |
- 10 |     +5      +5      +1x     +3      +3  |
-  9 | +5      +5      +5      W       +1x     |
-  8 |     +5      +5      +1x     +1x     +9  |
-  7 | +5      +5      +1x     +1x     +1x     |
-  6 |     +5      +1x     +1x     +3      +5  |
-  5 | +5      +1x     +1x     +3      +3      |
-  4 |     +1x     +1x     +3      +3      +3  |
-  3 | +3      +1x     +3      +3      +3      |
-  2 |     W       +3      +3      +3      +3  |
-  1 | +3      +3      +3      +3      +3      |
-    +-----------------------------------------+
-      a   b   c   d   e   f   g   h   i   j
+    +---------------------------------------------+
+ 10 |     +3      +3      +5      +9      +3      |
+  9 | +3      +3      +3      +1x     +1x      W  |
+  8 |     +3      +3      +3      +1x     +3      |
+  7 | +3      +3      +3      +1x      W      +5  |
+  6 |     +3      +3      +1x     +1x     +1x     |
+  5 | +3      +3      +1x     +1x     +5      +5  |
+  4 |     +3      +1x     +1x     +5      +5      |
+  3 | +3      +1x     +1x     +5      +5      +5  |
+  2 |      W      +1x     +5      +5      +5      |
+  1 | +3      +3      +5      +5      +5      +5  |
+    +---------------------------------------------+
+      a   b   c   d   e   f   g   h   i   j   k
 ```
 (DTM per square of the black king with white to move; `x` = white can capture.)
 

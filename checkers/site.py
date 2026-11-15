@@ -333,6 +333,21 @@ turn on the single corner. 307 contain the blockade of <a href="twee-blokkade.ht
 single corner, held by one black king. In 5 black holds the same two white kings with two kings (on f6 and e5 against h8
 and g7), in 2 one white king is locked in the corner (the <a href="curiosa.html">two curiosities</a>). Only 2 classes have nothing to do with the corner (the third
 diagram).</p>''')]
+        body += [t('''
+<p>Het algemene patroon: een van de drie motieven van <a href="twee-blokkade.html">1 tegen 2 in de enkele hoek</a>, en
+de overgebleven zwarte dam heeft de oppositie tegen de overgebleven witte dam. Met wit aan zet staan die twee dan op
+hetzelfde systeem: het verschil in lijn en het verschil in rij zijn allebei even. Ze mogen verder overal over het bord
+staan, zolang de vrije witte dam de blokkade in de hoek niet kan opheffen. De oppositie is noodzakelijk: van de rustige
+stellingen met een van de drie motieven en de vrije dammen op verschillende systemen is er geen enkele remise; met de
+vrije dammen op hetzelfde systeem is ruwweg 4 op de 10 remise, en in de rest breekt de vrije witte dam de blokkade toch
+open.</p>''', '''
+<p>The general pattern: one of the three motifs of <a href="twee-blokkade.html">1 against 2 in the single corner</a>, and
+the remaining black king has the opposition against the remaining white king. With white to move those two then stand on
+the same system: the difference in files and the difference in ranks are both even. Otherwise they may stand anywhere
+on the board, as long as the free white king cannot lift the blockade in the corner. The opposition is necessary: of
+the quiet positions with one of the three motifs and the free kings on different systems not a single one is drawn;
+with the free kings on the same system roughly 4 in 10 are drawn, and in the rest the free white king breaks the
+blockade after all.</p>''')]
         cases = [
             ('W:WK3,K4,K29:BK11,K22',
              'Een dubbele blokkade: in de enkele hoek rechtsboven dezelfde blokkade als bij 2 tegen 1, en de derde witte dam zit '

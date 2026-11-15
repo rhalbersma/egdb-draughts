@@ -10,6 +10,9 @@
 // mapped to its 4 KiB block of 2-bit values (16,384 positions) in the stored layout, and fed to LRU caches of
 // 1 ... 4096 blocks per slice (a cache that starts empty at every slice, as a pessimistic case). The solved values
 // are checked against the stored ones.
+// With compressed storage the positions where the side to move can capture are stored as "don't care": a lookup that
+// hits such a position resolves it by playing its captures, recursively until positions without a capture. That
+// variant is counted too (all captures resolved, no cut-off: an upper bound), with its own LRU caches.
 //
 // build: g++-14 -std=c++23 -O2 -fopenmp build_lookups.cpp -o build_lookups
 // usage: build_lookups data/6x6_le9.db data/6x6_10.dtm [sample=200] [threads=4]
@@ -44,16 +47,19 @@ struct Lru {
 
 struct Counts {
         std::uint64_t positions = 0, slices = 0, look[3]{}, hits[NC]{}, distinct = 0;
+        std::uint64_t capture_targets = 0, resolved = 0, rhits[NC]{};
         void add(Counts const& o)
         {
                 positions += o.positions; slices += o.slices; distinct += o.distinct;
+                capture_targets += o.capture_targets; resolved += o.resolved;
                 for (int i = 0; i < 3; ++i) look[i] += o.look[i];
-                for (int i = 0; i < NC; ++i) hits[i] += o.hits[i];
+                for (int i = 0; i < NC; ++i) { hits[i] += o.hits[i]; rhits[i] += o.rhits[i]; }
         }
 };
 
 thread_local Counts* cnt = nullptr;
 thread_local std::vector<Lru>* lrus = nullptr;
+thread_local std::vector<Lru>* rlrus = nullptr;
 thread_local std::unordered_map<std::uint64_t, char>* seen = nullptr;
 
 // the global block of a position in the stored layout: (storage, offset / BLOCK)
@@ -71,12 +77,26 @@ std::uint64_t block_of(Pos const& p0)
         return tag << 60 | (base + std::uint64_t(p.stm) * m.P + index_of(m, p)) / BLOCK;
 }
 
+// the stored lookups needed for p when capture positions are don't-cares: resolve captures until quiet positions
+void resolve(Pos const& p)
+{
+        if (!has_capture(p)) {
+                ++cnt->resolved;
+                std::uint64_t b = block_of(p);
+                for (int i = 0; i < NC; ++i) cnt->rhits[i] += (*rlrus)[i].touch(b);
+                return;
+        }
+        for (auto const& mv : moves(p)) resolve(mv.next);       // captures are compulsory: every move is a capture
+}
+
 std::uint16_t counted(Pos const& p, int phase)
 {
         ++cnt->look[phase];
         std::uint64_t b = block_of(p);
         if (seen->emplace(b, 1).second) ++cnt->distinct;
         for (int i = 0; i < NC; ++i) cnt->hits[i] += (*lrus)[i].touch(b);
+        if (has_capture(p)) ++cnt->capture_targets;
+        resolve(p);
         return lookup(p);
 }
 
@@ -174,8 +194,9 @@ int main(int argc, char** argv)
         #pragma omp parallel for schedule(dynamic, 1) num_threads(threads)
         for (std::size_t j = 0; j < layer.size(); j += std::size_t(sample)) {
                 int t = omp_get_thread_num();
-                std::vector<Lru> l;
-                for (auto c : CACHES) l.push_back(Lru{ c, {}, {} });
+                std::vector<Lru> l, rl;
+                for (auto c : CACHES) { l.push_back(Lru{ c, {}, {} }); rl.push_back(Lru{ c, {}, {} }); }
+                rlrus = &rl;
                 std::unordered_map<std::uint64_t, char> sn;
                 cnt = &per[t]; lrus = &l; seen = &sn;
                 Meta m = meta_of(Key::unpack(layer[j].first));
@@ -200,6 +221,14 @@ int main(int argc, char** argv)
                 double h = double(c.hits[i]) / L, miss = L - double(c.hits[i]);
                 std::printf("  %5zu blocks (%6.1f MiB decoded): hit %.4f, %.2f us per position\n", CACHES[i],
                             double(CACHES[i]) * 4 / 1024, h, (miss * 6 + double(c.hits[i]) * 0.05) / n);
+        }
+        double R = double(c.resolved);
+        std::printf("\nwith capture positions stored as don't care: %.1f%% of the lookups hit a capture position;\n"
+                    "resolving captures until quiet positions takes %.2f stored lookups per lookup, %.2f per position\n",
+                    100 * double(c.capture_targets) / L, R / L, R / n);
+        for (int i = 0; i < NC; ++i) {
+                double h = double(c.rhits[i]) / R, miss = R - double(c.rhits[i]);
+                std::printf("  %5zu blocks: hit %.4f, %.2f us per position\n", CACHES[i], h, (miss * 6 + double(c.rhits[i]) * 0.05) / n);
         }
         return 0;
 }

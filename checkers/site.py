@@ -452,6 +452,16 @@ king in the middle of the white kings (the third diagram).</p>''')]
                   'and two white kings per corner would mean 4 against 2. On 8×8 the board is just small enough to do it with '
                   '3 kings: in the trap the middle white king does double duty. It captures back after the exchange in the one '
                   'corner and after the one in the other, in the first trap below from d4, in the second from e5.</p>')
+                + t('<p>Een dam op de randvelden van een dubbele hoek kan niet geslagen worden. Om de vesting te breken, moet '
+                    'wit dus een zwarte dam uit zijn dubbele hoek krijgen, en dat kan op twee manieren: ofwel wit ruilt een '
+                    'zwarte dam af zonder er zelf een dam bij in te schieten (zwart moet slaan, wit slaat terug, en 2 tegen 1 '
+                    'wint), ofwel een zwarte dam moet de dubbele hoek verlaten en kan niet meer terug. Op 8×8 gaat het met de '
+                    'eerste manier.</p>',
+                    '<p>A king on the edge squares of a double corner cannot be captured. To break the fortress white '
+                    'therefore has to get a black king out of its double corner, and there are two ways: either white '
+                    'exchanges a black king without losing a king for nothing (black has to capture, white captures back, '
+                    'and 2 against 1 wins), or a black king has to leave the double corner and cannot come back. On 8×8 it '
+                    'goes the first way.</p>')
                 + t('<p>Wit breekt de dubbele hoeken met een val: een opstelling waarin elke pendelzet van zwart een '
                   'gedwongen ruil toelaat: met een rustige zet dwingt wit zwart een witte dam te slaan, wit slaat terug, en 2 '
                   'tegen 1 wint. Zwart heeft twee dammen en dus twee pendelzetten; de val moet ze allebei straffen, ook als de '
@@ -736,21 +746,25 @@ are 12 traps, at even parity not a single one.</p>''')]
         body7 += [fige, t('<p>Bij even pariteit is er geen val. Toch is vrijwel alles verloren, want de dubbele hoeken liggen '
                           'zo dicht bij elkaar dat wit erin kan binnendringen. Pendelt de ene zwarte dam, dan bezet wit het '
                           'vrije randveld naast de andere: die heeft geen wachtzet meer en moet de dubbele hoek uit (de '
-                          'wachtzet met de eerste dam verliest nog sneller). ',
+                          'wachtzet met de eerste dam verliest nog sneller). Daarna gaat wit zelf op het randveld staan dat '
+                          'de zwarte dam verliet, en die kan niet meer terug. ',
                           '<p>At even parity there is no trap. Still almost everything is lost, because the double corners are '
                           'so close together that white can invade them. When the one black king shuttles, white occupies the '
                           'free edge square next to the other one: it has no waiting move left and has to leave the double '
-                          'corner (the waiting move with the first king loses even faster). ')
+                          'corner (the waiting move with the first king loses even faster). Then white steps onto the edge square the '
+                          'black king left, and it cannot come back. ')
                   + lines[0] + t(', en 2 tegen 1 wint. Pendelt zwart in de onderste hoek, dan gaat het net zo in de bovenste: ',
                                  ', and 2 against 1 wins. If black shuttles in the lower corner, it goes the same way in the '
                                  'upper one: ')
                   + lines[1] + t('. Alle zetten van zwart: ', '. All moves of black: ')
                   + self.moves_list(pg7, ie, legale, '1. … ') + '.</p>', '<div style="clear:both"></div>']
-        body7.append(t('<p>De vesting valt dus bij beide pariteiten, maar zonder tempowissel: bij oneven pariteit met een val, '
-                       'bij even pariteit door zwart uit een dubbele hoek te verdrijven. Alleen bij zwart op a2 en a6 en wit '
+        body7.append(t('<p>De vesting valt dus bij beide pariteiten, op de <a href="val.html">twee manieren</a> om de vesting '
+                       'te breken, en zonder tempowissel: bij oneven pariteit met een ruil (een val), bij even pariteit doordat '
+                       'een zwarte dam zijn dubbele hoek uit moet en niet meer terug kan. Alleen bij zwart op a2 en a6 en wit '
                        'op c4, b3 of b5 en d3 of d5 (wit op b5, c4 en d5 bijvoorbeeld) is het remise.</p>',
-                       '<p>The fortress therefore falls at both parities, but without a tempo change: at odd parity with a '
-                       'trap, at even parity by driving black out of a double corner. Only with black on a2 and a6 and white '
+                       '<p>The fortress therefore falls at both parities, in the <a href="val.html">two ways</a> to break the '
+                       'fortress, and without a tempo change: at odd parity with an exchange (a trap), at even parity because a '
+                       'black king has to leave its double corner and cannot come back. Only with black on a2 and a6 and white '
                        'on c4, b3 or b5 and d3 or d5 (white on b5, c4 and d5 for example) is it a draw.</p>'))
         for W, B, even in ((EW, EB, True), (OW, OB, False)):
             assert (rank_parity(e87, e87.fen(W, B, 'B')) == 0) == even

@@ -1,0 +1,10 @@
+13635092 slices, 18398782158 positions (10 pieces)
+positions          18398782158 (both sides to move, canonical slices)
+loss / win / draw  29.55% / 44.35% / 26.11%
+capture (don't care) 78.01% of all positions
+slices             13635092, of which single-valued 5508818 (40.40% of the slices, 0.76% of the positions)
+more than 6 pieces on one side: 4793226 slices, 33.88% of the positions
+entropy            order-0 1.546 bits, order-1 (don't cares filled) 0.202 bits per position
+sample (every 16-th slice): 1148038584 positions
+  xz -9   raw 0.598 bits, don't cares filled 0.173 bits per position
+  zlib -9 raw 0.669 bits, don't cares filled 0.197 bits per position

@@ -415,10 +415,10 @@ class Site:
             body.append(self.t(
                 f'<p class="note">De randslag-opening 1. 13-11 6-8 2. 11×6 2×9 maakt deel uit van de '
                 f'<a href="{self.solved("#t-13-11-6-8")}">volledige opgeloste openingsboom tot 4 ply</a> op de site '
-                f'<em>Strongly Solving 6×6 Draughts</em>: daar staan alle openingen met hun waarde.</p>',
+                f'<em>Strongly Solving 6×6</em>: daar staan alle openingen met hun waarde.</p>',
                 f'<p class="note">The edge-capture opening 1. 13-11 6-8 2. 11×6 2×9 is part of the '
                 f'<a href="{self.solved("#t-13-11-6-8")}">complete solved opening tree to 4 plies</a> on the site '
-                f'<em>Strongly Solving 6×6 Draughts</em>: all openings with their values are there.</p>'))
+                f'<em>Strongly Solving 6×6</em>: all openings with their values are there.</p>'))
         marks = []
         for did in dids:
             sides = self.diag[did]['sides'].values() if self.home[did] == pid else []
@@ -487,10 +487,10 @@ class Site:
                   '<em>Chapters</em> menu at the top takes you anywhere.</p>'), '\n'.join(toc),
                 t(f'<h2>De opening</h2><p>Met de databases tot en met 10 stukken is ook de beginstand van 6×6 opgelost: '
                   f'<a href="{self.solved()}">remise, met de volledige openingsboom tot 4 ply</a>, op de site '
-                  f'<em>Strongly Solving 6×6 Draughts</em>.</p>',
+                  f'<em>Strongly Solving 6×6</em>.</p>',
                   f'<h2>The opening</h2><p>With the databases up to 10 pieces the start position of 6×6 is solved too: '
                   f'<a href="{self.solved()}">a draw, with the complete opening tree to 4 plies</a>, on the site '
-                  f'<em>Strongly Solving 6×6 Draughts</em>.</p>'),
+                  f'<em>Strongly Solving 6×6</em>.</p>'),
                 t('<h2>Achtergrond</h2>', '<h2>Background</h2>')]
         for head, rest in sections:
             body.append(f'<details class="more"><summary>{esc(head.strip())}</summary><div>'

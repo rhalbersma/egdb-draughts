@@ -21,12 +21,12 @@ ROOT = Path(__file__).resolve().parent.parent
 
 SITES = {
     'nl': [
+        ('../strongly_solving_6x6/nl/', 'Strongly Solving 6×6',
+         'De beginstand van 6×6-dammen is remise: de volledige openingsboom tot 4 ply met exacte waarden, de geschiedenis '
+         'van de oplossing en hoe ver 6×6 is opgelost.'),
         ('../strategie_der_36_velden/', 'Strategie der 36 velden',
          'Herm Jan Brascamps reeks over het 6×6-bord (2016), hoofdstuk voor hoofdstuk nagerekend met exacte databases tot '
          '10 stukken; plus de oplossing van de beginstand: remise.'),
-        ('../strongly_solving_6x6/nl/', 'Strongly Solving 6×6 Draughts',
-         'De beginstand van 6×6-dammen is remise: de volledige openingsboom tot 4 ply met exacte waarden, de geschiedenis '
-         'van de oplossing en hoe ver 6×6 is opgelost.'),
         ('../drie_tegen_een_is_gemeen/', 'Drie tegen een is gemeen',
          'Twee en drie dammen tegen één op borden van elke afmeting: de winst op 6×5, de families, de vangstellingen en '
          '10×10 met één veld weg.'),
@@ -34,12 +34,12 @@ SITES = {
          'Korte dammen op borden van elke afmeting: blokkades, de vesting in de dubbele hoek en de oppositie.'),
     ],
     'en': [
+        ('strongly_solving_6x6/', 'Strongly Solving 6×6',
+         'The start position of 6×6 draughts is a draw: the complete opening tree to 4 plies with exact values, the '
+         'history of the solution and how far 6×6 is solved.'),
         ('strategie_der_36_velden/', 'Strategie der 36 velden',
          'Herm Jan Brascamp\'s series on the 6×6 board (2016), checked chapter by chapter with exact databases up to 10 '
          'pieces; plus the solution of the start position: a draw.'),
-        ('strongly_solving_6x6/', 'Strongly Solving 6×6 Draughts',
-         'The start position of 6×6 draughts is a draw: the complete opening tree to 4 plies with exact values, the '
-         'history of the solution and how far 6×6 is solved.'),
         ('drie_tegen_een_is_gemeen/', 'Drie tegen een is gemeen',
          'Two and three kings against one on boards of any size: the win on 6×5, the families, the trapping positions '
          'and 10×10 with one square removed.'),

@@ -525,26 +525,35 @@ king in the middle of the white kings (the third diagram).</p>''')]
             f'<p>Which diagonal black stands on does not matter: with the white kings on {alg((14, 18, 23))} there is a trap '
             f'against the black kings on {alg((5, 32))}, on the same diagonal, and also one against {alg((1, 28))}, on the other. '
             f'What decides the parity is the diagonal of white. Every row of the table is a trap:</p>'), table]
-        # the change-over: white on the trap of the even parity, but white to move; three steps to the other diagonal
-        fen = 'W:WK14,K18,K23:BK5,K32'
+        # the change-over: white on the trap of the odd parity, but white to move; three steps to the other diagonal. (From
+        # the set-up of the even trap with white to move white forces the exchange at once, so that is shown separately.)
+        fen = 'W:WK10,K15,K19:BK5,K32'
+        assert self.exchange(e88, fen) is None
+        for B in ((5, 32), (1, 28)):           # after two shuttle moves black is back on 5/32 or on 1/28: both traps
+            fb = f"B:WK14,K18,K23:B{','.join('K%d' % x for x in B)}"
+            assert e88.analyse(fb)[0].startswith('L') and rank_parity(e88, fb) == 0
         v, _ = e88.analyse(fen)
         fig, i0 = pgp.diagram(fen, t(f'8×8, wit aan zet: {v}', f'8×8, white to move: {v}'), gid=k88)
-        plan = [((x,), '') for x in ('14-10', '5-1', '18-15', '1-5', '23-19')]
+        plan = [((x,), '') for x in ('10-14', '5-1', '15-18', '1-5', '19-23')]
         h, i_end, f_end, _ = pgp.moves(fen, plan, 1, False, 'm1', i0, nbook=len(plan))
         phases += [fig, t(
-            f'<p>Wit staat in de opstelling van de val bij even pariteit, maar is zelf aan zet, en dan is het geen val. Wit '
+            f'<p>Wit staat in de opstelling van de val bij oneven pariteit, maar is zelf aan zet, en dan is het geen val. Wit '
             f'stapt over naar de andere diagonaal: elke witte dam één veld, terwijl zwart pendelt. ',
-            f'<p>White stands in the set-up of the trap at even parity, but is to move itself, and then it is no trap. White '
+            f'<p>White stands in the set-up of the trap at odd parity, but is to move itself, and then it is no trap. White '
             f'moves over to the other diagonal: every white king one square, while black shuttles. ')
             + f'{h}. ' + t(
-            f'Dat zijn drie zetten, een oneven aantal: het tempo draait om, en zwart staat aan zet in de val bij oneven '
-            f'pariteit. Met twee dammen zou zo\'n overstap twee zetten kosten, en dan wisselt het tempo niet.</p>',
-            f'That is three moves, an odd number: the tempo turns over, and black is to move in the trap at odd parity. With '
-            f'two kings such a change-over would take two moves, and then the tempo does not change.</p>'),
+            f'Dat zijn drie zetten, een oneven aantal: het tempo draait om, en zwart staat aan zet in de val bij even '
+            f'pariteit. Hoe zwart ook pendelt, na twee pendelzetten staat zwart weer op {alg((5, 32))} of op {alg((1, 28))}, '
+            f'en tegen allebei is wit op {alg((14, 18, 23))} een val. Met twee dammen zou zo\'n overstap twee zetten kosten, '
+            f'en dan wisselt het tempo niet.</p>',
+            f'That is three moves, an odd number: the tempo turns over, and black is to move in the trap at even parity. '
+            f'However black shuttles, after two shuttle moves black stands on {alg((5, 32))} or on {alg((1, 28))} again, and '
+            f'against both white on {alg((14, 18, 23))} is a trap. With two kings such a change-over would take two moves, '
+            f'and then the tempo does not change.</p>'),
             '<div style="clear:both"></div>']
         # the trap reached: every shuttle move of black is punished
         v2, legal2 = e88.analyse(f_end)
-        fig2, j0 = pgp.diagram(f_end, t(f'8×8, zwart aan zet (oneven pariteit): {v2}', f'8×8, black to move (odd parity): {v2}'),
+        fig2, j0 = pgp.diagram(f_end, t(f'8×8, zwart aan zet (even pariteit): {v2}', f'8×8, black to move (even parity): {v2}'),
                               gid=k88)
         lines = []
         for m in legal2:
@@ -564,6 +573,23 @@ king in the middle of the white kings (the third diagram).</p>''')]
         phases += [fig2, t('<p>Elke pendelzet van zwart wordt gestraft: ', '<p>Every shuttle move of black is punished: ')
                    + '; '.join(lines) + t(', en 2 tegen 1 wint. Alle zetten van zwart: ', ', and 2 against 1 wins. All moves of black: ')
                    + self.moves_list(pgp, j0, legal2, '1. … ') + '.</p>', '<div style="clear:both"></div>']
+        # the other way round white need not even move over: from the set-up of the even trap with white to move white
+        # forces the exchange at once
+        fw = 'W:WK14,K18,K23:BK5,K32'
+        vw, legalw = e88.analyse(fw)
+        exw = self.exchange(e88, fw)
+        assert exw and vw.startswith('W')
+        figw, iw = pgp.diagram(fw, t(f'8×8, wit aan zet: {vw}', f'8×8, white to move: {vw}'), gid=k88)
+        i, parts = iw, []
+        for k, mv in enumerate(exw):
+            i = pgp.child(i, mv)
+            parts.append(f'<a class="m1" href="#" data-i="{i}">{("1. ", "", "2. ")[k]}{pgp.label(k88, mv)}</a>')
+        phases += [figw, t('<p>Andersom hoeft wit niet eens over te stappen. Staat wit in de opstelling van de val bij even '
+                           'pariteit en is wit zelf aan zet, dan dwingt wit de ruil meteen af: ',
+                           '<p>The other way round white need not even move over. If white stands in the set-up of the trap '
+                           'at even parity and is to move itself, white forces the exchange at once: ')
+                   + ' '.join(parts) + t(', en 2 tegen 1 wint. Alle zetten van wit: ', ', and 2 against 1 wins. All moves of white: ')
+                   + self.moves_list(pgp, iw, legalw, '1. ') + '.</p>', '<div style="clear:both"></div>']
         return body, phases, pgp
 
     def vesting(self):

@@ -1,0 +1,8 @@
+1148038588 positions, uncompressed file 287 MB, 2000000 lookups (cold: the first 100000), 4 threads
+
+                            file MB    warm, 1 thr  warm, all thr    cold, 1 thr  cold, all thr
+uncompressed, 2 bits          287.0       0.027 us       0.027 us        3.19 us        6.10 us   (resident after evict: 0%)
+zstd -19, 4 KiB blocks         30.6       5.652 us       6.255 us        6.44 us        8.39 us   (resident after evict: 0%)
+zstd -19, 16 KiB blocks        27.7      15.246 us      16.318 us       19.22 us       19.71 us   (resident after evict: 0%)
+
+(time per lookup = wall time x threads / lookups; cold over the first lookups after eviction)

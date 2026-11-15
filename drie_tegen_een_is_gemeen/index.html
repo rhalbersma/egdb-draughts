@@ -6,7 +6,7 @@
 <script>
 // the language of a site: its default, unless the visitor chose the other one on that site (remembered per site)
 (function () {
-  const key = 'lang:' + "drie_tegen_een_is_gemeen";
+  const key = 'lang:' + "d3";
   try { const pref = localStorage.getItem(key); if (pref && pref !== "nl" && "en/index.html") location.replace("en/index.html" + location.hash); } catch (e) {}
   document.addEventListener('click', function (e) {
     const a = e.target.closest && e.target.closest('a[data-setlang]');
@@ -36,10 +36,13 @@
   --link: #7fb6dd; --m2: #9cc06e; --err: #f2766d; --only: #e0b04f; --db: #b79cf0; --active: #4a4020; --lake: #3d5a6c;
 }
 * { box-sizing: border-box; }
+/* --hh: the height of the fixed navigation bar (set by the script below); anchors scroll to just below it */
+html { scroll-padding-top: calc(var(--hh, 44px) + 8px); }
 body { margin: 0; background: var(--bg); color: var(--fg);
   font: 17px/1.6 Charter, "Bitstream Charter", "Sitka Text", Cambria, Georgia, serif; }
 header { border-bottom: 1px solid var(--rule); padding: 8px 16px; font: 14px/1.4 system-ui, sans-serif;
-  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 18px; position: relative; z-index: 5; }
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 18px; position: sticky; top: 0; z-index: 5;
+  background: var(--bg); }
 header > a { color: var(--muted); text-decoration: none; }
 header > a.brand { color: var(--fg); font-weight: 600; }
 header > a:hover { color: var(--fg); }
@@ -68,10 +71,10 @@ details.more > div { padding: 0 16px 8px; }
 details.onpage { font: 14px/1.6 system-ui, sans-serif; margin: 10px 0 0; }
 details.onpage summary { cursor: pointer; color: var(--muted); }
 details.onpage a { margin-right: 12px; white-space: nowrap; }
-@media (max-width: 760px) { .menu-panel { position: fixed; left: 8px; right: 8px; top: 48px; min-width: 0; } }
+@media (max-width: 760px) { .menu-panel { position: fixed; left: 8px; right: 8px; top: calc(var(--hh, 44px) + 4px); min-width: 0; } }
 .wrap { display: grid; grid-template-columns: minmax(280px, 420px) minmax(0, 1fr); gap: 40px;
   max-width: 1180px; margin: 0 auto; padding: 24px 16px 64px; }
-.side { position: sticky; top: 16px; align-self: start; }
+.side { position: sticky; top: calc(var(--hh, 44px) + 16px); align-self: start; }
 #board svg { width: 100%; height: auto; display: block; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
 .buttons { display: flex; gap: 8px; margin: 10px 0; }
 .buttons button { flex: 1; padding: 6px 0; font: 16px system-ui, sans-serif; color: var(--fg); background: var(--panel);
@@ -100,7 +103,7 @@ details.onpage a { margin-right: 12px; white-space: nowrap; }
 .panel a { color: var(--link); text-decoration: none; }
 main { min-width: 0; }
 h1 { font-size: 30px; line-height: 1.2; margin: 0 0 16px; }
-h2 { font-size: 22px; margin: 36px 0 8px; }
+h2 { font-size: 22px; margin: 28px 0 8px; padding-top: 14px; border-top: 1px solid var(--rule); clear: both; }   /* sections of a chapter, separated as the diagrams are */
 a.m1, a.m2, a.m3 { text-decoration: none; white-space: nowrap; border-radius: 3px; padding: 0 1px; }
 a.m1 { color: var(--link); font-weight: 600; }
 a.m2 { color: var(--m2); }
@@ -144,6 +147,9 @@ section.diag h3 { font-size: 19px; margin: 6px 0 4px; }
 .pager a, .toc a, .src a, main p a:not(.m1):not(.m2) { color: var(--link); }
 .optree h3 { font-size: 18px; margin: 22px 0 4px; }
 .optree p { margin: 4px 0 4px 18px; }
+.optree p.t2 { margin: 10px 0 2px 18px; }
+.optree ul.t3 { list-style: none; margin: 0 0 6px 40px; padding: 0; }
+.optree ul.t3 li { margin: 2px 0; }
 pre.tbl { font: 13px/1.45 ui-monospace, Menlo, Consolas, monospace; background: var(--panel); border: 1px solid var(--rule);
   border-radius: 6px; padding: 10px 12px; overflow-x: auto; }
 table.tbl { border-collapse: collapse; font: 14px/1.4 system-ui, sans-serif; margin: 10px 0; }
@@ -157,7 +163,7 @@ table.tbl th { color: var(--muted); font-weight: 600; }
 .hub a.card span { font-size: 15px; color: var(--muted); }
 @media (max-width: 760px) {
   .wrap { grid-template-columns: 1fr; gap: 16px; }
-  .side { position: sticky; top: 0; background: var(--bg); padding-bottom: 6px; z-index: 2; }
+  .side { position: sticky; top: var(--hh, 44px); background: var(--bg); padding-bottom: 6px; z-index: 2; }
   #board { max-width: min(230px, 62vw); margin: 0 auto; }
   .buttons { max-width: 360px; margin: 6px auto; }
   .buttons button { padding: 4px 0; font-size: 15px; }
@@ -204,7 +210,7 @@ breiden de resultaten van het boek uit.</p>
 L = verlies, met het aantal ply tot het einde van de partij; D = remise. Zuiver speltheoretisch, zonder
 zettenregels.</p>
 <p>Omdat het eindspelen met alleen dammen zijn, zonder schijven en dus zonder voor- of achterkant, maakt het niet uit
-hoe het bord ligt: kantelen in de diagonaal door a1 verandert geen enkele waarde, en ook de kleuring (p0/p1) blijft
+hoe het bord ligt: kantelen in de diagonaal door a1 verandert geen enkele waarde, en ook de kleuring van de hoekvelden blijft
 gelijk. De diagrammen tonen de borden daarom gekanteld, liggend: <em>L</em> kolommen breed en <em>B</em> rijen hoog. Bij de
 diagrammen heten ze <em>L</em> × <em>B</em>, kolommen × rijen: 11×10 is het bord met <em>B</em> = 10 en
 <em>L</em> = 11 uit de familie <em>L</em> = <em>B</em> + 1.</p>
@@ -217,16 +223,16 @@ diagrammen heten ze <em>L</em> × <em>B</em>, kolommen × rijen: 11×10 is het b
 
 <h2>Vergelijking met het boek</h2>
 <p><strong>Bevestigd</strong>: alles wat het boek stellig beweert: 2 tegen 1 voor <em>B</em> ≤ 4 (met de
-voorwaarde van de lange lijn op 3×3 en 4×4) en op 7×5 p1; 3 tegen 1 op <em>B</em> = 5 en 6 voor elke
-<em>L</em> &gt; <em>B</em> (vierkante borden met de voorwaarde van de lange lijn, expliciet op 5×5 p1);
+voorwaarde van de lange lijn op 3×3 en 4×4) en op 7×5 speelbare hoeken; 3 tegen 1 op <em>B</em> = 5 en 6 voor elke
+<em>L</em> &gt; <em>B</em> (vierkante borden met de voorwaarde van de lange lijn, expliciet op 5×5 speelbare hoeken);
 <em>B</em> = 7 voor <em>L</em> = 7–11; <em>B</em> = 8 voor <em>L</em> = 9, 10, 11 en 15; de families
 <em>B</em> + 1, <em>B</em> + 2 en 2<em>B</em> − 1 met de kleuringsregel; de borden met een weggehaald veld 1, 2, 4, 5,
 7, 8, 9, 18 en 23.</p>
 <p><strong>Nieuw</strong>:</p>
 <table class="tbl"><tr><th>Materiaal</th><th>Bord</th><th>Resultaat</th><th>Langste winst</th></tr>
 <tr><td>2-1</td><td><a href="twee-tegen-een.html">6×5</a></td><td>gewonnen</td><td>27 ply</td></tr>
-<tr><td>3-1</td><td>7×12, 7×13 p0, 7×14, 7×15 p1</td><td>gewonnen (algemene methode)</td><td>35, 49, 53, 67</td></tr>
-<tr><td>3-1</td><td>7×15 p0, 7×16, 7×17</td><td>remise: de grens van <em>B</em> = 7</td><td></td></tr>
+<tr><td>3-1</td><td>7×12, 7×13 onspeelbare hoeken, 7×14, 7×15 speelbare hoeken</td><td>gewonnen (algemene methode)</td><td>35, 49, 53, 67</td></tr>
+<tr><td>3-1</td><td>7×15 onspeelbare hoeken, 7×16, 7×17</td><td>remise: de grens van <em>B</em> = 7</td><td></td></tr>
 <tr><td>3-1</td><td><a href="tien-zonder-veld.html">10×10 zonder g7 (19)</a></td><td>gewonnen</td><td>33</td></tr>
 <tr><td>3-1</td><td><a href="tien-zonder-veld.html">10×10 zonder f10, d8, f8 (3, 12, 13)</a></td><td>remise</td><td></td></tr>
 </table>
@@ -240,9 +246,17 @@ op de lange lijn (40 vorken met zwart aan zet), en de precieze grenzen van elke 
   </main>
 </div>
 <script>
+// the navigation bar stays at the top: its height positions the board below it and the anchors
+(function () {
+  const h = document.querySelector('header');
+  const set = () => document.documentElement.style.setProperty('--hh', h.offsetHeight + 'px');
+  set();
+  window.addEventListener('resize', set);
+  if (window.ResizeObserver) new ResizeObserver(set).observe(h);
+})();
 const POS = [{"f":"W:WK1,K8:BK7","v":"W27","last":null,"prev":null,"next":null,"g":"5x6","m":[["8-5","c3-d4","W27",null],["8-3","c3-e5","W27",null],["8-11","c3-d2","W27",null],["8-13","c3-a1","W27",null],["8-15","c3-e1","W29",null],["1-4","a5-b4","D",null],["8-4","c3-b4","D",null],["8-10","c3-b2","D",null]]}];
 const UI = {"white": "wit", "black": "zwart", "tomove": "aan zet", "nomoves": "geen zetten: verloren"};
-const GEOMS = {"5x6":{"w":6,"h":5,"parity":1,"sq":{"1":[0,4],"2":[2,4],"3":[4,4],"4":[1,3],"5":[3,3],"6":[5,3],"7":[0,2],"8":[2,2],"9":[4,2],"10":[1,1],"11":[3,1],"12":[5,1],"13":[0,0],"14":[2,0],"15":[4,0]},"lake":[],"pref":"alg"}};
+const GEOMS = {"5x6":{"w":6,"h":5,"corners":"playable","sq":{"1":[0,4],"2":[2,4],"3":[4,4],"4":[1,3],"5":[3,3],"6":[5,3],"7":[0,2],"8":[2,2],"9":[4,2],"10":[1,1],"11":[3,1],"12":[5,1],"13":[0,0],"14":[2,0],"15":[4,0]},"lake":[],"pref":"alg"}};
 // notation: 'std' = the standard notation of each board (numeric on 6x6, 8x8 checkers and 10x10), or 'num' / 'alg'
 let cur = 0, showNums = true, timer = null, notation = 'std';
 try { const n = localStorage.getItem('notation-v2'); if (n === 'num' || n === 'alg') notation = n; } catch (e) {}

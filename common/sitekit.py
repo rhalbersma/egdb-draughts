@@ -89,7 +89,7 @@ class FastEngine:
         # draughts), algebraic on all others
         checkers = 'checkers' in self.args
         standard = (w, h) == ((8, 8) if checkers else (10, 10))
-        return {'w': w, 'h': h, 'parity': parity, 'sq': sq, 'lake': lake, 'pref': 'num' if standard else 'alg'}
+        return {'w': w, 'h': h, 'corners': 'playable' if parity else 'unplayable', 'sq': sq, 'lake': lake, 'pref': 'num' if standard else 'alg'}
 
     def analyse(self, fen):
         if fen not in self.cache:
@@ -170,7 +170,7 @@ class Page:
                 return None
             n, a = n_or_name, name[n_or_name]
         else:
-            if n_or_name not in num_of or n_or_name in ('p0', 'p1'):      # p0 / p1: the colourings, not squares
+            if n_or_name not in num_of:
                 return None
             n, a = num_of[n_or_name], n_or_name
         pref = self.geoms[gid].get('pref', 'num')

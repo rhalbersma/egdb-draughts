@@ -32,12 +32,13 @@ run() {   # name, args...
 # 1. 3-1 grid
 for h in 3 4 5 6 7 8 9 10 11 12; do
   for w in $(seq $h $((2 * h + 3))); do
-    for p in $( ((w % 2 && h % 2)) && echo 0 1 || echo 1); do
-      n=$(( (w * h + p) / 2 ))
+    for c in $( ((w % 2 && h % 2)) && echo unplayable playable || echo playable); do
+      one=0; [ $c = playable ] && one=1      # playable corner squares: one playable square more
+      n=$(( (w * h + one) / 2 ))
       [ $n -gt 512 ] && continue
       keys=$(( $(binom3 $n) * (n - 3) ))
       text=""; [ $keys -gt 5000000 ] && text="--no-text"
-      run 31_${w}x${h}_p$p --width $w --height $h --parity $p --out data/${w}x${h}_p$p $text
+      run 31_${w}x${h}_$c --width $w --height $h --corners $c --out data/${w}x${h}_$c $text
     done
   done
 done
@@ -47,9 +48,10 @@ for sq in b10 d10 f10 h10 j10 c9 e9 g9 i9 d8 f8 h8 e7 g7 f6; do
   run lake_$sq --board international --lake $sq --out data/lake_$sq
 done
 
-# 3. English checkers 3-2 (width height parity)
-for b in "7 6 1" "8 7 1" "8 8 1" "9 8 1" "10 8 1" "10 9 1" "10 10 1" "11 10 1" "12 10 1" "9 7 0" "9 9 0"; do
+# 3. English checkers 3-2 (width height corners)
+for b in "7 6 playable" "8 7 playable" "8 8 playable" "9 8 playable" "10 8 playable" "10 9 playable" "10 10 playable" \
+         "11 10 playable" "12 10 playable" "9 7 unplayable" "9 9 unplayable"; do
   set -- $b
-  run checkers32_${1}x${2}_p$3 --width $1 --height $2 --parity $3 --rules checkers --white 3 --black 2 --out data/checkers32_${1}x${2}_p$3
+  run checkers32_${1}x${2}_$3 --width $1 --height $2 --corners $3 --rules checkers --white 3 --black 2 --out data/checkers32_${1}x${2}_$3
 done
 echo "ALL DONE" >> $res

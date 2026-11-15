@@ -4,13 +4,14 @@
 #    (See accompanying file LICENSE_1_0.txt or copy at
 #          http://www.boost.org/LICENSE_1_0.txt)
 
-"""Checkers 3-2: can white catch both phases of the double-corner fortress?
+"""Checkers 3-2: can white catch the double-corner fortress at both parities?
 
 Black has a king on one of the two edge squares of each of two double corners, black to move, and nobody can
 capture. A TRAP is a white set-up in which both shuttle moves of black (one per corner) allow an immediate forced
 exchange: a quiet white offer, after which every black move is a capture and white captures back (3-2 -> 2-1).
-The phase (the opposition) is the parity of the sum of the ranks of all five kings with black to move; it never
-changes without a capture. Result: traps in both phases on 8x8, in one phase on 8x9 and 9x10, none on 10x10.
+The parity (the opposition) is the parity of the sum of the rank numbers (1, 2, ...) of all five kings with black
+to move; it never changes without a capture. Result: traps at both parities on 8x8, at one parity on 8x9 and 9x10,
+none on 10x10.
 
 usage: traps.py [path/to/egdb_fast]
 """
@@ -30,8 +31,8 @@ def npieces(fen):
     _, w, b = fen.split(':')
     return len([x for x in w[1:].split(',') if x]), len([x for x in b[1:].split(',') if x])
 
-def run(w, h, p):
-    e = FastEngine(EXE, '--width', w, '--height', h, '--parity', p, '--rules', 'checkers', '--white', 3, '--black', 2)
+def run(w, h, colouring):
+    e = FastEngine(EXE, '--width', w, '--height', h, '--corners', colouring, '--rules', 'checkers', '--white', 3, '--black', 2)
     sq = {n: tuple(fr) for n, fr in e.g['sq'].items()}
     at = {fr: n for n, fr in sq.items()}
     corners = []
@@ -72,13 +73,13 @@ def run(w, h, p):
                         continue
                     if any(npieces(x[2]) != (3, 2) for x in e.analyse(fen(W, (a, b), 'W'))[1]):
                         continue
-                    phase = sum(sq[x][1] for x in (*W, a, b)) % 2
+                    phase = 'even' if sum(sq[x][1] + 1 for x in (*W, a, b)) % 2 == 0 else 'odd'   # the parity
                     res[('positions', phase)] += 1
                     if exchange(fen(W, (a2, b), 'W')) and exchange(fen(W, (a, b2), 'W')):
                         res[('traps', phase)] += 1
                         if res[('traps', phase)] == 1:
                             res[('example', phase, f0)] = 1
-    print(f'{h}x{w} p{p}: double corners {corners}')
+    print(f'{h}x{w} ({colouring} corner squares): double corners {corners}')
     for k, v in sorted(res.items(), key=str):
         print('  ', k, v)
     sys.stdout.flush()
@@ -195,8 +196,8 @@ class Race:
 
 
 if __name__ == '__main__':
-    for w, h, p in ((8, 8, 1), (9, 8, 1), (10, 9, 1), (10, 10, 1)):    # width, height, parity
-        run(w, h, p)
-    r = Race(FastEngine(EXE, '--width', 8, '--height', 8, '--parity', 1, '--rules', 'checkers', '--white', 3, '--black', 2))
+    for w, h in ((8, 8), (9, 8), (10, 9), (10, 10)):    # width, height (corner squares playable)
+        run(w, h, 'playable')
+    r = Race(FastEngine(EXE, '--width', 8, '--height', 8, '--corners', 'playable', '--rules', 'checkers', '--white', 3, '--black', 2))
     print('8x8: white moves to force a trap, white to move:', dict(sorted(r.distribution().items())))
     print('   farthest:', r.fen(r.farthest()[0], r.farthest()[1:], 'W'), [m[0] for m in r.line(r.farthest())])

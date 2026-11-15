@@ -57,14 +57,14 @@ TABLE_31 = """ B \\ L−B    0       1      2       3      4       5      6     
 
 LEGEND_EN = ('In the tables: <code>21</code> = won, longest win 21 plies · <code>21*</code> = won provided the stronger '
              'side occupies the long diagonal(s) · <code>(21)</code> = drawn (the number is the longest win among the '
-             'positions that are won) · <code>13/15</code> = uncoloured/coloured corner squares. A board <em>B × L</em> has '
-             '<em>B</em> as its shorter side; coloured = the corner squares are coloured (playable), uncoloured = they are not '
+             'positions that are won) · <code>13/15</code> = unplayable/playable corner squares. A board <em>B × L</em> has '
+             '<em>B</em> as its shorter side; playable = the corner squares are playable, unplayable = they are not '
              '(only relevant for odd × odd).')
 
 LEGEND = ('In de tabellen: <code>21</code> = gewonnen, langste winst 21 ply · <code>21*</code> = gewonnen als de '
           'sterke partij de lange lijn(en) bezet · <code>(21)</code> = remise (het getal is de langste winst onder de '
-          'stellingen die wel gewonnen zijn) · <code>13/15</code> = ongekleurde/gekleurde hoekvelden. Een bord <em>B × L</em> '
-          'heeft <em>B</em> als kortste zijde; gekleurd = de hoekvelden zijn gekleurd (speelbaar), ongekleurd = niet '
+          'stellingen die wel gewonnen zijn) · <code>13/15</code> = onspeelbare/speelbare hoekvelden. Een bord <em>B × L</em> '
+          'heeft <em>B</em> als kortste zijde; speelbaar = de hoekvelden zijn speelbaar, onspeelbaar = niet '
           '(alleen van belang bij oneven × oneven).')
 
 
@@ -135,7 +135,7 @@ class Site:
     # ---- pages -------------------------------------------------------------------
 
     def index(self):
-        e = self.engine('5x6', '--width', 6, '--height', 5, '--parity', 1, '--white', 2, '--black', 1)
+        e = self.engine('5x6', '--width', 6, '--height', 5, '--corners', 'playable', '--white', 2, '--black', 1)
         pg = self.page(('5x6', e))
         t = self.t
         fig, _ = pg.diagram('W:WK1,K8:BK7', t('6×5: twee dammen winnen (27 ply)', '6×5: two kings win (27 plies)'))
@@ -174,16 +174,16 @@ they are named <em>L</em> × <em>B</em>, files × ranks: 11×10 is the board wit
         body.append(t('''
 <h2>Vergelijking met het boek</h2>
 <p><strong>Bevestigd</strong>: alles wat het boek stellig beweert: 2 tegen 1 voor <em>B</em> ≤ 4 (met de
-voorwaarde van de lange lijn op 3×3 en 4×4) en op 7×5 gekleurd; 3 tegen 1 op <em>B</em> = 5 en 6 voor elke
-<em>L</em> &gt; <em>B</em> (vierkante borden met de voorwaarde van de lange lijn, expliciet op 5×5 gekleurd);
+voorwaarde van de lange lijn op 3×3 en 4×4) en op 7×5 speelbare hoeken; 3 tegen 1 op <em>B</em> = 5 en 6 voor elke
+<em>L</em> &gt; <em>B</em> (vierkante borden met de voorwaarde van de lange lijn, expliciet op 5×5 speelbare hoeken);
 <em>B</em> = 7 voor <em>L</em> = 7–11; <em>B</em> = 8 voor <em>L</em> = 9, 10, 11 en 15; de families
 <em>B</em> + 1, <em>B</em> + 2 en 2<em>B</em> − 1 met de kleuringsregel; de borden met een weggehaald veld 1, 2, 4, 5,
 7, 8, 9, 18 en 23.</p>
 <p><strong>Nieuw</strong>:</p>
 <table class="tbl"><tr><th>Materiaal</th><th>Bord</th><th>Resultaat</th><th>Langste winst</th></tr>
 <tr><td>2-1</td><td><a href="twee-tegen-een.html">6×5</a></td><td>gewonnen</td><td>27 ply</td></tr>
-<tr><td>3-1</td><td>7×12, 7×13 ongekleurd, 7×14, 7×15 gekleurd</td><td>gewonnen (algemene methode)</td><td>35, 49, 53, 67</td></tr>
-<tr><td>3-1</td><td>7×15 ongekleurd, 7×16, 7×17</td><td>remise: de grens van <em>B</em> = 7</td><td></td></tr>
+<tr><td>3-1</td><td>7×12, 7×13 onspeelbare hoeken, 7×14, 7×15 speelbare hoeken</td><td>gewonnen (algemene methode)</td><td>35, 49, 53, 67</td></tr>
+<tr><td>3-1</td><td>7×15 onspeelbare hoeken, 7×16, 7×17</td><td>remise: de grens van <em>B</em> = 7</td><td></td></tr>
 <tr><td>3-1</td><td><a href="tien-zonder-veld.html">10×10 zonder g7 (19)</a></td><td>gewonnen</td><td>33</td></tr>
 <tr><td>3-1</td><td><a href="tien-zonder-veld.html">10×10 zonder f10, d8, f8 (3, 12, 13)</a></td><td>remise</td><td></td></tr>
 </table>
@@ -193,15 +193,15 @@ op de lange lijn (40 vorken met zwart aan zet), en de precieze grenzen van elke 
 <a href="https://github.com/rhalbersma/egdb-draughts">github.com/rhalbersma/egdb-draughts</a>.</p>''', '''
 <h2>Comparison with the book</h2>
 <p><strong>Confirmed</strong>: everything the book states firmly — 2-1 for <em>B</em> ≤ 4 (with the long-diagonal
-condition on 3×3 and 4×4) and on 7×5 coloured; 3-1 on <em>B</em> = 5, 6 for every <em>L</em> &gt; <em>B</em> (square boards
-with the long-diagonal condition, explicit on 5×5 coloured); <em>B</em> = 7 for <em>L</em> = 7–11; <em>B</em> = 8 for
+condition on 3×3 and 4×4) and on 7×5 playable corners; 3-1 on <em>B</em> = 5, 6 for every <em>L</em> &gt; <em>B</em> (square boards
+with the long-diagonal condition, explicit on 5×5 playable corners); <em>B</em> = 7 for <em>L</em> = 7–11; <em>B</em> = 8 for
 <em>L</em> = 9, 10, 11, 15; the families <em>B</em> + 1, <em>B</em> + 2 and 2<em>B</em> − 1 with the colouring rule; the
 boards with a square removed 1, 2, 4, 5, 7, 8, 9, 18, 23.</p>
 <p><strong>New</strong>:</p>
 <table class="tbl"><tr><th>Material</th><th>Board</th><th>Result</th><th>Longest win</th></tr>
 <tr><td>2-1</td><td><a href="twee-tegen-een.html">6×5</a></td><td>won</td><td>27 plies</td></tr>
-<tr><td>3-1</td><td>7×12, 7×13 uncoloured, 7×14, 7×15 coloured</td><td>won (general method)</td><td>35, 49, 53, 67</td></tr>
-<tr><td>3-1</td><td>7×15 uncoloured, 7×16, 7×17</td><td>drawn: the limit of <em>B</em> = 7</td><td></td></tr>
+<tr><td>3-1</td><td>7×12, 7×13 unplayable corners, 7×14, 7×15 playable corners</td><td>won (general method)</td><td>35, 49, 53, 67</td></tr>
+<tr><td>3-1</td><td>7×15 unplayable corners, 7×16, 7×17</td><td>drawn: the limit of <em>B</em> = 7</td><td></td></tr>
 <tr><td>3-1</td><td><a href="tien-zonder-veld.html">10×10 without g7 (19)</a></td><td>won</td><td>33</td></tr>
 <tr><td>3-1</td><td><a href="tien-zonder-veld.html">10×10 without f10, d8, f8 (3, 12, 13)</a></td><td>drawn</td><td></td></tr>
 </table>
@@ -212,22 +212,22 @@ on the long diagonal (40 forks with black to move), and the exact limits of ever
         self.write('index.html', 'Overzicht', '\n'.join(body), pg)
 
     def twee(self):
-        e56 = self.engine('5x6', '--width', 6, '--height', 5, '--parity', 1, '--white', 2, '--black', 1)
-        e57 = self.engine('5x7', '--width', 7, '--height', 5, '--parity', 1, '--white', 2, '--black', 1)
+        e56 = self.engine('5x6', '--width', 6, '--height', 5, '--corners', 'playable', '--white', 2, '--black', 1)
+        e57 = self.engine('5x7', '--width', 7, '--height', 5, '--corners', 'playable', '--white', 2, '--black', 1)
         pg = self.page(('5x6', e56), ('5x7', e57))
         t = self.t
         body = [t('<h1>2 dammen tegen 1</h1>', '<h1>2 kings against 1</h1>'), f'<pre class="tbl">{esc(TABLE_21)}</pre>',
                 f'<p class="note">{t(LEGEND, LEGEND_EN)}</p>', t('''<ul>
 <li>Voor <em>B</em> ≤ 4 (gedegenereerde borden) winnen twee dammen altijd, op de vierkante borden als ze de lange
 lijn(en) bezetten.</li>
-<li>Voor <em>B</em> ≥ 5 zijn maar twee borden gewonnen: <strong>6×5</strong> (nieuw) en <strong>7×5 gekleurd</strong>
+<li>Voor <em>B</em> ≥ 5 zijn maar twee borden gewonnen: <strong>6×5</strong> (nieuw) en <strong>7×5 speelbare hoeken</strong>
 (bekend). Vanaf <em>B</em> = 6 is alles remise; de overige winsten zijn korte combinaties waarvan de lengte niet van
 de bordgrootte afhangt.</li>
 <li>Met de enkele dam aan zet zijn er op 6×5 (8) en 7×5 (16) een paar uitzonderingen: dubbele aanvallen (vorken).</li>
 </ul>''', '''<ul>
 <li>For <em>B</em> ≤ 4 (degenerate boards) two kings always win, on the square boards provided they hold the long
 diagonal(s).</li>
-<li>For <em>B</em> ≥ 5 only two boards are won: <strong>6×5</strong> (new) and <strong>7×5 coloured</strong> (known). From
+<li>For <em>B</em> ≥ 5 only two boards are won: <strong>6×5</strong> (new) and <strong>7×5 playable corners</strong> (known). From
 <em>B</em> = 6 on everything is drawn, and the remaining wins are short combinations whose length does not depend on the
 board size.</li>
 <li>With the single king to move there are a few exceptions on 6×5 (8) and 7×5 (16): double attacks (forks).</li>
@@ -249,17 +249,17 @@ board size.</li>
                    'then place the second king behind it on the corner diagonal. More than 80% of all quiet wins on 6×5 '
                    'and 7×5 end with black capturing into a corner.</p>')]
         fen = 'W:WK1,K9:BK2'
-        fig, i0 = pg.diagram(fen, t('7×5 gekleurd, wit aan zet', '7×5 coloured, white to move'), gid='5x7')
+        fig, i0 = pg.diagram(fen, t('7×5 speelbare hoeken, wit aan zet', '7×5 playable corners, white to move'), gid='5x7')
         line = ('1. c3-e5 c5-a3 2. a5-d2 a3-c5 3. d2-c1 c5-f2 4. e5-g3 f2-c5 5. c1-a3 c5-d4 6. a3-b2! d4xa1 '
                 '7. g3-e5 a1-b2 8. e5xa1')
         h, *_ = pg.moves(fen, self.plan(line), 1, False, 'm1', i0)
-        body += [t('<h2>7×5 gekleurd: hetzelfde slotmotief</h2>', '<h2>7×5 coloured: the same final motif</h2>'), fig,
-                 t('<p>Op 7×5 gekleurd verschijnt hetzelfde slotmotief na 15 ply:</p>',
-                   '<p>On 7×5 coloured the same final motif appears after 15 plies:</p>'), f'<p class="var">{h}</p>']
+        body += [t('<h2>7×5 speelbare hoeken: hetzelfde slotmotief</h2>', '<h2>7×5 playable corners: the same final motif</h2>'), fig,
+                 t('<p>Op 7×5 speelbare hoeken verschijnt hetzelfde slotmotief na 15 ply:</p>',
+                   '<p>On 7×5 playable corners the same final motif appears after 15 plies:</p>'), f'<p class="var">{h}</p>']
         self.write('twee-tegen-een.html', '2 dammen tegen 1', '\n'.join(body), pg, '5x6')
 
     def drie(self):
-        e = self.engine('8x8', '--width', 8, '--height', 8, '--parity', 1)
+        e = self.engine('8x8', '--width', 8, '--height', 8, '--corners', 'playable')
         pg = self.page(('8x8', e))
         t = self.t
         body = [t('<h1>3 dammen tegen 1</h1>', '<h1>3 kings against 1</h1>'), f'<pre class="tbl">{esc(TABLE_31)}</pre>',
@@ -275,18 +275,18 @@ board size.</li>
                 t('''<h2>De drie families</h2>
 <table class="tbl"><tr><th>Familie</th><th>Resultaat (B = 3 … 12)</th></tr>
 <tr><td><strong>L = B + 1</strong></td><td>gewonnen op elk bord</td></tr>
-<tr><td><strong>L = B + 2</strong></td><td>gewonnen, behalve de "verkeerde" kleuring, ongekleurde hoekvelden, voor B = 9 en 11</td></tr>
-<tr><td><strong>L = 2B − 1</strong></td><td>gewonnen, behalve ongekleurd voor B = 9 en 11 (10×19: 27 ply, 11×21 gekleurd: 25 ply,
+<tr><td><strong>L = B + 2</strong></td><td>gewonnen, behalve de "verkeerde" kleuring, onspeelbare hoekvelden, voor B = 9 en 11</td></tr>
+<tr><td><strong>L = 2B − 1</strong></td><td>gewonnen, behalve onspeelbaar voor B = 9 en 11 (10×19: 27 ply, 11×21 speelbare hoeken: 25 ply,
 12×23: 27 ply)</td></tr></table>
 <p>De kleuringsregel van het boek klopt: vanaf <em>B</em> = 9 wint bij oneven <em>B</em> alleen de kleuring met
-gekleurde hoekvelden. Op <em>B</em> = 7 wint de verkeerde kleuring nog (5×9 en 7×13 ongekleurd), omdat de algemene methode
+speelbare hoekvelden. Op <em>B</em> = 7 wint de verkeerde kleuring nog (5×9 en 7×13 onspeelbare hoeken), omdat de algemene methode
 daar nog reikt. Hoe de families winnen, staat bij de <a href="vangstellingen.html">vangstellingen</a>.</p>
 <h2>De algemene methode op smalle borden</h2>
 <ul>
 <li><strong>B = 5, 6</strong>: elk niet-vierkant bord is gewonnen (gecontroleerd tot 5×13 en 6×15). Drie dammen in
 een kolom sluiten de volle breedte af en worden over het bord geschoven; de langste winst groeit met ongeveer 2 ply per
 extra kolom.</li>
-<li><strong>B = 7</strong>: gewonnen tot en met <strong>7×14</strong> en <strong>7×15 gekleurd</strong> (boek: tot 7×11).
+<li><strong>B = 7</strong>: gewonnen tot en met <strong>7×14</strong> en <strong>7×15 speelbare hoeken</strong> (boek: tot 7×11).
 Vanaf <em>L</em> = 16 is het remise. De langste winsten springen van 25 naar 35, 49, 53 en 67–73 ply: de ruimte wordt
 krap.</li>
 <li><strong>B = 8</strong>: gewonnen bij <em>L</em> = 9, 10, 11 en 15 (= 2<em>B</em> − 1), remise bij
@@ -299,20 +299,20 @@ aan zet, gesplitst naar wie de lange lijn(en) bezet (remises / stellingen):</p>
 <table class="tbl"><tr><th>Bord</th><th>Wit op de lange lijn(en)</th><th>Niemand</th><th>Alleen zwart</th></tr>
 <tr><td>6×6</td><td>0 / 3.154</td><td>0 / 816</td><td>784 / 812</td></tr>
 <tr><td>8×8</td><td>0 / 33.364 (40 vorken met zwart aan zet)</td><td>0 / 17.184</td><td>10.696 / 11.084</td></tr>
-<tr><td>5×5 gekleurd (twee diagonalen, wit op beide)</td><td>0 / 540</td><td></td><td></td></tr>
-<tr><td>7×7 gekleurd (wit op beide)</td><td>0 / 6.032</td><td></td><td></td></tr>
-<tr><td>9×9 gekleurd (wit op beide)</td><td>32.492 / 39.328</td><td></td><td></td></tr>
+<tr><td>5×5 speelbare hoeken (twee diagonalen, wit op beide)</td><td>0 / 540</td><td></td><td></td></tr>
+<tr><td>7×7 speelbare hoeken (wit op beide)</td><td>0 / 6.032</td><td></td><td></td></tr>
+<tr><td>9×9 speelbare hoeken (wit op beide)</td><td>32.492 / 39.328</td><td></td><td></td></tr>
 <tr><td>10×10</td><td>177.548 / 206.466</td><td></td><td></td></tr></table>
 <p>Tot en met <em>B</em> = 8 beslist de lange lijn; vanaf <em>B</em> = 9 kunnen drie dammen niet winnen, ook niet als ze
 hem bezetten. Met één lange diagonaal komt de voorwaarde neer op "zwart bezet hem niet"; met twee diagonalen heeft wit
 er echt beide nodig.</p>''', '''<h2>The three families</h2>
 <table class="tbl"><tr><th>Family</th><th>Result (B = 3 … 12)</th></tr>
 <tr><td><strong>L = B + 1</strong></td><td>won on every board</td></tr>
-<tr><td><strong>L = B + 2</strong></td><td>won, except the "wrong" colouring, uncoloured corner squares, for B = 9 and 11</td></tr>
-<tr><td><strong>L = 2B − 1</strong></td><td>won, except uncoloured for B = 9 and 11 (10×19: 27 plies, 11×21 coloured: 25 plies,
+<tr><td><strong>L = B + 2</strong></td><td>won, except the "wrong" colouring, unplayable corner squares, for B = 9 and 11</td></tr>
+<tr><td><strong>L = 2B − 1</strong></td><td>won, except unplayable for B = 9 and 11 (10×19: 27 plies, 11×21 playable corners: 25 plies,
 12×23: 27 plies)</td></tr></table>
 <p>The colouring rule of the book is confirmed: from <em>B</em> = 9 on, for odd <em>B</em> only the colouring with
-coloured corner squares wins. On <em>B</em> = 7 the wrong colouring still wins (5×9 and 7×13 uncoloured) because the general
+playable corner squares wins. On <em>B</em> = 7 the wrong colouring still wins (5×9 and 7×13 unplayable corners) because the general
 method still reaches that far. How the families win is shown with the <a href="vangstellingen.html">trapping
 positions</a>.</p>
 <h2>The general method on narrow boards</h2>
@@ -320,7 +320,7 @@ positions</a>.</p>
 <li><strong>B = 5, 6</strong>: every non-square board is won (checked up to 5×13 and 6×15). Three kings in a column
 close off the full width and can be pushed along the board; the longest win grows by about 2 plies per extra
 column.</li>
-<li><strong>B = 7</strong>: won up to <strong>7×14</strong> and <strong>7×15 coloured</strong> (book: up to 7×11). From
+<li><strong>B = 7</strong>: won up to <strong>7×14</strong> and <strong>7×15 playable corners</strong> (book: up to 7×11). From
 <em>L</em> = 16 on it is drawn. The longest wins jump from 25 to 35, 49, 53 and 67–73 plies: the space becomes
 tight.</li>
 <li><strong>B = 8</strong>: won at <em>L</em> = 9, 10, 11 and 15 (= 2<em>B</em> − 1), drawn at <em>L</em> = 12–14 and
@@ -333,9 +333,9 @@ three kings to move by who occupies the long diagonal(s) (draws / positions):</p
 <table class="tbl"><tr><th>Board</th><th>White on the long diagonal(s)</th><th>Nobody</th><th>Only black</th></tr>
 <tr><td>6×6</td><td>0 / 3,154</td><td>0 / 816</td><td>784 / 812</td></tr>
 <tr><td>8×8</td><td>0 / 33,364 (40 forks with black to move)</td><td>0 / 17,184</td><td>10,696 / 11,084</td></tr>
-<tr><td>5×5 coloured (two diagonals, white on both)</td><td>0 / 540</td><td></td><td></td></tr>
-<tr><td>7×7 coloured (white on both)</td><td>0 / 6,032</td><td></td><td></td></tr>
-<tr><td>9×9 coloured (white on both)</td><td>32,492 / 39,328</td><td></td><td></td></tr>
+<tr><td>5×5 playable corners (two diagonals, white on both)</td><td>0 / 540</td><td></td><td></td></tr>
+<tr><td>7×7 playable corners (white on both)</td><td>0 / 6,032</td><td></td><td></td></tr>
+<tr><td>9×9 playable corners (white on both)</td><td>32,492 / 39,328</td><td></td><td></td></tr>
 <tr><td>10×10</td><td>177,548 / 206,466</td><td></td><td></td></tr></table>
 <p>Up to <em>B</em> = 8 the long diagonal decides; from <em>B</em> = 9 on three kings cannot win even when they hold it.
 With one long diagonal the condition amounts to "black does not hold it"; with two diagonals white really needs
@@ -400,7 +400,7 @@ both.</p>''')]
         fams = [('10x11', 11, 10, ['b2', 'k9', 'i7'], 'B + 1', 'h10'),
                 ('10x12', 12, 10, ['b2', 'l8', 'j6'], 'B + 2', None),
                 ('10x19', 19, 10, ['b2', 'j8', 'r2'], '2B − 1', None)]
-        engines = {gid: self.engine(gid, '--width', w, '--height', h, '--parity', 1) for gid, w, h, *_ in fams}
+        engines = {gid: self.engine(gid, '--width', w, '--height', h, '--corners', 'playable') for gid, w, h, *_ in fams}
         pg = self.page(*engines.items())
         t = self.t
         body = [t('<h1>Vangstellingen</h1>', '<h1>Trapping positions</h1>'), t('''
@@ -477,12 +477,12 @@ capture.</p>''')]
                 body.append(t('<p><strong>De V</strong> (alleen bij <em>L</em> = 2<em>B</em> − 1): de diagonalen vanuit '
                             'de twee hoeken van één lange zijde ontmoeten elkaar precies in het midden van de overkant. '
                             'Korter, en de benen kruisen onder de rand; langer, en ze raken de rand op twee verschillende '
-                            'velden. Even <em>B</em> heeft altijd de twee hoeken; oneven <em>B</em> alleen met gekleurde '
+                            'velden. Even <em>B</em> heeft altijd de twee hoeken; oneven <em>B</em> alleen met speelbare '
                             'hoekvelden.</p>',
                               '<p><strong>The V</strong> (only for <em>L</em> = 2<em>B</em> − 1): the diagonals from the '
                               'two corners of one long side meet exactly in the middle of the opposite side. Shorter, and '
                               'the legs cross below the edge; longer, and they hit the edge at two different squares. Even '
-                              '<em>B</em> always has the two corners; odd <em>B</em> has them only with coloured corner squares.</p>'))
+                              '<em>B</em> always has the two corners; odd <em>B</em> has them only with playable corner squares.</p>'))
             body.append('<div style="clear:both"></div>')
         self.write('vangstellingen.html', 'Vangstellingen', '\n'.join(body), pg)
 

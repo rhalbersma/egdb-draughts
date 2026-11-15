@@ -1,0 +1,7 @@
+sample: every 16-th slice, 1148038586 positions (one byte of DTM each = 8 bits)
+byte entropy: as is 4.385 bits, captures filled 4.466 bits per position
+
+                                    4 KiB     64 KiB      1 MiB   (bits per position)
+zstd -3, as is                      3.571      3.590      3.660
+zstd -3, captures filled            1.341      1.295      1.317
+zstd -19, captures filled           1.118      1.038      1.028

@@ -33,7 +33,8 @@ CHAPTERS = [
         ('twee-4x4.html', 'Uitzondering 2: remise op 4×4', 'Exception 2: a draw on 4×4')]),
     ('3 tegen 2', '3 against 2', [
         ('drie-langste.html', 'De langste winst op 8×8', 'The longest win on 8×8'),
-        ('blokkades.html', 'De blokkades', 'The blockades')]),
+        ('blokkades.html', 'De blokkades', 'The blockades'),
+        ('curiosa.html', 'Twee curiosa', 'Two curiosities')]),
     ('De val', 'The trap', [
         ('val.html', 'De val bij beide pariteiten', 'The trap at both parities'),
         ('val-pariteit.html', 'Waarom beide pariteiten', 'Why both parities'),
@@ -323,14 +324,14 @@ gedrukt wordt (0,0% remise zonder witte dam aan de rand, 0,5% met drie), en zwar
 remise. Op 8×8 zijn er 1.252 rustige remisestellingen met wit aan zet, 316 op spiegelingen van het bord na, en bijna
 allemaal draaien ze om de enkele hoek. In 307 zit de blokkade van <a href="twee-blokkade.html">2 tegen 1</a>: twee witte
 dammen in een enkele hoek, vastgehouden door één zwarte dam. In 5 houdt zwart dezelfde twee witte dammen met twee dammen
-vast (op f6 en e5 tegen h8 en g7), in 2 zit één witte dam vast in de hoek. Alleen 2 klassen hebben niets met de hoek te
+vast (op f6 en e5 tegen h8 en g7), in 2 zit één witte dam vast in de hoek (de <a href="curiosa.html">twee curiosa</a>). Alleen 2 klassen hebben niets met de hoek te
 maken (het derde diagram).</p>''', '''
 <p>On 7×8 and 8×8 3-2 is won generically. The few draws occur almost only when white is pushed against the edge (draw
 rate 0.0% with no white king on the edge, 0.5% with three), and black holding both double corners never draws. On 8×8
 there are 1,252 quiet drawn positions with white to move, 316 up to the symmetries of the board, and nearly all of them
 turn on the single corner. 307 contain the blockade of <a href="twee-blokkade.html">2 against 1</a>: two white kings in a
 single corner, held by one black king. In 5 black holds the same two white kings with two kings (on f6 and e5 against h8
-and g7), in 2 one white king is locked in the corner. Only 2 classes have nothing to do with the corner (the third
+and g7), in 2 one white king is locked in the corner (the <a href="curiosa.html">two curiosities</a>). Only 2 classes have nothing to do with the corner (the third
 diagram).</p>''')]
         cases = [
             ('W:WK3,K4,K29:BK11,K22',
@@ -349,16 +350,6 @@ diagram).</p>''')]
              'work, not the edge: of the 24 set-ups with three white kings on the top edge and two black kings on the sixth '
              'rank only 3 are drawn, and in all three black on f6 holds the white kings on f8 and h8 (the blockade of 2 against '
              '1). White on b8, d8 and f8 against black on d6 and f6, three side by side with two right opposite, wins (W13). '),
-            ('W:WK2,K4,K11:BK10,K12',
-             'Eén witte dam zit vast in de hoek: na h8-g7 slaat zwart h6×f8. Tegen de zwarte dam op d6 komen de twee andere '
-             'witte dammen niet verder, en f6-g7 en f6-g5 verliezen zelfs. ',
-             'One white king is locked in the corner: after h8-g7 black captures h6×f8. Against the black king on d6 the two '
-             'other white kings make no progress, and f6-g7 and f6-g5 even lose. '),
-            ('W:WK4,K11,K15:BK3,K8',
-             'De zwarte dammen staan in de enkele hoek van wit, op f8 en g7, voor de witte dam op h8. Die kan niet bewegen: g7 '
-             'is bezet, en slaan kan niet omdat f6 bezet is. Alleen f6-e7 houdt remise; de andere zetten verliezen. ',
-             'The black kings stand in white\'s single corner, on f8 and g7, in front of the white king on h8. It cannot move: '
-             'g7 is occupied, and it cannot capture because f6 is occupied. Only f6-e7 keeps the draw; the other moves lose. '),
             ('W:WK7,K14,K23:BK13,K15',
              'Een van de 2 klassen die niets met de hoek te maken hebben (de andere: zwart op h4 in plaats van a5): de zwarte '
              'dam op e5 staat midden tussen de drie witte dammen. Een '
@@ -376,6 +367,32 @@ diagram).</p>''')]
             body += [fig, f'<p>{t(nl, en)}{t("Alle zetten van wit: ", "All moves of white: ")}'
                      f'{self.moves_list(pg, i0, legal, "1. ")}.</p>', '<div style="clear:both"></div>']
         flush('blokkades.html')
+        # two curiosities: one white king locked in the single corner in another way
+        body += [t('<p>Twee van de 316 remiseklassen van 3 tegen 2 op 8×8 passen in geen van de families van '
+                   '<a href="blokkades.html">de blokkades</a>: er zit maar één witte dam vast in de enkele hoek, en toch komt '
+                   'wit niet verder.</p>',
+                   '<p>Two of the 316 drawn classes of 3 against 2 on 8×8 fit none of the families of '
+                   '<a href="blokkades.html">the blockades</a>: only one white king is locked in the single corner, and still '
+                   'white makes no progress.</p>')]
+        for fen, nl, en in (
+            ('W:WK2,K4,K11:BK10,K12',
+             'Eén witte dam zit vast in de hoek: na h8-g7 slaat zwart h6×f8. Tegen de zwarte dam op d6 komen de twee andere '
+             'witte dammen niet verder, en f6-g7 en f6-g5 verliezen zelfs. ',
+             'One white king is locked in the corner: after h8-g7 black captures h6×f8. Against the black king on d6 the two '
+             'other white kings make no progress, and f6-g7 and f6-g5 even lose. '),
+            ('W:WK4,K11,K15:BK3,K8',
+             'De zwarte dammen staan in de enkele hoek van wit, op f8 en g7, voor de witte dam op h8. Die kan niet bewegen: g7 '
+             'is bezet, en slaan kan niet omdat f6 bezet is. Alleen f6-e7 houdt remise; de andere zetten verliezen. ',
+             'The black kings stand in white\'s single corner, on f8 and g7, in front of the white king on h8. It cannot move: '
+             'g7 is occupied, and it cannot capture because f6 is occupied. Only f6-e7 keeps the draw; the other moves lose. '),
+                ):
+            v, legal = e88.analyse(fen)
+            vb, _ = e88.analyse('B' + fen[1:])
+            fig, i0 = pg.diagram(fen, t(f'8×8, wit aan zet: {v} (zwart aan zet: {vb})',
+                                        f'8×8, white to move: {v} (black to move: {vb})'), gid=k88)
+            body += [fig, f'<p>{t(nl, en)}{t("Alle zetten van wit: ", "All moves of white: ")}'
+                     f'{self.moves_list(pg, i0, legal, "1. ")}.</p>', '<div style="clear:both"></div>']
+        flush('curiosa.html')
 
     @staticmethod
     def exchange(e, fen):

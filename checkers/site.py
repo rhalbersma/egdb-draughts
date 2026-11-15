@@ -437,7 +437,17 @@ king in the middle of the white kings (the third diagram).</p>''')]
     def traps88(self, pg, k88, e88):
         """two traps on 8x8, one at each parity: every shuttle move of black allows a forced exchange"""
         t = self.t
-        body = [t('<p>Wit breekt de dubbele hoeken met een val: een opstelling waarin elke pendelzet van zwart een '
+        body = [t('<p>Bij <a href="twee-langste.html">2 tegen 1</a> is de dubbele hoek geen veilige haven: twee witte '
+                  'dammen winnen ook tegen een zwarte dam in de dubbele hoek. Bij 3 tegen 2 bezet zwart daarom beide dubbele '
+                  'hoeken, en per hoek twee witte dammen zou neerkomen op 4 tegen 2. Op 8×8 is het bord precies klein genoeg om '
+                  'het met 3 dammen te doen: in de val doet de middelste witte dam dubbel werk. Hij slaat terug na de ruil in '
+                  'de ene hoek én na die in de andere, in de eerste val hieronder vanaf d4, in de tweede vanaf e5.</p>',
+                  '<p>In <a href="twee-langste.html">2 against 1</a> the double corner is no safe haven: two white kings win '
+                  'against a black king in the double corner too. In 3 against 2 black therefore occupies both double corners, '
+                  'and two white kings per corner would mean 4 against 2. On 8×8 the board is just small enough to do it with '
+                  '3 kings: in the trap the middle white king does double duty. It captures back after the exchange in the one '
+                  'corner and after the one in the other, in the first trap below from d4, in the second from e5.</p>')
+                + t('<p>Wit breekt de dubbele hoeken met een val: een opstelling waarin elke pendelzet van zwart een '
                   'gedwongen ruil toelaat: met een rustige zet dwingt wit zwart een witte dam te slaan, wit slaat terug, en 2 '
                   'tegen 1 wint. Zwart heeft twee dammen en dus twee pendelzetten; de val moet ze allebei straffen, ook als de '
                   'ruil de andere zwarte dam treft. Of zo\'n val werkt, hangt af van de pariteit: even of oneven, de pariteit '

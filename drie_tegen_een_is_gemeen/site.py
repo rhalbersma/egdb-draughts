@@ -138,7 +138,7 @@ class Site:
         t = self.t
         fig, _ = pg.diagram('W:WK1,K8:BK7', t('6×5: twee dammen winnen (27 ply)', '6×5: two kings win (27 plies)'))
         body = [f'<h1>{TITLE}</h1>', fig, t('''
-<p>Eindspelen met alleen dammen, op borden van elke afmeting <em>B × L</em>, met internationale regels: vliegende
+<p>Eindspelen met alleen dammen, op borden van elke afmeting <em>B × L</em> (<em>B</em> ≤ <em>L</em>, met de families <em>L</em> = <em>B</em> + 1, <em>B</em> + 2 en 2<em>B</em> − 1, zoals in het boek), met internationale regels: vliegende
 dammen, slagplicht, meerslag en Turkse slag. Een Nederlands boek uit 1988 over drie dammen tegen één vond zijn
 resultaten met de hand, op borden van elke grootte. De databases van
 <a href="https://github.com/rhalbersma/egdb-draughts/blob/main/src/egdb_fast.cpp"><code>egdb_fast</code></a>
@@ -146,8 +146,13 @@ rekenen elke stelling exact uit, met de afstand tot het einde van de partij in p
 breiden de resultaten van het boek uit.</p>
 <p>Elke stelling op deze site is klikbaar: het grote bord volgt, en eronder staan de waarde en alle zetten. W = winst,
 L = verlies, met het aantal ply tot het einde van de partij; D = remise. Zuiver speltheoretisch, zonder
-zettenregels.</p>''', '''
-<p>Endgames with kings only, on boards of any size <em>B × L</em>, under international rules: flying kings, mandatory
+zettenregels.</p>
+<p>Omdat het eindspelen met alleen dammen zijn, zonder schijven en dus zonder voor- of achterkant, maakt het niet uit
+hoe het bord ligt: kantelen in de diagonaal door a1 verandert geen enkele waarde, en ook de kleuring (p0/p1) blijft
+gelijk. De diagrammen tonen de borden daarom gekanteld, liggend: <em>L</em> kolommen breed en <em>B</em> rijen hoog. Bij de
+diagrammen heten ze <em>L</em> × <em>B</em>, kolommen × rijen: 11×10 is het bord met <em>B</em> = 10 en
+<em>L</em> = 11 uit de familie <em>L</em> = <em>B</em> + 1.</p>''', '''
+<p>Endgames with kings only, on boards of any size <em>B × L</em> (<em>B</em> ≤ <em>L</em>, with the families <em>L</em> = <em>B</em> + 1, <em>B</em> + 2 and 2<em>B</em> − 1, as in the book), under international rules: flying kings, mandatory
 capture, majority capture and the Turkish strike. A Dutch book of 1988 on three kings against one, <em>Drie tegen een is
 gemeen</em> ("three against one is mean"), found its results by hand, on boards of every size. The databases of
 <a href="https://github.com/rhalbersma/egdb-draughts/blob/main/src/egdb_fast.cpp"><code>egdb_fast</code></a> compute
@@ -155,7 +160,12 @@ every position exactly, with the distance to the end of the game in plies, and c
 of the book.</p>
 <p>Every position on this site is clickable: the large board follows, and below it are the value and all moves. W = win,
 L = loss, with the number of plies to the end of the game; D = draw. Purely game-theoretic, without move-count
-rules.</p>'''), t('<h2>Inhoud</h2>', '<h2>Contents</h2>') + '<ul class="toc">']
+rules.</p>
+<p>Since these are endgames with kings only, without men and so without a front or back, it does not matter which way
+the board lies: turning it over the diagonal through a1 changes no value, and the colouring (p0/p1) stays the same too.
+The diagrams therefore show the boards on their side: <em>L</em> files wide and <em>B</em> ranks high. At the diagrams
+they are named <em>L</em> × <em>B</em>, files × ranks: 11×10 is the board with <em>B</em> = 10 and
+<em>L</em> = 11 from the family <em>L</em> = <em>B</em> + 1.</p>'''), t('<h2>Inhoud</h2>', '<h2>Contents</h2>') + '<ul class="toc">']
         for k in range(1, len(PAGES)):
             body.append(f'<li><a href="{PAGES[k][0]}">{esc(self.title(k))}</a></li>')
         body.append('</ul>')
@@ -425,10 +435,10 @@ capture.</p>''')]
                    '<table class="tbl"><tr><th>Family</th><th>White kings (file, rank)</th><th>Boards checked</th>'
                    '<th>Black to move</th><th>White to move</th></tr>') + rows + '</table>'
                  + t('<p class="note">Coördinaten (kolom, rij) gerekend vanaf (1, 1) = a1 linksonder; <em>B</em> × '
-                     '<em>L</em> met <em>L</em> kolommen en <em>B</em> rijen. Bij 2<em>B</em> − 1 staan (2, 2) en '
+                     '<em>L</em> gekanteld getoond, met <em>L</em> kolommen en <em>B</em> rijen. Bij 2<em>B</em> − 1 staan (2, 2) en '
                      '(<em>L</em> − 1, 2) op de benen van de V en (<em>B</em>, <em>B</em> − 2) onder de top.</p>',
                      '<p class="note">Coordinates (file, rank) counted from (1, 1) = a1 at the bottom left; <em>B</em> × '
-                     '<em>L</em> with <em>L</em> files and <em>B</em> ranks. For 2<em>B</em> − 1, (2, 2) and '
+                     '<em>L</em> shown on its side, with <em>L</em> files and <em>B</em> ranks. For 2<em>B</em> − 1, (2, 2) and '
                      '(<em>L</em> − 1, 2) stand on the legs of the V and (<em>B</em>, <em>B</em> − 2) below its apex.</p>'))
         body[1] = body[1].replace('{TABLE}', table)
         for gid, w, h, wk, fam, black in fams:

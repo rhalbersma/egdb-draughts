@@ -30,11 +30,10 @@ CHAPTERS = [
         ('twee-langste.html', 'De langste winst op 8×8', 'The longest win on 8×8'),
         ('twee-blokkade.html', 'Uitzondering 1: de blokkade aan de rand', 'Exception 1: the blockade at the edge'),
         ('twee-4x4.html', 'Uitzondering 2: remise op 4×4', 'Exception 2: a draw on 4×4')]),
-    ('3 tegen 2', '3 against 2', [
-        ('drie-langste.html', 'De langste winst op 8×8', 'The longest win on 8×8'),
-        ('blokkades.html', 'De blokkades', 'The blockades'),
-        ('curiosa.html', 'Twee curiosa', 'Two curiosities')]),
-    ('De val', 'The trap', [
+    ('3 tegen 2 op 8×8', '3 against 2 on 8×8', [
+        ('drie-langste.html', 'De langste winst', 'The longest win'),
+        ('blokkades.html', 'Uitzondering 1: de blokkades', 'Exception 1: the blockades'),
+        ('curiosa.html', 'Uitzondering 2: twee curiosa', 'Exception 2: two curiosities'),
         ('val.html', 'Twee vallen om de vesting te breken', 'Two traps to break the fortress'),
         ('val-pariteit.html', 'De winst is strategisch, de pariteit doet er niet toe', 'The win is strategic, parity does not matter')]),
     ('De vesting op grotere borden', 'The fortress on larger boards', [
@@ -310,9 +309,11 @@ by opposition; on odd × odd boards with playable corners this blockade does not
             f'makes half of such positions a draw on 9×8 and 10×9, plays no role on 8×8.</p>'),
             f'<p class="var">{h}</p>',
             t('<p>Zwart probeert zijn toevlucht te zoeken in een vesting door beide dubbele hoeken te bezetten, maar wit '
-              'breekt de vesting. Hoe wit dat doet, analyseren we in het hoofdstuk <a href="val.html">De val</a>.</p>',
+              'breekt de vesting. Hoe wit dat doet, analyseren we na de twee uitzonderingen, bij '
+              '<a href="val.html">twee vallen om de vesting te breken</a>.</p>',
               '<p>Black tries to take refuge in a fortress by occupying both double corners, but white breaks the fortress. '
-              'How white achieves this is analysed in the chapter <a href="val.html">The trap</a>.</p>'),
+              'How white achieves this is analysed after the two exceptions, at '
+              '<a href="val.html">two traps to break the fortress</a>.</p>'),
             '<div style="clear:both"></div>']
         flush('drie-langste.html')
         body, phases, pgp = self.traps88(pg, k88, e88)

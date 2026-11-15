@@ -25,7 +25,7 @@ SITES = {
          'Herm Jan Brascamps reeks over het 6×6-bord (2016), hoofdstuk voor hoofdstuk nagerekend met exacte databases tot '
          '10 stukken; plus de oplossing van de beginstand: remise.'),
         ('../drie_tegen_een_is_gemeen/', 'Drie tegen een is gemeen',
-         'Twee en drie dammen tegen één op borden van elke afmeting: de winst op 5×6, de families, de vangstellingen en '
+         'Twee en drie dammen tegen één op borden van elke afmeting: de winst op 6×5, de families, de vangstellingen en '
          '10×10 met één veld weg.'),
         ('../checkers/', 'Checkers: 3 dammen tegen 2',
          'Korte dammen op borden van elke afmeting: blokkades, de vesting in de dubbele hoek en de oppositie.'),
@@ -35,7 +35,7 @@ SITES = {
          'Herm Jan Brascamp\'s series on the 6×6 board (2016), checked chapter by chapter with exact databases up to 10 '
          'pieces; plus the solution of the start position: a draw.'),
         ('drie_tegen_een_is_gemeen/', 'Drie tegen een is gemeen',
-         'Two and three kings against one on boards of any size: the win on 5×6, the families, the trapping positions '
+         'Two and three kings against one on boards of any size: the win on 6×5, the families, the trapping positions '
          'and 10×10 with one square removed.'),
         ('checkers/', 'Checkers: 3 kings against 2',
          'Short kings on boards of any size: blockades, the double-corner fortress and opposition.'),

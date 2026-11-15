@@ -322,6 +322,9 @@ class Site:
                   'international/compression_stats.cpp"><code>compression_stats</code></a> on the 10-piece layer.</p>')]
         if f.exists():
             body.append(COMPRESSION_TEXT(self, f.read_text()))
+        fz = HERE / 'international' / 'compression_zstd_10.txt'
+        if fz.exists():
+            body.append(ZSTD_TEXT(self, fz.read_text()))
         else:
             body.append(t('<p>De meting loopt nog.</p>', '<p>The measurement is still running.</p>'))
         self.write('compression.html', '\n'.join(body), self.page())
@@ -381,6 +384,48 @@ def COMPRESSION_TEXT(site, raw):
                 f'capture costs one ply of captures when it is looked up. On the other hand the capture positions can be '
                 f'filled in more cleverly than with the previous value, for example with the value that extends a run on '
                 f'both sides.</p>'))
+
+
+def ZSTD_TEXT(site, raw):
+    """the results of compression_zstd (by block size) as a table and conclusions"""
+    t = site.t
+    names = {'zstd -3, as is': ('zstd -3, zoals het is', 'zstd -3, as is'),
+             'zstd -3, captures filled': ('zstd -3, slagplicht ingevuld', 'zstd -3, captures filled in'),
+             'zstd -9, captures filled': ('zstd -9, slagplicht ingevuld', 'zstd -9, captures filled in'),
+             'zstd -19, captures filled': ('zstd -19, slagplicht ingevuld', 'zstd -19, captures filled in'),
+             'zstd -9 + 100 KB dictionary': ('zstd -9 + woordenboek van 100 KB', 'zstd -9 + 100 KB dictionary'),
+             'zstd -19 + 100 KB dictionary': ('zstd -19 + woordenboek van 100 KB', 'zstd -19 + 100 KB dictionary'),
+             'xz -9, captures filled': ('xz -9, slagplicht ingevuld', 'xz -9, captures filled in')}
+    rows, vals = [], {}
+    for line in raw.splitlines():
+        for k, (nl, en) in names.items():
+            if line.startswith(k + ' ') and len(line.split()) >= 4:
+                xs = [float(x) for x in line[len(k):].split()]
+                vals[k] = xs
+                f = (lambda x: f'{x:.3f}'.replace('.', ',')) if site.lang == 'nl' else (lambda x: f'{x:.3f}')
+                rows.append(f'<tr><td>{nl if site.lang == "nl" else en}</td>' + ''.join(f'<td>{f(x)}</td>' for x in xs) + '</tr>')
+    z19, z3, xz = vals['zstd -19, captures filled'], vals['zstd -3, captures filled'], vals['xz -9, captures filled']
+    f = (lambda x, d=1: f'{x:.{d}f}'.replace('.', ',')) if site.lang == 'nl' else (lambda x, d=1: f'{x:.{d}f}')
+    gb = lambda bits: f(63_836_439_921 * bits / 8 / 1e9)
+    return (t('<h2>zstd en de blokgrootte</h2><p>Voor snel opzoeken moet een blok klein zijn: bij elke opvraging wordt '
+              'één blok uitgepakt. Hieronder de bits per stelling bij onafhankelijke blokken van 4 KiB tot 1 MiB (een '
+              'blok van 4 KiB bevat 16.384 stellingen), op dezelfde steekproef van 1 op de 16 slices.</p>',
+              '<h2>zstd and the block size</h2><p>For fast lookup a block has to be small: every lookup unpacks one block. '
+              'Below the bits per position for independent blocks of 4 KiB to 1 MiB (a block of 4 KiB holds 16,384 '
+              'positions), on the same sample of 1 in 16 slices.</p>')
+            + f'<table class="tbl"><tr><th></th><th>4 KiB</th><th>16 KiB</th><th>64 KiB</th><th>1 MiB</th></tr>{"".join(rows)}</table>'
+            + t(f'<p>Kleine blokken kosten weinig: zstd -19 haalt bij 4 KiB {f(z19[0], 3)} bits per stelling, nauwelijks '
+                f'meer dan de {f(z19[3], 3)} bij 1 MiB. Bij kleine blokken is zstd beter dan xz ({f(xz[0], 3)}), dat pas bij '
+                f'grote blokken wint. Een woordenboek helpt alleen bij de kleinste blokken een beetje. zstd pakt snel uit, '
+                f'typisch ruim 1 GB per seconde, ook na niveau 19 (niet apart gemeten), dus een blok van 4 KiB kost enkele microseconden. Met zstd -19 en '
+                f'blokken van 4 KiB worden alle databases tot en met 12 stukken ongeveer {gb(z19[0])} GB; met het snellere '
+                f'zstd -3 {gb(z3[0])} GB. Beide passen ruim in het geheugen.</p>',
+                f'<p>Small blocks cost little: zstd -19 reaches {f(z19[0], 3)} bits per position at 4 KiB, hardly more than '
+                f'the {f(z19[3], 3)} at 1 MiB. With small blocks zstd beats xz ({f(xz[0], 3)}), which only wins with large '
+                f'blocks. A dictionary helps a little, and only for the smallest blocks. zstd decompresses fast, '
+                f'typically well over 1 GB per second, also after level 19 (not measured here), so a block of 4 KiB costs a few microseconds. With zstd -19 and blocks of 4 KiB all databases '
+                f'up to 12 pieces take about {gb(z19[0])} GB; with the faster zstd -3 {gb(z3[0])} GB. Both fit in memory '
+                f'with room to spare.</p>'))
 
 
 def main():

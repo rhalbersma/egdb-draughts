@@ -1,0 +1,10 @@
+sample: every 16-th slice, 852194 slices, 1148038588 positions, 287009647 bytes packed
+
+                                        4 KiB     16 KiB     64 KiB      1 MiB   (bits per position; 2 bits = uncompressed)
+zstd -3, as is                          0.690      0.681      0.676      0.683
+zstd -3, captures filled                0.245      0.228      0.221      0.224
+zstd -9, captures filled                0.221      0.204      0.201      0.200
+zstd -19, captures filled               0.210      0.192      0.185      0.180
+zstd -9 + 100 KB dictionary             0.219      0.207      0.202      0.200
+zstd -19 + 100 KB dictionary            0.203      0.191      0.185      0.181
+xz -9, captures filled                  0.258      0.214      0.193      0.172

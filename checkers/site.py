@@ -303,6 +303,30 @@ rate 0.0% with no white king on the edge, 0.5% with three), and black holding bo
                      + '; '.join(lines) + t(', en 2 tegen 1 wint. Alle zetten van zwart: ',
                                             ', and 2 against 1 wins. All moves of black: ')
                      + self.moves_list(pg, i0, legal, '1. … ') + '.</p>', '<div style="clear:both"></div>']
+        # why both phases: the diagonal of white decides the phase, and moving over to the other diagonal costs three
+        # moves (one per king), an odd number (no "op <number>" or algebraic squares in this prose: the page converts
+        # those on the 7x8 board)
+        ms = {m[3]: m for m in e88.analyse('W:WK14,K18,K23:BK5,K32')[1]}
+        shift = ', '.join(pg.label(k88, ms[x]) for x in ('14-10', '18-15', '23-19'))
+        body += [t('<h3>Waarom wit in beide fasen een val heeft</h3>', '<h3>Why white has a trap in both phases</h3>'), t(
+            '<p>Op welke diagonaal zwart staat, maakt niet uit: met de witte dammen 14, 18 en 23 is er een val tegen de '
+            'zwarte dammen 5 en 32, dus op dezelfde diagonaal, en ook een tegen 1 en 28, op de andere. Wat de fase '
+            'bepaalt, is de diagonaal van wit:</p>',
+            '<p>Which diagonal black stands on does not matter: with the white kings 14, 18 and 23 there is a trap against '
+            'the black kings 5 and 32, on the same diagonal, and also one against 1 and 28, on the other. What decides the '
+            'phase is the diagonal of white:</p>'),
+            t('<table class="tbl"><tr><th>Zwart</th><th>Wit op diagonaal 5…32: fase 1</th><th>Wit op diagonaal 1…28: fase 0</th></tr>'
+              '<tr><td>5 en 32</td><td>14, 18, 23</td><td>10, 15, 19 · 6, 15, 24</td></tr>'
+              '<tr><td>1 en 28</td><td>14, 18, 23 · 9, 18, 27</td><td>10, 15, 19</td></tr></table>',
+              '<table class="tbl"><tr><th>Black</th><th>White on diagonal 5…32: phase 1</th><th>White on diagonal 1…28: phase 0</th></tr>'
+              '<tr><td>5 and 32</td><td>14, 18, 23</td><td>10, 15, 19 · 6, 15, 24</td></tr>'
+              '<tr><td>1 and 28</td><td>14, 18, 23 · 9, 18, 27</td><td>10, 15, 19</td></tr></table>'),
+            t(f'<p>Van de val met 14, 18, 23 naar die met 10, 15, 19 gaat elke witte dam één stap naar de andere diagonaal: '
+              f'{shift}. Dat zijn drie zetten, een oneven aantal: het tempo draait om, en wit staat in de andere fase. Met '
+              f'twee dammen zou zo\'n overstap twee zetten kosten, en dan wisselt het tempo niet.</p>',
+              f'<p>From the trap with 14, 18, 23 to the one with 10, 15, 19 every white king takes one step to the other '
+              f'diagonal: {shift}. That is three moves, an odd number: the tempo turns over, and white is in the other phase. '
+              f'With two kings such a change-over would take two moves, and then the tempo does not change.</p>')]
         body += self.race88(pg, k88, e88)
         return body
 

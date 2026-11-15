@@ -558,6 +558,9 @@ king in the middle of the white kings (the third diagram).</p>''')]
             assert m[1][0] == ('W' if k % 2 == 0 else 'L') and n(m) == (min if k % 2 == 0 else max)(n(x) for x in ms if x[1][0] == m[1][0])
             f = m[2]
         assert f == 'B:WK14,K18,K23:BK5,K32'
+        fx = 'W:WK14,K18,K24:BK1,K32'          # after 1. 15-18 5-1 2. 6-10 1-5 3. 10-14 5-1: white exchanges at once
+        exx = self.exchange(e88, fx)
+        assert exx and exx[0][3] == '24-27' and int(exx[0][1][1:]) == min(int(m[1][1:]) for m in e88.analyse(fx)[1] if m[1][0] == 'W')
         plan = [((x,), '') for x in line]
         h, i_end, f_end, _ = pgp.moves(fen, plan, 1, False, 'm1', i0, nbook=len(plan))
         phases += [fig, t(
@@ -571,15 +574,21 @@ king in the middle of the white kings (the third diagram).</p>''')]
             f'Dat zijn vijf zetten, een oneven aantal: het tempo draait om, en zwart staat aan zet in de '
             f'<a href="val.html">eerste val</a>, bij even pariteit. Dat geldt voor elke langste verdediging van zwart: '
             f'met de sterkste zetten staat na 9 ply de eerste val met zwart aan zet op het bord, of de tweede val gedraaid '
-            f'(wit op {alg((9, 18, 27))}, zwart op {alg((1, 28))}). Een andere pendelzet verliest sneller, al kan de val dan '
-            f'langer op zich laten wachten. De eenvoudigste winmethode is dus: bouw de tweede val op. Met zwart aan zet is het '
-            f'een val; met wit aan zet staat na 9 ply een van de twee vallen met zwart aan zet.</p>',
+            f'(wit op {alg((9, 18, 27))}, zwart op {alg((1, 28))}). Pendelt zwart anders, dan ruilt wit met de sterkste zetten '
+            f'nog eerder: na 1. {al(15)}-{al(18)} {al(5)}-{al(1)} 2. {al(6)}-{al(10)} {al(1)}-{al(5)} 3. {al(10)}-{al(14)} '
+            f'{al(5)}-{al(1)} bijvoorbeeld meteen 4. {al(24)}-{al(27)} {al(32)}×{al(23)} 5. {al(18)}×{al(27)}. De eenvoudigste '
+            f'winmethode is dus: bouw de tweede val op. Met zwart aan zet is het een val; met wit aan zet heeft wit na uiterlijk '
+            f'9 ply, hoe zwart ook pendelt, een ruil afgedwongen of staat een van de twee vallen met zwart aan zet op het '
+            f'bord.</p>',
             f'That is five moves, an odd number: the tempo turns over, and black is to move in the '
             f'<a href="val.html">first trap</a>, at even parity. That holds for every longest defence of black: with the '
             f'strongest moves, after 9 plies the first trap stands on the board with black to move, or the second trap turned '
-            f'(white on {alg((9, 18, 27))}, black on {alg((1, 28))}). Another shuttle move loses faster, though the trap may then '
-            f'take longer. The simplest winning method therefore is: build the second trap. With black to move it is a trap; '
-            f'with white to move, after 9 plies one of the two traps stands on the board with black to move.</p>'),
+            f'(white on {alg((9, 18, 27))}, black on {alg((1, 28))}). If black shuttles differently, white with the strongest moves '
+            f'exchanges even sooner: after 1. {al(15)}-{al(18)} {al(5)}-{al(1)} 2. {al(6)}-{al(10)} {al(1)}-{al(5)} 3. '
+            f'{al(10)}-{al(14)} {al(5)}-{al(1)} for example at once 4. {al(24)}-{al(27)} {al(32)}×{al(23)} 5. {al(18)}×{al(27)}. '
+            f'The simplest winning method therefore is: build the second trap. With black to move it is a trap; with white to '
+            f'move, within 9 plies, however black shuttles, white has forced an exchange or one of the two traps stands on the '
+            f'board with black to move.</p>'),
             '<div style="clear:both"></div>']
         # the trap reached: every shuttle move of black is punished
         v2, legal2 = e88.analyse(f_end)

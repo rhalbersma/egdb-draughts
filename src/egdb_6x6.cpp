@@ -1477,31 +1477,26 @@ bool unit_build(std::string const& dir, int n, int m, int threads)
         return true;
 }
 
-// every stored position of unit (n, m): compare(position, offset) for each, in parallel over the slices
+// every stored position of unit (n, m): f(position, offset) for each, in parallel over chunks of positions
 template <class F>
 void for_each_stored(std::vector<UnitMat> const& lay, int threads, char const* what, F&& f)
 {
-        std::vector<std::pair<std::size_t, std::uint64_t>> slices;   // (material, men rank)
-        for (std::size_t i = 0; i < lay.size(); ++i)
-                for (std::uint64_t r = 0; r < lay[i].men; ++r) slices.push_back({ i, r });
+        std::uint64_t const npos = unit_positions(lay), chunk = 1 << 16, nc = (npos + chunk - 1) / chunk;
         auto const t0 = std::chrono::steady_clock::now();
         std::uint64_t done = 0;
-        std::size_t const step = std::max<std::size_t>(1, slices.size() / 20);
-        #pragma omp parallel for schedule(dynamic, 16) num_threads(threads)
-        for (std::size_t j = 0; j < slices.size(); ++j) {
-                UnitMat const& x = lay[slices[j].first];
-                std::uint32_t wm, bm;
-                men_unrank(x.wm, x.bm, slices[j].second, wm, bm);
-                Meta const s = meta_of(Key{ wm, bm, x.wk, x.bk });
-                for (int stm = 0; stm < x.S; ++stm)
-                        for (std::uint64_t k = 0; k < s.P; ++k)
-                                f(pos_of(s, k, stm), x.base + (slices[j].second * std::uint64_t(x.S) + std::uint64_t(stm)) * s.P + k);
+        std::uint64_t const step = std::max<std::uint64_t>(1, nc / 20);
+        #pragma omp parallel for schedule(dynamic, 1) num_threads(threads)
+        for (std::uint64_t j = 0; j < nc; ++j) {
+                Cursor c(lay);
+                c.seek(j * chunk);
+                std::uint64_t const end = std::min(npos, (j + 1) * chunk);
+                for (std::uint64_t o = j * chunk; o < end; ++o, c.next()) f(c.pos(), o);
                 std::uint64_t d;
                 #pragma omp atomic capture
                 d = ++done;
                 if (d % step == 0) {
                         #pragma omp critical
-                        std::cerr << what << ": " << d << " / " << slices.size() << " slices, " << seconds_since(t0) << " s" << std::endl;
+                        std::cerr << what << ": " << d << " / " << nc << " chunks, " << seconds_since(t0) << " s" << std::endl;
                 }
         }
 }

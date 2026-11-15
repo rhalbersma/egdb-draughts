@@ -101,14 +101,15 @@ cmake -B build && cmake --build build
 ## Conventions
 
 * **Board** `W × H`: `W` is the shorter side, `H` the longer one. In the diagrams the long side is horizontal.
-* **Parity** (tabula): **p1** = the corner squares are playable (a1 is a dark square), **p0** = they are not.
+* **Colouring of the corner squares** (tabula's `parity`): **coloured** (parity 1) = the corner squares are playable
+  (a1 is a dark square), **uncoloured** (parity 0) = they are not. It only matters on boards with two odd sides.
   This only matters for odd × odd boards; otherwise both parities are mirror images.
 * **Squares**: numbered 1..N in PDN order (square 1 top left) in FEN and in the text files; algebraic (a1 bottom left) in move sequences.
 * **DTM** in plies for the side to move: `+n` win in n plies, `-n` loss in n plies (`-0`: no moves left), `D` draw.
   Purely game-theoretic: no move-count rules.
 * **"Won"** for a board means: every position in which neither side can capture is won for the side with more kings to move.
 * In the tables: `21` = won, longest win 21 plies · `21*` = won provided the stronger side occupies the long
-  diagonal(s) · `(21)` = drawn (the number is the longest win among the positions that are won) · `13/15` = p0/p1.
+  diagonal(s) · `(21)` = drawn (the number is the longest win among the positions that are won) · `13/15` = uncoloured/coloured corner squares.
 
 ---
 
@@ -129,7 +130,7 @@ cmake -B build && cmake --build build
 ```
 
 * For `W ≤ 4` (degenerate boards) two kings always win, on the square boards provided they hold the long diagonal(s).
-* For `W ≥ 5` only two boards are won: **5×6** (new) and **5×7 p1** (known). From `W = 6` on everything is drawn,
+* For `W ≥ 5` only two boards are won: **5×6** (new) and **5×7 coloured** (known). From `W = 6` on everything is drawn,
   and the remaining wins are short combinations whose length does not depend on the board size.
 * With the single king to move there are a few exceptions on 5×6 (8) and 5×7 (16): double attacks (forks).
 
@@ -148,7 +149,7 @@ cmake -B build && cmake --build build
 8. f4-c1 c3-e5 9. c5-e3 e5-c3 10. c1-a3 c3-e5 11. e3-f4 e5-d4 12. **a3-b2** d4xa1 13. f4-e5 a1-b2 14. e5xa1
 
 The long tempo play serves one purpose: sacrifice so that black captures *into the corner*, then place the
-second king behind it on the corner diagonal. On 5×7 p1 the same final motif appears after 15 plies:
+second king behind it on the corner diagonal. On 5×7 coloured the same final motif appears after 15 plies:
 `W:WK1,K9:BK2` 1. c3-e5 c5-a3 2. a5-d2 a3-c5 3. d2-c1 c5-f2 4. e5-g3 f2-c5 5. c1-a3 c5-d4 6. **a3-b2** d4xa1 7. g3-e5 a1-b2 8. e5xa1.
 More than 80% of all quiet wins on these two boards end with black capturing into a corner.
 
@@ -180,17 +181,17 @@ with the single king to move 16,812 wins, 863,802 draws and 40,586 losses.
 | Family | Result (W = 3 … 12) |
 |---|---|
 | **H = W + 1** | won on every board |
-| **H = W + 2** | won, except the "wrong" colouring p0 for W = 9 and 11 |
-| **H = 2W − 1** | won, except p0 for W = 9 and 11 (10×19: 27 plies, 11×21 p1: 25 plies, 12×23: 27 plies) |
+| **H = W + 2** | won, except the "wrong" colouring, uncoloured corner squares, for W = 9 and 11 |
+| **H = 2W − 1** | won, except uncoloured for W = 9 and 11 (10×19: 27 plies, 11×21 coloured: 25 plies, 12×23: 27 plies) |
 
-The colouring rule of the book is confirmed: from W = 9 on, for odd W only the colouring with playable corners (p1) wins.
-On W = 7 the wrong colouring still wins (5×9 p0, 7×13 p0) because the general method still reaches that far.
+The colouring rule of the book is confirmed: from W = 9 on, for odd W only the colouring with coloured corner squares wins.
+On W = 7 the wrong colouring still wins (5×9 and 7×13 uncoloured) because the general method still reaches that far.
 
 ### The general method on narrow boards
 
 * **W = 5, 6**: every non-square board is won (checked up to 5×13 and 6×15). Three kings in a column
   close off the full width and can be pushed along the board; the longest win grows by about 2 plies per extra column.
-* **W = 7**: won up to **7×14** and **7×15 p1** (book: up to 7×11). From H = 16 on it is drawn.
+* **W = 7**: won up to **7×14** and **7×15 coloured** (book: up to 7×11). From H = 16 on it is drawn.
   The longest wins jump from 25 to 35, 49, 53 and 67–73 plies: the space becomes tight.
 * **W = 8**: won at H = 9, 10, 11 and 15 (= 2W − 1), drawn at H = 12–14 and 16–19.
 * **W ≥ 9**: only the families remain.
@@ -204,9 +205,9 @@ three kings to move by who occupies the long diagonal(s) (draws / positions):
 |---|---|---|---|
 | 6×6 | 0 / 3,154 | 0 / 816 | 784 / 812 |
 | 8×8 | 0 / 33,364 (40 forks with black to move) | 0 / 17,184 | 10,696 / 11,084 |
-| 5×5 p1 (two diagonals, white on both) | 0 / 540 | | |
-| 7×7 p1 (white on both) | 0 / 6,032 | | |
-| 9×9 p1 (white on both) | 32,492 / 39,328 | | |
+| 5×5 coloured (two diagonals, white on both) | 0 / 540 | | |
+| 7×7 coloured (white on both) | 0 / 6,032 | | |
+| 9×9 coloured (white on both) | 32,492 / 39,328 | | |
 | 10×10 | 177,548 / 206,466 | | |
 
 Up to W = 8 the long line decides; from W = 9 on three kings cannot win even when they hold it.
@@ -244,7 +245,7 @@ On 6×11:
     +-----------------------+
       a b c d e f g h i j k
 ```
-Even W always has the two corners; odd W has them only with colouring p1. The trapping map is exactly symmetric about the apex file.
+Even W always has the two corners; odd W has them only with coloured corner squares. The trapping map is exactly symmetric about the apex file.
 
 **W + 1 and W + 2**: the king at b2 stands on the long diagonal, whose other end is an entrance at the top right;
 the two kings at the top right form a half trap with it and the upper one can close the long line.
@@ -301,8 +302,8 @@ One square per symmetry class (the 4 symmetries of the board give 15 classes):
 
 ## Comparison with the 1988 book
 
-**Confirmed**: everything the book states firmly — 2-1 for W ≤ 4 (with the long-line condition on 3×3 and 4×4) and on 5×7 p1;
-3-1 on W = 5, 6 for every H > W (square boards with the long-line condition, explicit on 5×5 p1);
+**Confirmed**: everything the book states firmly — 2-1 for W ≤ 4 (with the long-line condition on 3×3 and 4×4) and on 5×7 coloured;
+3-1 on W = 5, 6 for every H > W (square boards with the long-line condition, explicit on 5×5 coloured);
 W = 7 for H = 7–11; W = 8 for H = 9, 10, 11, 15; the families W + 1, W + 2 and 2W − 1 with the colouring rule;
 the lake boards 1, 2, 4, 5, 7, 8, 9, 18, 23.
 
@@ -311,8 +312,8 @@ the lake boards 1, 2, 4, 5, 7, 8, 9, 18, 23.
 | Material | Board | Result | Longest win |
 |---|---|---|---|
 | 2-1 | 5×6 | won | 27 plies |
-| 3-1 | 7×12, 7×13 p0, 7×14, 7×15 p1 | won (general method) | 35, 49, 53, 67 |
-| 3-1 | 7×15 p0, 7×16, 7×17 | drawn: the limit of W = 7 | |
+| 3-1 | 7×12, 7×13 uncoloured, 7×14, 7×15 coloured | won (general method) | 35, 49, 53, 67 |
+| 3-1 | 7×15 uncoloured, 7×16, 7×17 | drawn: the limit of W = 7 | |
 | 3-1 | 10×10 without g7 (19) | won | 33 |
 | 3-1 | 10×10 without f10, d8, f8 (3, 12, 13) | drawn | |
 
@@ -343,8 +344,8 @@ On odd × odd boards with playable corners there are no exceptions at all. The l
 | 10×10 | 1,012,242 (7.1%) | 115 | ~100% |
 | 10×11 | 1,810,258 (7.5%) | 109 | ~100% |
 | 10×12 | 2,744,990 | 127 | ~100% |
-| 7×9 p0 (four double corners) | 124,148 (13.2%) | 93 | see below |
-| 9×9 p0 (four double corners) | 1,201,460 (29.5%) | 99 | see below |
+| 7×9 uncoloured (four double corners) | 124,148 (13.2%) | 93 | see below |
+| 9×9 uncoloured (four double corners) | 1,201,460 (29.5%) | 99 | see below |
 
 **Small boards: blockades.** On 7×8 and 8×8 3-2 is won generically. The few draws occur almost only when white is pushed
 against the edge (draw rate 0.0% with no white king on the edge, 0.5% with three), and black holding both double corners
@@ -399,30 +400,20 @@ With white to move every move draws: black just shuttles a7-b8-a7. With black to
 
 | Boards | D × d | Fortress |
 |---|---|---|
-| 6×7, 7×8, 7×9 p0 (vertical pair) | 6 × 0 | falls |
+| 6×7, 7×8, 7×9 uncoloured (vertical pair) | 6 × 0 | falls |
 | 8×8 | 7 × 7 | falls |
-| 8×9, 9×10, 9×9 p0 (same side), 7×9 p0 (horizontal) | 8 × 0 | opposition decides |
-| 7×9 p0 (diagonal pair) | 8 × 6 | opposition decides |
-| 9×9 p0 (diagonal pair) | 8 × 8 | holds |
+| 8×9, 9×10, 9×9 uncoloured (same side), 7×9 uncoloured (horizontal) | 8 × 0 | opposition decides |
+| 7×9 uncoloured (diagonal pair) | 8 × 6 | opposition decides |
+| 9×9 uncoloured (diagonal pair) | 8 × 8 | holds |
 | 8×10, 10×10, 10×11, 10×12 | ≥ 9 | holds |
 
 `D ≤ 7`: the fortress falls · `D = 8`: opposition decides, unless also `d = 8` · `D ≥ 9`: the fortress holds.
-On 9×9 p0, freezing one corner already takes all three white kings (one on the shuttle square, one blocking the exit,
-one guarding the blocker), so the other black king simply shuttles:
-```
-    +-------------------+
-  9 |   .   .   .   .   |
-  8 | .   .   .   .   B |
-  7 |   .   .   .   .   |
-  6 | .   .   .   .   . |
-  5 |   .   .   .   .   |
-  4 | .   .   .   .   . |
-  3 |   .   W   .   .   |
-  2 | W   W   .   .   . |
-  1 |   B   .   .   .   |
-    +-------------------+
-      a b c d e f g h i
-```
+On 9×9 uncoloured the trap decides again. With two double corners on the same side (e.g. black on h1 and h9, white
+on h3, h5, h7, black to move: L28) every shuttle move allows a forced exchange, in one of the two phases (3 traps per
+pair, none in the other phase): the opposition decides. With the diagonal pair (black on b1 and i8) there is no trap
+in either phase: the 8×8 trap, three white kings in a row in the middle of the connecting diagonal, punishes only one
+shuttle move here (white on d3, e4, f5: i8-h9 is punished, b1-a2 is not; on e4, f5, g6 the other way round). On 8×8
+there are 5 squares between the black kings, on 9×9 there are 6: that distance is too long.
 
 ---
 

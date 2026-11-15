@@ -43,7 +43,7 @@ CHAPTERS = [
     ('De vesting op grotere borden', 'The fortress on larger boards', [
         ('vesting.html', 'Oppositie op 8×9', 'Opposition on 8×9'),
         ('afstandsregel.html', 'De afstandsregel', 'The distance rule'),
-        ('vesting-9x9.html', '9×9 p0: de val en de diagonaal', '9×9 p0: the trap and the diagonal')]),
+        ('vesting-9x9.html', '9×9 ongekleurd: de val en de diagonaal', '9×9 uncoloured: the trap and the diagonal')]),
 ]
 # every page in reading order: (file, Dutch, English, chapter number or None)
 PAGES = [('index.html', 'Overzicht', 'Overview', None)] + [(f, nl, en, c) for c, (_, _, secs) in enumerate(CHAPTERS)
@@ -62,9 +62,10 @@ TABLE32 = {'nl': '''<h2>3 dammen tegen 2 per bord</h2>
 <tr><td>10×10</td><td>1.012.242 (7,1%)</td><td>115</td><td>~100%</td></tr>
 <tr><td>10×11</td><td>1.810.258 (7,5%)</td><td>109</td><td>~100%</td></tr>
 <tr><td>10×12</td><td>2.744.990</td><td>127</td><td>~100%</td></tr>
-<tr><td>7×9 p0 (vier dubbele hoeken)</td><td>124.148 (13,2%)</td><td>93</td><td>zie <a href="vesting.html">vesting</a></td></tr>
-<tr><td>9×9 p0 (vier dubbele hoeken)</td><td>1.201.460 (29,5%)</td><td>99</td><td>zie <a href="vesting.html">vesting</a></td></tr>
-</table>''',
+<tr><td>7×9 ongekleurd (vier dubbele hoeken)</td><td>124.148 (13,2%)</td><td>93</td><td>zie <a href="vesting.html">vesting</a></td></tr>
+<tr><td>9×9 ongekleurd (vier dubbele hoeken)</td><td>1.201.460 (29,5%)</td><td>99</td><td>zie <a href="vesting.html">vesting</a></td></tr>
+</table>
+<p>Op borden met twee oneven zijden zijn de vier hoekvelden óf alle vier gekleurd (speelbaar) óf alle vier ongekleurd; bij ongekleurde hoekvelden is elke hoek een dubbele hoek.</p>''',
            'en': '''<h2>3 kings against 2 per board</h2>
 <table class="tbl"><tr><th>Board</th><th>Quiet draws (3 kings to move)</th><th>Longest win</th>
 <th>Black in both double corners: draws</th></tr>
@@ -77,9 +78,10 @@ TABLE32 = {'nl': '''<h2>3 dammen tegen 2 per bord</h2>
 <tr><td>10×10</td><td>1,012,242 (7.1%)</td><td>115</td><td>~100%</td></tr>
 <tr><td>10×11</td><td>1,810,258 (7.5%)</td><td>109</td><td>~100%</td></tr>
 <tr><td>10×12</td><td>2,744,990</td><td>127</td><td>~100%</td></tr>
-<tr><td>7×9 p0 (four double corners)</td><td>124,148 (13.2%)</td><td>93</td><td>see <a href="vesting.html">fortress</a></td></tr>
-<tr><td>9×9 p0 (four double corners)</td><td>1,201,460 (29.5%)</td><td>99</td><td>see <a href="vesting.html">fortress</a></td></tr>
-</table>'''}
+<tr><td>7×9 uncoloured (four double corners)</td><td>124,148 (13.2%)</td><td>93</td><td>see <a href="vesting.html">fortress</a></td></tr>
+<tr><td>9×9 uncoloured (four double corners)</td><td>1,201,460 (29.5%)</td><td>99</td><td>see <a href="vesting.html">fortress</a></td></tr>
+</table>
+<p>On boards with two odd sides the four corner squares are either all coloured (playable) or all uncoloured; with uncoloured corner squares every corner is a double corner.</p>'''}
 
 
 class Site:
@@ -507,11 +509,11 @@ lose a tempo, so who has the opposition is fixed from the start.</p>
 <em>d</em> = kleinste coördinaatverschil; <em>d</em> = 0 als ze aan dezelfde kant liggen), niet of ze aan dezelfde
 kant liggen:</p>
 <table class="tbl"><tr><th>Borden</th><th>D × d</th><th>Vesting</th></tr>
-<tr><td>6×7, 7×8, 7×9 p0 (verticaal paar)</td><td>6 × 0</td><td>valt</td></tr>
+<tr><td>6×7, 7×8, 7×9 ongekleurd (verticaal paar)</td><td>6 × 0</td><td>valt</td></tr>
 <tr><td>8×8</td><td>7 × 7</td><td>valt</td></tr>
-<tr><td>8×9, 9×10, 9×9 p0 (zelfde kant), 7×9 p0 (horizontaal)</td><td>8 × 0</td><td>oppositie beslist</td></tr>
-<tr><td>7×9 p0 (diagonaal paar)</td><td>8 × 6</td><td>oppositie beslist</td></tr>
-<tr><td>9×9 p0 (diagonaal paar)</td><td>8 × 8</td><td>houdt</td></tr>
+<tr><td>8×9, 9×10, 9×9 ongekleurd (zelfde kant), 7×9 ongekleurd (horizontaal)</td><td>8 × 0</td><td>oppositie beslist</td></tr>
+<tr><td>7×9 ongekleurd (diagonaal paar)</td><td>8 × 6</td><td>oppositie beslist</td></tr>
+<tr><td>9×9 ongekleurd (diagonaal paar)</td><td>8 × 8</td><td>houdt</td></tr>
 <tr><td>8×10, 10×10, 10×11, 10×12</td><td>≥ 9</td><td>houdt</td></tr></table>
 <p><em>D</em> ≤ 7: de vesting valt · <em>D</em> = 8: de oppositie beslist, tenzij ook <em>d</em> = 8 ·
 <em>D</em> ≥ 9: de vesting houdt.</p>''', '''
@@ -519,11 +521,11 @@ kant liggen:</p>
 <em>d</em> = smallest coordinate difference; <em>d</em> = 0 when they are on the same side), not whether they lie on the
 same side:</p>
 <table class="tbl"><tr><th>Boards</th><th>D × d</th><th>Fortress</th></tr>
-<tr><td>6×7, 7×8, 7×9 p0 (vertical pair)</td><td>6 × 0</td><td>falls</td></tr>
+<tr><td>6×7, 7×8, 7×9 uncoloured (vertical pair)</td><td>6 × 0</td><td>falls</td></tr>
 <tr><td>8×8</td><td>7 × 7</td><td>falls</td></tr>
-<tr><td>8×9, 9×10, 9×9 p0 (same side), 7×9 p0 (horizontal)</td><td>8 × 0</td><td>opposition decides</td></tr>
-<tr><td>7×9 p0 (diagonal pair)</td><td>8 × 6</td><td>opposition decides</td></tr>
-<tr><td>9×9 p0 (diagonal pair)</td><td>8 × 8</td><td>holds</td></tr>
+<tr><td>8×9, 9×10, 9×9 uncoloured (same side), 7×9 uncoloured (horizontal)</td><td>8 × 0</td><td>opposition decides</td></tr>
+<tr><td>7×9 uncoloured (diagonal pair)</td><td>8 × 6</td><td>opposition decides</td></tr>
+<tr><td>9×9 uncoloured (diagonal pair)</td><td>8 × 8</td><td>holds</td></tr>
 <tr><td>8×10, 10×10, 10×11, 10×12</td><td>≥ 9</td><td>holds</td></tr></table>
 <p><em>D</em> ≤ 7: the fortress falls · <em>D</em> = 8: opposition decides, unless also <em>d</em> = 8 ·
 <em>D</em> ≥ 9: the fortress holds.</p>'''),
@@ -553,10 +555,10 @@ same side:</p>
         return out
 
     def fortress99(self, pg, k99, e99):
-        """9x9 p0: the trap works for two double corners on the same side, not for the diagonal pair"""
+        """9x9 with uncoloured corners: the trap works for two double corners on the same side, not for the diagonal pair"""
         t = self.t
         body = [t('''
-<p>Op 9×9 p0 zijn alle vier de hoekvelden licht, dus elke hoek is een dubbele hoek: b1/a2, h1/i2, a8/b9 en h9/i8.
+<p>Op 9×9 met ongekleurde hoekvelden is elke hoek een dubbele hoek: b1/a2, h1/i2, a8/b9 en h9/i8.
 Zwart kan twee dubbele hoeken aan dezelfde kant bezetten (afstand 8 × 0) of twee diagonaal tegenover elkaar
 (8 × 8). Beslissend is weer de <a href="val.html">val</a>: een opstelling van de drie witte dammen waarin elke
 pendelzet van zwart een gedwongen ruil toelaat. De database telt de vallen met zwart aan zet en beide zwarte dammen
@@ -565,7 +567,7 @@ op de randvelden van hun dubbele hoeken:</p>
 <tr><td>twee dubbele hoeken aan dezelfde kant</td><td colspan="2">3 in één van de twee fasen</td><td>de oppositie beslist</td></tr>
 <tr><td>twee diagonaal tegenover elkaar</td><td>0</td><td>0</td><td>de vesting houdt</td></tr></table>
 <p>Per paar dubbele hoeken zijn er 12.100 beginstellingen in elke fase.</p>''', '''
-<p>On 9×9 p0 all four corner squares are light, so every corner is a double corner: b1/a2, h1/i2, a8/b9 and h9/i8.
+<p>On 9×9 with uncoloured corner squares every corner is a double corner: b1/a2, h1/i2, a8/b9 and h9/i8.
 Black can occupy two double corners on the same side (distance 8 × 0) or two diagonally opposite ones (8 × 8). What
 decides is again the <a href="val.html">trap</a>: a set-up of the three white kings in which every shuttle move of
 black allows a forced exchange. The database counts the traps with black to move and both black kings on the edge
@@ -577,7 +579,7 @@ squares of their double corners:</p>
         # the trap along the side of the i-file: black h1 and h9, white h3, h5, h7
         fen = e99.fen(['h3', 'h5', 'h7'], ['h1', 'h9'], 'B')
         v, legal = e99.analyse(fen)
-        fig, i0 = pg.diagram(fen, t(f'9×9 p0, zwart aan zet: {v}', f'9×9 p0, black to move: {v}'), gid=k99)
+        fig, i0 = pg.diagram(fen, t(f'9×9 ongekleurd, zwart aan zet: {v}', f'9×9 uncoloured, black to move: {v}'), gid=k99)
         sh = self.shuttles(pg, k99, e99, i0, legal, {'h1-i2', 'h9-i8'})
         assert len(sh) == 2 and all(ok for _, ok, _ in sh)
         body += [fig, t('<p>Twee dubbele hoeken aan dezelfde kant, h1/i2 en h9/i8, met de witte dammen op h3, h5 en h7 '
@@ -595,7 +597,7 @@ squares of their double corners:</p>
         for W in (['d3', 'e4', 'f5'], ['e4', 'f5', 'g6']):
             fen = e99.fen(W, ['b1', 'i8'], 'B')
             v, legal = e99.analyse(fen)
-            fig, i0 = pg.diagram(fen, t(f'9×9 p0, zwart aan zet: {v}', f'9×9 p0, black to move: {v}'), gid=k99)
+            fig, i0 = pg.diagram(fen, t(f'9×9 ongekleurd, zwart aan zet: {v}', f'9×9 uncoloured, black to move: {v}'), gid=k99)
             sh = self.shuttles(pg, k99, e99, i0, legal, {'b1-a2', 'i8-h9'})
             assert v == 'D' and len(sh) == 2 and sorted(ok for _, ok, _ in sh) == [False, True]
             hit = next(x for _, ok, x in sh if ok)

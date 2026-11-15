@@ -416,7 +416,8 @@ capture.</p>''')]
                ('B + 2', '(2, 2), (L, B − 2), (L − 2, B − 4)', '10x12', '6×8 … 10×12', 12, 11),
                ('2B − 1', '(2, 2), (B, B − 2), (L − 1, 2)', '10x19', '5×9 … 9×17', 8, 7)]
         ex = {gid: wk for gid, w, h, wk, *_ in fams}
-        rows = ''.join(f'<tr><td><strong>{f}</strong></td><td>{c} — {t("bv.", "e.g.")} {g.replace("x", "×")}: '
+        shown = {gid: f'{w}×{h}' for gid, w, h, *_ in fams}       # as drawn: files × ranks (the book: 10×11 etc.)
+        rows = ''.join(f'<tr><td><strong>{f}</strong></td><td>{c} — {t("bv.", "e.g.")} {shown[g]}: '
                        f'{pg.prose(", ".join(ex[g]), g, "alg")}</td><td>{boards}</td><td>{lb}</td><td>{lw}</td></tr>'
                        for f, c, g, boards, lb, lw in gen)
         table = (t('<table class="tbl"><tr><th>Familie</th><th>Witte dammen (kolom, rij)</th><th>Gecontroleerd</th>'
@@ -435,7 +436,7 @@ capture.</p>''')]
             if black is None:
                 black = self.hardest(e, wk)
             fen = e.fen(wk, [black])
-            fig, i0 = pg.diagram(fen, f'{gid.replace("x", "×")}: ' + t(f'familie {fam}, wit aan zet',
+            fig, i0 = pg.diagram(fen, f'{shown[gid]}: ' + t(f'familie {fam}, wit aan zet',
                                                                        f'family {fam}, white to move'), gid=gid)
             v, _ = e.analyse(fen)
             hl, *_ = pg.best_line(fen, 40, start=i0)
@@ -443,19 +444,19 @@ capture.</p>''')]
             ib = pg.add(fb, gid=gid)
             vb, _ = e.analyse(fb)
             hb, *_ = pg.best_line(fb, 40, start=ib)
-            body += [f'<h2>{t("Familie", "Family")} {fam}: {gid.replace("x", "×")}</h2>', fig,
+            body += [f'<h2>{t("Familie", "Family")} {fam}: {shown[gid]}</h2>', fig,
                      pg.prose_html(t(f'<p>Witte dammen op {", ".join(wk)}, de zwarte dam op {black}. Wit aan zet: {v}.</p>',
                        f'<p>White kings on {", ".join(wk)}, the black king on {black}. White to move: {v}.</p>'), gid, 'alg'),
                      f'<p class="var">{hl}</p>', t(f'<p>Dezelfde stelling met zwart aan zet: {vb}.</p>',
                                                    f'<p>The same position with black to move: {vb}.</p>'),
                      f'<p class="var">{hb}</p>']
             if gid == '10x11':
-                body.append(pg.prose_html(t('<p>Op 10×11 (diagram 8 van het boek) wint wit met wit aan zet op elk veld van de zwarte dam '
+                body.append(pg.prose_html(t('<p>Op 11×10 (in het boek 10×11, diagram 8) wint wit met wit aan zet op elk veld van de zwarte dam '
                             'binnen 5 ply, <strong>behalve op h10, het gearceerde veld in het boek, waar het 9 ply '
                             'kost</strong>. De dam op b2 staat op de lange lijn, waarvan het andere eind een ingang '
                             'rechtsboven is; de twee dammen rechtsboven vormen er een halve val mee en de bovenste kan '
                             'de lange lijn afsluiten.</p>',
-                              '<p>On 10×11 (diagram 8 of the book) white to move wins within 5 plies on every square of '
+                              '<p>On 11×10 (10×11 in the book, diagram 8) white to move wins within 5 plies on every square of '
                               'the black king, <strong>except h10, the hatched square in the book, which takes 9 '
                               'plies</strong>. The king at b2 stands on the long diagonal, whose other end is an entrance '
                               'at the top right; the two kings at the top right form a half trap with it and the upper one '

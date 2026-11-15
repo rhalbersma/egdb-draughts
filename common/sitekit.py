@@ -403,6 +403,10 @@ def write_page(path, title, nav, body, page, site_title, lang='nl'):
     tpl = (tpl.replace('{{LANG}}', lang).replace('{{T_BACK}}', u['back']).replace('{{T_PLAY}}', u['play'])
            .replace('{{T_FWD}}', u['fwd']).replace('{{CREDIT}}', u['credit']).replace('{{T_START}}', u['start']).replace('{{T_END}}', u['end']).replace('{{T_NUMS}}', u['nums']).replace('{{T_NOTA}}', u['nota'])
            .replace('{{LEGEND}}', u['legend']).replace('{{UI}}', json.dumps(u['js'], ensure_ascii=False)))
+    # the previous/next links also at the top of the page
+    pager = re.search(r'<nav class="pager">.*?</nav>', body, re.S)
+    if pager:
+        body = pager.group(0).replace('class="pager"', 'class="pager pager-top"', 1) + '\n' + body
     geoms = json.dumps(page.geoms, separators=(',', ':'))
     out = (tpl.replace('{{TITLE}}', esc(title)).replace('{{SITE}}', esc(site_title)).replace('{{NAV}}', nav)
            .replace('{{BODY}}', body).replace('{{GEOMS}}', geoms).replace('{{DATA}}', page.data()))

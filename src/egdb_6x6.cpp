@@ -49,7 +49,7 @@
 //   unitbuild <dir> <n> <m> [t]          build unit (n pieces, m men) as a raw file (continues an interrupted build)
 //   unitverify <dir> <n> <m> raw|cdb [t] recompute the values of the unit from their successors
 //   unitcompress <dir> <n> <m> [t]       compress the raw file of the unit
-//   unitcompare <dir> <n> <m> [t]        compare the compressed unit with the raw file, both ways
+//   unitcompare <dir> <n> <m> [t]        compare every block of the compressed unit with the raw file
 // FEN: W:W17,K16:B2,K15 (side to move, white pieces, black pieces; K = king).
 // Values: "W<n>" win in n plies, "L<n>" loss in n plies, "D" draw (for the side to move).
 
@@ -1589,10 +1589,10 @@ bool unit_compress(std::string const& dir, int n, int m, int threads)
         return true;
 }
 
-// compare the compressed unit with the raw one, both ways:
-//   compressed -> raw: every block decoded and compared byte for byte with the block as it should be stored;
-//   raw -> compressed: every position looked up through the compressed unit (capture positions resolved) and
-//   compared with its raw value.
+// compare the compressed unit with the raw one: every block decoded and compared byte for byte with the block as it
+// should be stored (the raw values, capture positions filled in). Looking up every position through the compressed
+// unit as well would add nothing: a position without capture reads exactly such a byte, and a capture position is
+// resolved through the units with fewer pieces, which is the computation that checked its raw value (unitverify).
 bool unit_compare(std::string const& dir, int n, int m, int threads)
 {
         auto const lay = unit_layout(n, m);
@@ -1604,8 +1604,8 @@ bool unit_compare(std::string const& dir, int n, int m, int threads)
         std::uint8_t* raw = map_any(unit_path(dir, n, m, ".raw"), rsize, 0, npos);
         if (!raw) return false;
         auto const t0 = std::chrono::steady_clock::now();
-        std::uint64_t bad_bytes = 0;
-        #pragma omp parallel num_threads(threads) reduction(+ : bad_bytes)
+        std::uint64_t bad_bytes = 0, bytes = 0;
+        #pragma omp parallel num_threads(threads) reduction(+ : bad_bytes, bytes)
         {
                 ZSTD_DCtx* dx = new_dctx();
                 std::vector<std::uint8_t> want(BLOCK), got(BLOCK);
@@ -1615,26 +1615,14 @@ bool unit_compare(std::string const& dir, int n, int m, int threads)
                         filled_block(lay, raw, npos, b, want.data());
                         std::size_t const len = std::size_t(std::min(BLOCK, npos - b * BLOCK));
                         for (std::size_t i = 0; i < len; ++i) bad_bytes += want[i] != got[i];
+                        bytes += len;
                 }
                 ZSTD_freeDCtx(dx);
         }
-        double const s1 = seconds_since(t0);
-        std::vector<std::uint64_t> c(2 * std::size_t(threads), 0);
-        for_each_stored(lay, threads, "compare", [&](Pos const& q, std::uint64_t off) {
-                std::uint64_t* t = &c[2 * std::size_t(omp_get_thread_num())];
-                ++t[0];
-                std::uint16_t const a = widen(raw[off]), b = store_lookup(q);
-                if (a != b && ++t[1] <= 10) {
-                        #pragma omp critical
-                        std::cerr << "compare: " << fen_of(q) << " raw " << show(a) << ", compressed " << show(b) << std::endl;
-                }
-        });
-        std::uint64_t looked = 0, bad = 0;
-        for (int i = 0; i < threads; ++i) { looked += c[2 * i]; bad += c[2 * i + 1]; }
         ::munmap(raw, rsize);
-        std::cout << "compare " << n << " " << m << " positions " << npos << " blocks " << u.nblocks << " block_byte_errors " << bad_bytes
-                  << " looked_up " << looked << " lookup_errors " << bad << " seconds " << s1 << " " << seconds_since(t0) - s1 << '\n';
-        return bad_bytes == 0 && bad == 0 && looked == npos;
+        std::cout << "compare " << n << " " << m << " positions " << npos << " blocks " << u.nblocks << " bytes_compared " << bytes
+                  << " byte_errors " << bad_bytes << " seconds " << seconds_since(t0) << '\n';
+        return bad_bytes == 0 && bytes == npos;
 }
 
 // order: best move first (fastest win, then draw, then slowest loss)

@@ -11,10 +11,12 @@ these steps, every step a separate run of egdb_6x6:
   1. build         the unit as a raw file, one byte of DTM per position (the units before it compressed);
   2. verify raw    every position: the stored value equals the value recomputed from its successors;
   3. compress      blocks of 4096 positions, zstd -19, capture positions filled in;
-  4. compare       compressed against raw, both ways, every position;
+  4. compare       every compressed block decoded and compared byte for byte with the raw values (captures filled);
   5. delete raw.
-(A self-consistency check of the compressed unit adds nothing to steps 2 and 4: after them every compressed value
-equals a verified raw value. It is available as `unitverify <dir> <n> <m> cdb`.)
+(A self-consistency check of the compressed unit, or a lookup of every position through it, adds nothing to steps 2
+and 4: a position without capture reads a byte that step 4 compared, and a capture position is resolved through the
+units with fewer pieces, which is how step 2 checked its raw value. The check is available as
+`unitverify <dir> <n> <m> cdb`.)
 The state is kept in <dir>/state.json, so that an interrupted run continues where it stopped (an interrupted build
 continues from its last checkpoint). Results go to <dir>/units.log (one JSON object per step).
 

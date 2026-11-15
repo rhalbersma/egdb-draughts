@@ -12,8 +12,9 @@ these steps, every step a separate run of egdb_6x6:
   2. verify raw    every position: the stored value equals the value recomputed from its successors;
   3. compress      blocks of 4096 positions, zstd -19, capture positions filled in;
   4. compare       compressed against raw, both ways, every position;
-  5. delete raw
-  6. verify cdb    every position without capture, through the compressed unit, against its successors.
+  5. delete raw.
+(A self-consistency check of the compressed unit adds nothing to steps 2 and 4: after them every compressed value
+equals a verified raw value. It is available as `unitverify <dir> <n> <m> cdb`.)
 The state is kept in <dir>/state.json, so that an interrupted run continues where it stopped (an interrupted build
 continues from its last checkpoint). Results go to <dir>/units.log (one JSON object per step).
 
@@ -27,7 +28,7 @@ import subprocess
 import sys
 import time
 
-STEPS = ['build', 'verify_raw', 'compress', 'compare', 'delete_raw', 'verify_cdb']
+STEPS = ['build', 'verify_raw', 'compress', 'compare', 'delete_raw']
 
 
 def units(nmax):

@@ -32,7 +32,6 @@ CHAPTERS = [
         ('twee-blokkade.html', 'De blokkade in de enkele hoek', 'The blockade in the single corner'),
         ('twee-4x4.html', 'Remise op 4×4', 'A draw on 4×4')]),
     ('3 tegen 2 op 8×8', '3 against 2 on 8×8', [
-        ('dubbele-hoeken.html', 'Zwart in de dubbele hoeken', 'Black in the double corners'),
         ('drie-langste.html', 'De langste winst', 'The longest win')]),
     ('De val', 'The trap', [
         ('val.html', 'De val bij beide pariteiten', 'The trap at both parities'),
@@ -261,38 +260,36 @@ opposition. On odd × odd boards with playable corners there are no exceptions a
                  t('<p>Daarna begint het opnieuw in de andere hoek.</p>', '<p>Then it starts again in the other corner.</p>'),
                  '<div style="clear:both"></div>']
         flush('twee-4x4.html')
-        for fen, head, cap in (
-                ('W:WK4,K8,K29:BK1,K28', '',
-                 t('<p>De beste verdediging lijkt de twee zwarte dammen elk in een dubbele hoek te zetten: een dam op de twee '
-                   'randvelden van een dubbele hoek kan niet geslagen worden en heeft altijd een wachtzet (zie de '
-                   '<a href="vesting.html">vesting</a>). Op 8×8 helpt het niet: alle 13.320 rustige stellingen met zwart in '
-                   'beide dubbele hoeken zijn gewonnen, met wit aan zet én met zwart aan zet. De oppositie, die op 8×9 en '
-                   '9×10 precies de helft van zulke stellingen remise maakt, speelt op 8×8 dus geen rol. Hier liggen de twee '
-                   'dubbele hoeken diagonaal tegenover elkaar en dicht bij elkaar (in de afstandsregel van de vesting: '
-                   'D × d = 7 × 7, de vesting valt).</p><p>De langste van deze stellingen, met de witte dammen in de enkele '
-                   'hoeken, duurt {v} ply. Op zet 10 zet wit een dam op het tweede veld van de hoek linksboven: de zwarte '
-                   'dam daar kan niet meer pendelen, en zwart moet met de andere dam zetten. Op zet 18 dwingt wit met een '
-                   'offer een ruil af: zwart moet slaan, wit slaat terug, en 2 tegen 1 wint. Hoe die val werkt, staat bij '
-                   '<a href="val.html">de val</a>.</p>',
-                   '<p>The best defence seems to be to put each black king in a double corner: a king on the two edge '
-                   'squares of a double corner cannot be captured and always has a waiting move (see the '
-                   '<a href="vesting.html">fortress</a>). On 8×8 it does not help: all 13,320 quiet positions with black in '
-                   'both double corners are won, with white to move and with black to move. The opposition, which makes '
-                   'exactly half of such positions a draw on 8×9 and 9×10, plays no role on 8×8. Here the two double '
-                   'corners lie diagonally opposite and close together (in the distance rule of the fortress: '
-                   'D × d = 7 × 7, the fortress falls).</p><p>The longest of these positions, with the white kings in the '
-                   'single corners, takes {v} plies. On move 10 white puts a king on the second square of the top-left '
-                   'corner: the black king there can no longer shuttle, and black has to move the other king. On move 18 '
-                   'white forces an exchange with a sacrifice: black has to capture, white captures back, and 2 against 1 '
-                   'wins. How that trap works is shown at <a href="val.html">the trap</a>.</p>')),
-                ('W:WK3,K4,K30:BK11,K13', '',
-                 t('<p>De langste winst op 8×8 zonder slag voor beide kanten in de beginstelling: {v} ply.</p>',
-                   '<p>The longest win on 8×8 without a capture for either side in the start position: {v} plies.</p>'))):
-            v, _ = e88.analyse(fen)
-            fig, i0 = pg.diagram(fen, t(f'8×8, wit aan zet: {v}', f'8×8, white to move: {v}'), gid=k88)
-            h, *_ = pg.best_line(fen, 80, start=i0)
-            body += [head, fig, cap.format(v=v[1:]), f'<p class="var">{h}</p>', '<div style="clear:both"></div>']
-            flush('dubbele-hoeken.html' if fen == 'W:WK4,K8,K29:BK1,K28' else 'drie-langste.html')
+        # the longest win: black flees to both double corners and white builds the trap there
+        fen = 'W:WK3,K4,K30:BK11,K13'
+        v, _ = e88.analyse(fen)
+        v61, _ = e88.analyse('W:WK4,K8,K29:BK1,K28')
+        fig, i0 = pg.diagram(fen, t(f'8×8, wit aan zet: {v}', f'8×8, white to move: {v}'), gid=k88)
+        h, *_ = pg.best_line(fen, 80, start=i0)
+        body += [fig, t(
+            f'<p>De langste winst op 8×8 zonder slag voor beide kanten in de beginstelling duurt {v[1:]} ply. Zwart vlucht met '
+            f'beide dammen naar de dubbele hoeken: na 15. … 27-32 staan ze op 5 en 32. Een dam op de twee randvelden van een '
+            f'dubbele hoek kan niet geslagen worden en heeft altijd een wachtzet (zie de <a href="vesting.html">vesting</a>), '
+            f'maar op 8×8 helpt dat niet: alle 13.320 rustige stellingen met zwart in beide dubbele hoeken zijn gewonnen, met '
+            f'wit aan zet én met zwart aan zet; de langste duurt {v61[1:]} ply. Wit bouwt in de dubbele hoeken een '
+            f'vangstelling en dwingt op zet 21 met een offer een ruil af: zwart moet slaan, wit slaat terug, en 2 tegen 1 '
+            f'wint. Hoe die val werkt, staat bij <a href="val.html">de val</a>.</p>'
+            f'<p>De twee dubbele hoeken liggen op 8×8 diagonaal tegenover elkaar en dicht bij elkaar (in de '
+            f'<a href="afstandsregel.html">afstandsregel</a>: D × d = 7 × 7, de vesting valt). De oppositie, die op 8×9 en '
+            f'9×10 de helft van zulke stellingen remise maakt, speelt op 8×8 dus geen rol.</p>',
+            f'<p>The longest win on 8×8 without a capture for either side in the start position takes {v[1:]} plies. Black '
+            f'flees with both kings to the double corners: after 15. … 27-32 they stand on 5 and 32. A king on the two edge '
+            f'squares of a double corner cannot be captured and always has a waiting move (see the '
+            f'<a href="vesting.html">fortress</a>), but on 8×8 that does not help: all 13,320 quiet positions with black in '
+            f'both double corners are won, with white to move and with black to move; the longest takes {v61[1:]} plies. '
+            f'White builds a trap in the double corners and on move 21 forces an exchange with a sacrifice: black has to '
+            f'capture, white captures back, and 2 against 1 wins. How that trap works is shown at '
+            f'<a href="val.html">the trap</a>.</p>'
+            f'<p>On 8×8 the two double corners lie diagonally opposite and close together (in the '
+            f'<a href="afstandsregel.html">distance rule</a>: D × d = 7 × 7, the fortress falls). The opposition, which '
+            f'makes half of such positions a draw on 8×9 and 9×10, plays no role on 8×8.</p>'),
+            f'<p class="var">{h}</p>', '<div style="clear:both"></div>']
+        flush('drie-langste.html')
         body, phases = self.traps88(pg, k88, e88)
         flush('val.html')
         body = phases
@@ -457,11 +454,9 @@ rate 0.0% with no white king on the edge, 0.5% with three), and black holding bo
                         'possible and forces the exchange after the last shuttle move.</p>'),
                  f'<p class="var">{" ".join(parts)}</p>',
                  t('<p>Zwart kan ook zelf een hoek verlaten. Volgens de database is dat vaak even goed als pendelen, en '
-                   'meestal kan zwart later ook weer terug in de hoek, zoals de zwarte dam rechtsonder in de hoofdvariant '
-                   'bij <a href="dubbele-hoeken.html">zwart in de dubbele hoeken</a> (zet 10 tot en met 13). Het redt niets: alle stellingen blijven verloren.</p>',
+                   'meestal kan zwart later ook weer terug in de hoek. Het redt niets: alle stellingen blijven verloren.</p>',
                    '<p>Black can also leave a corner itself. According to the database that is often just as good as '
-                   'shuttling, and usually black can later get back into the corner, as the black king at the bottom right '
-                   'does in the main line at <a href="dubbele-hoeken.html">black in the double corners</a> (moves 10 to 13). It saves nothing: every position stays '
+                   'shuttling, and usually black can later get back into the corner. It saves nothing: every position stays '
                    'lost.</p>'), '<div style="clear:both"></div>']
         return body
 
@@ -653,7 +648,10 @@ def main():
         s = Site(args.engine, out, lang, engines)
         s.index()
         s.vesting()
-        # the page on the two parities used to be called val-fasen.html
+        # pages that were renamed or merged
+        (out / 'dubbele-hoeken.html').write_text('<!DOCTYPE html><meta charset="utf-8"><meta http-equiv="refresh" '
+                                                 'content="0; url=drie-langste.html"><link rel="canonical" href="drie-langste.html">'
+                                                 '<title>Checkers</title><a href="drie-langste.html">drie-langste.html</a>\n')
         (out / 'val-fasen.html').write_text('<!DOCTYPE html><meta charset="utf-8"><meta http-equiv="refresh" '
                                             'content="0; url=val-pariteit.html"><link rel="canonical" href="val-pariteit.html">'
                                             '<title>Checkers</title><a href="val-pariteit.html">val-pariteit.html</a>\n')

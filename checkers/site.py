@@ -616,6 +616,12 @@ same side:</p>
 <p><em>D</em> ≤ 7: the fortress falls · <em>D</em> = 8: opposition decides, unless also <em>d</em> = 8 ·
 <em>D</em> ≥ 9: the fortress holds.</p>'''),
                 ]
+        # the other two of the three traps on 9x8 (the position above with black to move is the third)
+        rule = next(k for k, x in enumerate(body) if isinstance(x, str) and 'D × d' in x)
+        body[rule:rule] = [t('<p>Dat is een van de drie vallen op 9×8. De andere twee:</p>',
+                             '<p>That is one of the three traps on 9×8. The other two:</p>')] + self.trap_blocks(
+            pg, k89, e89, '9×8', '', [(['d8', 'e7', 'f8'], ['b8', 'h8']), (['d8', 'e7', 'f8'], ['a7', 'i7'])],
+            {'b8': 'a7', 'a7': 'b8', 'h8': 'i7', 'i7': 'h8'})
         rule = next(k for k, x in enumerate(body) if isinstance(x, str) and 'D × d' in x)
         self.write('vesting.html', None, '\n'.join(body[:rule]), pg, k89)
         self.write('afstandsregel.html', None, body[rule], self.page((k89, e89)), k89)
@@ -668,6 +674,24 @@ same side:</p>
             out.append((m[0], ex is not None, ' '.join(parts)))
         return out
 
+    def trap_blocks(self, pg, gid, e, board, extra, traps_, partner):
+        """one diagram per trap (black to move): every shuttle move of black and the exchange that punishes it"""
+        t = self.t
+        out = []
+        for k, (W, B) in enumerate(traps_):
+            fen = e.fen(W, B, 'B')
+            v, legal = e.analyse(fen)
+            name = f'{board} {extra}' if extra else board
+            fig, i0 = pg.diagram(fen, t(f'{name}, zwart aan zet: {v}', f'{name}, black to move: {v}'), gid=gid)
+            sh = self.shuttles(pg, gid, e, i0, legal, {f'{b}-{partner[b]}' for b in B})
+            assert len(sh) == 2 and all(ok for _, ok, _ in sh), (fen, sh)
+            out += [fig, t(f'<p>Val {k + 1}: wit op {", ".join(W)}, zwart op {B[0]} en {B[1]}: ',
+                           f'<p>Trap {k + 1}: white on {", ".join(W)}, black on {B[0]} and {B[1]}: ')
+                    + '; '.join(x for _, _, x in sh)
+                    + t(', en 2 tegen 1 wint. Alle zetten van zwart: ', ', and 2 against 1 wins. All moves of black: ')
+                    + self.moves_list(pg, i0, legal, '1. … ') + '.</p>', '<div style="clear:both"></div>']
+        return out
+
     def fortress99(self, pg, k99, e99):
         """9x9 with unplayable corners: the trap works for two double corners on the same side, not for the diagonal pair"""
         t = self.t
@@ -694,22 +718,17 @@ to move and both black kings on the edge squares of their double corners:</p>
 <tr><td>two double corners on the same side</td><td colspan="2">3 at one of the two parities</td><td>the opposition decides</td></tr>
 <tr><td>two diagonally opposite ones</td><td>0</td><td>0</td><td>the fortress holds</td></tr></table>
 <p>Per pair of double corners there are 12,100 starting positions at each parity.</p>''')]
-        # the trap along the side of the i-file: black h1 and h9, white h3, h5, h7
-        fen = e99.fen(['h3', 'h5', 'h7'], ['h1', 'h9'], 'B')
-        v, legal = e99.analyse(fen)
-        fig, i0 = pg.diagram(fen, t(f'9×9 onspeelbare hoeken, zwart aan zet: {v}', f'9×9 unplayable corners, black to move: {v}'), gid=k99)
-        sh = self.shuttles(pg, k99, e99, i0, legal, {'h1-i2', 'h9-i8'})
-        assert len(sh) == 2 and all(ok for _, ok, _ in sh)
-        body += [fig, t('<p>Twee dubbele hoeken aan dezelfde kant, h1/i2 en h9/i8, met de witte dammen op h3, h5 en h7 '
-                        'ertussen: elke pendelzet van zwart wordt gestraft: ',
-                        '<p>Two double corners on the same side, h1/i2 and h9/i8, with the white kings on h3, h5 and h7 '
-                        'between them: every shuttle move of black is punished: ')
-                 + '; '.join(x for _, _, x in sh)
-                 + t(', en 2 tegen 1 wint. Alle zetten van zwart: ', ', and 2 against 1 wins. All moves of black: ')
-                 + self.moves_list(pg, i0, legal, '1. … ')
-                 + t('. Net als op 9×8 werkt deze val maar bij één van de twee pariteiten: de oppositie beslist.</p>',
-                     '. As on 9×8 this trap works at only one of the two parities: the opposition decides.</p>'),
-                 '<div style="clear:both"></div>']
+        # the three traps for the pair of double corners along the i-file (h1/i2 and h9/i8)
+        body.append(t('<p>Voor twee dubbele hoeken aan dezelfde kant, h1/i2 en h9/i8, zijn er drie vallen. In elk ervan '
+                      'wordt elke pendelzet van zwart gestraft. Net als op 9×8 werken ze maar bij één van de twee pariteiten: '
+                      'de oppositie beslist.</p>',
+                      '<p>For two double corners on the same side, h1/i2 and h9/i8, there are three traps. In each of them '
+                      'every shuttle move of black is punished. As on 9×8 they work at only one of the two parities: the '
+                      'opposition decides.</p>'))
+        body += self.trap_blocks(pg, k99, e99, '9×9', t('onspeelbare hoeken', 'unplayable corners'),
+                                 [(['h3', 'h5', 'h7'], ['h1', 'h9']), (['i4', 'h5', 'i6'], ['h1', 'h9']),
+                                  (['i4', 'h5', 'i6'], ['i2', 'i8'])],
+                                 {'h1': 'i2', 'i2': 'h1', 'h9': 'i8', 'i8': 'h9'})
         # the diagonal pair: the 8x8 trap (three kings in a row on the connecting diagonal) catches only one shuttle
         figs = []
         for W in (['d3', 'e4', 'f5'], ['e4', 'f5', 'g6']):

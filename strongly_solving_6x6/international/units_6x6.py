@@ -12,7 +12,9 @@ these steps, every step a separate run of egdb_6x6:
   2. verify raw    every position: the stored value equals the value recomputed from its successors;
   3. compress      blocks of 4096 positions, zstd -19, capture positions filled in;
   4. compare       every compressed block decoded and compared byte for byte with the raw values (captures filled);
-  5. delete raw.
+  5. crc           CRC32C of the stored bytes (independent of the zstd version), appended to <dir>/crc32c.txt: another
+                   build of the same unit, e.g. one without step 2 on another machine, must give the same checksum;
+  6. delete raw.
 (A self-consistency check of the compressed unit, or a lookup of every position through it, adds nothing to steps 2
 and 4: a position without capture reads a byte that step 4 compared, and a capture position is resolved through the
 units with fewer pieces, which is how step 2 checked its raw value. The check is available as
@@ -30,7 +32,7 @@ import subprocess
 import sys
 import time
 
-STEPS = ['build', 'verify_raw', 'compress', 'compare', 'delete_raw']
+STEPS = ['build', 'verify_raw', 'compress', 'compare', 'crc', 'delete_raw']
 
 
 def units(nmax):
@@ -75,6 +77,8 @@ def main():
                 cmd = f'unitcompress {d} {n} {m} {t}'
             elif step == 'compare':
                 cmd = f'unitcompare {d} {n} {m} {t}'
+            elif step == 'crc':
+                cmd = f'unitcrc {d} {n} {m}'
             elif step == 'verify_cdb':
                 cmd = f'unitverify {d} {n} {m} cdb {t}'
             else:
@@ -93,6 +97,9 @@ def main():
             if not ok:
                 print(f'{key} {step} FAILED: {lines}', flush=True)
                 sys.exit(1)
+            if step == 'crc' and lines and lines[0].startswith('crc32c '):
+                with open(os.path.join(d, 'crc32c.txt'), 'a') as c:
+                    c.write(lines[0][len('crc32c '):] + '\n')
             done.append(step)
             json.dump(state, open(state_path + '.tmp', 'w'), indent=0)
             os.replace(state_path + '.tmp', state_path)

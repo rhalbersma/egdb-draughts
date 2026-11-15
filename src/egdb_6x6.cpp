@@ -52,6 +52,7 @@
 //   unitverify <dir> <n> <m> raw|cdb [t] recompute the values of the unit from their successors
 //   unitcompress <dir> <n> <m> [t]       compress the raw file of the unit
 //   unitcompare <dir> <n> <m> [t]        compare every block of the compressed unit with the raw file
+//   unitcrc <dir> <n> <m>                CRC32C of the stored bytes of the compressed unit (independent of zstd)
 // FEN: W:W17,K16:B2,K15 (side to move, white pieces, black pieces; K = king).
 // Values: "W<n>" win in n plies, "L<n>" loss in n plies, "D" draw (for the side to move).
 
@@ -80,6 +81,7 @@
 #include <unistd.h>
 #include <unordered_map>
 #include <vector>
+#include <nmmintrin.h>
 #include <omp.h>
 #define ZSTD_STATIC_LINKING_ONLY
 #include <zstd.h>
@@ -1905,6 +1907,38 @@ bool unit_compress(std::string const& dir, int n, int m, int threads)
         return true;
 }
 
+// CRC32C (Castagnoli, as in iSCSI and ext4) with the SSE4.2 instruction
+std::uint32_t crc32c(std::uint32_t crc, std::uint8_t const* p, std::size_t n)
+{
+        std::uint64_t c = ~crc;
+        std::size_t i = 0;
+        for (; i + 8 <= n; i += 8) { std::uint64_t x; std::memcpy(&x, p + i, 8); c = _mm_crc32_u64(c, x); }
+        for (; i < n; ++i) c = _mm_crc32_u8(std::uint32_t(c), p[i]);
+        return ~std::uint32_t(c);
+}
+
+// the checksum of a compressed unit: CRC32C of its stored bytes in order (every block decoded, capture positions as
+// filled in), so independent of the zstd version that compressed it; equal for every build of the same unit
+bool unit_crc(std::string const& dir, int n, int m)
+{
+        auto const lay = unit_layout(n, m);
+        if (lay.empty()) { std::cout << "empty " << n << " " << m << '\n'; return true; }
+        if (!store_open(dir, n, m, 3)) return false;
+        Unit const& u = units.back();
+        ZSTD_DCtx* dx = new_dctx();
+        std::vector<std::uint8_t> buf(BLOCK);
+        std::uint32_t crc = 0;
+        for (std::uint64_t b = 0; b < u.nblocks; ++b) {
+                decode_block(dx, u, b, buf.data());
+                crc = crc32c(crc, buf.data(), std::size_t(std::min(BLOCK, u.npos - b * BLOCK)));
+        }
+        ZSTD_freeDCtx(dx);
+        char hex[16];
+        std::snprintf(hex, sizeof hex, "%08x", crc);
+        std::cout << "crc32c " << n << " " << m << " positions " << u.npos << " " << hex << '\n';
+        return true;
+}
+
 // compare the compressed unit with the raw one: every block decoded and compared byte for byte with the block as it
 // should be stored (the raw values, capture positions filled in). Looking up every position through the compressed
 // unit as well would add nothing: a position without capture reads exactly such a byte, and a capture position is
@@ -2004,6 +2038,14 @@ int main()
                         rs >> dir;
                         bool ok = store_open(dir, 13, 0, -1, true);
                         std::cout << (ok ? "store ok " : "error store failed ") << dir << " units " << units.size() << "\nend" << std::endl;
+                        continue;
+                }
+                if (cmd == "unitcrc") {
+                        std::string dir;
+                        int n = 0, m = 0;
+                        rs >> dir >> n >> m;
+                        bool ok = unit_crc(dir, n, m);
+                        std::cout << (ok ? "unitcrc ok" : "error unitcrc failed") << "\nend" << std::endl;
                         continue;
                 }
                 if (cmd == "unitbuild" || cmd == "unitverify" || cmd == "unitcompress" || cmd == "unitcompare") {

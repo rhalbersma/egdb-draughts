@@ -31,7 +31,8 @@ int main(int argc, char** argv)
                         auto const lay = unit_layout(n, m);
                         if (lay.empty()) continue;
                         std::vector<std::uint64_t> c(2 * std::size_t(threads), 0);
-                        for_each_stored(lay, threads, "crosscheck", [&](Pos const& q, std::uint64_t) {
+                        for_each_stored(lay, threads, "crosscheck", [&](Cursor const& cur, std::uint64_t) {
+                                Pos const q = cur.pos();
                                 std::uint64_t* t = &c[2 * std::size_t(omp_get_thread_num())];
                                 ++t[0];
                                 Pos const p = canonical_key(key_of(q)) ? q : mirror(q);

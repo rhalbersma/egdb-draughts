@@ -64,6 +64,7 @@
 #include <sstream>
 #include <string>
 #include <tuple>
+#include <utility>
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -1184,6 +1185,7 @@ struct MatRef { int unit = -1; int S = 0; std::uint64_t base = 0, P = 0; };
 std::vector<Unit> units;
 MatRef mat_ref[7][7][7][7];
 std::uint64_t next_unit_id = 1;
+std::uint64_t store_gen = 0;           // changes whenever the store is opened again (capture cache tag)
 
 std::string unit_path(std::string const& dir, int n, int m, char const* ext)
 {
@@ -1251,6 +1253,7 @@ bool store_open(std::string const& dir, int n, int m, int own)
                         if (unit_before(a, b, n, m) && !unit_open(dir, a, b, 3)) return false;
         if (own >= 0 && !unit_open(dir, n, m, own)) return false;
         store_on = true;
+        store_gen = next_unit_id;
         slice_max = std::max(slice_max, 12);
         return true;
 }
@@ -1313,6 +1316,27 @@ MatRef const& mat_of(Pos const& q)
         return mat_ref[__builtin_popcount(q.m[0])][__builtin_popcount(q.m[1])][__builtin_popcount(q.k[0])][__builtin_popcount(q.k[1])];
 }
 
+// the values of capture positions resolved through compressed units, per thread (direct mapped, 2^20 entries):
+// a capture position is often a successor of several positions that are built or checked one after the other
+struct CaptureCache {
+        static constexpr std::size_t SLOTS = std::size_t(1) << 20;
+        std::vector<PosKey> key = std::vector<PosKey>(SLOTS, 0);
+        std::vector<std::uint64_t> gen = std::vector<std::uint64_t>(SLOTS, 0);
+        std::vector<std::uint16_t> val = std::vector<std::uint16_t>(SLOTS, 0);
+};
+thread_local CaptureCache capture_cache;
+
+std::uint16_t resolve_capture(Pos const& q)
+{
+        PosKey const k = pack(q);
+        std::size_t const s = PosKeyHash{}(k) & (CaptureCache::SLOTS - 1);
+        CaptureCache& c = capture_cache;
+        if (c.key[s] == k && c.gen[s] == store_gen) return c.val[s];
+        std::uint16_t const v = from_successors(q);
+        c.key[s] = k; c.gen[s] = store_gen; c.val[s] = v;
+        return v;
+}
+
 std::uint16_t store_lookup(Pos const& p)
 {
         int const w = __builtin_popcount(p.m[0] | p.k[0]), b = __builtin_popcount(p.m[1] | p.k[1]);
@@ -1323,7 +1347,7 @@ std::uint16_t store_lookup(Pos const& p)
         MatRef const& r = mat_of(q);
         if (r.unit < 0) throw NotInDatabase{};
         Unit const& u = units[std::size_t(r.unit)];
-        if (!u.raw && has_capture(q)) return from_successors(q);
+        if (!u.raw && has_capture(q)) return resolve_capture(q);
         std::uint64_t const off = stored_offset(r, q);
         std::uint8_t const v = u.raw ? u.p[off] : block_cache.byte(u, off);
         if (v > DRAW8) { std::cerr << "store: no value yet for " << fen_of(p) << std::endl; std::abort(); }
@@ -1477,7 +1501,8 @@ bool unit_build(std::string const& dir, int n, int m, int threads)
         return true;
 }
 
-// every stored position of unit (n, m): f(position, offset) for each, in parallel over chunks of positions
+// every stored position of unit (n, m): f(cursor, offset) for each (cursor.pos() is the position), in parallel over
+// chunks of positions
 template <class F>
 void for_each_stored(std::vector<UnitMat> const& lay, int threads, char const* what, F&& f)
 {
@@ -1490,7 +1515,7 @@ void for_each_stored(std::vector<UnitMat> const& lay, int threads, char const* w
                 Cursor c(lay);
                 c.seek(j * chunk);
                 std::uint64_t const end = std::min(npos, (j + 1) * chunk);
-                for (std::uint64_t o = j * chunk; o < end; ++o, c.next()) f(c.pos(), o);
+                for (std::uint64_t o = j * chunk; o < end; ++o, c.next()) f(std::as_const(c), o);
                 std::uint64_t d;
                 #pragma omp atomic capture
                 d = ++done;
@@ -1502,7 +1527,11 @@ void for_each_stored(std::vector<UnitMat> const& lay, int threads, char const* w
 }
 
 // self-consistency: every stored value equals the value recomputed from the successors (raw: every position;
-// compressed: the positions without capture, since a capture position is resolved from its successors anyway)
+// compressed: the positions without capture, since a capture position is resolved from its successors anyway).
+// In a raw unit a king move without capture stays in the slice, with the other side to move: for an asymmetric
+// material (both sides to move stored) that successor is read directly from the neighbouring half of the slice;
+// all other successors (man moves, captures, promotions, and king moves of a symmetric material, whose positions
+// with black to move are stored mirrored) go through the general lookup.
 bool unit_verify(std::string const& dir, int n, int m, bool compressed, int threads)
 {
         auto const lay = unit_layout(n, m);
@@ -1512,10 +1541,24 @@ bool unit_verify(std::string const& dir, int n, int m, bool compressed, int thre
         std::uint64_t checked = 0, skipped = 0, errors = 0;
         auto const t0 = std::chrono::steady_clock::now();
         std::vector<std::uint64_t> c(3 * std::size_t(threads), 0);
-        for_each_stored(lay, threads, "verify", [&](Pos const& q, std::uint64_t off) {
+        for_each_stored(lay, threads, "verify", [&](Cursor const& cur, std::uint64_t off) {
                 std::uint64_t* t = &c[3 * std::size_t(omp_get_thread_num())];
+                Pos const q = cur.pos();
                 if (compressed && has_capture(q)) { ++t[1]; return; }
-                std::uint16_t const a = widen(compressed ? block_cache.byte(u, off) : u.p[off]), b = from_successors(q);
+                std::uint16_t b;
+                if (!compressed && cur.lay[cur.mi].S == 2) {
+                        std::uint64_t const P = cur.meta.P, other = off - cur.k + (cur.stm ? 0 : 2 * P) - P;   // other side to move
+                        int best_win = INF, max_loss = -1;
+                        bool draw = false;
+                        for (auto const& mv : moves(q)) {
+                                std::uint16_t const v = internal_move(q, mv) ? widen(u.p[other + index_of(cur.meta, mv.next)]) : lookup(mv.next);
+                                if (v == DRAW) draw = true;
+                                else if (v & 1) max_loss = std::max(max_loss, v + 1);
+                                else best_win = std::min(best_win, v + 1);
+                        }
+                        b = best_win < INF ? std::uint16_t(best_win) : draw ? DRAW : std::uint16_t(std::max(max_loss, 0));
+                } else b = from_successors(q);
+                std::uint16_t const a = widen(compressed ? block_cache.byte(u, off) : u.p[off]);
                 ++t[0];
                 if (a != b) {
                         if (++t[2] <= 10) {

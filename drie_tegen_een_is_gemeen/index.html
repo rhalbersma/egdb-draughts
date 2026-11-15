@@ -192,7 +192,7 @@ table.tbl th { color: var(--muted); font-weight: 600; }
 <h1>Drie tegen een is gemeen</h1>
 <figure><a class="diagram" href="#" data-i="0"><div class="smallboard" data-g="5x6" data-fen="W:WK1,K8:BK7"></div></a><figcaption>6×5: twee dammen winnen (27 ply)</figcaption></figure>
 
-<p>Eindspelen met alleen dammen, op borden van elke afmeting <em>B × L</em>, met internationale regels: vliegende
+<p>Eindspelen met alleen dammen, op borden van elke afmeting <em>B × L</em> (<em>B</em> ≤ <em>L</em>, met de families <em>L</em> = <em>B</em> + 1, <em>B</em> + 2 en 2<em>B</em> − 1, zoals in het boek), met internationale regels: vliegende
 dammen, slagplicht, meerslag en Turkse slag. Een Nederlands boek uit 1988 over drie dammen tegen één vond zijn
 resultaten met de hand, op borden van elke grootte. De databases van
 <a href="https://github.com/rhalbersma/egdb-draughts/blob/main/src/egdb_fast.cpp"><code>egdb_fast</code></a>
@@ -201,6 +201,11 @@ breiden de resultaten van het boek uit.</p>
 <p>Elke stelling op deze site is klikbaar: het grote bord volgt, en eronder staan de waarde en alle zetten. W = winst,
 L = verlies, met het aantal ply tot het einde van de partij; D = remise. Zuiver speltheoretisch, zonder
 zettenregels.</p>
+<p>Omdat het eindspelen met alleen dammen zijn, zonder schijven en dus zonder voor- of achterkant, maakt het niet uit
+hoe het bord ligt: kantelen in de diagonaal door a1 verandert geen enkele waarde, en ook de kleuring (p0/p1) blijft
+gelijk. De diagrammen tonen de borden daarom gekanteld, liggend: <em>L</em> kolommen breed en <em>B</em> rijen hoog. Bij de
+diagrammen heten ze <em>L</em> × <em>B</em>, kolommen × rijen: 11×10 is het bord met <em>B</em> = 10 en
+<em>L</em> = 11 uit de familie <em>L</em> = <em>B</em> + 1.</p>
 <h2>Inhoud</h2><ul class="toc">
 <li><a href="twee-tegen-een.html">2 dammen tegen 1</a></li>
 <li><a href="drie-tegen-een.html">3 dammen tegen 1</a></li>

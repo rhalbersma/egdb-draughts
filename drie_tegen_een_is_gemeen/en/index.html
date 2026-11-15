@@ -192,7 +192,7 @@ table.tbl th { color: var(--muted); font-weight: 600; }
 <h1>Drie tegen een is gemeen</h1>
 <figure><a class="diagram" href="#" data-i="0"><div class="smallboard" data-g="5x6" data-fen="W:WK1,K8:BK7"></div></a><figcaption>6×5: two kings win (27 plies)</figcaption></figure>
 
-<p>Endgames with kings only, on boards of any size <em>W × H</em>, under international rules: flying kings, mandatory
+<p>Endgames with kings only, on boards of any size <em>W × H</em> (<em>W</em> ≤ <em>H</em>, with the families <em>H</em> = <em>W</em> + 1, <em>W</em> + 2 and 2<em>W</em> − 1, as in the book), under international rules: flying kings, mandatory
 capture, majority capture and the Turkish strike. A Dutch book of 1988 on three kings against one, <em>Drie tegen een is
 gemeen</em> ("three against one is mean"), found its results by hand, on boards of every size. The databases of
 <a href="https://github.com/rhalbersma/egdb-draughts/blob/main/src/egdb_fast.cpp"><code>egdb_fast</code></a> compute
@@ -201,6 +201,11 @@ of the book.</p>
 <p>Every position on this site is clickable: the large board follows, and below it are the value and all moves. W = win,
 L = loss, with the number of plies to the end of the game; D = draw. Purely game-theoretic, without move-count
 rules.</p>
+<p>Since these are endgames with kings only, without men and so without a front or back, it does not matter which way
+the board lies: turning it over the diagonal through a1 changes no value, and the colouring (p0/p1) stays the same too.
+The diagrams therefore show the boards on their side: <em>H</em> files wide and <em>W</em> ranks high. At the diagrams
+they are named <em>H</em> × <em>W</em>, files × ranks: 11×10 is the board with <em>W</em> = 10 and
+<em>H</em> = 11 from the family <em>H</em> = <em>W</em> + 1.</p>
 <h2>Contents</h2><ul class="toc">
 <li><a href="twee-tegen-een.html">2 kings against 1</a></li>
 <li><a href="drie-tegen-een.html">3 kings against 1</a></li>

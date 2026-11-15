@@ -28,7 +28,7 @@ TITLE = {'nl': 'Checkers: 3 dammen tegen 2', 'en': 'Checkers: 3 kings against 2'
 # the chapters, each with one page per section: (Dutch, English, [(file, Dutch, English)])
 CHAPTERS = [
     ('2 tegen 1', '2 against 1', [
-        ('twee-langste.html', 'Gewonnen, op twee uitzonderingen na', 'Won, with two exceptions'),
+        ('twee-langste.html', 'De langste winst op 8×8', 'The longest win on 8×8'),
         ('twee-blokkade.html', 'Uitzondering 1: de blokkade aan de rand', 'Exception 1: the blockade at the edge'),
         ('twee-4x4.html', 'Uitzondering 2: remise op 4×4', 'Exception 2: a draw on 4×4')]),
     ('3 tegen 2', '3 against 2', [

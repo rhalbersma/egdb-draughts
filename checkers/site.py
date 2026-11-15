@@ -558,18 +558,14 @@ king in the middle of the white kings (the third diagram).</p>''')]
         pg9 = self.page((k99, e99))
         fen = e89.fen(['c7', 'e7', 'g7'], ['a7', 'i7'])
         t = self.t
-        fig, i0 = pg.diagram(fen, t('9×8, wit aan zet', '9×8, white to move'), gid=k89)
         v, legal = e89.analyse(fen)
-        fb = 'B' + fen[1:]
-        ib = pg.add(fb, gid=k89)
+        fig, i0 = pg.diagram(fen, t(f'9×8, wit aan zet: {v}', f'9×8, white to move: {v}'), gid=k89)
+        fb = 'B' + fen[1:]                 # the same position with black to move
         vb, _ = e89.analyse(fb)
+        figb, ib = pg.diagram(fb, t(f'9×8, zwart aan zet: {vb}', f'9×8, black to move: {vb}'), gid=k89)
         hb, *_ = pg.moves(fb, self.plan('1. a7-b8 2. g7-f8! b8xd6 3. e7xc5'), 1, True, 'm1', ib)
         hb2, *_ = pg.best_line(pg.pos[int(re.findall(r'data-i="(\d+)"', hb)[-1])]['f'], 40,
                                start=int(re.findall(r'data-i="(\d+)"', hb)[-1]), number=3)
-        f2 = e89.fen(['d6', 'e7', 'g7'], ['a7', 'i7'])
-        fig2, i2 = pg.diagram(f2, t('9×8, wit aan zet', '9×8, white to move'), gid=k89)
-        v2, legal2 = e89.analyse(f2)
-        h2, *_ = pg.moves(f2, self.plan('1. d6-c7!'), 1, False, 'm1', i2)
         body = [t('''
 <p>Een dam op de twee randvelden van een dubbele hoek kan nooit geslagen worden en heeft altijd een wachtzet. Op 9×8
 maakt een zwarte dam in elke dubbele hoek remise in de helft van de stellingen, en welke helft dat is, beslist de
@@ -586,16 +582,15 @@ move, and kings cannot lose a tempo, so with black to move the parity is fixed f
 <p>With black to move and the black kings on the edge squares of the two double corners (quiet positions, nobody can
 capture), on 9×8 every position is drawn at even parity (8,228 positions) and none at odd parity (8,244).</p>'''),
                 fig,
-                t(f'<p>Zwart op a7 en i7 (pendelend met b8 en h8), wit op c7, e7 en g7. Met wit aan zet ({v}) houdt elke '
-                  f'zet remise: zwart pendelt gewoon a7-b8-a7. ',
-                  f'<p>Black on a7 and i7 (shuttling with b8 and h8), white on c7, e7 and g7. With white to move ({v}) every '
-                  f'move draws: black just shuttles a7-b8-a7. ') + f'{self.moves_list(pg, i0, legal, "1. ")}.</p>',
-                t(f'<p>Met zwart aan zet staat zwart in zetdwang en verliest in {vb[1:]} ply: {hb} en 2 tegen 1 wint: ',
-                  f'<p>With black to move black is in zugzwang and loses in {vb[1:]} plies: {hb} and 2-1 wins: ')
-                + f'{hb2}</p>', '<div style="clear:both"></div>', fig2,
-                t(f'<p>Met de witte dam op d6 in plaats van c7 ({v2}) wint wit met {h2}, en bereikt zo dezelfde stelling met '
-                  f'zwart aan zet.</p>', f'<p>With the white king on d6 instead of c7 ({v2}) white wins with {h2}, reaching '
-                  f'the same position with black to move.</p>'), '<div style="clear:both"></div>', t('''
+                t(f'<p>Zwart op a7 en i7 (pendelend met b8 en h8), wit op c7, e7 en g7. Met wit aan zet houdt elke zet '
+                  f'remise: zwart pendelt gewoon a7-b8-a7 en/of i7-h8-i7. ',
+                  f'<p>Black on a7 and i7 (shuttling with b8 and h8), white on c7, e7 and g7. With white to move every move '
+                  f'draws: black just shuttles a7-b8-a7 and/or i7-h8-i7. ') + f'{self.moves_list(pg, i0, legal, "1. ")}.</p>',
+                '<div style="clear:both"></div>', figb,
+                t(f'<p>Dezelfde stelling met zwart aan zet: zwart staat in zetdwang en verliest in {vb[1:]} ply: {hb} en 2 '
+                  f'tegen 1 wint: ',
+                  f'<p>The same position with black to move: black is in zugzwang and loses in {vb[1:]} plies: {hb} and 2-1 '
+                  f'wins: ') + f'{hb2}</p>', '<div style="clear:both"></div>', t('''
 <p>Wat beslist, is de afstand tussen de hoeken van de dubbele hoeken die zwart bezet (<em>D</em> = grootste,
 <em>d</em> = kleinste coördinaatverschil; <em>d</em> = 0 als ze aan dezelfde kant liggen), niet of ze aan dezelfde
 kant liggen:</p>

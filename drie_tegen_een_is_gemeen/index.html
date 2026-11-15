@@ -190,7 +190,7 @@ table.tbl th { color: var(--muted); font-weight: 600; }
   </aside>
   <main>
 <h1>Drie tegen een is gemeen</h1>
-<figure><a class="diagram" href="#" data-i="0"><div class="smallboard" data-g="5x6" data-fen="W:WK15,K9:BK14"></div></a><figcaption>5×6: twee dammen winnen (27 ply)</figcaption></figure>
+<figure><a class="diagram" href="#" data-i="0"><div class="smallboard" data-g="5x6" data-fen="W:WK1,K8:BK7"></div></a><figcaption>5×6: twee dammen winnen (27 ply)</figcaption></figure>
 
 <p>Eindspelen met alleen dammen, op borden van elke afmeting <em>B × L</em>, met internationale regels: vliegende
 dammen, slagplicht, meerslag en Turkse slag. Een Nederlands boek uit 1988 over drie dammen tegen één vond zijn
@@ -233,9 +233,9 @@ op de lange lijn (40 vorken met zwart aan zet), en de precieze grenzen van elke 
   </main>
 </div>
 <script>
-const POS = [{"f":"W:WK15,K9:BK14","v":"W27","last":null,"prev":null,"next":null,"g":"5x6","m":[["9-7","c3-d4","W27",null],["9-5","c3-e5","W27",null],["9-6","c3-b4","W27",null],["9-13","c3-a1","W27",null],["9-3","c3-a5","W29",null],["9-12","c3-d2","D",null],["9-11","c3-b2","D",null],["15-12","e1-d2","D",null]]}];
+const POS = [{"f":"W:WK1,K8:BK7","v":"W27","last":null,"prev":null,"next":null,"g":"5x6","m":[["8-5","c3-d4","W27",null],["8-3","c3-e5","W27",null],["8-11","c3-d2","W27",null],["8-13","c3-a1","W27",null],["8-15","c3-e1","W29",null],["1-4","a5-b4","D",null],["8-4","c3-b4","D",null],["8-10","c3-b2","D",null]]}];
 const UI = {"white": "wit", "black": "zwart", "tomove": "aan zet", "nomoves": "geen zetten: verloren"};
-const GEOMS = {"5x6":{"w":5,"h":6,"parity":1,"sq":{"1":[1,5],"2":[3,5],"3":[0,4],"4":[2,4],"5":[4,4],"6":[1,3],"7":[3,3],"8":[0,2],"9":[2,2],"10":[4,2],"11":[1,1],"12":[3,1],"13":[0,0],"14":[2,0],"15":[4,0]},"lake":[],"pref":"alg"}};
+const GEOMS = {"5x6":{"w":6,"h":5,"parity":1,"sq":{"1":[0,4],"2":[2,4],"3":[4,4],"4":[1,3],"5":[3,3],"6":[5,3],"7":[0,2],"8":[2,2],"9":[4,2],"10":[1,1],"11":[3,1],"12":[5,1],"13":[0,0],"14":[2,0],"15":[4,0]},"lake":[],"pref":"alg"}};
 // notation: 'std' = the standard notation of each board (numeric on 6x6, 8x8 checkers and 10x10), or 'num' / 'alg'
 let cur = 0, showNums = true, timer = null, notation = 'std';
 try { const n = localStorage.getItem('notation-v2'); if (n === 'num' || n === 'alg') notation = n; } catch (e) {}

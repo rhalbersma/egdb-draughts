@@ -315,27 +315,45 @@ by opposition; on odd × odd boards with playable corners this blockade does not
         flush('val-pariteit.html')
         body = self.race88(pg, k88, e88)
         flush('val-race.html')
-        fen = 'W:WK3,K4,K29:BK11,K22'
-        v, legal = e88.analyse(fen)
-        vb, _ = e88.analyse('B' + fen[1:])
-        fig, i0 = pg.diagram(fen, t(f'8×8, wit aan zet: {v}', f'8×8, white to move: {v}'), gid=k88)
-        h, *_ = pg.best_line(fen, 12, start=i0)
-        body += [fig, t('''
+        # the 3-2 blockades on 8x8: 1252 quiet draws with white to move, 316 up to symmetry; 307 of them contain the
+        # 2-1 blockade in a single corner
+        body += [t('''
 <p>Op 7×8 en 8×8 is 3 tegen 2 in het algemeen gewonnen. De weinige remises ontstaan bijna alleen als wit tegen de rand
 gedrukt wordt (0,0% remise zonder witte dam aan de rand, 0,5% met drie), en zwart in beide dubbele hoeken maakt nooit
-remise.</p>''', '''
+remise. Op 8×8 zijn er 1.252 rustige remisestellingen met wit aan zet, 316 op spiegelingen van het bord na. In 307 daarvan
+zit de blokkade van <a href="twee-blokkade.html">2 tegen 1</a>: twee witte dammen in een enkele hoek, vastgehouden door
+één zwarte dam.</p>''', '''
 <p>On 7×8 and 8×8 3-2 is won generically. The few draws occur almost only when white is pushed against the edge (draw
-rate 0.0% with no white king on the edge, 0.5% with three), and black holding both double corners never draws.</p>'''),
-                 t(f'<p>Een dubbele blokkade: in de enkele hoek rechtsboven dezelfde blokkade als bij 2 tegen 1, en de derde '
-                   f'witte dam zit opgesloten in de andere enkele hoek. Wit aan zet maakt remise, maar meer niet; zet de '
-                   f'opgesloten dam uit de hoek, dan slaat zwart hem en is het 2 tegen 2. Met zwart aan zet is de stelling '
-                   f'verloren ({vb}). Alle zetten van wit: ',
-                   f'<p>A double blockade: in the single corner at the top right the same blockade as in 2 against 1, and the '
-                   f'third white king is locked in the other single corner. White to move draws, but no more; if the locked '
-                   f'king leaves the corner, black captures it and it is 2 against 2. With black to move the position is lost '
-                   f'({vb}). All moves of white: ') + self.moves_list(pg, i0, legal, '1. ') + '.</p>',
-                 t('<p>Een remisevariant van de database:</p>', '<p>A drawing line of the database:</p>'),
-                 f'<p class="var">{h}</p>', '<div style="clear:both"></div>']
+rate 0.0% with no white king on the edge, 0.5% with three), and black holding both double corners never draws. On 8×8
+there are 1,252 quiet drawn positions with white to move, 316 up to the symmetries of the board. 307 of them contain the
+blockade of <a href="twee-blokkade.html">2 against 1</a>: two white kings in a single corner, held by one black king.</p>''')]
+        cases = [
+            ('W:WK3,K4,K29:BK11,K22',
+             'Een dubbele blokkade: in de enkele hoek rechtsboven dezelfde blokkade als bij 2 tegen 1, en de derde witte dam zit '
+             'opgesloten in de andere enkele hoek. Zet hij de hoek uit, dan slaat zwart hem en is het 2 tegen 2. ',
+             'A double blockade: in the single corner at the top right the same blockade as in 2 against 1, and the third white '
+             'king is locked in the other single corner. If it leaves the corner, black captures it and it is 2 against 2. '),
+            ('W:WK1,K3,K4:BK9,K11',
+             'Drie witte dammen aan de rand, de twee zwarte dammen er recht tegenover in oppositie: zwart op b6 tegenover b8, '
+             'zwart op f6 tegenover f8 en h8 (de blokkade van 2 tegen 1). Wit aan zet komt niet verder: elke zet houdt remise, '
+             'maar meer niet. ',
+             'Three white kings on the edge, the two black kings right opposite them in opposition: black on b6 opposite b8, '
+             'black on f6 opposite f8 and h8 (the blockade of 2 against 1). White to move makes no progress: every move keeps '
+             'the draw, but no more. '),
+            ('W:WK7,K14,K23:BK13,K15',
+             'Een van de 9 klassen zonder blokkade in de hoek: de zwarte dam op e5 staat midden tussen de drie witte dammen. Een '
+             'witte dam die ernaast komt, wordt geslagen (1. e7-d6 e5×c7). Remise met wit én met zwart aan zet; met zwart aan '
+             'zet houden alleen e5-d6 en e5-d4 remise. ',
+             'One of the 9 classes without a corner blockade: the black king on e5 stands in the middle of the three white kings. '
+             'A white king that steps next to it is captured (1. e7-d6 e5×c7). A draw with white and with black to move; with '
+             'black to move only e5-d6 and e5-d4 keep the draw. ')]
+        for fen, nl, en in cases:
+            v, legal = e88.analyse(fen)
+            vb, _ = e88.analyse('B' + fen[1:])
+            fig, i0 = pg.diagram(fen, t(f'8×8, wit aan zet: {v} (zwart aan zet: {vb})',
+                                        f'8×8, white to move: {v} (black to move: {vb})'), gid=k88)
+            body += [fig, f'<p>{t(nl, en)}{t("Alle zetten van wit: ", "All moves of white: ")}'
+                     f'{self.moves_list(pg, i0, legal, "1. ")}.</p>', '<div style="clear:both"></div>']
         flush('blokkades.html')
 
     @staticmethod

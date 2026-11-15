@@ -113,9 +113,8 @@ class Site:
     def index(self):
         k21, e21 = self.engine(8, 8, 1, 2, 1)
         k44, e44 = self.engine(4, 4, 1, 2, 1)
-        k78, e78 = self.engine(8, 7, 1)
         k88, e88 = self.engine(8, 8, 1)
-        pg = self.page((k21, e21), (k44, e44), (k88, e88), (k78, e78))
+        pg = self.page((k21, e21), (k44, e44), (k88, e88))
         t = self.t
         body = [f'<h1>{esc(TITLE[self.lang])}</h1>', t('''
 <p>Eindspelen met alleen dammen in het Engelse damspel (<em>checkers</em>): korte dammen (één veld), slagplicht en
@@ -144,6 +143,21 @@ opposition. On odd × odd boards with playable corners there are no exceptions a
                  t(f'<p>De langste winst op 8×8 ({v[1:]} ply):</p>', f'<p>The longest win on 8×8 ({v[1:]} plies):</p>'),
                  f'<p class="var">{h}</p>',
                  '<div style="clear:both"></div>']
+        # the 2-1 blockade on 8x8: two white kings locked in the single corner, the black king keeps the opposition
+        fen = 'W:WK3,K4:BK11'
+        v, legal = e21.analyse(fen)
+        vb, _ = e21.analyse('B' + fen[1:])
+        fig, i0 = pg.diagram(fen, t(f'8×8, 2 tegen 1, wit aan zet: {v}', f'8×8, 2 against 1, white to move: {v}'), gid=k21)
+        h, *_ = pg.best_line(fen, 12, start=i0)
+        body += [fig, t('<p>De blokkade: de twee witte dammen zitten in de enkele hoek en de zwarte dam houdt ze daar met '
+                        'oppositie. Op 8×8 zijn er precies 10 zulke rustige remisestellingen met wit aan zet, 5 in elke '
+                        f'enkele hoek. Met zwart aan zet is dezelfde stelling verloren ({vb}). Alle zetten van wit: ',
+                        '<p>The blockade: the two white kings are in the single corner and the black king keeps them there '
+                        'by opposition. On 8×8 there are exactly 10 such quiet drawn positions with white to move, 5 in each '
+                        f'single corner. With black to move the same position is lost ({vb}). All moves of white: ')
+                 + self.moves_list(pg, i0, legal, '1. ') + '.</p>',
+                 t('<p>Zwart houdt de oppositie gewoon vast:</p>', '<p>Black simply keeps the opposition:</p>'),
+                 f'<p class="var">{h}</p>', '<div style="clear:both"></div>']
         # 4x4: the draw; driven out of one double corner, black escapes through the centre to the other one
         fen = 'W:WK6,K8:BK3'
         fig, i0 = pg.diagram(fen, t(f'4×4, 2 tegen 1, wit aan zet: {e44.analyse(fen)[0]}',
@@ -225,30 +239,28 @@ opposition. On odd × odd boards with playable corners there are no exceptions a
             body += [head, fig, cap.format(v=v[1:]), f'<p class="var">{h}</p>', '<div style="clear:both"></div>']
             if fen == 'W:WK4,K8,K29:BK1,K28':
                 body += self.traps88(pg, k88, e88)
-        fen = 'W:WK1,K2,K3:BK10,K11'
-        fig, i0 = pg.diagram(fen, t('7×8, wit aan zet', '7×8, white to move'), gid=k78)
-        v, legal = e78.analyse(fen)
-        i1 = pg.child(i0, [m for m in legal if m[0] == 'c7-b6'][0])
-        f1 = pg.pos[i1]['f']
-        _, legal1 = e78.analyse(f1)
-        body += [t('<h2>Kleine borden: blokkades</h2>', '<h2>Small boards: blockades</h2>'), fig, t('''
+        fen = 'W:WK3,K4,K29:BK11,K22'
+        v, legal = e88.analyse(fen)
+        vb, _ = e88.analyse('B' + fen[1:])
+        fig, i0 = pg.diagram(fen, t(f'8×8, wit aan zet: {v}', f'8×8, white to move: {v}'), gid=k88)
+        h, *_ = pg.best_line(fen, 12, start=i0)
+        body += [t('<h2>3 tegen 2 op 8×8: blokkades</h2>', '<h2>3 against 2 on 8×8: blockades</h2>'), fig, t('''
 <p>Op 7×8 en 8×8 is 3 tegen 2 in het algemeen gewonnen. De weinige remises ontstaan bijna alleen als wit tegen de rand
 gedrukt wordt (0,0% remise zonder witte dam aan de rand, 0,5% met drie), en zwart in beide dubbele hoeken maakt nooit
 remise.</p>''', '''
 <p>On 7×8 and 8×8 3-2 is won generically. The few draws occur almost only when white is pushed against the edge (draw
 rate 0.0% with no white king on the edge, 0.5% with three), and black holding both double corners never draws.</p>'''),
-                 t(f'<p>In deze stelling op 7×8 ({v}) verliezen vier van de vijf witte zetten meteen een dam '
-                   f'(a7-b6 c5×a7, c7-d6 e5×c7, e7-d6 c5×e7, e7-f6 e5×g7): ',
-                   f'<p>In this position on 7×8 ({v}) four of the five white moves lose a king at once '
-                   f'(a7-b6 c5×a7, c7-d6 e5×c7, e7-d6 c5×e7, e7-f6 e5×g7): ') + f'{self.moves_list(pg, i0, legal, "1. ")}.</p>',
-                 t(f'<p>Na <a class="m1" href="#" data-i="{i1}">1. c7-b6</a> moet zwart de enige remisezet vinden; alles '
-                   f'andere verliest: ', f'<p>After <a class="m1" href="#" data-i="{i1}">1. c7-b6</a> black has to find '
-                   f'the only drawing move; everything else loses: ') + f'{self.moves_list(pg, i1, legal1, "1. … ")}.</p>',
-                 t('<p>Na 1. … e5-d4 kan wit zijn dammen eeuwig houden maar breekt nooit uit: zwart kan in geen van de '
-                   '901.577 stellingen die zonder slag bereikbaar zijn een slag afdwingen.</p>',
-                   '<p>After 1. … e5-d4 white can keep its kings forever but never breaks out: black cannot force a '
-                   'capture in any of the 901,577 positions reachable without captures.</p>')]
-        self.write('index.html', 'Overzicht', '\n'.join(body), pg, k78)
+                 t(f'<p>Een dubbele blokkade: in de enkele hoek rechtsboven dezelfde blokkade als bij 2 tegen 1, en de derde '
+                   f'witte dam zit opgesloten in de andere enkele hoek. Wit aan zet maakt remise, maar meer niet; zet de '
+                   f'opgesloten dam uit de hoek, dan slaat zwart hem en is het 2 tegen 2. Met zwart aan zet is de stelling '
+                   f'verloren ({vb}). Alle zetten van wit: ',
+                   f'<p>A double blockade: in the single corner at the top right the same blockade as in 2 against 1, and the '
+                   f'third white king is locked in the other single corner. White to move draws, but no more; if the locked '
+                   f'king leaves the corner, black captures it and it is 2 against 2. With black to move the position is lost '
+                   f'({vb}). All moves of white: ') + self.moves_list(pg, i0, legal, '1. ') + '.</p>',
+                 t('<p>Een remisevariant van de database:</p>', '<p>A drawing line of the database:</p>'),
+                 f'<p class="var">{h}</p>', '<div style="clear:both"></div>']
+        self.write('index.html', 'Overzicht', '\n'.join(body), pg, k88)
 
     @staticmethod
     def exchange(e, fen):
@@ -323,8 +335,7 @@ rate 0.0% with no white king on the edge, 0.5% with three), and black holding bo
                                             ', and 2 against 1 wins. All moves of black: ')
                      + self.moves_list(pg, i0, legal, '1. … ') + '.</p>', '<div style="clear:both"></div>']
         # why both phases: the diagonal of white decides the phase, and moving over to the other diagonal costs three
-        # moves (one per king), an odd number (no "op <number>" or algebraic squares in this prose: the page converts
-        # those on the 7x8 board)
+        # moves (one per king), an odd number
         ms = {m[3]: m for m in e88.analyse('W:WK14,K18,K23:BK5,K32')[1]}
         shift = ', '.join(pg.label(k88, ms[x]) for x in ('14-10', '18-15', '23-19'))
         body += [t('<h3>Waarom wit in beide fasen een val heeft</h3>', '<h3>Why white has a trap in both phases</h3>'), t(

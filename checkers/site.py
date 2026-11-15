@@ -39,8 +39,8 @@ CHAPTERS = [
         ('val-pariteit.html', 'De winst is strategisch, de pariteit doet er niet toe', 'The win is strategic, parity does not matter')]),
     ('De vesting op grotere borden', 'The fortress on larger boards', [
         ('vesting.html', 'Eén val om de vesting te breken op 9×8', 'A trap to break the fortress on 9×8'),
-        ('afstandsregel.html', 'De afstandsregel', 'The distance rule'),
-        ('vesting-9x9.html', '9×9 onspeelbare hoeken: de val en de diagonaal', '9×9 unplayable corners: the trap and the diagonal')]),
+        ('vesting-9x9.html', '9×9 onspeelbare hoeken: de val en de diagonaal', '9×9 unplayable corners: the trap and the diagonal'),
+        ('afstandsregel.html', 'De afstandsregel', 'The distance rule')]),
     ('Conclusie', 'Conclusion', [
         ('conclusie.html', 'Conclusie', 'Conclusion')]),
 ]
@@ -673,8 +673,8 @@ same side:</p>
         t = self.t
         body = [t('''
 <p>Op 9×9 met onspeelbare hoekvelden is elke hoek een dubbele hoek: b1/a2, h1/i2, a8/b9 en h9/i8.
-Zwart kan twee dubbele hoeken aan dezelfde kant bezetten (afstand 8 × 0) of twee diagonaal tegenover elkaar
-(8 × 8). Beslissend is weer de <a href="val.html">val</a>: een opstelling van de drie witte dammen waarin elke
+Zwart kan twee dubbele hoeken aan dezelfde kant bezetten of twee die diagonaal tegenover elkaar liggen.
+Beslissend is weer de <a href="val.html">val</a>: een opstelling van de drie witte dammen waarin elke
 pendelzet van zwart een gedwongen ruil toelaat. De database telt de vallen met zwart aan zet en beide zwarte dammen
 op de randvelden van hun dubbele hoeken:</p>
 <table class="tbl"><tr><th>Zwart in</th><th>Vallen bij even pariteit</th><th>Vallen bij oneven pariteit</th><th>Gevolg</th></tr>
@@ -682,7 +682,7 @@ op de randvelden van hun dubbele hoeken:</p>
 <tr><td>twee diagonaal tegenover elkaar</td><td>0</td><td>0</td><td>de vesting houdt</td></tr></table>
 <p>Per paar dubbele hoeken zijn er 12.100 beginstellingen bij elke pariteit.</p>''', '''
 <p>On 9×9 with unplayable corner squares every corner is a double corner: b1/a2, h1/i2, a8/b9 and h9/i8.
-Black can occupy two double corners on the same side (distance 8 × 0) or two diagonally opposite ones (8 × 8). What
+Black can occupy two double corners on the same side or two diagonally opposite ones. What
 decides is again the <a href="val.html">trap</a>: a set-up of the three white kings in which every shuttle move of
 black allows a forced exchange. The database counts the traps with black to move and both black kings on the edge
 squares of their double corners:</p>

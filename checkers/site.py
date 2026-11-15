@@ -36,7 +36,7 @@ CHAPTERS = [
         ('curiosa.html', 'Twee curiosa', 'Two curiosities')]),
     ('De val', 'The trap', [
         ('val.html', 'De val bij beide pariteiten', 'The trap at both parities'),
-        ('val-pariteit.html', 'Waarom beide pariteiten', 'Why both parities')]),
+        ('val-pariteit.html', 'De winst is strategisch, de pariteit doet er niet toe', 'The win is strategic, parity does not matter')]),
     ('De vesting op grotere borden', 'The fortress on larger boards', [
         ('vesting.html', 'Oppositie op 8×9', 'Opposition on 8×9'),
         ('afstandsregel.html', 'De afstandsregel', 'The distance rule'),

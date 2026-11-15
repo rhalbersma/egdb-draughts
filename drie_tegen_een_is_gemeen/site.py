@@ -337,6 +337,19 @@ both.</p>''')]
                      t(f'<p>Met wit op de lange lijn wint wit altijd. Een van de langste winsten ({v[1:]} ply):</p>',
                        f'<p>With white on the long diagonal white always wins. One of the longest wins ({v[1:]} plies):</p>'),
                      f'<p class="var">{h}</p>']
+            # after 9. h8-c3 (ply 17) the white kings form Petrov's triangle
+            k = i0
+            for _ in range(17):
+                k = pg.pos[k]['next']
+            tri = pg.pos[k]['f']
+            fig2, _ = pg.diagram(tri, t('na 9. h8-c3: de driehoek van Petrov', 'after 9. h8-c3: Petrov\'s triangle'))
+            body += ['<div style="clear:both"></div>', fig2, t(
+                '<p>Met 9. h8-c3 bouwt wit de <strong>driehoek van Petrov</strong>, het motief waarmee drie dammen de '
+                'enkele dam vangen als die niet op de lange lijn staat, bekend sinds 1827. Daarna is zwart snel '
+                'uitgeteld: wit offert twee keer (11. c5-f2 en 12. c3-a5) en slaat de zwarte dam met 13. a5×c3.</p>',
+                '<p>With 9. h8-c3 white builds <strong>Petrov\'s triangle</strong>, the motif by which three kings catch '
+                'the single king when it is not on the long diagonal, known since 1827. After that black is soon counted '
+                'out: white sacrifices twice (11. c5-f2 and 12. c3-a5) and captures the black king with 13. a5×c3.</p>')]
         self.write('drie-tegen-een.html', '3 dammen tegen 1', '\n'.join(body), pg, '8x8')
 
     @staticmethod

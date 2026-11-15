@@ -24,6 +24,9 @@ SITES = {
         ('../strategie_der_36_velden/', 'Strategie der 36 velden',
          'Herm Jan Brascamps reeks over het 6×6-bord (2016), hoofdstuk voor hoofdstuk nagerekend met exacte databases tot '
          '10 stukken; plus de oplossing van de beginstand: remise.'),
+        ('../strongly_solving_6x6/nl/', 'Strongly Solving 6×6 Draughts',
+         'De beginstand van 6×6-dammen is remise: de volledige openingsboom tot 4 ply met exacte waarden, de geschiedenis '
+         'van de oplossing en hoe ver 6×6 is opgelost.'),
         ('../drie_tegen_een_is_gemeen/', 'Drie tegen een is gemeen',
          'Twee en drie dammen tegen één op borden van elke afmeting: de winst op 6×5, de families, de vangstellingen en '
          '10×10 met één veld weg.'),
@@ -34,6 +37,9 @@ SITES = {
         ('strategie_der_36_velden/', 'Strategie der 36 velden',
          'Herm Jan Brascamp\'s series on the 6×6 board (2016), checked chapter by chapter with exact databases up to 10 '
          'pieces; plus the solution of the start position: a draw.'),
+        ('strongly_solving_6x6/', 'Strongly Solving 6×6 Draughts',
+         'The start position of 6×6 draughts is a draw: the complete opening tree to 4 plies with exact values, the '
+         'history of the solution and how far 6×6 is solved.'),
         ('drie_tegen_een_is_gemeen/', 'Drie tegen een is gemeen',
          'Two and three kings against one on boards of any size: the win on 6×5, the families, the trapping positions '
          'and 10×10 with one square removed.'),
@@ -46,11 +52,11 @@ TEXT = {
     'nl': ('Eindspeldatabases voor het damspel',
            'Exacte eindspeldatabases voor het internationale damspel en voor checkers, op borden van elke afmeting: elke '
            'stelling is uitgerekend tot het einde van de partij, met de afstand in ply. Drie sites spelen klassieke '
-           'analyses na, met klikbare zetten en bij elke stelling de waarde en alle zetten.',
+           'analyses na en een vierde verzamelt de oplossing van 6×6, met klikbare zetten en bij elke stelling de waarde en alle zetten.',
            'De programma\'s, databases en rapporten', '../index.html', 'English'),
     'en': ('Endgame databases for draughts',
            'Exact endgame databases for international draughts and for checkers, on boards of any size: every position is '
-           'computed to the end of the game, with the distance in plies. Three sites replay classic analyses, with '
+           'computed to the end of the game, with the distance in plies. Three sites replay classic analyses and a fourth collects the solution of 6×6, with '
            'clickable moves and for every position the value and all moves.',
            'The programs, databases and reports', 'nl/index.html', 'Nederlands'),
 }
@@ -129,7 +135,8 @@ def main():
         d.mkdir(parents=True, exist_ok=True)
         (d / 'index.html').write_text(page)
     for f in OLD[1:]:
-        target = 'strategie_der_36_velden/' + ('h7-7.html#d7.22' if f == 'voorbeeld-7-22.html' else f)
+        target = ('strongly_solving_6x6/nl/international.html' if f == 'opening.html' else
+                  'strategie_der_36_velden/' + ('h7-7.html#d7.22' if f == 'voorbeeld-7-22.html' else f))
         (out / f).write_text(REDIRECT.format(url=target))
     (out / '.nojekyll').write_text('')
 

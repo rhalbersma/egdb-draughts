@@ -159,7 +159,7 @@ class Oracle:
 
     def __init__(self, eng):
         self.eng = eng
-        self.tree = json.loads((HERE / 'opening' / 'opening_6x6.json').read_text())['tree']
+        self.tree = json.loads((ROOT / 'strongly_solving_6x6' / 'international' / 'opening_6x6.json').read_text())['tree']
 
     def analyse(self, fen):
         """-> (value, [(notation, value for the mover, next fen)]) best first"""
@@ -257,15 +257,17 @@ class Site:
                 short = lab.replace('Hoofdstuk ', '') if lab else ''
                 items.append((f'{pid}.html', f'{short} {self.ttl(title)}'.strip()))
             groups.append((heading if self.lang == 'nl' else heading_en(heading), items))
-        groups.append((t('De opening', 'The opening'),
-                       [('opening.html', t('De beginstand en alle openingen tot 3 ply',
-                                           'The start position and all openings to 3 plies'))]))
         home = '../nl/index.html' if self.lang == 'nl' else '../../index.html'      # Dutch: default, English in en/
         alt = f'en/{current}' if self.lang == 'nl' else f'../{current}'
         return (f'<a class="brand" href="index.html">Strategie der 36 velden</a>'
-                f'{menu(groups, current, t("Hoofdstukken", "Chapters"))}<a href="opening.html">Opening</a>'
+                f'{menu(groups, current, t("Hoofdstukken", "Chapters"))}<a href="{self.solved()}">Opening</a>'
                 f'<a href="{orig}">{t("Origineel", "Original")} ↗</a><a href="{home}">{t("Alle sites", "All sites")}</a>'
                 f'{lang_link(self.lang, alt)}')
+
+    def solved(self, anchor=''):
+        """the solved opening tree on the site Strongly Solving 6x6 Draughts (English by default, Dutch in nl/)"""
+        return (f'../strongly_solving_6x6/nl/international.html{anchor}' if self.lang == 'nl' else
+                f'../../strongly_solving_6x6/international.html{anchor}')
 
     def page(self):
         pg = Page()
@@ -409,6 +411,14 @@ class Site:
                                                        'Per diagram the claims of the book, the variations and the '
                                                        'refutations, checked with the databases. The book\'s notes '
                                                        'are translated from Dutch.') + '</p>']
+        if pid == 'h7':                 # the edge-capture opening as part of the complete solved opening tree
+            body.append(self.t(
+                f'<p class="note">De randslag-opening 1. 13-11 6-8 2. 11×6 2×9 maakt deel uit van de '
+                f'<a href="{self.solved("#t-13-11-6-8")}">volledige opgeloste openingsboom tot 4 ply</a> op de site '
+                f'<em>Strongly Solving 6×6 Draughts</em>: daar staan alle openingen met hun waarde.</p>',
+                f'<p class="note">The edge-capture opening 1. 13-11 6-8 2. 11×6 2×9 is part of the '
+                f'<a href="{self.solved("#t-13-11-6-8")}">complete solved opening tree to 4 plies</a> on the site '
+                f'<em>Strongly Solving 6×6 Draughts</em>: all openings with their values are there.</p>'))
         marks = []
         for did in dids:
             sides = self.diag[did]['sides'].values() if self.home[did] == pid else []
@@ -475,10 +485,12 @@ class Site:
                   '<p>In the order of the book\'s website (the chapter titles are Brascamp\'s, in Dutch). Each chapter '
                   'shows the diagrams with the claims of the book, the variations and the refutations; the '
                   '<em>Chapters</em> menu at the top takes you anywhere.</p>'), '\n'.join(toc),
-                t('<h2>De opening</h2><p>Met de databases tot en met 10 stukken is ook de beginstand van 6×6 opgelost: '
-                  '<a href="opening.html">remise, met alle openingen tot 3 ply</a>.</p>',
-                  '<h2>The opening</h2><p>With the databases up to 10 pieces the start position of 6×6 is solved too: '
-                  '<a href="opening.html">a draw, with all openings to 3 plies</a>.</p>'),
+                t(f'<h2>De opening</h2><p>Met de databases tot en met 10 stukken is ook de beginstand van 6×6 opgelost: '
+                  f'<a href="{self.solved()}">remise, met de volledige openingsboom tot 4 ply</a>, op de site '
+                  f'<em>Strongly Solving 6×6 Draughts</em>.</p>',
+                  f'<h2>The opening</h2><p>With the databases up to 10 pieces the start position of 6×6 is solved too: '
+                  f'<a href="{self.solved()}">a draw, with the complete opening tree to 4 plies</a>, on the site '
+                  f'<em>Strongly Solving 6×6 Draughts</em>.</p>'),
                 t('<h2>Achtergrond</h2>', '<h2>Background</h2>')]
         for head, rest in sections:
             body.append(f'<details class="more"><summary>{esc(head.strip())}</summary><div>'
@@ -492,145 +504,6 @@ class Site:
                                            'The full report (Dutch), the databases and the programs')
                     + f': <a href="{REPO}">{REPO}</a>.</p>')
         self.write('index.html', t('Overzicht', 'Overview'), '\n'.join(body), pg)
-
-    def strength(self):
-        """how far 6x6 is solved (numbers from opening/opening_strength_6x6.py)"""
-        t = self.t
-        rows = [(t('Tot en met 10 stukken', 'Up to 10 pieces'), t('25.741.493.062', '25,741,493,062'),
-                 t('sterk opgelost, met exacte afstand tot het einde (DTM)', 'strongly solved, with the exact distance to '
-                   'the end (DTM)')),
-                (t('11–12 stukken, hooguit één kant dammen: de volledige openings-DAG',
-                   '11–12 pieces, kings on at most one side: the complete opening DAG'), t('193.708', '193,708'),
-                 t('188.103 (97%) bewezen; open: 2.008 ≥D, 578 ≤D, 3.019 ?', '188,103 (97%) proven; open: 2,008 ≥D, '
-                   '578 ≤D, 3,019 ?')),
-                (t('Alle overige stellingen met 11 of 12 stukken', 'All other positions with 11 or 12 pieces'),
-                 t('ca. 91 miljard legaal, waarvan 89 miljard met dammen aan beide kanten',
-                   'about 91 billion legal, of which 89 billion with kings on both sides'), t('onbekend', 'unknown'))]
-        tbl = ''.join(f'<tr><td>{a}</td><td>{b}</td><td>{c}</td></tr>' for a, b, c in rows)
-        return (t('<h3>Hoe ver is 6×6 opgelost?</h3>', '<h3>How far is 6×6 solved?</h3>') + t(
-            '<p>In de termen van Allis (1994) is 6×6 hiermee, net als bij Van Horssen, <strong>zwak opgelost</strong>: de '
-            'waarde van de beginstand is bewezen, met een strategie om die te halen. <strong>Sterk opgelost</strong> zou '
-            'betekenen dat de waarde van elke legale stelling bekend is. Zover is het niet, maar inhoudelijk ligt er veel '
-            'meer vast dan bij een zwakke oplossing gebruikelijk is:</p>',
-            '<p>In the terms of Allis (1994) 6×6 is thereby, as with Van Horssen, <strong>weakly solved</strong>: the '
-            'value of the start position is proven, with a strategy to achieve it. <strong>Strongly solved</strong> would '
-            'mean that the value of every legal position is known. It is not that far, but in substance much more is '
-            'settled than is usual for a weak solution:</p>')
-            + f'<table class="tbl"><tr><th></th><th>{t("Stellingen", "Positions")}</th><th>Status</th></tr>{tbl}</table>'
-            + t('<p>De open stellingen in de DAG hangen allemaal af van de 5.101 bladeren met 11 of 12 stukken en dammen '
-                'aan beide kanten waarvan de waarde ook na één ply niet vastligt. Achter die bladeren ligt geen handvol '
-                'stellingen: een verkenning vanaf die bladeren vond meer dan 5 miljoen verschillende bereikbare stellingen '
-                'met dammen aan beide kanten voordat hij werd gestopt, vooral eindspelen met alleen dammen, zoals 6 dammen '
-                'tegen 5 (alleen al 29.405.376 legale stellingen). Sterk oplossen vraagt dus de databases voor 11 en 12 '
-                'stukken met dammen aan beide kanten: ruim drie keer zoveel stellingen als alle databases tot en met 10 '
-                'stukken samen.</p><p>Kort gezegd: formeel zwak opgelost, inhoudelijk sterk tot en met 10 stukken, met een '
-                'openingsboom die voor 97% is bewezen en een exacte afstand tot het einde voor de beginstand en alle '
-                'stellingen tot en met ply 4.</p>',
-                '<p>The open positions in the DAG all depend on the 5,101 leaves with 11 or 12 pieces and kings on both '
-                'sides whose value is not settled after one ply either. Behind those leaves lies not a handful of '
-                'positions: a probe from those leaves found more than 5 million different reachable positions with kings '
-                'on both sides before it was stopped, mostly endgames with kings only, such as 6 kings against 5 (29,405,376 '
-                'legal positions for that material alone). Solving strongly therefore needs the databases for 11 and 12 '
-                'pieces with kings on both sides: more than three times as many positions as all databases up to 10 '
-                'pieces together.</p><p>In short: formally weakly solved, in substance strongly up to 10 pieces, with an '
-                'opening tree that is 97% proven and an exact distance to the end for the start position and all positions '
-                'up to ply 4.</p>'))
-
-    def opening_page(self):
-        pg = self.page()
-        fig, i0 = pg.diagram(START, self.t('de beginstand, wit aan zet', 'the start position, white to move'))
-        v0, legal0 = self.o.analyse(START)
-        body = [self.t('<h1>De opening</h1>', '<h1>The opening</h1>'), fig, self.t(
-                '<p>De beginstand is <strong>remise</strong>. Alle vijf eerste zetten van wit houden remise. Hieronder '
-                'elke zet tot 3 ply met zijn waarde, sterkste eerst; klik op een zet om de stelling te zien. De waarden '
-                'komen uit de opgeloste openingsboom (stellingen met meer dan 10 stukken) en de databases.</p>',
-                '<p>The start position is a <strong>draw</strong>. All five first moves of white keep the draw. Below, '
-                'every move to 3 plies with its value, strongest first; click a move to see the position. The values '
-                'come from the solved opening tree (positions with more than 10 pieces) and the databases.</p>'),
-                '<div class="optree">']
-        for m1 in legal0:
-            i1 = pg.child(i0, m1)
-            body.append(f'<h3><a class="m1" href="#" data-i="{i1}">1. {pg.label('6x6', m1)}</a> '
-                        f'<span class="val">{m1[1]}</span></h3>')
-            for m2 in self.o.analyse(m1[2])[1]:
-                i2 = pg.child(i1, m2)
-                rep = [f'<a class="m2" href="#" data-i="{pg.child(i2, m3)}">2. {pg.label('6x6', m3)}</a> '
-                       f'<span class="val">{m3[1]}</span>' for m3 in self.o.analyse(m2[2])[1]]
-                body.append(f'<p><a class="m1" href="#" data-i="{i2}">1. … {pg.label('6x6', m2)}</a> '
-                            f'<span class="val">{m2[1]}</span> — ' + ', '.join(rep) + '</p>')
-        body.append('</div>')
-        rows = [(self.t('Beginstand', 'Start position'), self.t('remise', 'draw'), self.t('remise', 'draw')),
-                (self.t('Eerste zetten van wit', 'First moves of white'), self.t('alle remise', 'all draw'),
-                 self.t('alle vijf remise', 'all five draw')),
-                (self.t('Antwoorden van zwart', 'Replies of black'),
-                 self.t('direct verliezende antwoorden', 'immediately losing replies'),
-                 self.t('idem, bv. 1. 13-10 4-7 (L60)', 'likewise, e.g. 1. 13-10 4-7 (L60)')),
-                (self.t('Diepste verlies van zwart vanaf de beginstand', 'Deepest loss of black from the start position'),
-                 '61 ply', self.t('61 ply (2 + 59 na 1. 13-10 4-7)', '61 plies (2 + 59 after 1. 13-10 4-7)')),
-                (self.t('Stellingen t/m 3, 4, 5, 6, 7 stukken', 'Positions up to 3, 4, 5, 6, 7 pieces'),
-                 '31,155 · 512,910 · 5,789,784 · 48,881,249 · 322,389,233' if self.lang == 'en' else
-                 '31.155 · 512.910 · 5.789.784 · 48.881.249 · 322.389.233',
-                 self.t('precies dezelfde aantallen', 'exactly the same numbers')),
-                (self.t('Stellingen t/m 8 stukken', 'Positions up to 8 pieces'),
-                 self.t('1.617.366.257', '1,617,366,257'), self.t('1.702.191.569 (incl. 7 tegen 1)', '1,702,191,569 (incl. 7 against 1)'))]
-        tbl = ''.join(f'<tr><td>{a}</td><td>{pg.prose(b, "6x6")}</td><td>{pg.prose(c, "6x6")}</td></tr>' for a, b, c in rows)
-        body.append(self.t('<h2>Eerdere oplossingen</h2>', '<h2>Earlier solutions</h2>'))
-        body.append(pg.prose_html(self.t(
-            '<p>Op 5 november 2009 publiceerde Rein Halbersma de eerste perft-getallen voor het 6×6-bord (draad '
-            '<a href="https://damforum.nl/viewtopic.php?p=76677#p76677"><em>Perft for arbitrary board sizes</em></a>: 5, 25, '
-            '106, 369, 1.301, 4.214, 12.912, 39.526, 113.614, 329.982, 933.564 tot diepte 11); onze zettengenerator geeft '
-            'precies dezelfde getallen.</p>'
-            '<p>In oktober 2011 deed een zoektocht van Rein Halbersma met alpha-beta vanuit de beginstand, zonder databases '
-            'en zonder filter voor graph-history-interactie, vermoeden dat de beginstand remise is (met herhaling als winst '
-            'voor wit W35, met herhaling als winst voor zwart L36). Een bewijs van de juistheid was er nog niet. Privé gedeeld met '
-            'Ed Gilbert (19 oktober 2011) en voor het eerst gepubliceerd op 8 april 2017, op het World Draughts Forum '
-            '(damforum.nl, voorheen laatste.info) in de draad <a href="https://damforum.nl/viewtopic.php?p=118055#p118055">'
-            '<em>Search Algorithm</em></a>.</p>',
-            '<p>On November 5, 2009 Rein Halbersma published the first perft numbers for the 6×6 board (thread '
-            '<a href="https://damforum.nl/viewtopic.php?p=76677#p76677"><em>Perft for arbitrary board sizes</em></a>: 5, 25, '
-            '106, 369, 1,301, 4,214, 12,912, 39,526, 113,614, 329,982, 933,564 up to depth 11); our move generator gives '
-            'exactly the same numbers.</p>'
-            '<p>In October 2011 an alpha-beta search by Rein Halbersma from the start position, without databases and '
-            'without a filter for graph-history interaction, suggested that the start position is a draw (scoring a '
-            'repetition as a white win W35, as a black win L36). There was no proof of correctness yet. Shared privately '
-            'with Ed Gilbert '
-            '(October 19, 2011) and first published on April 8, 2017, on the World Draughts Forum (damforum.nl, formerly '
-            'laatste.info) in the thread <a href="https://damforum.nl/viewtopic.php?p=118055#p118055"><em>Search '
-            'Algorithm</em></a>.</p>'),
-            '6x6'))
-        body.append(self.t(
-            '<p>Jan-Jaap van Horssen loste 6×6 in 2016 als eerste sluitend zwak op, met proof-number search en de '
-            'databases tot en met 8 stukken. Hij meldde dat op 7 augustus 2017 op het forum (draad '
-            '<a href="https://damforum.nl/viewtopic.php?p=120014#p120014"><em>Breakthrough Draughts</em></a>), beschreef '
-            'het op 13 augustus 2017 in de draad <a href="https://damforum.nl/viewtopic.php?p=120080#p120080"><em>Complexity '
-            'of Checkers and Draughts on board sizes 6x6/…/14x14</em></a> en publiceerde het in 2018 in het ICGA Journal.</p>',
-            '<p>Jan-Jaap van Horssen was the first to weakly solve 6×6 conclusively, in 2016, with proof-number search and the '
-            'databases up to 8 pieces. He reported it on the forum on August 7, 2017 (thread '
-            '<a href="https://damforum.nl/viewtopic.php?p=120014#p120014"><em>Breakthrough Draughts</em></a>), described it '
-            'on August 13, 2017 in the thread <a href="https://damforum.nl/viewtopic.php?p=120080#p120080"><em>Complexity of '
-            'Checkers and Draughts on board sizes 6x6/…/14x14</em></a> and published it in the ICGA Journal in 2018.</p>'))
-        body.append(self.t('<h3>Vergelijking met Van Horssen (2018)</h3>', '<h3>Comparison with Van Horssen (2018)</h3>'))
-        body.append(self.t(
-            '<p>Jan-Jaap van Horssen loste 6×6 al eerder zwak op, in <em>Complexity of checkers and draughts on different '
-            'board sizes</em>, ICGA Journal 40 (2018) 341–352: een database met winst/remise/verlies tot en met 8 stukken '
-            'en proof-number search vanuit de beginstand. Onze databases en openingsboom zijn daar onafhankelijk van, en '
-            'komen op alle punten met hem overeen:</p>',
-            '<p>Jan-Jaap van Horssen weakly solved 6×6 earlier, in <em>Complexity of checkers and draughts on different '
-            'board sizes</em>, ICGA Journal 40 (2018) 341–352: a win/draw/loss database up to 8 pieces and proof-number '
-            'search from the start position. Our databases and opening tree are independent of his, and agree with him on '
-            'every point:</p>'))
-        body.append(f'<table class="tbl"><tr><th></th><th>Van Horssen (2018)</th><th>{self.t("Hier", "Here")}</th></tr>{tbl}</table>')
-        body.append(self.t(
-            '<p>Het verschil bij 8 stukken is precies 84.825.312: de stellingen met 7 stukken tegen 1, die Van Horssen '
-            'terecht weglaat, want elke kant begint met 6 stukken. Hij bewijst de waarde van de beginstand (zonder '
-            'transpositietabel, om graph-history-problemen te vermijden); hier zijn de afstanden tot het einde exact voor '
-            'de hele boom tot en met ply 4.</p>',
-            '<p>The difference at 8 pieces is exactly 84,825,312: the positions with 7 pieces against 1, which Van Horssen '
-            'rightly leaves out, since each side starts with 6 pieces. He proves the value of the start position (without '
-            'a transposition table, to avoid graph-history problems); here the distances to the end are exact for the '
-            'whole tree up to ply 4.</p>'))
-        body.append(self.strength())
-        self.write('opening.html', self.t('De opening', 'The opening'), '\n'.join(body), pg)
 
 
 def main():
@@ -651,7 +524,11 @@ def main():
             n = site.chapter_page(k)
             print(f'{lang} {PAGES[k][0]}: {n} positions', file=sys.stderr)
         site.index_page()
-        site.opening_page()
+        # the opening page moved to the site Strongly Solving 6x6 Draughts
+        url = site.solved()
+        (out / 'opening.html').write_text(f'<!DOCTYPE html><meta charset="utf-8"><meta http-equiv="refresh" '
+                                          f'content="0; url={url}"><link rel="canonical" href="{url}">'
+                                          f'<title>Opening</title><a href="{url}">{url}</a>\n')
     (out / '.nojekyll').write_text('')
 
 

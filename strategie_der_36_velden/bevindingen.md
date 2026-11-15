@@ -60,7 +60,7 @@ databases op die enkele plaatsen verder kijken.
 ### De beginstand van 6×6 is remise
 
 Met de databases tot en met 10 stukken en de volledige openingsboom is de beginstand exact opgelost: remise
-(details en de tabel van alle 106 openingen van 3 ply in [`opening/opening_6x6.md`](opening/opening_6x6.md)).
+(details en de tabel van alle 106 openingen van 3 ply in [`opening_6x6.md`](../strongly_solving_6x6/international/opening_6x6.md)).
 Alle vijf eerste zetten van wit houden remise. Na 1. 13-11 6-8 2. 11×6 is het remise, maar 2. … 2×9?? (de
 randslag van hoofdstuk 7) verliest.
 
@@ -98,11 +98,12 @@ zijn onafhankelijk daarvan gemaakt en komen op alle punten met hem overeen:
 | Antwoorden van zwart | direct verliezende antwoorden | idem, bijvoorbeeld 1. 13-10 4-7 (L60) |
 | Diepste verlies van zwart vanaf de beginstand | 61 ply | 61 ply (2 ply + 59 na 1. 13-10 4-7) |
 | Stellingen t/m 3, 4, 5, 6, 7 stukken (één kant aan zet) | 31.155 · 512.910 · 5.789.784 · 48.881.249 · 322.389.233 | precies dezelfde aantallen |
-| Stellingen t/m 8 stukken | 1.617.366.257 | 1.702.191.569 |
+| Stellingen t/m 8 stukken | 1.617.366.257 | 1.617.366.257: precies hetzelfde |
 
-Het verschil bij 8 stukken is precies 84.825.312: de stellingen met 7 stukken tegen 1. Van Horssen laat die
-terecht weg, want elke kant begint met 6 stukken. Onze databases rekenen ze (en bij 9 en 10 stukken 7-2, 7-3, 8-2,
-9-1, …) overbodig toch uit; aan de resultaten verandert dat niets. Hij noemt 83 ply als langste winst in zijn
+We reproduceren zijn databases dus tot en met 8 stukken. Van Horssen laat de stellingen met 7 stukken tegen 1
+terecht weg, want elke kant begint met 6 stukken. Onze databases rekenden ze (84.825.312 bij 8 stukken, en bij 9 en
+10 stukken 7-2, 7-3, 8-2, 9-1, …) overbodig ook uit; zonder die stellingen zijn de aantallen precies gelijk, en aan de
+resultaten verandert het niets. Hij noemt 83 ply als langste winst in zijn
 8-stukkendatabase (afstand tot de winst); hier is de langste winst tot en met 9 stukken 100 ply.
 
 Het verschil in aanpak: Van Horssen bewijst de waarde van de beginstand (proof-number search zonder
@@ -119,17 +120,20 @@ gebruikelijk is:
 
 | | Stellingen | Status |
 |---|---|---|
-| Tot en met 10 stukken | 25.741.493.062 | sterk opgelost, met exacte afstand tot het einde (DTM) |
+| Tot en met 10 stukken | 18.379.036.017 | sterk opgelost, met exacte afstand tot het einde (DTM) |
 | 11–12 stukken, hooguit één kant dammen: de volledige openings-DAG | 193.708 | 188.103 (97%) bewezen; open: 2.008 ≥D, 578 ≤D, 3.019 ? |
-| Alle overige stellingen met 11 of 12 stukken | ca. 91 miljard legaal, waarvan 89 miljard met dammen aan beide kanten | onbekend |
+| Alle overige stellingen met 11 of 12 stukken | ca. 45,5 miljard, waarvan 44,5 miljard met dammen aan beide kanten | onbekend |
+
+(Legale stellingen met hooguit 6 stukken per kant en wit aan zet, zoals Van Horssen telt. Onze databases tot en met
+10 stukken bevatten er 25.741.493.062, inclusief de overbodige stellingen met meer dan 6 stukken aan één kant.)
 
 De open stellingen in de DAG hangen allemaal af van de 5.101 bladeren met 11 of 12 stukken en dammen aan beide
 kanten waarvan de waarde ook na één ply niet vastligt. Achter die bladeren ligt geen handvol stellingen: een
 verkenning vanaf die bladeren vond meer dan 5 miljoen verschillende bereikbare stellingen met dammen aan beide kanten
-voordat ik hem stopte, vooral eindspelen met alleen dammen, zoals 6 dammen tegen 5 (alleen al 29.405.376 legale
-stellingen). Sterk oplossen vraagt dus de databases voor 11 en 12 stukken met dammen aan beide kanten: ruim drie
-keer zoveel stellingen als alle databases tot en met 10 stukken samen. De getallen komen uit
-[`opening/opening_strength_6x6.py`](opening/opening_strength_6x6.py).
+voordat ik hem stopte, vooral eindspelen met alleen dammen, zoals 6 dammen tegen 5 (alleen al 14.702.688 legale
+stellingen). Sterk oplossen vraagt dus de databases voor 11 en 12 stukken met dammen aan beide kanten: bijna
+tweeënhalf keer zoveel stellingen als alle stellingen tot en met 10 stukken samen. De getallen komen uit
+[`opening_strength_6x6.py`](../strongly_solving_6x6/international/opening_strength_6x6.py).
 
 Kort gezegd: formeel zwak opgelost, inhoudelijk sterk tot en met 10 stukken, met een openingsboom die voor 97% is
 bewezen en een exacte afstand tot het einde voor de beginstand en alle stellingen tot en met ply 4.

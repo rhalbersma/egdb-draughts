@@ -60,7 +60,7 @@ databases op die enkele plaatsen verder kijken.
 ### De beginstand van 6×6 is remise
 
 Met de databases tot en met 10 stukken en de volledige openingsboom is de beginstand exact opgelost: remise
-(details en de tabel van alle 106 openingen van 3 ply in [`opening/opening_6x6.md`](opening/opening_6x6.md)).
+(details en de tabel van alle 106 openingen van 3 ply in [`opening_6x6.md`](../strongly_solving_6x6/international/opening_6x6.md)).
 Alle vijf eerste zetten van wit houden remise. Na 1. 13-11 6-8 2. 11×6 is het remise, maar 2. … 2×9?? (de
 randslag van hoofdstuk 7) verliest.
 
@@ -98,11 +98,12 @@ zijn onafhankelijk daarvan gemaakt en komen op alle punten met hem overeen:
 | Antwoorden van zwart | direct verliezende antwoorden | idem, bijvoorbeeld 1. 13-10 4-7 (L60) |
 | Diepste verlies van zwart vanaf de beginstand | 61 ply | 61 ply (2 ply + 59 na 1. 13-10 4-7) |
 | Stellingen t/m 3, 4, 5, 6, 7 stukken (één kant aan zet) | 31.155 · 512.910 · 5.789.784 · 48.881.249 · 322.389.233 | precies dezelfde aantallen |
-| Stellingen t/m 8 stukken | 1.617.366.257 | 1.702.191.569 |
+| Stellingen t/m 8 stukken | 1.617.366.257 | 1.617.366.257: precies hetzelfde |
 
-Het verschil bij 8 stukken is precies 84.825.312: de stellingen met 7 stukken tegen 1. Van Horssen laat die
-terecht weg, want elke kant begint met 6 stukken. Onze databases rekenen ze (en bij 9 en 10 stukken 7-2, 7-3, 8-2,
-9-1, …) overbodig toch uit; aan de resultaten verandert dat niets. Hij noemt 83 ply als langste winst in zijn
+We reproduceren zijn databases dus tot en met 8 stukken. Van Horssen laat de stellingen met 7 stukken tegen 1
+terecht weg, want elke kant begint met 6 stukken. Onze databases rekenden ze (84.825.312 bij 8 stukken, en bij 9 en
+10 stukken 7-2, 7-3, 8-2, 9-1, …) overbodig ook uit; zonder die stellingen zijn de aantallen precies gelijk, en aan de
+resultaten verandert het niets. Hij noemt 83 ply als langste winst in zijn
 8-stukkendatabase (afstand tot de winst); hier is de langste winst tot en met 9 stukken 100 ply.
 
 Het verschil in aanpak: Van Horssen bewijst de waarde van de beginstand (proof-number search zonder

@@ -324,32 +324,34 @@ the lake boards 1, 2, 4, 5, 7, 8, 9, 18, 23.
 
 ## English checkers
 
+Boards are named width × height, as drawn (columns × rows).
+
 ### 2 kings vs 1
 
 Drawn on 4×4. On every larger board it is won, except for a fixed handful of positions (8 or 10, independent of the board size)
 in which the two white kings are locked in the single corner and the black king keeps them there by opposition.
 On odd × odd boards with playable corners there are no exceptions at all. The longest win grows steadily:
-33 plies on 8×8, 41 on 10×10, 49 on 12×12, 61 on 12×15.
+33 plies on 8×8, 41 on 10×10, 49 on 12×12, 61 on 15×12.
 
 ### 3 kings vs 2
 
 | Board | Quiet draws (3 kings to move) | Longest win | Black in both double corners: draws |
 |---|---|---|---|
-| 6×7 | 273 | 63 | 0% |
-| 7×8 | 792 (0.16%) | 75 | 0% |
+| 7×6 | 273 | 63 | 0% |
+| 8×7 | 792 (0.16%) | 75 | 0% |
 | 8×8 | 1,252 (0.11%) | 67 | 0% |
-| 8×9 | 87,670 (4.0%) | 79 | 50% (opposition) |
-| 9×10 | 344,907 (4.4%) | 93 | 50% (opposition) |
-| 8×10 | 288,748 | 97 | ~100% |
+| 9×8 | 87,670 (4.0%) | 79 | 50% (opposition) |
+| 10×9 | 344,907 (4.4%) | 93 | 50% (opposition) |
+| 10×8 | 288,748 | 97 | ~100% |
 | 10×10 | 1,012,242 (7.1%) | 115 | ~100% |
-| 10×11 | 1,810,258 (7.5%) | 109 | ~100% |
-| 10×12 | 2,744,990 | 127 | ~100% |
-| 7×9 unplayable corners (four double corners) | 124,148 (13.2%) | 93 | see below |
+| 11×10 | 1,810,258 (7.5%) | 109 | ~100% |
+| 12×10 | 2,744,990 | 127 | ~100% |
+| 9×7 unplayable corners (four double corners) | 124,148 (13.2%) | 93 | see below |
 | 9×9 unplayable corners (four double corners) | 1,201,460 (29.5%) | 99 | see below |
 
-**Small boards: blockades.** On 7×8 and 8×8 3-2 is won generically. The few draws occur almost only when white is pushed
+**Small boards: blockades.** On 8×7 and 8×8 3-2 is won generically. The few draws occur almost only when white is pushed
 against the edge (draw rate 0.0% with no white king on the edge, 0.5% with three), and black holding both double corners
-never draws. Example on 7×8, `W:WK1,K2,K3:BK10,K11`:
+never draws. Example on 8×7, `W:WK1,K2,K3:BK10,K11`:
 ```
     +-----------------+
   7 | W   W   W   .   |
@@ -367,19 +369,19 @@ black has to find the only drawing move 1... e5-d4 (everything else loses in 6�
 kings forever but never breaks out: black cannot force a capture in any of the 901,577 positions reachable without captures.
 
 **Larger boards: the double-corner fortress.** A king on the two edge squares of a double corner can never be captured
-and always has a waiting move. On 8×9 and 9×10 a black king in each double corner draws in half of the positions,
+and always has a waiting move. On 9×8 and 10×9 a black king in each double corner draws in half of the positions,
 and that half is decided by **opposition**: the parity (even or odd) of the sum of the rank numbers of all pieces flips
 with every move, and kings cannot lose a tempo, so with black to move the parity is fixed from the start.
 
 | Black in both double corners, black to move | Even parity | Odd parity |
 |---|---|---|
-| 8×9 | 100% draws | 0% draws |
-| 9×10 | 100% | 0% |
-| 10×11 | 100% | 100% |
+| 9×8 | 100% draws | 0% draws |
+| 10×9 | 100% | 0% |
+| 11×10 | 100% | 100% |
 
 Counted are the quiet positions (nobody can capture) with the black kings on the edge squares of two double corners.
 
-8×9, black on a7 and i7 (shuttling with b8 and h8), white c7, e7, g7:
+9×8, black on a7 and i7 (shuttling with b8 and h8), white c7, e7, g7:
 ```
     +-------------------+
   8 |   .   .   .   .   |
@@ -402,12 +404,12 @@ With white to move every move draws: black just shuttles a7-b8-a7. With black to
 
 | Boards | D × d | Fortress |
 |---|---|---|
-| 6×7, 7×8, 7×9 unplayable corners (vertical pair) | 6 × 0 | falls |
+| 7×6, 8×7, 9×7 unplayable corners (vertical pair) | 6 × 0 | falls |
 | 8×8 | 7 × 7 | falls |
-| 8×9, 9×10, 9×9 unplayable corners (same side), 7×9 unplayable corners (horizontal) | 8 × 0 | opposition decides |
-| 7×9 unplayable corners (diagonal pair) | 8 × 6 | opposition decides |
+| 9×8, 10×9, 9×9 unplayable corners (same side), 9×7 unplayable corners (horizontal) | 8 × 0 | opposition decides |
+| 9×7 unplayable corners (diagonal pair) | 8 × 6 | opposition decides |
 | 9×9 unplayable corners (diagonal pair) | 8 × 8 | holds |
-| 8×10, 10×10, 10×11, 10×12 | ≥ 9 | holds |
+| 10×8, 10×10, 11×10, 12×10 | ≥ 9 | holds |
 
 `D ≤ 7`: the fortress falls · `D = 8`: opposition decides, unless also `d = 8` · `D ≥ 9`: the fortress holds.
 On 9×9 unplayable corners the trap decides again. With two double corners on the same side (e.g. black on h1 and h9, white

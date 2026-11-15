@@ -149,7 +149,7 @@ DIAGRAMS = {
     '9.9':  ('W:WK2,8,15:B3,K14', 'W+', None, 'stand na 17. … 7-14 (als diagram 6.14)'),
     '9.10': ('W:WK2,8,15:B3,K18', 'W+', None, 'stand na 17. … 7-18'),
     '9.11': ('W:WK2,8,15:B3,K4', 'W+', None, 'stand na 17. … 7-4'),
-    '9.slot': ('W:W5,K17:B6,K9', None, None, 'eindstand'),
+    '9.slot': ('W:W5,K17:B6,K9', None, 'W+', 'eindstand'),
 }
 
 LINES = [

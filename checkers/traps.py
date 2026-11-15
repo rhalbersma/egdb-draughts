@@ -8,7 +8,7 @@
 
 Black has a king on one of the two edge squares of each of two double corners, black to move, and nobody can
 capture. A TRAP is a white set-up in which both shuttle moves of black (one per corner) allow an immediate forced
-exchange: a quiet white offer, after which every black move is a capture and white captures back (3-2 -> 2-1).
+exchange: a quiet white offer, after which every black move is a capture and white captures back to a won 2-1.
 The parity (the opposition) is the parity of the sum of the rank numbers (1, 2, ...) of all five kings with black
 to move; it never changes without a capture. Result: traps at both parities on 8x8, at one parity on 8x9 and 9x10,
 none on 10x10.
@@ -54,7 +54,8 @@ def run(w, h, colouring):
             _, bm = e.analyse(f1)
             if not bm or any(npieces(f2) != (2, 2) for _, _, f2, _ in bm):
                 continue                     # black is not forced to capture
-            if all(any(npieces(f3)[1] < 2 for _, _, f3, _ in e.analyse(f2)[1]) for _, _, f2, _ in bm):
+            # white captures back, and the 2-1 is won (black cannot capture back at once)
+            if all(any(npieces(f3)[1] < 2 and v3.startswith('W') for _, v3, f3, _ in e.analyse(f2)[1]) for _, _, f2, _ in bm):
                 return True
         return False
 

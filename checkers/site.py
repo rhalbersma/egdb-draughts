@@ -424,7 +424,7 @@ king in the middle of the white kings (the third diagram).</p>''')]
 
     @staticmethod
     def exchange(e, fen):
-        """white to move: a quiet offer after which black must capture and white captures back (3-2 -> 2-1), as the
+        """white to move: a quiet offer after which black must capture and white captures back to a won 2-1, as the
         moves (offer, capture, recapture), or None"""
         count = lambda f: tuple(len([x for x in side[1:].split(',') if x]) for side in f.split(':')[1:])
         for off in e.analyse(fen)[1]:
@@ -433,7 +433,8 @@ king in the middle of the white kings (the third diagram).</p>''')]
             replies = e.analyse(off[2])[1]
             if not replies or any(count(r[2]) != (2, 2) for r in replies):
                 continue
-            backs = [next((m for m in e.analyse(r[2])[1] if count(m[2])[1] < 2), None) for r in replies]
+            # the recapture has to leave a won 2-1 (black must not be able to capture back at once)
+            backs = [next((m for m in e.analyse(r[2])[1] if count(m[2])[1] < 2 and m[1].startswith('W')), None) for r in replies]
             if all(backs):
                 return off, replies[0], backs[0]
         return None
@@ -684,54 +685,64 @@ same side:</p>
         pg7 = self.page((k87, e87))
         partner = {'b1': 'a2', 'a2': 'b1', 'h1': 'i2', 'i2': 'h1', 'b7': 'a6', 'a6': 'b7', 'h7': 'i6', 'i6': 'h7'}
         name = '8×7'
-        TW, TB = ['b3', 'c4', 'b5'], ['b1', 'b7']          # the trap at even parity
+        OW, OB = ['b3', 'c4', 'd7'], ['b1', 'a6']           # a trap at odd parity
+        EW, EB = ['b3', 'c4', 'b5'], ['b1', 'b7']           # even parity: no trap, white drives a black king out
         body7 = [t('''
 <p>Op 8×8 liggen de twee dubbele hoeken 7 velden uit elkaar, en daar valt de vesting altijd. Wat gebeurt er als ze nog
 dichter bij elkaar liggen? Op 8×7 zijn er precies twee dubbele hoeken, b1/a2 en b7/a6, allebei langs de zijde van 7, en
 ze liggen maar 6 uit elkaar. (Met speelbare in plaats van onspeelbare hoekvelden is 8×7 het spiegelbeeld, met de dubbele
-hoeken langs de h-lijn.) De database telt de vallen met zwart aan zet en beide zwarte dammen op de randvelden van hun dubbele hoeken: 3 bij even en 12
-bij oneven pariteit. Net als op 8×8 heeft wit dus bij elke pariteit een val, en de vesting valt altijd.</p>
-<p>Hieronder eerst de val bij even pariteit: de witte dam op c4 staat precies tussen de twee zwarte dammen in, 3 velden van
-elk, en slaat terug na de ruil in de ene hoek én na die in de andere.</p>''', '''
+hoeken langs de h-lijn.)</p>
+<p>Met zwart aan zet en beide zwarte dammen op de randvelden van hun dubbele hoeken (rustige stellingen) is bij oneven
+pariteit elke stelling verloren (3.172), en bij even pariteit alle op 4 na (3.153 van de 3.157). Maar het gaat op twee
+verschillende manieren: bij oneven pariteit zijn er 12 vallen, bij even pariteit geen enkele.</p>''', '''
 <p>On 8×8 the two double corners are 7 squares apart, and there the fortress always falls. What happens when they are
 even closer together? On 8×7 there are exactly two double corners, b1/a2 and b7/a6, both along the side of 7, and they are
 only 6 apart. (With playable instead of unplayable corner squares 8×7 is the mirror image, with the double corners along
-the h-file.) The database counts the traps with black to move and both black kings on the edge squares of their double corners: 3 at even
-and 12 at odd parity. As on 8×8 white therefore has a trap at each parity, and the fortress always falls.</p>
-<p>Below first the trap at even parity: the white king on c4 stands exactly between the two black kings, 3 squares from
-each, and captures back after the exchange in the one corner and after the one in the other.</p>''')]
-        body7 += self.trap_blocks(pg7, k87, e87, name, '', [(TW, TB)], partner)
-        OW, OB = ['b3', 'c4', 'd7'], ['b1', 'a6']           # a trap at odd parity
-        body7.append(t('<p>En een van de vallen bij oneven pariteit: nu staan de zwarte dammen scheef tegenover elkaar.</p>',
-                       '<p>And one of the traps at odd parity: now the black kings stand askew to each other.</p>'))
-        body7 += self.trap_blocks(pg7, k87, e87, name, '', [(OW, OB)], partner, 2)
-        # the change-over, as on 8x8: white in the set-up of the odd trap but white to move; an odd number of moves later
-        # black is to move in the even trap, whichever shuttle move black picks
-        fw = e87.fen(OW, OB, 'W')
-        vw, _ = e87.analyse(fw)
-        assert self.exchange(e87, fw) is None
-        for alt in (['b1', 'b7'], ['a2', 'a6']):
-            fa = e87.fen(['b3', 'c4', 'b5'], alt, 'B')
-            assert e87.analyse(fa)[0].startswith('L') and rank_parity(e87, fa) == 0
-        figw, iw = pg7.diagram(fw, t(f'{name}, wit aan zet: {vw}', f'{name}, white to move: {vw}'), gid=k87)
-        plan = self.plan('1. d7-c6 a6-b7 2. c6-b5')
-        h, *_ = pg7.moves(fw, plan, 1, False, 'm1', iw, nbook=len(plan))
-        body7 += [figw, t('<p>Wit staat in de opstelling van de val bij oneven pariteit, maar is zelf aan zet, en dan is het '
-                          'geen val. Net als op 8×8 wisselt wit van tempo: de witte dam op d7 loopt via c6 naar b5, terwijl '
-                          'zwart één keer pendelt. ',
-                          '<p>White stands in the set-up of the trap at odd parity, but is to move itself, and then it is no '
-                          'trap. As on 8×8 white changes the tempo: the white king on d7 walks via c6 to b5, while black '
-                          'shuttles once. ')
-                  + f'{h}. ' + t(
-                      'Twee witte zetten en één zwarte, samen drie, een oneven aantal: het tempo draait om, en zwart staat aan '
-                      'zet in val 1, bij even pariteit. Pendelt zwart met 1. … b1-a2 in plaats van a6-b7, dan staat zwart op a2 '
-                      'en a6, en ook daartegen is wit op b3, c4 en b5 een val.</p>',
-                      'Two white moves and one black, three together, an odd number: the tempo turns over, and black is to '
-                      'move in trap 1, at even parity. If black shuttles with 1. … b1-a2 instead of a6-b7, black stands on '
-                      'a2 and a6, and against that too white on b3, c4 and b5 is a trap.</p>'),
-                  '<div style="clear:both"></div>']
-        for W, B, even in ((TW, TB, True), (OW, OB, False)):
+the h-file.)</p>
+<p>With black to move and both black kings on the edge squares of their double corners (quiet positions) every position is
+lost at odd parity (3,172), and all but 4 at even parity (3,153 of 3,157). But in two different ways: at odd parity there
+are 12 traps, at even parity not a single one.</p>''')]
+        body7.append(t('<p>Bij oneven pariteit breekt wit de vesting met een val, zoals op 8×8, bijvoorbeeld deze:</p>',
+                       '<p>At odd parity white breaks the fortress with a trap, as on 8×8, for example this one:</p>'))
+        body7 += self.trap_blocks(pg7, k87, e87, name, '', [(OW, OB)], partner)
+        # even parity: white occupies the free edge square next to a black king, which then has to leave its double corner
+        fe = e87.fen(EW, EB, 'B')
+        ve, legale = e87.analyse(fe)
+        fige, ie = pg7.diagram(fe, t(f'{name}, zwart aan zet (even pariteit): {ve}', f'{name}, black to move (even parity): {ve}'),
+                               gid=k87)
+        lines = []
+        for line in ('1. b7-a6 2. b3-a2! b1-c2 3. a2-b1 c2-b3 4. c4xa2 a6xc4', '1. b1-a2 2. b5-a6! b7-c6 3. a6-b7 c6-b5 4. c4xa6 a2xc4'):
+            h, _, f_end, _ = pg7.moves(fe, self.plan(line), 1, True, 'm1', ie)
+            assert f_end[0] == 'W' and e87.analyse(f_end)[0].startswith('W') and all(
+                len([x for x in side[1:].split(',') if x]) == n for side, n in zip(f_end.split(':')[1:], (2, 1)))
+            lines.append(h)
+        # after the invasion, the other waiting move (with the other king) loses even faster
+        after = e87.analyse(e87.fen(['a2', 'c4', 'b5'], ['b1', 'a6'], 'B'))[1]
+        val = {m[0]: m[1] for m in after}
+        assert set(val) == {'b1-c2', 'a6-b7'} and all(v[0] == 'L' for v in val.values()) and int(val['a6-b7'][1:]) < int(val['b1-c2'][1:])
+        body7 += [fige, t('<p>Bij even pariteit is er geen val. Toch is vrijwel alles verloren, want de dubbele hoeken liggen '
+                          'zo dicht bij elkaar dat wit erin kan binnendringen. Pendelt de ene zwarte dam, dan bezet wit het '
+                          'vrije randveld naast de andere: die heeft geen wachtzet meer en moet de dubbele hoek uit (de '
+                          'wachtzet met de eerste dam verliest nog sneller). ',
+                          '<p>At even parity there is no trap. Still almost everything is lost, because the double corners are '
+                          'so close together that white can invade them. When the one black king shuttles, white occupies the '
+                          'free edge square next to the other one: it has no waiting move left and has to leave the double '
+                          'corner (the waiting move with the first king loses even faster). ')
+                  + lines[0] + t(', en 2 tegen 1 wint. Pendelt zwart in de onderste hoek, dan gaat het net zo in de bovenste: ',
+                                 ', and 2 against 1 wins. If black shuttles in the lower corner, it goes the same way in the '
+                                 'upper one: ')
+                  + lines[1] + t('. Alle zetten van zwart: ', '. All moves of black: ')
+                  + self.moves_list(pg7, ie, legale, '1. … ') + '.</p>', '<div style="clear:both"></div>']
+        body7.append(t('<p>De vesting valt dus bij beide pariteiten, maar zonder tempowissel: bij oneven pariteit met een val, '
+                       'bij even pariteit door zwart uit een dubbele hoek te verdrijven. Alleen bij zwart op a2 en a6 en wit '
+                       'op c4, b3 of b5 en d3 of d5 (wit op b5, c4 en d5 bijvoorbeeld) is het remise.</p>',
+                       '<p>The fortress therefore falls at both parities, but without a tempo change: at odd parity with a '
+                       'trap, at even parity by driving black out of a double corner. Only with black on a2 and a6 and white '
+                       'on c4, b3 or b5 and d3 or d5 (white on b5, c4 and d5 for example) is it a draw.</p>'))
+        for W, B, even in ((EW, EB, True), (OW, OB, False)):
             assert (rank_parity(e87, e87.fen(W, B, 'B')) == 0) == even
+        for W in (['b5', 'c4', 'd5'], ['b5', 'c4', 'd3'], ['b3', 'c4', 'd5'], ['b3', 'c4', 'd3']):
+            assert e87.analyse(e87.fen(W, ['a2', 'a6'], 'B'))[0] == 'D'
         body7.append(t('<p>Wat er gebeurt als de dubbele hoeken 8 uit elkaar liggen, zien we op <a href="vesting.html">9×8</a>.</p>',
                        '<p>What happens when the double corners are 8 apart, we see on <a href="vesting.html">9×8</a>.</p>'))
         self.write('vesting-8x7.html', None, '\n'.join(body7), pg7, k87)

@@ -331,6 +331,9 @@ class Site:
         fm = HERE / 'international' / 'compression_mmap_10.txt'
         if fm.exists():
             body.append(MMAP_TEXT(self, fm.read_text()))
+        fb = HERE / 'international' / 'build_lookups_10.txt'
+        if fb.exists():
+            body.append(BUILD_TEXT(self, fb.read_text()))
         else:
             body.append(t('<p>De meting loopt nog.</p>', '<p>The measurement is still running.</p>'))
         self.write('compression.html', '\n'.join(body), self.page())
@@ -520,6 +523,48 @@ def MMAP_TEXT(site, raw):
                 'The uncompressed file is some 200 times faster when warm (a few tens of nanoseconds, just a memory access), '
                 'but also 10 times larger: up to 12 pieces 16 GB against 1.7 GB. A possible middle way: the databases that '
                 'are looked up most often uncompressed, the rest compressed.</p>'))
+
+
+def BUILD_TEXT(site, raw):
+    """the results of build_lookups (lookups while building a slice, with a block cache) as a table and conclusions"""
+    import re as _re
+    t = site.t
+    f = (lambda x, d: f'{float(x):.{d}f}'.replace('.', ',')) if site.lang == 'nl' else (lambda x, d: f'{float(x):.{d}f}')
+    sl, npos = _re.search(r'slices (\d+), positions (\d+)', raw).groups()
+    p1, p2, tot = _re.search(r'phase 1 ([\d.]+), phase 2 ([\d.]+), total ([\d.]+)', raw).groups()
+    dist, = _re.search(r'distinct 4 KiB blocks per slice: ([\d.]+)', raw).groups()
+    rows = ''.join(f'<tr><td>{c}</td><td>{f(mib, 1)} MiB</td><td>{f(100 * float(h), 2)}%</td><td>{f(us, 2)} µs</td></tr>'
+                   for c, mib, h, us in _re.findall(r'(\d+) blocks \(\s*([\d.]+) MiB decoded\): hit ([\d.]+), ([\d.]+) us', raw))
+    num = (lambda x: f'{int(x):,}'.replace(',', '.')) if site.lang == 'nl' else (lambda x: f'{int(x):,}')
+    head = t('<tr><th>Cache (blokken van 4 KiB)</th><th>Uitgepakt</th><th>Treffers</th><th>Tijd per stelling</th></tr>',
+             '<tr><th>Cache (blocks of 4 KiB)</th><th>Decompressed</th><th>Hits</th><th>Time per position</th></tr>')
+    return (t(f'<h2>Opzoeken tijdens het bouwen</h2><p>Gemeten met <a href="https://github.com/rhalbersma/egdb-draughts/'
+              f'blob/main/strongly_solving_6x6/international/build_lookups.cpp"><code>build_lookups</code></a>: '
+              f'{num(sl)} slices met 10 stukken (1 op de 200, {num(npos)} stellingen) opnieuw opgelost met de oplosroutine '
+              f'van de engine, waarbij elke opvraging buiten de slice (slagen, schijfzetten, promoties) is geteld en aan zijn '
+              f'blok van 4 KiB is gekoppeld; de uitkomsten zijn gecontroleerd tegen de opgeslagen waarden. Per stelling zijn '
+              f'er {f(tot, 2)} opvragingen: {f(p1, 2)} in de eerste ronde en {f(p2, 2)} bij het controleren van de '
+              f'verlieskandidaten. Ze zijn zeer geconcentreerd: een slice raakt gemiddeld maar {f(dist, 1)} verschillende '
+              f'blokken. Met een cache die bij elke slice leeg begint (een pessimistisch geval) en 6 µs per misser:</p>',
+              f'<h2>Lookups while building</h2><p>Measured with <a href="https://github.com/rhalbersma/egdb-draughts/'
+              f'blob/main/strongly_solving_6x6/international/build_lookups.cpp"><code>build_lookups</code></a>: '
+              f'{num(sl)} slices with 10 pieces (1 in 200, {num(npos)} positions) solved again with the engine\'s solver, '
+              f'counting every lookup outside the slice (captures, man moves, promotions) and mapping it to its 4 KiB block; '
+              f'the results are checked against the stored values. Per position there are {f(tot, 2)} lookups: {f(p1, 2)} in '
+              f'the first pass and {f(p2, 2)} when checking the loss candidates. They are highly concentrated: a slice touches '
+              f'only {f(dist, 1)} different blocks on average. With a cache that starts empty at every slice (a pessimistic '
+              f'case) and 6 µs per miss:</p>')
+            + f'<table class="tbl">{head}{rows}</table>'
+            + t('<p>Met een cache van 64 blokken (256 KB per kern) wordt 99,4% van de opvragingen uit de cache bediend, en '
+                'kost het opzoeken zo\'n 0,17 µs per stelling. Voor de 45,5 miljard stellingen met 11 of 12 stukken is dat '
+                'ruwweg 2 uur op één kern: gecomprimeerd opzoeken is dus geen bottleneck. Twee kanttekeningen: de slices met '
+                '10 stukken zijn klein (gemiddeld 1.350 stellingen), en een opgezochte stelling met slagplicht kost bij '
+                'gecomprimeerde opslag nog één ply slagen, wat het aantal opvragingen verhoogt.</p>',
+                '<p>With a cache of 64 blocks (256 KB per core) 99.4% of the lookups are served from the cache, and lookup '
+                'costs some 0.17 µs per position. For the 45.5 billion positions with 11 or 12 pieces that is roughly 2 hours '
+                'on one core: compressed lookup is no bottleneck. Two caveats: the 10-piece slices are small (1,350 positions '
+                'on average), and with compressed storage a looked-up position with a capture still costs one ply of '
+                'captures, which raises the number of lookups.</p>'))
 
 
 def main():

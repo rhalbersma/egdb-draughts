@@ -112,9 +112,10 @@ class Site:
 
     def index(self):
         k21, e21 = self.engine(8, 8, 1, 2, 1)
+        k44, e44 = self.engine(4, 4, 1, 2, 1)
         k78, e78 = self.engine(8, 7, 1)
         k88, e88 = self.engine(8, 8, 1)
-        pg = self.page((k21, e21), (k88, e88), (k78, e78))
+        pg = self.page((k21, e21), (k44, e44), (k88, e88), (k78, e78))
         t = self.t
         body = [f'<h1>{esc(TITLE[self.lang])}</h1>', t('''
 <p>Eindspelen met alleen dammen in het Engelse damspel (<em>checkers</em>): korte dammen (één veld), slagplicht en
@@ -142,6 +143,24 @@ opposition. On odd × odd boards with playable corners there are no exceptions a
 33 plies on 8×8, 41 on 10×10, 49 on 12×12, 61 on 12×15.</p>'''),
                  t(f'<p>De langste winst op 8×8 ({v[1:]} ply):</p>', f'<p>The longest win on 8×8 ({v[1:]} plies):</p>'),
                  f'<p class="var">{h}</p>',
+                 '<div style="clear:both"></div>']
+        # 4x4: the draw; driven out of one double corner, black escapes through the centre to the other one
+        fen = 'W:WK6,K8:BK3'
+        fig, i0 = pg.diagram(fen, t(f'4×4, 2 tegen 1, wit aan zet: {e44.analyse(fen)[0]}',
+                                    f'4×4, 2 against 1, white to move: {e44.analyse(fen)[0]}'), gid=k44)
+        parts, i, f = [], i0, fen
+        for k, num in enumerate('6-4 3-1 8-6 1-3 4-1 3-5 1-3 5-8'.split()):
+            m = next(x for x in e44.analyse(f)[1] if x[3] == num)
+            i, f = pg.child(i, m), m[2]
+            parts.append(f'<a class="m1" href="#" data-i="{i}">{f"{k // 2 + 1}. " if k % 2 == 0 else ""}{pg.label(k44, m)}</a>')
+        body += [fig, t('<p>Op 4×4 is 2 tegen 1 remise. Het bord heeft twee dubbele hoeken met alleen de twee middenvelden '
+                        'ertussen. Drijft wit de zwarte dam met beide dammen uit de ene dubbele hoek, dan ontsnapt zwart door '
+                        'het midden naar de andere:</p>',
+                        '<p>On 4×4, 2 against 1 is a draw. The board has two double corners with only the two centre squares '
+                        'between them. If white drives the black king out of one double corner with both kings, black escapes '
+                        'through the centre to the other one:</p>'),
+                 f'<p class="var">{" ".join(parts)}</p>',
+                 t('<p>Daarna begint het opnieuw in de andere hoek.</p>', '<p>Then it starts again in the other corner.</p>'),
                  '<div style="clear:both"></div>']
         body.append(t('''<h2>3 dammen tegen 2</h2>
 <table class="tbl"><tr><th>Bord</th><th>Rustige remises (3 dammen aan zet)</th><th>Langste winst</th>

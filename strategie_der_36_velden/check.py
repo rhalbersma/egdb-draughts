@@ -6,7 +6,8 @@
 
 """Check every claim of "Strategie der 36 velden" against the exact 6x6 databases of egdb_6x6.
 
-usage: check.py path/to/egdb_6x6 [--db data/6x6_le8.db] [--slicemax 8] [--json results.json]
+usage: check.py path/to/egdb_6x6 [--store data/units] [--json results.json]
+       check.py path/to/egdb_6x6 [--db data/6x6_le9.db] [--attach data/6x6_10.dtm] [--slicemax 8] [--json results.json]
 """
 
 import argparse
@@ -22,9 +23,14 @@ from claims import DIAGRAMS, LINES  # noqa: E402
 
 
 class Engine:
-    def __init__(self, exe, slicemax, db=None, attach=None):
+    def __init__(self, exe, slicemax, db=None, attach=None, store=None):
         self.p = subprocess.Popen([exe], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, bufsize=1)
         self.cache = {}
+        if store:
+            out = self.cmd(f'store {store}')
+            if not out or not out[0].startswith('store ok'):
+                raise RuntimeError(f'cannot open the store {store}: {out}')
+            return
         if db:
             out = self.cmd(f'load {db}')
             if not out or not out[0].startswith('load ok'):
@@ -217,23 +223,26 @@ def main():
     ap.add_argument('--slicemax', type=int, default=8)
     ap.add_argument('--db', default=str(Path(__file__).resolve().parent.parent / 'data' / '6x6_le9.db'))
     ap.add_argument('--attach', default=str(Path(__file__).resolve().parent.parent / 'data' / '6x6_10.dtm'))
+    ap.add_argument('--store', default=None, help='directory with the compressed units (instead of --db/--attach)')
     ap.add_argument('--json', default=str(Path(__file__).resolve().parent / 'results.json'))
+    ap.add_argument('--only', default=None, help='only these diagrams (comma separated) and the lines that start there')
     ap.add_argument('--maxpieces', type=int, default=12, help='skip diagrams and lines that start with more pieces')
     args = ap.parse_args()
     eng = Engine(args.engine, args.slicemax, args.db if Path(args.db).exists() else None,
-                 args.attach if Path(args.attach).exists() else None)
+                 args.attach if Path(args.attach).exists() else None, args.store)
+    only = set(args.only.split(',')) if args.only else None
     t0 = time.time()
     diagrams = []
     def npieces(fen):
         return sum(len([x for x in part[1:].split(',') if x]) for part in fen.split(':')[1:])
     for did in DIAGRAMS:
-        if npieces(DIAGRAMS[did][0]) > args.maxpieces:
+        if npieces(DIAGRAMS[did][0]) > args.maxpieces or (only and did not in only):
             continue
         diagrams.append(check_diagram(eng, did))
         print(f'[{time.time() - t0:7.1f}s] diagram {did}', file=sys.stderr, flush=True)
     lines = []
     for sec, start, text, claim, note in LINES:
-        if npieces(DIAGRAMS[start][0]) > args.maxpieces:
+        if npieces(DIAGRAMS[start][0]) > args.maxpieces or (only and start not in only):
             continue
         lines.append(check_line(eng, sec, start, text, claim, note))
         r = lines[-1]

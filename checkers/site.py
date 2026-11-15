@@ -37,8 +37,7 @@ CHAPTERS = [
         ('val.html', 'Twee vallen om de vesting te breken', 'Two traps to break the fortress'),
         ('val-pariteit.html', 'De winst is strategisch, de pariteit doet er niet toe', 'The win is strategic, parity does not matter')]),
     ('3 tegen 2 op grotere borden', '3 against 2 on larger boards', [
-        ('vesting-9x7.html', '9×7 onspeelbare hoeken: langs de korte kant valt de vesting',
-         '9×7 unplayable corners: along the short side the fortress falls'),
+        ('vesting-8x7.html', 'Langs de zijde van 7 valt de vesting op 8×7', 'Along the side of 7 the fortress falls on 8×7'),
         ('vesting.html', 'Eén val om de vesting te breken op 9×8', 'One trap to break the fortress on 9×8'),
         ('vesting-pariteit.html', 'De winst is niet strategisch, de pariteit doet ertoe op 9×8',
          'The win is non-strategic, parity matters on 9×8'),
@@ -680,41 +679,41 @@ same side:</p>
         rule = next(k for k, x in enumerate(body) if isinstance(x, str) and 'D × d' in x)
         self.write('vesting.html', None, '\n'.join(body[:rule]), pg, k89)
         self.write('vesting-9x9.html', None, '\n'.join(self.fortress99(pg9, k99, e99)), pg9, k99)
-        # 9x7 with unplayable corners, the pair along the short side (6 apart, closer than on 8x8): the fortress falls
-        k97, e97 = self.engine(9, 7, 'unplayable')
-        pg7 = self.page((k97, e97))
+        # 8x7: one pair of double corners, along the side of 7 (6 apart, closer than on 8x8): the fortress falls
+        k87, e87 = self.engine(8, 7, 'unplayable')
+        pg7 = self.page((k87, e87))
         partner = {'b1': 'a2', 'a2': 'b1', 'h1': 'i2', 'i2': 'h1', 'b7': 'a6', 'a6': 'b7', 'h7': 'i6', 'i6': 'h7'}
-        name = t('9×7 onspeelbare hoeken', '9×7 unplayable corners')
+        name = '8×7'
         TW, TB = ['b3', 'c4', 'b5'], ['b1', 'b7']          # the trap at even parity
         body7 = [t('''
 <p>Op 8×8 liggen de twee dubbele hoeken 7 velden uit elkaar, en daar valt de vesting altijd. Wat gebeurt er als ze nog
-dichter bij elkaar liggen? Op 9×7 met onspeelbare hoekvelden zijn er vier dubbele hoeken: b1/a2, h1/i2, b7/a6 en h7/i6.
-Langs de korte kant, de rand van 7 (b1/a2 met b7/a6, en net zo h1/i2 met h7/i6), liggen ze maar 6 uit elkaar. De
-database telt de vallen met zwart aan zet en beide zwarte dammen op de randvelden van hun dubbele hoeken: 3 bij even en 12
+dichter bij elkaar liggen? Op 8×7 zijn er precies twee dubbele hoeken, b1/a2 en b7/a6, allebei langs de zijde van 7, en
+ze liggen maar 6 uit elkaar. (Met speelbare in plaats van onspeelbare hoekvelden is 8×7 het spiegelbeeld, met de dubbele
+hoeken langs de h-lijn.) De database telt de vallen met zwart aan zet en beide zwarte dammen op de randvelden van hun dubbele hoeken: 3 bij even en 12
 bij oneven pariteit. Net als op 8×8 heeft wit dus bij elke pariteit een val, en de vesting valt altijd.</p>
 <p>Hieronder eerst de val bij even pariteit: de witte dam op c4 staat precies tussen de twee zwarte dammen in, 3 velden van
 elk, en slaat terug na de ruil in de ene hoek én na die in de andere.</p>''', '''
 <p>On 8×8 the two double corners are 7 squares apart, and there the fortress always falls. What happens when they are
-even closer together? On 9×7 with unplayable corner squares there are four double corners: b1/a2, h1/i2, b7/a6 and h7/i6.
-Along the short side, the edge of 7 (b1/a2 with b7/a6, and likewise h1/i2 with h7/i6), they are only 6 apart. The
-database counts the traps with black to move and both black kings on the edge squares of their double corners: 3 at even
+even closer together? On 8×7 there are exactly two double corners, b1/a2 and b7/a6, both along the side of 7, and they are
+only 6 apart. (With playable instead of unplayable corner squares 8×7 is the mirror image, with the double corners along
+the h-file.) The database counts the traps with black to move and both black kings on the edge squares of their double corners: 3 at even
 and 12 at odd parity. As on 8×8 white therefore has a trap at each parity, and the fortress always falls.</p>
 <p>Below first the trap at even parity: the white king on c4 stands exactly between the two black kings, 3 squares from
 each, and captures back after the exchange in the one corner and after the one in the other.</p>''')]
-        body7 += self.trap_blocks(pg7, k97, e97, name, '', [(TW, TB)], partner)
+        body7 += self.trap_blocks(pg7, k87, e87, name, '', [(TW, TB)], partner)
         OW, OB = ['b3', 'c4', 'd7'], ['b1', 'a6']           # a trap at odd parity
         body7.append(t('<p>En een van de vallen bij oneven pariteit: nu staan de zwarte dammen scheef tegenover elkaar.</p>',
                        '<p>And one of the traps at odd parity: now the black kings stand askew to each other.</p>'))
-        body7 += self.trap_blocks(pg7, k97, e97, name, '', [(OW, OB)], partner, 2)
+        body7 += self.trap_blocks(pg7, k87, e87, name, '', [(OW, OB)], partner, 2)
         # the change-over, as on 8x8: white in the set-up of the odd trap but white to move; an odd number of moves later
         # black is to move in the even trap, whichever shuttle move black picks
-        fw = e97.fen(OW, OB, 'W')
-        vw, _ = e97.analyse(fw)
-        assert self.exchange(e97, fw) is None
+        fw = e87.fen(OW, OB, 'W')
+        vw, _ = e87.analyse(fw)
+        assert self.exchange(e87, fw) is None
         for alt in (['b1', 'b7'], ['a2', 'a6']):
-            fa = e97.fen(['b3', 'c4', 'b5'], alt, 'B')
-            assert e97.analyse(fa)[0].startswith('L') and rank_parity(e97, fa) == 0
-        figw, iw = pg7.diagram(fw, t(f'{name}, wit aan zet: {vw}', f'{name}, white to move: {vw}'), gid=k97)
+            fa = e87.fen(['b3', 'c4', 'b5'], alt, 'B')
+            assert e87.analyse(fa)[0].startswith('L') and rank_parity(e87, fa) == 0
+        figw, iw = pg7.diagram(fw, t(f'{name}, wit aan zet: {vw}', f'{name}, white to move: {vw}'), gid=k87)
         plan = self.plan('1. d7-c6 a6-b7 2. c6-b5')
         h, *_ = pg7.moves(fw, plan, 1, False, 'm1', iw, nbook=len(plan))
         body7 += [figw, t('<p>Wit staat in de opstelling van de val bij oneven pariteit, maar is zelf aan zet, en dan is het '
@@ -732,18 +731,21 @@ each, and captures back after the exchange in the one corner and after the one i
                       'a2 and a6, and against that too white on b3, c4 and b5 is a trap.</p>'),
                   '<div style="clear:both"></div>']
         for W, B, even in ((TW, TB, True), (OW, OB, False)):
-            assert (rank_parity(e97, e97.fen(W, B, 'B')) == 0) == even
-        body7.append(t('<p>De andere paren van 9×7, langs de lange kant en diagonaal, liggen 8 uit elkaar. Wat die afstand '
-                       'doet, zien we eerst op <a href="vesting.html">9×8</a>.</p>',
-                       '<p>The other pairs of 9×7, along the long side and diagonal, are 8 apart. What that distance does, '
-                       'we first see on <a href="vesting.html">9×8</a>.</p>'))
-        self.write('vesting-9x7.html', None, '\n'.join(body7), pg7, k97)
+            assert (rank_parity(e87, e87.fen(W, B, 'B')) == 0) == even
+        body7.append(t('<p>Wat er gebeurt als de dubbele hoeken 8 uit elkaar liggen, zien we op <a href="vesting.html">9×8</a>.</p>',
+                       '<p>What happens when the double corners are 8 apart, we see on <a href="vesting.html">9×8</a>.</p>'))
+        self.write('vesting-8x7.html', None, '\n'.join(body7), pg7, k87)
         # the distance rule, with the two pairs of 9x7 that are 8 apart
+        k97, e97 = self.engine(9, 7, 'unplayable')
+        name = t('9×7 onspeelbare hoeken', '9×7 unplayable corners')
         pga = self.page((k97, e97))
-        rulebody = [t('<p>Op 9×7 liggen de twee andere soorten paren 8 uit elkaar: langs de lange kant, zoals op 9×8, en '
-                      'diagonaal. Bij beide zijn er 3 vallen bij even pariteit en geen bij oneven: de oppositie beslist. '
+        rulebody = [t('<p>Op 9×7 met onspeelbare hoekvelden zijn er vier dubbele hoeken: b1/a2, h1/i2, b7/a6 en h7/i6. '
+                      'Langs de zijde van 7 liggen ze 6 uit elkaar, zoals op <a href="vesting-8x7.html">8×7</a>; de twee '
+                      'andere soorten paren liggen 8 uit elkaar: langs de lange kant, zoals op 9×8, en diagonaal. Bij beide zijn er 3 vallen bij even pariteit en geen bij oneven: de oppositie beslist. '
                       'Langs de lange kant staan de drie witte dammen op een rij tussen de zwarte, als op 9×8:</p>',
-                      '<p>On 9×7 the two other kinds of pairs are 8 apart: along the long side, as on 9×8, and diagonally. '
+                      '<p>On 9×7 with unplayable corner squares there are four double corners: b1/a2, h1/i2, b7/a6 and '
+                      'h7/i6. Along the side of 7 they are 6 apart, as on <a href="vesting-8x7.html">8×7</a>; the two other '
+                      'kinds of pairs are 8 apart: along the long side, as on 9×8, and diagonally. '
                       'For both there are 3 traps at even parity and none at odd: the opposition decides. Along the long side '
                       'the three white kings stand in a row between the black ones, as on 9×8:</p>')]
         rulebody += self.trap_blocks(pga, k97, e97, name, '', [(['c2', 'e2', 'g2'], ['a2', 'i2'])], partner)
@@ -938,6 +940,9 @@ def main():
         s.index()
         s.vesting()
         # pages that were renamed or merged
+        (out / 'vesting-9x7.html').write_text('<!DOCTYPE html><meta charset="utf-8"><meta http-equiv="refresh" '
+                                              'content="0; url=vesting-8x7.html"><link rel="canonical" href="vesting-8x7.html">'
+                                              '<title>Checkers</title><a href="vesting-8x7.html">vesting-8x7.html</a>\n')
         (out / 'val-race.html').write_text('<!DOCTYPE html><meta charset="utf-8"><meta http-equiv="refresh" '
                                            'content="0; url=val.html"><link rel="canonical" href="val.html">'
                                            '<title>Checkers</title><a href="val.html">val.html</a>\n')

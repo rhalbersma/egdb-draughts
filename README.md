@@ -413,7 +413,7 @@ With white to move every move draws: black just shuttles a7-b8-a7. With black to
 
 `D ≤ 7`: the fortress falls · `D = 8`: opposition decides, unless also `d = 8` · `D ≥ 9`: the fortress holds.
 On 9×9 unplayable corners the trap decides again. With two double corners on the same side (e.g. black on h1 and h9, white
-on h3, h5, h7, black to move: L28) every shuttle move allows a forced exchange, at one of the two parities (3 traps per
+on h3, h5, h7, black to move: L28) every shuttle move allows a forced exchange, at one of the two parities (2 traps per
 pair, none at the other parity): the opposition decides. With the diagonal pair (black on b1 and i8) there is no trap
 at either parity: the 8×8 trap, three white kings in a row in the middle of the connecting diagonal, punishes only one
 shuttle move here (white on d3, e4, f5: i8-h9 is punished, b1-a2 is not; on e4, f5, g6 the other way round). On 8×8

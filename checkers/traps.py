@@ -8,7 +8,8 @@
 
 Black has a king on one of the two edge squares of each of two double corners, black to move, and nobody can
 capture. A TRAP is a white set-up in which both shuttle moves of black (one per corner) allow an immediate forced
-exchange: a quiet white offer, after which every black move is a capture and white captures back to a won 2-1.
+exchange: a quiet white offer, after which every black move is a capture and white captures back to a won 2-1; and
+every other black move (leaving a double corner) loses material at once too (such an exchange, or a capture).
 The parity (the opposition) is the parity of the sum of the rank numbers (1, 2, ...) of all five kings with black
 to move; it never changes without a capture. Result: traps at both parities on 8x8, at one parity on 8x9 and 9x10,
 none on 10x10.
@@ -59,6 +60,9 @@ def run(w, h, colouring):
                 return True
         return False
 
+    def punished(f):                         # white to move after black left a double corner: material falls at once
+        return exchange(f) or any(npieces(f1)[1] < 2 and v1.startswith('W') for _, v1, f1, _ in e.analyse(f)[1])
+
     res = Counter()
     for ca, cb in combinations(corners, 2):
         for a in ca:
@@ -76,7 +80,8 @@ def run(w, h, colouring):
                         continue
                     phase = 'even' if sum(sq[x][1] + 1 for x in (*W, a, b)) % 2 == 0 else 'odd'   # the parity
                     res[('positions', phase)] += 1
-                    if exchange(fen(W, (a2, b), 'W')) and exchange(fen(W, (a, b2), 'W')):
+                    shuttles = (fen(W, (a2, b), 'W'), fen(W, (a, b2), 'W'))
+                    if all(map(exchange, shuttles)) and all(punished(f1) for _, _, f1, _ in bm if f1 not in shuttles):
                         res[('traps', phase)] += 1
                         if res[('traps', phase)] == 1:
                             res[('example', phase, f0)] = 1

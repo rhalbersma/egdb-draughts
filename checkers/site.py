@@ -465,11 +465,13 @@ king in the middle of the white kings (the third diagram).</p>''')]
                 + t('<p>Wit breekt de dubbele hoeken met een val: een opstelling waarin elke pendelzet van zwart een '
                   'gedwongen ruil toelaat: met een rustige zet dwingt wit zwart een witte dam te slaan, wit slaat terug, en 2 '
                   'tegen 1 wint. Zwart heeft twee dammen en dus twee pendelzetten; de val moet ze allebei straffen, ook als de '
-                  'ruil de andere zwarte dam treft. Of zo\'n val werkt, hangt af van de pariteit: even of oneven, de pariteit '
+                  'ruil de andere zwarte dam treft. En verlaat een zwarte dam zijn dubbele hoek, dan moet dat ook meteen '
+                  'materiaal kosten. Of zo\'n val werkt, hangt af van de pariteit: even of oneven, de pariteit '
                   'van de som van de rijnummers (1, 2, …) van alle dammen, met zwart aan zet. Die verandert zonder slag nooit, '
                   'want dammen kunnen geen tempo verliezen; dat is de oppositie.</p>'
                   '<p>De database telt de vallen met zwart aan zet en beide zwarte dammen op de randvelden van de twee '
-                  'dubbele hoeken: op 8×8 zijn er 3 bij even en 3 bij oneven pariteit. Wit heeft dus bij elke pariteit een '
+                  'dubbele hoeken: op 8×8 zijn er 2 bij even en 2 bij oneven pariteit: de twee vallen hieronder en hun '
+                  'spiegelbeelden (het bord 180° gedraaid), want draaien keert de pariteit om. Wit heeft dus bij elke pariteit een '
                   'val, en de vesting valt altijd: wit kiest de val die bij de oppositie past. In de vallen staan de drie '
                   'witte dammen op een van de twee lange diagonalen die de dubbele hoeken verbinden, tussen de zwarte dammen '
                   'in; welke diagonaal, bepaalt de pariteit. De tellingen komen uit '
@@ -477,11 +479,13 @@ king in the middle of the white kings (the third diagram).</p>''')]
                   '<p>White breaks the double corners with a trap: a set-up in which every shuttle move of black allows a '
                   'forced exchange: with a quiet move white forces black to capture a white king, white captures back, and 2 '
                   'against 1 wins. Black has two kings and therefore two shuttle moves; the trap has to punish both, even when '
-                  'the exchange hits the other black king. Whether such a trap works depends on the parity: even or odd, the '
+                  'the exchange hits the other black king. And when a black king leaves its double corner, that too has to '
+                  'cost material at once. Whether such a trap works depends on the parity: even or odd, the '
                   'parity of the sum of the rank numbers (1, 2, …) of all kings, with black to move. It never changes without a '
                   'capture, since kings cannot lose a tempo; that is the opposition.</p>'
                   '<p>The database counts the traps with black to move and both black kings on the edge squares of the two '
-                  'double corners: on 8×8 there are 3 at even and 3 at odd parity. White therefore has a trap at each parity, '
+                  'double corners: on 8×8 there are 2 at even and 2 at odd parity: the two traps below and their mirror '
+                  'images (the board turned 180°), since turning reverses the parity. White therefore has a trap at each parity, '
                   'and the fortress always falls: white picks the trap that fits the opposition. In the traps the three white '
                   'kings stand on one of the two long diagonals that connect the double corners, between the black kings; '
                   'which diagonal decides the parity. The counts come from '
@@ -517,8 +521,8 @@ king in the middle of the white kings (the third diagram).</p>''')]
         sq88 = {int(n): fr for n, fr in e88.g['sq'].items()}
         al = lambda n: f'{chr(97 + sq88[n][0])}{sq88[n][1] + 1}'
         alg = lambda ns: ', '.join(al(n) for n in ns[:-1]) + t(' en ', ' and ') + al(ns[-1])
-        rows = [((5, 32), (14, 18, 23), '5…32', True), ((5, 32), (10, 15, 19), '1…28', False), ((5, 32), (6, 15, 24), '1…28', False),
-                ((1, 28), (14, 18, 23), '5…32', True), ((1, 28), (9, 18, 27), '5…32', True), ((1, 28), (10, 15, 19), '1…28', False)]
+        rows = [((5, 32), (14, 18, 23), '5…32', True), ((1, 28), (9, 18, 27), '5…32', True),
+                ((5, 32), (6, 15, 24), '1…28', False), ((1, 28), (10, 15, 19), '1…28', False)]
         for B, W, _, even in rows:          # every row is a trap at the stated parity (checked with the database)
             fen = f"B:W{','.join('K%d' % x for x in W)}:B{','.join('K%d' % x for x in B)}"
             assert (rank_parity(e88, fen) == 0) == even and e88.analyse(fen)[0].startswith('L')
@@ -529,12 +533,12 @@ king in the middle of the white kings (the third diagram).</p>''')]
                            f'<td>{t("even" if even else "oneven", "even" if even else "odd")}</td></tr>' for B, W, d, even in rows)
                  + '</table>')
         phases = [t(
-            f'<p>Op welke diagonaal zwart staat, maakt niet uit: met de witte dammen op {alg((14, 18, 23))} is er een val tegen '
-            f'de zwarte dammen op {alg((5, 32))}, dus op dezelfde diagonaal, en ook een tegen {alg((1, 28))}, op de andere. Wat '
-            f'de pariteit bepaalt, is de diagonaal van wit. Elke regel van de tabel is een val:</p>',
-            f'<p>Which diagonal black stands on does not matter: with the white kings on {alg((14, 18, 23))} there is a trap '
-            f'against the black kings on {alg((5, 32))}, on the same diagonal, and also one against {alg((1, 28))}, on the other. '
-            f'What decides the parity is the diagonal of white. Every row of the table is a trap:</p>'), table]
+            f'<p>Op welke diagonaal zwart staat, maakt niet uit: op elk van de twee diagonalen heeft wit een val tegen de zwarte '
+            f'dammen op {alg((5, 32))} en een tegen {alg((1, 28))}. Wat de pariteit bepaalt, is de diagonaal van wit. De vier '
+            f'vallen, de twee van de <a href="val.html">vorige pagina</a> en hun spiegelbeelden (180° gedraaid):</p>',
+            f'<p>Which diagonal black stands on does not matter: on each of the two diagonals white has a trap against the black '
+            f'kings on {alg((5, 32))} and one against {alg((1, 28))}. What decides the parity is the diagonal of white. The four '
+            f'traps, the two of the <a href="val.html">previous page</a> and their mirror images (turned 180°):</p>'), table]
         # the change-over, with the strongest moves: white in the set-up of the second trap (odd parity) but white to move;
         # five moves later black is to move in the first trap (even parity). (From the set-up of the first trap with white
         # to move white forces the exchange at once, shown below.)
@@ -565,13 +569,17 @@ king in the middle of the white kings (the third diagram).</p>''')]
             f'{al(15)}-{al(18)}, {al(6)} via {al(10)} to {al(14)} and {al(24)} via {al(27)} to {al(23)}. ')
             + f'{h}. ' + t(
             f'Dat zijn vijf zetten, een oneven aantal: het tempo draait om, en zwart staat aan zet in de '
-            f'<a href="val.html">eerste val</a>, bij even pariteit. Pendelt zwart anders, dan komt wit met de sterkste zetten '
-            f'net zo na vijf zetten in een val op de diagonaal {diag("5…32")}: deze, of {alg((9, 18, 27))} tegen '
-            f'{alg((1, 28))}.</p>',
+            f'<a href="val.html">eerste val</a>, bij even pariteit. Dat geldt voor elke langste verdediging van zwart: '
+            f'met de sterkste zetten staat na 9 ply de eerste val met zwart aan zet op het bord, of de tweede val gedraaid '
+            f'(wit op {alg((9, 18, 27))}, zwart op {alg((1, 28))}). Een andere pendelzet verliest sneller, al kan de val dan '
+            f'langer op zich laten wachten. De eenvoudigste winmethode is dus: bouw de tweede val op. Met zwart aan zet is het '
+            f'een val; met wit aan zet staat na 9 ply een van de twee vallen met zwart aan zet.</p>',
             f'That is five moves, an odd number: the tempo turns over, and black is to move in the '
-            f'<a href="val.html">first trap</a>, at even parity. If black shuttles differently, white with the strongest '
-            f'moves likewise reaches a trap on the diagonal {diag("5…32")} after five moves: this one, or {alg((9, 18, 27))} '
-            f'against {alg((1, 28))}.</p>'),
+            f'<a href="val.html">first trap</a>, at even parity. That holds for every longest defence of black: with the '
+            f'strongest moves, after 9 plies the first trap stands on the board with black to move, or the second trap turned '
+            f'(white on {alg((9, 18, 27))}, black on {alg((1, 28))}). Another shuttle move loses faster, though the trap may then '
+            f'take longer. The simplest winning method therefore is: build the second trap. With black to move it is a trap; '
+            f'with white to move, after 9 plies one of the two traps stands on the board with black to move.</p>'),
             '<div style="clear:both"></div>']
         # the trap reached: every shuttle move of black is punished
         v2, legal2 = e88.analyse(f_end)
@@ -680,25 +688,23 @@ same side:</p>
 <p><em>D</em> ≤ 7: the fortress falls · <em>D</em> = 8: opposition decides, unless also <em>d</em> = 8 ·
 <em>D</em> ≥ 9: the fortress holds.</p>'''),
                 ]
-        # the other two of the three traps on 9x8 (the trap of the previous page is the third), on a page of their own
+        # the other of the two traps on 9x8 (the trap of the previous page is the first), on a page of its own
         pgp = self.page((k89, e89))
-        extra = [t('<p>De val op de <a href="vesting.html">vorige pagina</a> is een van de drie vallen op 9×8. De andere '
-                   'twee:</p>', '<p>The trap on the <a href="vesting.html">previous page</a> is one of the three traps on '
-                   '9×8. The other two:</p>')] + self.trap_blocks(
-            pgp, k89, e89, '9×8', '', [(['d8', 'e7', 'f8'], ['b8', 'h8']), (['d8', 'e7', 'f8'], ['a7', 'i7'])],
-            {'b8': 'a7', 'a7': 'b8', 'h8': 'i7', 'i7': 'h8'}) + [t(
-            '<p>Hoewel er drie vallen zijn, gaan ze in elkaar over met een even aantal zetten: van val 2 naar de val van de '
-            'vorige pagina (wit op c7, e7 en g7) doen twee witte dammen elk één stap (d8-c7 en f8-g7), en van val 2 naar '
-            'val 1 pendelen beide zwarte dammen. Alle drie liggen ze bij dezelfde pariteit (oneven). Wit kan het tempo dus '
-            'niet wisselen, zoals op 8×8 met de overstap van drie dammen naar de andere diagonaal. De winst is hier niet '
-            'strategisch: de oppositie beslist.</p>',
-            '<p>Although there are three traps, they turn into each other with an even number of moves: from trap 2 to the '
-            'trap of the previous page (white on c7, e7 and g7) two white kings take one step each (d8-c7 and f8-g7), and '
-            'from trap 2 to trap 1 both black kings shuttle. All three lie at the same parity (odd). White therefore cannot '
-            'change the tempo, as on 8×8 with the change-over of three kings to the other diagonal. The win here is not '
-            'strategic: the opposition decides.</p>')] \
+        extra = [t('<p>De val op de <a href="vesting.html">vorige pagina</a> is een van de twee vallen op 9×8. De andere, '
+                   'val 2:</p>', '<p>The trap on the <a href="vesting.html">previous page</a> is one of the two traps on '
+                   '9×8. The other one, trap 2:</p>')] + self.trap_blocks(
+            pgp, k89, e89, '9×8', '', [(['d8', 'e7', 'f8'], ['b8', 'h8'])],
+            {'b8': 'a7', 'a7': 'b8', 'h8': 'i7', 'i7': 'h8'}, 2) + [t(
+            '<p>De twee vallen gaan in elkaar over met een even aantal zetten: van de val van de vorige pagina (wit op c7, e7 '
+            'en g7, zwart op a7 en i7) naar val 2 doen twee witte dammen elk één stap (c7-d8 en g7-f8) en pendelen beide '
+            'zwarte dammen. Ze liggen dus bij dezelfde pariteit (oneven). Wit kan het tempo niet wisselen, zoals op 8×8 met de '
+            'overstap naar de andere diagonaal. De winst is hier niet strategisch: de oppositie beslist.</p>',
+            '<p>The two traps turn into each other with an even number of moves: from the trap of the previous page (white on '
+            'c7, e7 and g7, black on a7 and i7) to trap 2 two white kings take one step each (c7-d8 and g7-f8) and both black '
+            'kings shuttle. They therefore lie at the same parity (odd). White cannot change the tempo, as on 8×8 with the '
+            'change-over to the other diagonal. The win here is not strategic: the opposition decides.</p>')] \
             + self.no_tempo(pgp, k89, e89, '9×8', ['c7', 'e7', 'g7'], ['a7', 'i7'], '1. c7-d8 a7-b8 2. g7-f8 b8-a7',
-                            t('val 2', 'trap 2'))
+                            t('de witte opstelling van val 2', 'the white set-up of trap 2'))
         self.write('vesting-pariteit.html', None, '\n'.join(extra), pgp, k89)
         rule = next(k for k, x in enumerate(body) if isinstance(x, str) and 'D × d' in x)
         self.write('vesting.html', None, '\n'.join(body[:rule]), pg, k89)
@@ -717,14 +723,14 @@ ze liggen maar 6 uit elkaar. (Met speelbare in plaats van onspeelbare hoekvelden
 hoeken langs de h-lijn.)</p>
 <p>Met zwart aan zet en beide zwarte dammen op de randvelden van hun dubbele hoeken (rustige stellingen) is bij oneven
 pariteit elke stelling verloren (3.172), en bij even pariteit alle op 4 na (3.153 van de 3.157). Maar het gaat op twee
-verschillende manieren: bij oneven pariteit zijn er 12 vallen, bij even pariteit geen enkele.</p>''', '''
+verschillende manieren: bij oneven pariteit zijn er 8 vallen, bij even pariteit geen enkele.</p>''', '''
 <p>On 8×8 the two double corners are 7 squares apart, and there the fortress always falls. What happens when they are
 even closer together? On 8×7 there are exactly two double corners, b1/a2 and b7/a6, both along the side of 7, and they are
 only 6 apart. (With playable instead of unplayable corner squares 8×7 is the mirror image, with the double corners along
 the h-file.)</p>
 <p>With black to move and both black kings on the edge squares of their double corners (quiet positions) every position is
 lost at odd parity (3,172), and all but 4 at even parity (3,153 of 3,157). But in two different ways: at odd parity there
-are 12 traps, at even parity not a single one.</p>''')]
+are 8 traps, at even parity not a single one.</p>''')]
         body7.append(t('<p>Bij oneven pariteit breekt wit de vesting met een val, zoals op 8×8, bijvoorbeeld deze:</p>',
                        '<p>At odd parity white breaks the fortress with a trap, as on 8×8, for example this one:</p>'))
         body7 += self.trap_blocks(pg7, k87, e87, name, '', [(OW, OB)], partner)
@@ -779,12 +785,12 @@ are 12 traps, at even parity not a single one.</p>''')]
         pga = self.page((k97, e97))
         rulebody = [t('<p>Op 9×7 met onspeelbare hoekvelden zijn er vier dubbele hoeken: b1/a2, h1/i2, b7/a6 en h7/i6. '
                       'Langs de zijde van 7 liggen ze 6 uit elkaar, zoals op <a href="vesting-8x7.html">8×7</a>; de twee '
-                      'andere soorten paren liggen 8 uit elkaar: langs de lange kant, zoals op 9×8, en diagonaal. Bij beide zijn er 3 vallen bij even pariteit en geen bij oneven: de oppositie beslist. '
+                      'andere soorten paren liggen 8 uit elkaar: langs de lange kant, zoals op 9×8, en diagonaal. Bij beide zijn er 2 vallen bij even pariteit en geen bij oneven: de oppositie beslist. '
                       'Langs de lange kant staan de drie witte dammen op een rij tussen de zwarte, als op 9×8:</p>',
                       '<p>On 9×7 with unplayable corner squares there are four double corners: b1/a2, h1/i2, b7/a6 and '
                       'h7/i6. Along the side of 7 they are 6 apart, as on <a href="vesting-8x7.html">8×7</a>; the two other '
                       'kinds of pairs are 8 apart: along the long side, as on 9×8, and diagonally. '
-                      'For both there are 3 traps at even parity and none at odd: the opposition decides. Along the long side '
+                      'For both there are 2 traps at even parity and none at odd: the opposition decides. Along the long side '
                       'the three white kings stand in a row between the black ones, as on 9×8:</p>')]
         rulebody += self.trap_blocks(pga, k97, e97, name, '', [(['c2', 'e2', 'g2'], ['a2', 'i2'])], partner)
         rulebody.append(t('<p>Diagonaal: op <a href="vesting-9x9.html">9×9</a> is de diagonaal te lang, op 9×7 niet. De drie '
@@ -803,8 +809,8 @@ are 12 traps, at even parity not a single one.</p>''')]
             '<p>De vallen per bord, met zwart aan zet en beide zwarte dammen op de randvelden van twee dubbele hoeken '
             '(geteld met <a href="https://github.com/rhalbersma/egdb-draughts/blob/main/checkers/traps.py"><code>traps.py</code></a>):</p>'
             '<table class="tbl"><tr><th>Bord</th><th>Vallen bij even pariteit</th><th>Vallen bij oneven pariteit</th><th>Gevolg</th></tr>'
-            '<tr><td>8×8</td><td>3</td><td>3</td><td>de vesting valt altijd</td></tr>'
-            '<tr><td>9×8, 10×9</td><td>0</td><td>3</td><td>de oppositie beslist: de helft remise</td></tr>'
+            '<tr><td>8×8</td><td>2</td><td>2</td><td>de vesting valt altijd</td></tr>'
+            '<tr><td>9×8, 10×9</td><td>0</td><td>2</td><td>de oppositie beslist: de helft remise</td></tr>'
             '<tr><td>10×10</td><td>0</td><td>0</td><td>de vesting houdt</td></tr></table>'
             '<p>Zwart in beide dubbele hoeken, zwart aan zet (rustige stellingen):</p>'
             '<table class="tbl"><tr><th>Bord</th><th>Even pariteit</th><th>Oneven pariteit</th></tr>'
@@ -815,8 +821,8 @@ are 12 traps, at even parity not a single one.</p>''')]
             '<p>The traps per board, with black to move and both black kings on the edge squares of two double corners '
             '(counted with <a href="https://github.com/rhalbersma/egdb-draughts/blob/main/checkers/traps.py"><code>traps.py</code></a>):</p>'
             '<table class="tbl"><tr><th>Board</th><th>Traps at even parity</th><th>Traps at odd parity</th><th>Consequence</th></tr>'
-            '<tr><td>8×8</td><td>3</td><td>3</td><td>the fortress always falls</td></tr>'
-            '<tr><td>9×8, 10×9</td><td>0</td><td>3</td><td>the opposition decides: half are draws</td></tr>'
+            '<tr><td>8×8</td><td>2</td><td>2</td><td>the fortress always falls</td></tr>'
+            '<tr><td>9×8, 10×9</td><td>0</td><td>2</td><td>the opposition decides: half are draws</td></tr>'
             '<tr><td>10×10</td><td>0</td><td>0</td><td>the fortress holds</td></tr></table>'
             '<p>Black in both double corners, black to move (quiet positions):</p>'
             '<table class="tbl"><tr><th>Board</th><th>Even parity</th><th>Odd parity</th></tr>'
@@ -856,6 +862,13 @@ are 12 traps, at even parity not a single one.</p>''')]
             fig, i0 = pg.diagram(fen, t(f'{name}, zwart aan zet: {v}', f'{name}, black to move: {v}'), gid=gid)
             sh = self.shuttles(pg, gid, e, i0, legal, {f'{b}-{partner[b]}' for b in B})
             assert len(sh) == 2 and all(ok for _, ok, _ in sh), (fen, sh)
+            # a trap: every other black move (leaving a double corner) loses material at once too
+            for m in legal:
+                if m[0] in {x for x, _, _ in sh}:
+                    continue
+                assert self.exchange(e, m[2]) or any(
+                    len([x for x in w[2].split(':')[2][1:].split(',') if x]) < 2 and w[1].startswith('W')
+                    for w in e.analyse(m[2])[1]), (fen, m[0])
             out += [fig, t(f'<p>Val {k + 1}: wit op {", ".join(W)}, zwart op {B[0]} en {B[1]}: ',
                            f'<p>Trap {k + 1}: white on {", ".join(W)}, black on {B[0]} and {B[1]}: ')
                     + '; '.join(x for _, _, x in sh)
@@ -881,8 +894,12 @@ are 12 traps, at even parity not a single one.</p>''')]
                        'omgedraaid, en het blijft remise.</p>',
                        ', it is reached after an even number of moves, and white is to move again: the tempo has not turned '
                        'over, and it stays a draw.</p>'), '<div style="clear:both"></div>',
-                fig2, t('<p>Dezelfde opstelling als de val, maar met wit aan zet: remise.</p>',
-                        '<p>The same set-up as the trap, but with white to move: a draw.</p>'), '<div style="clear:both"></div>']
+                fig2, t('<p>Wit staat in de opstelling van val 2, maar zwart pendelt met dezelfde dam heen en terug en '
+                        'staat niet in de val; wit is aan zet: remise. (Zou zwart met beide dammen pendelen, dan stond hij '
+                        'wel in val 2, met wit aan zet, en dwingt wit meteen de ruil af.)</p>',
+                        '<p>White stands in the set-up of trap 2, but black shuttles with the same king to and fro and is '
+                        'not in the trap; white is to move: a draw. (Were black to shuttle with both kings, he would stand in '
+                        'trap 2, with white to move, and white forces the exchange at once.)</p>'), '<div style="clear:both"></div>']
 
     def fortress99(self, pg, k99, e99):
         """9x9 with unplayable corners: the trap works for two double corners on the same side, not for the diagonal pair"""
@@ -891,44 +908,44 @@ are 12 traps, at even parity not a single one.</p>''')]
 <p>Op 9×9 met onspeelbare hoekvelden is elke hoek een dubbele hoek: b1/a2, h1/i2, a8/b9 en h9/i8. Twee dubbele hoeken
 aan dezelfde kant liggen even ver uit elkaar als op <a href="vesting.html">9×8</a>, en de <a href="val.html">val</a>
 werkt er net zo: bij één van de twee pariteiten, dus de oppositie beslist. Dat geldt op elk bord van 9 breed: op 9×10
-heeft het paar langs de rand van 9 dezelfde 3 vallen, en op 9×11 met onspeelbare hoeken elk van de twee paren langs een
+heeft het paar langs de rand van 9 dezelfde vallen, en op 9×11 met onspeelbare hoeken elk van de twee paren langs een
 rand van 9. Twee dubbele hoeken die diagonaal tegenover elkaar liggen, werken niet: daar is bij geen van beide
 pariteiten een val. De <a href="afstandsregel.html">afstandsregel</a> op de volgende pagina vat dat samen. De database
 telt de vallen met zwart aan zet en beide zwarte dammen op de randvelden van hun dubbele hoeken:</p>
 <table class="tbl"><tr><th>Zwart in</th><th>Vallen bij even pariteit</th><th>Vallen bij oneven pariteit</th><th>Gevolg</th></tr>
-<tr><td>twee dubbele hoeken aan dezelfde kant</td><td colspan="2">3 bij één van de twee pariteiten</td><td>de oppositie beslist</td></tr>
+<tr><td>twee dubbele hoeken aan dezelfde kant</td><td colspan="2">2 bij één van de twee pariteiten</td><td>de oppositie beslist</td></tr>
 <tr><td>twee diagonaal tegenover elkaar</td><td>0</td><td>0</td><td>de vesting houdt</td></tr></table>
 <p>Per paar dubbele hoeken zijn er 12.100 beginstellingen bij elke pariteit.</p>''', '''
 <p>On 9×9 with unplayable corner squares every corner is a double corner: b1/a2, h1/i2, a8/b9 and h9/i8. Two double
 corners on the same side lie as far apart as on <a href="vesting.html">9×8</a>, and the <a href="val.html">trap</a>
 works there just the same: at one of the two parities, so the opposition decides. That holds on every board 9 wide: on
-9×10 the pair along the edge of 9 has the same 3 traps, and on 9×11 with unplayable corners each of the two pairs along an
+9×10 the pair along the edge of 9 has the same traps, and on 9×11 with unplayable corners each of the two pairs along an
 edge of 9. Two diagonally opposite double corners do not work: there is no trap at either parity. The
 <a href="afstandsregel.html">distance rule</a> on the next page sums this up. The database counts the traps with black
 to move and both black kings on the edge squares of their double corners:</p>
 <table class="tbl"><tr><th>Black in</th><th>Traps at even parity</th><th>Traps at odd parity</th><th>Consequence</th></tr>
-<tr><td>two double corners on the same side</td><td colspan="2">3 at one of the two parities</td><td>the opposition decides</td></tr>
+<tr><td>two double corners on the same side</td><td colspan="2">2 at one of the two parities</td><td>the opposition decides</td></tr>
 <tr><td>two diagonally opposite ones</td><td>0</td><td>0</td><td>the fortress holds</td></tr></table>
 <p>Per pair of double corners there are 12,100 starting positions at each parity.</p>''')]
-        # the three traps for the pair of double corners along the i-file (h1/i2 and h9/i8)
-        body.append(t('<p>Voor twee dubbele hoeken aan dezelfde kant, h1/i2 en h9/i8, zijn er drie vallen. In elk ervan '
+        # the two traps for the pair of double corners along the i-file (h1/i2 and h9/i8)
+        body.append(t('<p>Voor twee dubbele hoeken aan dezelfde kant, h1/i2 en h9/i8, zijn er twee vallen. In elk ervan '
                       'wordt elke pendelzet van zwart gestraft. Net als op 9×8 werken ze maar bij één van de twee pariteiten: '
                       'de oppositie beslist.</p>',
-                      '<p>For two double corners on the same side, h1/i2 and h9/i8, there are three traps. In each of them '
+                      '<p>For two double corners on the same side, h1/i2 and h9/i8, there are two traps. In each of them '
                       'every shuttle move of black is punished. As on 9×8 they work at only one of the two parities: the '
                       'opposition decides.</p>'))
         body += self.trap_blocks(pg, k99, e99, '9×9', t('onspeelbare hoeken', 'unplayable corners'),
-                                 [(['h3', 'h5', 'h7'], ['h1', 'h9']), (['i4', 'h5', 'i6'], ['h1', 'h9']),
-                                  (['i4', 'h5', 'i6'], ['i2', 'i8'])],
+                                 [(['h3', 'h5', 'h7'], ['h1', 'h9']), (['i4', 'h5', 'i6'], ['i2', 'i8'])],
                                  {'h1': 'i2', 'i2': 'h1', 'h9': 'i8', 'i8': 'h9'})
-        body.append(t('<p>Ook hier gaan de drie vallen in elkaar over met een even aantal zetten (h3-i4 en h7-i6; de zwarte '
-                      'dammen pendelen), en liggen ze alle drie bij dezelfde pariteit. Wit kan het tempo niet wisselen: de '
+        body.append(t('<p>Ook hier gaan de twee vallen in elkaar over met een even aantal zetten (h3-i4 en h7-i6; de zwarte '
+                      'dammen pendelen), en liggen ze bij dezelfde pariteit. Wit kan het tempo niet wisselen: de '
                       'winst is niet strategisch maar hangt af van de oppositie.</p>',
-                      '<p>Here too the three traps turn into each other with an even number of moves (h3-i4 and h7-i6; the '
-                      'black kings shuttle), and all three lie at the same parity. White cannot change the tempo: the win is '
+                      '<p>Here too the two traps turn into each other with an even number of moves (h3-i4 and h7-i6; the '
+                      'black kings shuttle), and they lie at the same parity. White cannot change the tempo: the win is '
                       'not strategic but depends on the opposition.</p>'))
         body += self.no_tempo(pg, k99, e99, t('9×9 onspeelbare hoeken', '9×9 unplayable corners'), ['h3', 'h5', 'h7'],
-                              ['h1', 'h9'], '1. h3-i4 h9-i8 2. h7-i6 i8-h9', t('val 2', 'trap 2'))
+                              ['h1', 'h9'], '1. h3-i4 h9-i8 2. h7-i6 i8-h9',
+                              t('de witte opstelling van val 2', 'the white set-up of trap 2'))
         # the diagonal pair: the 8x8 trap (three kings in a row on the connecting diagonal) catches only one shuttle
         figs = []
         for W in (['d3', 'e4', 'f5'], ['e4', 'f5', 'g6']):

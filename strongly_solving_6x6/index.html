@@ -14,7 +14,7 @@
   });
 })();
 </script>
-<title>Overview · Strongly Solving 6×6 Draughts</title>
+<title>Overview · Strongly Solving 6×6</title>
 <style>
 :root {
   --bg: #fbfaf7; --fg: #1d1d1b; --muted: #6b6a66; --rule: #e3e0d8; --panel: #f3f1ec;
@@ -100,7 +100,7 @@ details.onpage a { margin-right: 12px; white-space: nowrap; }
 .panel a { color: var(--link); text-decoration: none; }
 main { min-width: 0; }
 h1 { font-size: 30px; line-height: 1.2; margin: 0 0 16px; }
-h2 { font-size: 22px; margin: 36px 0 8px; }
+h2 { font-size: 22px; margin: 28px 0 8px; padding-top: 14px; border-top: 1px solid var(--rule); clear: both; }   /* sections of a chapter, separated as the diagrams are */
 a.m1, a.m2, a.m3 { text-decoration: none; white-space: nowrap; border-radius: 3px; padding: 0 1px; }
 a.m1 { color: var(--link); font-weight: 600; }
 a.m2 { color: var(--m2); }
@@ -177,7 +177,7 @@ table.tbl th { color: var(--muted); font-weight: 600; }
 </style>
 </head>
 <body>
-<header><a class="brand" href="index.html">Strongly Solving 6×6 Draughts</a><a href="international.html">International</a><a href="../strategie_der_36_velden/en/">Strategie der 36 velden</a><a href="../index.html">All sites</a><span class="langs"><a class="flag" href="nl/index.html" hreflang="nl" lang="nl" data-setlang="nl" title="Nederlands" aria-label="Nederlands"><svg viewBox="0 0 9 6" aria-hidden="true"><rect width="9" height="6" fill="#21468B"/><rect width="9" height="4" fill="#fff"/><rect width="9" height="2" fill="#AE1C28"/></svg></a><span class="flag cur" title="English" aria-current="true"><svg viewBox="0 0 60 30" aria-hidden="true"><clipPath id="uk-t"><path d="M30,15h30v15zv15h-30zh-30v-15zv-15h30z"/></clipPath><path d="M0,0v30h60v-30z" fill="#012169"/><path d="M0,0L60,30M60,0L0,30" stroke="#fff" stroke-width="6"/><path d="M0,0L60,30M60,0L0,30" clip-path="url(#uk-t)" stroke="#C8102E" stroke-width="4"/><path d="M30,0v30M0,15h60" stroke="#fff" stroke-width="10"/><path d="M30,0v30M0,15h60" stroke="#C8102E" stroke-width="6"/></svg></span></span></header>
+<header><a class="brand" href="index.html">Strongly Solving 6×6</a><details class="menu"><summary>Chapters</summary><nav class="menu-panel"><a href="index.html" aria-current="page">Overview</a><div class="mh">The solved start position</div><a href="international.html">The opening tree to 4 plies</a><div class="mh">Earlier solutions</div><a href="history.html">Perft and a search (2009, 2011)</a><a href="van-horssen.html">Van Horssen (2016–2018)</a><div class="mh">How far is 6×6 solved?</div><a href="status.html">Weakly solved, strongly up to 10 pieces</a><a href="missing.html">What is still missing</a><div class="mh">Towards 12 pieces</div><a href="towards-12.html">The size up to 12 pieces</a><a href="compression.html">How well do the databases compress?</a></nav></details><a href="../index.html">All sites</a><span class="langs"><a class="flag" href="nl/index.html" hreflang="nl" lang="nl" data-setlang="nl" title="Nederlands" aria-label="Nederlands"><svg viewBox="0 0 9 6" aria-hidden="true"><rect width="9" height="6" fill="#21468B"/><rect width="9" height="4" fill="#fff"/><rect width="9" height="2" fill="#AE1C28"/></svg></a><span class="flag cur" title="English" aria-current="true"><svg viewBox="0 0 60 30" aria-hidden="true"><clipPath id="uk-t"><path d="M30,15h30v15zv15h-30zh-30v-15zv-15h30z"/></clipPath><path d="M0,0v30h60v-30z" fill="#012169"/><path d="M0,0L60,30M60,0L0,30" stroke="#fff" stroke-width="6"/><path d="M0,0L60,30M60,0L0,30" clip-path="url(#uk-t)" stroke="#C8102E" stroke-width="4"/><path d="M30,0v30M0,15h60" stroke="#fff" stroke-width="10"/><path d="M30,0v30M0,15h60" stroke="#C8102E" stroke-width="6"/></svg></span></span></header>
 <div class="wrap">
   <aside class="side">
     <div id="board"></div>
@@ -193,12 +193,15 @@ table.tbl th { color: var(--muted); font-weight: 600; }
     <div class="panel" id="panel"></div>
   </aside>
   <main>
-<h1>Strongly Solving 6×6 Draughts</h1>
+<nav class="pager pager-top"><span></span><a href="international.html">The opening tree to 4 plies →</a></nav>
+<h1>Strongly Solving 6×6</h1>
 <figure><a class="diagram" href="#" data-i="0"><div class="smallboard" data-g="6x6" data-fen="W:W13,14,15,16,17,18:B1,2,3,4,5,6"></div></a><figcaption>the start position of 6×6, white to move</figcaption></figure>
 <p>The goal: to <strong>strongly solve</strong> draughts on the 6×6 board, that is, to know the value of every legal position. The way there: exact endgame databases, with the distance to the end of the game, and above them the complete opening tree. For now with one variant.</p>
-<div class="hub"><a class="card" href="international.html"><strong>International draughts</strong><span>The start position is a draw. The complete opening tree to 4 plies with exact values, the history of the solution and how far 6×6 is solved: strongly up to 10 pieces.</span></a></div>
+<h2>International draughts</h2>
+<ul class="toc"><li><span class="h">The solved start position</span><a href="international.html">The opening tree to 4 plies</a></li><li><span class="h">Earlier solutions</span><ul class="sub"><li><a href="history.html">Perft and a search (2009, 2011)</a></li><li><a href="van-horssen.html">Van Horssen (2016–2018)</a></li></ul></li><li><span class="h">How far is 6×6 solved?</span><ul class="sub"><li><a href="status.html">Weakly solved, strongly up to 10 pieces</a></li><li><a href="missing.html">What is still missing</a></li></ul></li><li><span class="h">Towards 12 pieces</span><ul class="sub"><li><a href="towards-12.html">The size up to 12 pieces</a></li><li><a href="compression.html">How well do the databases compress?</a></li></ul></li></ul>
 <p>The first use of these databases was checking Herm Jan Brascamp's <em>Strategie der 36 velden</em>, with <a href="../strategie_der_36_velden/en/">a site of its own</a>.</p>
 <p class="src">The programs and databases: <a href="https://github.com/rhalbersma/egdb-draughts">https://github.com/rhalbersma/egdb-draughts</a>.</p>
+<nav class="pager"><span></span><a href="international.html">The opening tree to 4 plies →</a></nav>
 <p class="src credit">The form of the analyses is taken from those by Wieger Wesselink on <a href="https://10x10.org">10x10.org</a>.</p>
 <p class="legend">Click a move to see the position on the large board; ‹ › (or the arrow keys) step through the line, ⏮︎ ⏭︎ jump to its start and end, ▶︎ plays it. Values are for the side to move; for a move, for the side making it, with n the number of plies to the end of the game, the move included: W = win (odd), L = loss (even), D = draw. <span style="color:var(--link);font-weight:600">Blue</span> = main line, <span style="color:var(--m2)">green</span> = side line, <em>italics</em> = continuation by the database, <span class="q">?</span> = a move that changes the result according to the database, with the better move or the refutation in [ ] (<span style="color:var(--db)">≡</span> = back to the position before that move), <span style="color:var(--only)">*</span> = the only move that keeps the win or the draw. The # button turns the square names on the large board on or off; the button with the range of the square names (e.g. 1…18 or a1…f6 on 6×6) switches between numeric and algebraic notation, in the text as well.</p>
   </main>

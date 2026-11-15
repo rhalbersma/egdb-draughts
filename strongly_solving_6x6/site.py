@@ -328,6 +328,9 @@ class Site:
         fl = HERE / 'international' / 'compression_lookup_10.txt'
         if fl.exists():
             body.append(LOOKUP_TEXT(self, fl.read_text()))
+        fm = HERE / 'international' / 'compression_mmap_10.txt'
+        if fm.exists():
+            body.append(MMAP_TEXT(self, fm.read_text()))
         else:
             body.append(t('<p>De meting loopt nog.</p>', '<p>The measurement is still running.</p>'))
         self.write('compression.html', '\n'.join(body), self.page())
@@ -475,6 +478,48 @@ def LOOKUP_TEXT(site, raw):
                 'zstd -19: 0.210 bits per position (about 1.7 GB up to 12 pieces), some 6 µs for a random position and 0.5 µs '
                 'with a cache. Not yet counted: a position with a capture costs one ply of captures when it is looked up, so '
                 'one lookup per capture in a smaller database.</p>'))
+
+
+def MMAP_TEXT(site, raw):
+    """the results of compression_mmap (lookups through mmap, warm and cold) as a table and conclusions"""
+    import re as _re
+    t = site.t
+    names = {'uncompressed, 2 bits': ('ongecomprimeerd, 2 bits', 'uncompressed, 2 bits'),
+             'zstd -19, 4 KiB blocks': ('zstd -19, blokken van 4 KiB', 'zstd -19, blocks of 4 KiB'),
+             'zstd -19, 16 KiB blocks': ('zstd -19, blokken van 16 KiB', 'zstd -19, blocks of 16 KiB')}
+    f = (lambda x, d: f'{float(x):.{d}f}'.replace('.', ',')) if site.lang == 'nl' else (lambda x, d: f'{float(x):.{d}f}')
+    rows = []
+    for k, (nl, en) in names.items():
+        m = _re.search(_re.escape(k) + r'\s+([\d.]+)\s+([\d.]+) us\s+([\d.]+) us\s+([\d.]+) us\s+([\d.]+) us', raw)
+        mb, w1, wn, c1, cn = m.groups()
+        rows.append(f'<tr><td>{nl if site.lang == "nl" else en}</td><td>{f(mb, 0)} MB</td><td>{f(w1, 3)} µs</td>'
+                    f'<td>{f(wn, 3)} µs</td><td>{f(c1, 2)} µs</td><td>{f(cn, 2)} µs</td></tr>')
+    head = t('<tr><th></th><th>Bestand</th><th>Warm, 1 kern</th><th>Warm, 4 kernen</th><th>Koud, 1 kern</th><th>Koud, 4 kernen</th></tr>',
+             '<tr><th></th><th>File</th><th>Warm, 1 core</th><th>Warm, 4 cores</th><th>Cold, 1 core</th><th>Cold, 4 cores</th></tr>')
+    return (t('<h2>Opzoeken via mmap</h2><p>Gemeten met <a href="https://github.com/rhalbersma/egdb-draughts/blob/main/'
+              'strongly_solving_6x6/international/compression_mmap.cpp"><code>compression_mmap</code></a>: de bestanden worden '
+              'met mmap geopend. Warm: alle pagina\'s zitten al in het geheugen van het besturingssysteem. Koud: het bestand '
+              'is eerst uit dat geheugen gezet, zodat de eerste aanraking van een pagina van schijf komt (gemeten over de '
+              'eerste 100.000 opvragingen; dit is een virtuele schijf in de cloud, op een eigen SSD kan het anders '
+              'uitvallen). Willekeurige stellingen, elke waarde gecontroleerd.</p>',
+              '<h2>Lookup through mmap</h2><p>Measured with <a href="https://github.com/rhalbersma/egdb-draughts/blob/main/'
+              'strongly_solving_6x6/international/compression_mmap.cpp"><code>compression_mmap</code></a>: the files are opened '
+              'with mmap. Warm: every page is already in the operating system\'s page cache. Cold: the file is first evicted '
+              'from that cache, so the first touch of a page reads it from disk (measured over the first 100,000 lookups; '
+              'this is a virtual disk in the cloud, on a local SSD it may turn out differently). Random positions, every '
+              'value checked.</p>')
+            + f'<table class="tbl">{head}{"".join(rows)}</table>'
+            + t('<p>Via mmap is opzoeken in de gecomprimeerde blokken even snel als in gewoon geheugen: het uitpakken '
+                'bepaalt de tijd, en het bestand is klein genoeg om snel helemaal in het geheugen te staan. Een koude pagina '
+                'kost hier een paar microseconden extra. Het ongecomprimeerde bestand is warm zo\'n 200 keer sneller (een '
+                'paar tientallen nanoseconden, gewoon een geheugentoegang), maar ook 10 keer groter: tot en met 12 stukken '
+                '16 GB tegen 1,7 GB. Een mogelijke tussenweg: de databases waarin het meest wordt opgezocht '
+                'ongecomprimeerd, de rest gecomprimeerd.</p>',
+                '<p>Through mmap, lookup in the compressed blocks is as fast as in ordinary memory: decompression decides the '
+                'time, and the file is small enough to be fully cached soon. A cold page costs a few microseconds extra here. '
+                'The uncompressed file is some 200 times faster when warm (a few tens of nanoseconds, just a memory access), '
+                'but also 10 times larger: up to 12 pieces 16 GB against 1.7 GB. A possible middle way: the databases that '
+                'are looked up most often uncompressed, the rest compressed.</p>'))
 
 
 def main():

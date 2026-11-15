@@ -73,6 +73,8 @@ void write_file(std::string const& path, std::vector<std::uint8_t> const& a, std
         if (!f) std::abort();
         std::fwrite(a.data(), 1, a.size(), f);
         if (!b.empty()) std::fwrite(b.data(), 1, b.size(), f);
+        std::fflush(f);
+        ::fsync(::fileno(f));            // clean pages, so that they can be evicted for the cold measurement
         std::fclose(f);
 }
 

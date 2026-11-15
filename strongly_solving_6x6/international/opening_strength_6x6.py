@@ -29,8 +29,9 @@ from opening_solve_6x6 import START, Engine, info   # noqa: E402
 
 
 def legal(n, both):
-    """legal positions with n pieces, at most 6 per side, kings on both sides (both=True) or not, either side
-    to move; white men stand on 4..18 and black men on 1..15 (16..18 and 1..3 are their own back ranks)"""
+    """legal positions with n pieces, at most 6 per side, kings on both sides (both=True) or not, with white to
+    move (the count Van Horssen uses); white men stand on 4..18 and black men on 1..15 (16..18 and 1..3 are their own
+    back ranks)"""
     tot = 0
     for wm in range(7):
         for bm in range(7):
@@ -42,7 +43,7 @@ def legal(n, both):
                           for a in range(min(wm, 3) + 1) for c in range(min(bm, 3) + 1) if wm - a + bm - c <= 12)
                 free = 18 - wm - bm
                 tot += men * comb(free, wk) * comb(free - wk, bk)
-    return 2 * tot
+    return tot
 
 
 def main():

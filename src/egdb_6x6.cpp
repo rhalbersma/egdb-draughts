@@ -1345,7 +1345,8 @@ constexpr bitboard MEN_W = FULL - PROMO_WHITE;            // squares where a whi
 constexpr bitboard MEN_B = FULL - PROMO_BLACK;            // squares where a black man can stand
 constexpr bitboard MEN_MID = MEN_W & MEN_B;               // squares 4-15
 constexpr std::uint64_t BLOCK = 4096;                     // positions (bytes) per compressed block
-constexpr std::uint64_t CDB_MAGIC = 0x3678364244424331ull;
+constexpr std::uint64_t CDB_MAGIC = 0x3678364244424331ull;     // version 1: draw 253, no escapes (still read)
+constexpr std::uint64_t CDB_MAGIC2 = 0x3678364244424332ull;    // version 2: draw 255, escape codes E..254 (see ESC8)
 constexpr int ZLEVEL = 19;
 
 // placements of nwm white and nbm black men with j white men on squares 16-18
@@ -1440,17 +1441,21 @@ struct Unit {
         std::uint64_t id = 0;               // unique per opened unit (block cache tag)
         std::uint64_t const* ovf = nullptr; // raw: overflow table, sorted entries offset << 16 | DTM (see ESC8)
         std::size_t novf = 0;
-        std::uint64_t esc_base = 0;         // compressed: the DTM of escape code 252 with extra byte 0 (0: no escapes)
+        int version = 0;                    // compressed: 1 (draw 253, no escapes) or 2 (draw 255, escapes from esc)
+        unsigned esc = 255;                 // compressed version 2: the first escape code E (255: no escapes)
 };
 
-// DTM above dtm8_max plies (251; EGDB_DTM8_MAX lowers it, to test the escapes on small units).
-// Raw unit (during a build): the byte ESC8, with the exact value in an overflow table kept in memory (raw_ovf) and in
-// the file .ovf next to the raw file, written at every checkpoint.
-// Compressed unit: an escape code with one extra byte, the extra bytes after the 4096 bytes of the block (in the same
-// zstd frame), the k-th escape of a block taking the k-th extra byte:
-//   252: DTM = base + extra,  254: base + 256 + extra,  255: base + 512 + extra   (253 is a draw; base = dtm8_max + 1,
-//   in header word 7, which is 0 for a unit without escapes, so such a unit is stored exactly as before)
+// Long distances.
+// Raw unit (during a build): DTM up to dtm8_max (251; EGDB_DTM8_MAX lowers it, to test on small units), above that the
+// byte ESC8 with the exact value in an overflow table kept in memory (raw_ovf) and in the file .ovf next to the raw
+// file, written at every checkpoint. Draws are DRAW8 (253), positions not yet decided UNKNOWN8 (254).
+// Compressed unit (version 2): one code byte per position, 255 a draw, 0 .. E - 1 the DTM itself, E .. 254 escape codes:
+// code c with extra byte x is DTM E + 256 (c - E) + x. The extra bytes follow the block's position bytes in the same
+// zstd frame, the k-th escape of the block taking the k-th extra byte. E (header word 7) is chosen per unit as large as
+// possible: 255 (no escapes) when no DTM exceeds 254, else 255 - k with k codes reaching 254 + 255 k plies (EGDB_ESC
+// forces a smaller E, to test the escapes on small units).
 constexpr std::uint8_t ESC8 = 252;
+constexpr std::uint8_t DRAW_CODE = 255;
 int const dtm8_max = [] { char const* e = std::getenv("EGDB_DTM8_MAX"); return std::clamp(e ? std::atoi(e) : 251, 1, 251); }();
 std::vector<std::uint64_t> raw_ovf;
 
@@ -1542,14 +1547,16 @@ bool unit_open(std::string const& dir, int n, int m, int mode)
                 u.p = map_any(path, u.size, 0);
                 if (!u.p) { std::cerr << "store: cannot map " << path << std::endl; return false; }
                 auto const* h = reinterpret_cast<std::uint64_t const*>(u.p);
-                bool ok = u.size >= 64 && h[0] == CDB_MAGIC && h[1] == std::uint64_t(n) && h[2] == std::uint64_t(m) && h[3] == lay.size()
+                u.version = u.size >= 64 && h[0] == CDB_MAGIC2 ? 2 : 1;
+                bool ok = u.size >= 64 && (h[0] == CDB_MAGIC || h[0] == CDB_MAGIC2) && h[1] == std::uint64_t(n) && h[2] == std::uint64_t(m) && h[3] == lay.size()
                        && h[4] == u.npos && h[5] == BLOCK && h[6] == (u.npos + BLOCK - 1) / BLOCK;
                 for (std::size_t i = 0; ok && i < lay.size(); ++i) ok = h[8 + 2 * i] == lay[i].code() && h[9 + 2 * i] == lay[i].base;
                 if (!ok) { std::cerr << "store: bad header in " << path << std::endl; ::munmap(u.p, u.size); return false; }
                 u.nblocks = h[6];
                 u.off = h + 8 + 2 * lay.size();
                 u.data = reinterpret_cast<std::uint8_t const*>(u.off + u.nblocks + 1);
-                u.esc_base = h[7];
+                u.esc = u.version == 2 ? unsigned(h[7]) : 255;
+                if (u.version == 2 && (u.esc < 1 || u.esc > 255)) { std::cerr << "store: bad escape code in " << path << std::endl; ::munmap(u.p, u.size); return false; }
                 if (std::size_t(u.data - u.p) + u.off[u.nblocks] != u.size) { std::cerr << "store: bad size of " << path << std::endl; ::munmap(u.p, u.size); return false; }
         }
         units.push_back(u);
@@ -1596,52 +1603,97 @@ ZSTD_CCtx* new_cctx()
         return cx;
 }
 
-// a decoded block: the bytes of its positions, then the extra bytes of its escapes (out holds 2 * BLOCK bytes)
+// a whole decoded block: the bytes of its positions, then the extra bytes of its escapes (out holds 2 * BLOCK bytes)
 std::size_t decode_block(ZSTD_DCtx* dx, Unit const& u, std::uint64_t b, std::uint8_t* out)
 {
         std::size_t const want = std::size_t(std::min(BLOCK, u.npos - b * BLOCK));
         std::size_t const r = ZSTD_decompressDCtx(dx, out, 2 * BLOCK, u.data + u.off[b], std::size_t(u.off[b + 1] - u.off[b]));
-        if (ZSTD_isError(r) || r < want || (r > want && u.esc_base == 0)) {
+        if (ZSTD_isError(r) || r < want || (r > want && u.esc == 255)) {
                 std::cerr << "store: block " << b << " of unit " << u.n << "/" << u.m << " does not decode" << std::endl;
                 std::abort();
         }
         return r;
 }
 
-// the value of position i of a decoded block of len positions (see ESC8)
-std::uint16_t block_value(Unit const& u, std::uint8_t const* d, std::size_t len, std::size_t i)
+// a code byte without its extra byte: the value, or ESCAPED
+constexpr std::uint16_t ESCAPED = 0xFFFE;
+std::uint16_t code_value(Unit const& u, std::uint8_t c)
 {
-        std::uint8_t const c = d[i];
-        if (c < ESC8) return c;
-        if (c == DRAW8) return DRAW;
-        std::size_t k = 0;
-        for (std::size_t j = 0; j < i; ++j) k += d[j] >= ESC8 && d[j] != DRAW8;
-        return std::uint16_t(u.esc_base + (c == ESC8 ? 0 : c == 254 ? 256 : 512) + d[len + k]);
+        if (u.version == 1) return c == DRAW8 ? DRAW : c;
+        if (c == DRAW_CODE) return DRAW;
+        return c < u.esc ? c : ESCAPED;
 }
+
+std::uint16_t escape_value(Unit const& u, std::uint8_t c, std::uint8_t x) { return std::uint16_t(u.esc + 256 * (c - u.esc) + x); }
+
+// The block cache keeps the position bytes of a block in a slot of 4 KiB. A block with escapes does not fit there: it is
+// decoded once more into a scratch buffer, its position bytes copied to the slot and its extra bytes kept beside it,
+// with a bitset of its escaped positions and prefix counts, so that the extra byte of position i is number
+// prefix[i / 64] + popcount(bits[i / 64] & ((1 << i % 64) - 1)).
+struct Escapes {
+        std::array<std::uint64_t, BLOCK / 64> bits{};
+        std::array<std::uint16_t, BLOCK / 64> prefix{};
+        std::vector<std::uint8_t> extra;
+        std::uint8_t at(std::size_t i) const
+        {
+                std::size_t const w = i / 64;
+                std::uint64_t const below = bits[w] & ((std::uint64_t(1) << (i % 64)) - 1);
+                return extra[prefix[w] + std::size_t(std::popcount(below))];
+        }
+};
 
 std::size_t cache_bits = [] { char const* e = std::getenv("EGDB_CACHE_BITS"); return std::size_t(e ? std::atoi(e) : 14); }();
 std::atomic<std::uint64_t> cache_hits{0}, cache_misses{0};
 struct BlockCache {
         std::size_t const SLOTS = std::size_t(1) << cache_bits;
         std::vector<std::uint64_t> tag = std::vector<std::uint64_t>(SLOTS, 0);
-        std::vector<std::uint8_t> buf = std::vector<std::uint8_t>(SLOTS * 2 * BLOCK);
+        std::vector<std::uint8_t> buf = std::vector<std::uint8_t>(SLOTS * BLOCK);
+        std::vector<std::unique_ptr<Escapes>> esc = std::vector<std::unique_ptr<Escapes>>(SLOTS);
+        std::vector<std::uint8_t> has_esc = std::vector<std::uint8_t>(SLOTS, 0);
+        std::vector<std::uint8_t> scratch = std::vector<std::uint8_t>(2 * BLOCK);
         ZSTD_DCtx* dx = new_dctx();
         std::uint64_t hits = 0, misses = 0;
         ~BlockCache() { ZSTD_freeDCtx(dx); }
-        std::uint8_t const* block(Unit const& u, std::uint64_t b)
+        std::size_t slot(Unit const& u, std::uint64_t b)
         {
                 std::uint64_t const id = u.id << 40 | b;
                 std::size_t const s = std::size_t((id * 0x9E3779B97F4A7C15ull) >> (64 - cache_bits));
-                std::uint8_t* d = buf.data() + s * 2 * BLOCK;
-                if (tag[s] != id) { decode_block(dx, u, b, d); tag[s] = id; ++misses; }
-                else ++hits;
-                return d;
+                if (tag[s] == id) { ++hits; return s; }
+                ++misses;
+                std::uint8_t* d = buf.data() + s * BLOCK;
+                std::size_t const want = std::size_t(std::min(BLOCK, u.npos - b * BLOCK));
+                std::uint8_t const* src = d;
+                std::size_t r = ZSTD_decompressDCtx(dx, d, BLOCK, u.data + u.off[b], std::size_t(u.off[b + 1] - u.off[b]));
+                if (ZSTD_isError(r)) {          // extra bytes that do not fit the slot: decode the whole block
+                        r = decode_block(dx, u, b, scratch.data());
+                        std::memcpy(d, scratch.data(), want);
+                        src = scratch.data();
+                } else if (r < want || (r > want && u.esc == 255)) {
+                        std::cerr << "store: block " << b << " of unit " << u.n << "/" << u.m << " does not decode" << std::endl;
+                        std::abort();
+                }
+                has_esc[s] = r > want;
+                if (r > want) {
+                        if (!esc[s]) esc[s] = std::make_unique<Escapes>();
+                        Escapes& e = *esc[s];
+                        e.bits.fill(0);
+                        for (std::size_t i = 0; i < want; ++i)
+                                if (code_value(u, src[i]) == ESCAPED) e.bits[i / 64] |= std::uint64_t(1) << (i % 64);
+                        std::uint16_t run = 0;
+                        for (std::size_t w = 0; w < BLOCK / 64; ++w) { e.prefix[w] = run; run = std::uint16_t(run + std::popcount(e.bits[w])); }
+                        e.extra.assign(src + want, src + r);
+                        if (run != r - want) { std::cerr << "store: escapes of block " << b << " of unit " << u.n << "/" << u.m << " do not match" << std::endl; std::abort(); }
+                }
+                tag[s] = id;
+                return s;
         }
-        std::uint8_t byte(Unit const& u, std::uint64_t off) { return block(u, off / BLOCK)[off % BLOCK]; }
+        std::uint8_t byte(Unit const& u, std::uint64_t off) { return buf[slot(u, off / BLOCK) * BLOCK + off % BLOCK]; }
         std::uint16_t value(Unit const& u, std::uint64_t off)
         {
-                std::uint64_t const b = off / BLOCK;
-                return block_value(u, block(u, b), std::size_t(std::min(BLOCK, u.npos - b * BLOCK)), std::size_t(off % BLOCK));
+                std::size_t const s = slot(u, off / BLOCK), i = std::size_t(off % BLOCK);
+                std::uint8_t const c = buf[s * BLOCK + i];
+                std::uint16_t const v = code_value(u, c);
+                return v != ESCAPED ? v : escape_value(u, c, esc[s]->at(i));
         }
 };
 thread_local BlockCache block_cache;
@@ -1734,7 +1786,7 @@ struct Cursor {
 // the block as stored: capture positions repeat the previous value of the block
 // returns the size: the block's positions, then the extra bytes of its escapes (out holds 2 * BLOCK bytes)
 std::size_t filled_block(std::vector<UnitMat> const& lay, std::uint8_t const* raw, std::vector<std::uint64_t> const& ovf,
-                         std::uint64_t npos, std::uint64_t b, std::uint8_t* out)
+                         std::uint64_t npos, std::uint64_t b, unsigned esc, std::uint8_t* out)
 {
         Cursor c(lay);
         c.seek(b * BLOCK);
@@ -1745,12 +1797,12 @@ std::size_t filled_block(std::vector<UnitMat> const& lay, std::uint8_t const* ra
                 std::uint16_t v = raw[o] == ESC8 ? ovf_find(ovf.data(), ovf.size(), o) : widen(raw[o]);
                 if (o > b * BLOCK && has_capture(c.pos())) v = prev;
                 prev = v;
-                std::uint8_t code = v == DRAW ? DRAW8 : std::uint8_t(v);
-                if (v != DRAW && v > dtm8_max) {
-                        unsigned const e = unsigned(v) - unsigned(dtm8_max + 1);
-                        if (e >= 768) { std::cerr << "DTM overflow (" << v << ")" << std::endl; std::abort(); }
-                        code = e < 256 ? ESC8 : e < 512 ? std::uint8_t(254) : std::uint8_t(255);
-                        out[extra++] = std::uint8_t(e & 255);
+                std::uint8_t code = v == DRAW ? DRAW_CODE : std::uint8_t(v);
+                if (v != DRAW && v >= esc) {
+                        unsigned const e = unsigned(v) - esc, c = esc + e / 256;
+                        if (c > 254) { std::cerr << "DTM overflow (" << v << ")" << std::endl; std::abort(); }
+                        code = std::uint8_t(c);
+                        out[extra++] = std::uint8_t(e % 256);
                 }
                 out[o - b * BLOCK] = code;
         }
@@ -2067,8 +2119,14 @@ bool unit_compress(std::string const& dir, int n, int m, int threads)
         std::vector<std::uint64_t> const ovf = read_ovf(unit_path(dir, n, m, ".ovf"));
         std::FILE* f = std::fopen(tmp.c_str(), "wb");
         if (!f) return false;
-        std::vector<std::uint64_t> head{ CDB_MAGIC, std::uint64_t(n), std::uint64_t(m), lay.size(), npos, BLOCK, nb,
-                                         ovf.empty() ? 0 : std::uint64_t(dtm8_max + 1) };
+        // E: the first escape code, as large as the longest DTM allows (255: no escapes)
+        unsigned longest = 0;
+        for (std::uint64_t o = 0; o < npos; ++o) if (raw[o] <= MAXDTM8 && raw[o] != ESC8) longest = std::max(longest, unsigned(raw[o]));
+        for (std::uint64_t x : ovf) longest = std::max(longest, unsigned(x & 0xFFFF));
+        unsigned const k = longest <= 254 ? 0 : (longest - 254 + 254) / 255;
+        unsigned esc = 255 - k;
+        if (char const* e = std::getenv("EGDB_ESC")) esc = std::min(esc, unsigned(std::clamp(std::atoi(e), 1, 255)));
+        std::vector<std::uint64_t> head{ CDB_MAGIC2, std::uint64_t(n), std::uint64_t(m), lay.size(), npos, BLOCK, nb, esc };
         for (auto const& x : lay) { head.push_back(x.code()); head.push_back(x.base); }
         std::vector<std::uint64_t> off(nb + 1, 0);
         std::fwrite(head.data(), 8, head.size(), f);
@@ -2085,7 +2143,7 @@ bool unit_compress(std::string const& dir, int n, int m, int threads)
                         std::vector<std::uint8_t> blk(2 * BLOCK);
                         #pragma omp for schedule(dynamic, 16)
                         for (std::uint64_t b = b0; b < b1; ++b) {
-                                std::size_t const len = filled_block(lay, raw, ovf, npos, b, blk.data());
+                                std::size_t const len = filled_block(lay, raw, ovf, npos, b, esc, blk.data());
                                 auto& o = out[b - b0];
                                 o.resize(ZSTD_compressBound(len));
                                 std::size_t const r = ZSTD_compress2(cx, o.data(), o.size(), blk.data(), len);
@@ -2109,7 +2167,8 @@ bool unit_compress(std::string const& dir, int n, int m, int threads)
         if (!ok || std::rename(tmp.c_str(), path.c_str()) != 0) return false;
         std::uint64_t const fsize = head.size() * 8 + off.size() * 8 + total;
         std::cout << "compressed " << n << " " << m << " positions " << npos << " blocks " << nb << " bytes " << fsize
-                  << " bits_per_position " << 8.0 * double(fsize) / double(npos) << " overflow " << ovf.size() << " seconds " << seconds_since(t0) << '\n';
+                  << " bits_per_position " << 8.0 * double(fsize) / double(npos) << " longest " << longest << " escape " << esc
+                  << " seconds " << seconds_since(t0) << '\n';
         return true;
 }
 
@@ -2142,6 +2201,73 @@ bool unit_crc(std::string const& dir, int n, int m)
         return true;
 }
 
+// recode a compressed unit of version 1 (draw 253) to version 2 (draw 255, no escapes: version 1 has no DTM above 252):
+// every block decoded, its draws recoded, compressed again and decoded once more to check it; the values stay the same
+bool unit_recode(std::string const& dir, int n, int m, int threads)
+{
+        auto const lay = unit_layout(n, m);
+        if (lay.empty()) { std::cout << "empty " << n << " " << m << '\n'; return true; }
+        if (!store_open(dir, n, m, 3)) return false;
+        Unit const& u = units.back();
+        if (u.version == 2) { std::cout << "recoded " << n << " " << m << " already version 2\n"; return true; }
+        std::string const path = unit_path(dir, n, m, ".cdb"), tmp = path + ".tmp";
+        std::FILE* f = std::fopen(tmp.c_str(), "wb");
+        if (!f) return false;
+        std::size_t const nhead = std::size_t(u.data - u.p) / 8 - (u.nblocks + 1);   // header words before the offsets
+        std::vector<std::uint64_t> head(nhead);
+        std::memcpy(head.data(), u.p, nhead * 8);
+        head[0] = CDB_MAGIC2;
+        head[7] = 255;
+        std::vector<std::uint64_t> off(u.nblocks + 1, 0);
+        std::fwrite(head.data(), 8, head.size(), f);
+        std::fwrite(off.data(), 8, off.size(), f);
+        auto const t0 = std::chrono::steady_clock::now();
+        std::uint64_t const nb = u.nblocks, batch = 16384;
+        std::vector<std::vector<std::uint8_t>> out(batch);
+        std::uint64_t total = 0, draws = 0;
+        std::atomic<bool> bad{false};
+        for (std::uint64_t b0 = 0; b0 < nb; b0 += batch) {
+                std::uint64_t const b1 = std::min(nb, b0 + batch);
+                #pragma omp parallel num_threads(threads) reduction(+ : draws)
+                {
+                        ZSTD_CCtx* cx = new_cctx();
+                        ZSTD_DCtx* dx = new_dctx();
+                        std::vector<std::uint8_t> blk(2 * BLOCK), back(2 * BLOCK);
+                        #pragma omp for schedule(dynamic, 16)
+                        for (std::uint64_t b = b0; b < b1; ++b) {
+                                std::size_t const len = decode_block(dx, u, b, blk.data());
+                                for (std::size_t i = 0; i < len; ++i) {
+                                        if (blk[i] == DRAW8) { blk[i] = DRAW_CODE; ++draws; }
+                                        else if (blk[i] > DRAW8) bad = true;
+                                }
+                                auto& o = out[b - b0];
+                                o.resize(ZSTD_compressBound(len));
+                                std::size_t const r = ZSTD_compress2(cx, o.data(), o.size(), blk.data(), len);
+                                if (ZSTD_isError(r)) { std::cerr << "zstd: " << ZSTD_getErrorName(r) << std::endl; std::abort(); }
+                                o.resize(r);
+                                std::size_t const g = ZSTD_decompressDCtx(dx, back.data(), back.size(), o.data(), o.size());
+                                if (g != len || std::memcmp(back.data(), blk.data(), len) != 0) bad = true;
+                        }
+                        ZSTD_freeDCtx(dx);
+                        ZSTD_freeCCtx(cx);
+                }
+                for (std::uint64_t b = b0; b < b1; ++b) {
+                        off[b] = total;
+                        total += out[b - b0].size();
+                        std::fwrite(out[b - b0].data(), 1, out[b - b0].size(), f);
+                }
+        }
+        off[nb] = total;
+        bool ok = !bad && ::fseeko(f, off_t(head.size() * 8), SEEK_SET) == 0 && std::fwrite(off.data(), 8, off.size(), f) == off.size();
+        ok = ok && std::fflush(f) == 0 && ::fsync(::fileno(f)) == 0;
+        ok = std::fclose(f) == 0 && ok;
+        if (!ok) { std::remove(tmp.c_str()); std::cerr << "recode: unit " << n << "/" << m << " failed" << std::endl; return false; }
+        if (std::rename(tmp.c_str(), path.c_str()) != 0) return false;
+        std::cout << "recoded " << n << " " << m << " positions " << u.npos << " draws " << draws << " bytes "
+                  << (head.size() + off.size()) * 8 + total << " seconds " << seconds_since(t0) << '\n';
+        return true;
+}
+
 // compare the compressed unit with the raw one: every block decoded and compared byte for byte with the block as it
 // should be stored (the raw values, capture positions filled in). Looking up every position through the compressed
 // unit as well would add nothing: a position without capture reads exactly such a byte, and a capture position is
@@ -2166,7 +2292,7 @@ bool unit_compare(std::string const& dir, int n, int m, int threads)
                 #pragma omp for schedule(dynamic, 64)
                 for (std::uint64_t b = 0; b < u.nblocks; ++b) {
                         std::size_t const g = decode_block(dx, u, b, got.data());
-                        std::size_t const w = filled_block(lay, raw, ovf, npos, b, want.data());
+                        std::size_t const w = filled_block(lay, raw, ovf, npos, b, u.esc, want.data());
                         for (std::size_t i = 0; i < std::max(g, w); ++i) bad_bytes += i >= g || i >= w || want[i] != got[i];
                         bytes += std::size_t(std::min(BLOCK, npos - b * BLOCK));
                 }
@@ -2249,6 +2375,14 @@ int main()
                         rs >> dir >> n >> m;
                         bool ok = unit_crc(dir, n, m);
                         std::cout << (ok ? "unitcrc ok" : "error unitcrc failed") << "\nend" << std::endl;
+                        continue;
+                }
+                if (cmd == "unitrecode") {
+                        std::string dir;
+                        int n = 0, m = 0, threads = 4;
+                        rs >> dir >> n >> m >> threads;
+                        bool const ok = unit_recode(dir, n, m, threads);
+                        std::cout << (ok ? "unitrecode ok" : "error unitrecode failed") << "\nend" << std::endl;
                         continue;
                 }
                 if (cmd == "unitvalues") {

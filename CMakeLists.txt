@@ -44,6 +44,14 @@ target_compile_options(egdb_fast PRIVATE
     $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -Wshadow -march=native>
 )
 
+# the king index of a 6x6 slice: egdb_6x6's loops against xstd::bit_compress / bit_expand (PEXT / PDEP) and tables
+add_executable(bench_index_6x6 strongly_solving_6x6/international/bench_index.cpp)
+target_link_libraries(bench_index_6x6 PRIVATE xstd::bits)
+target_compile_features(bench_index_6x6 PRIVATE cxx_std_23)
+target_compile_options(bench_index_6x6 PRIVATE
+    $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -march=native>
+)
+
 # 6x6 international draughts with men and kings: slice databases built with leapfrog retrograde analysis
 # (used to check "Strategie der 36 velden", see strategie_der_36_velden/)
 add_executable(egdb_6x6 src/egdb_6x6.cpp)

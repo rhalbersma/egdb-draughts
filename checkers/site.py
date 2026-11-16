@@ -601,23 +601,17 @@ king in the middle of the white kings (the third diagram).</p>''')]
         k99, e99 = self.engine(9, 9, 'unplayable')
         pg = self.page((k89, e89))
         pg9 = self.page((k99, e99))
-        fen = e89.fen(['c7', 'e7', 'g7'], ['a7', 'i7'])
         t = self.t
-        v, legal = e89.analyse(fen)
-        fig, i0 = pg.diagram(fen, t(f'9×8, wit aan zet: {v}', f'9×8, white to move: {v}'), gid=k89)
-        fb = 'B' + fen[1:]                 # the same position with black to move
-        vb, _ = e89.analyse(fb)
-        figb, ib = pg.diagram(fb, t(f'9×8, zwart aan zet: {vb}', f'9×8, black to move: {vb}'), gid=k89)
-        hb, *_ = pg.moves(fb, self.plan('1. a7-b8 2. g7-f8! b8xd6 3. e7xc5'), 1, True, 'm1', ib)
-        hb2, *_ = pg.best_line(pg.pos[int(re.findall(r'data-i="(\d+)"', hb)[-1])]['f'], 40,
-                               start=int(re.findall(r'data-i="(\d+)"', hb)[-1]), number=3)
         partner89 = {'b8': 'a7', 'a7': 'b8', 'h8': 'i7', 'i7': 'h8'}
         x89 = self.active_passive(e89, (['d8', 'e7', 'f8'], ['b8', 'h8']), (['c7', 'e7', 'g7'], ['a7', 'i7']))
-        act89 = [t(f'<p>Ook op 9×8 heeft wit twee vallen. Val 1 is de actieve, een dubbele ruildreiging: wit op d8, e7 en f8 '
-                   f'tegen b8 en h8. Die wint ook met wit aan zet, want dan ruilt wit meteen: {x89}.</p>',
-                   f'<p>On 9×8 too white has two traps. Trap 1 is the active one, a double exchange threat: white on d8, e7 and '
-                   f'f8 against b8 and h8. It wins with white to move too, since then white exchanges at once: {x89}.</p>')] \
-            + self.trap_blocks(pg, k89, e89, '9×8', '', [(['d8', 'e7', 'f8'], ['b8', 'h8'])], partner89)
+        act89 = [t('<p>Ook op 9×8 heeft wit twee vallen, hier allebei met zwart aan zet. Val 1 is de actieve, een dubbele '
+                   'ruildreiging: wit op d8, e7 en f8 tegen b8 en h8. Val 2 is de passieve, een dubbele vangstdreiging: wit '
+                   'op c7, e7 en g7 tegen a7 en i7.</p>',
+                   '<p>On 9×8 too white has two traps, both shown here with black to move. Trap 1 is the active one, a '
+                   'double exchange threat: white on d8, e7 and f8 against b8 and h8. Trap 2 is the passive one, a double '
+                   'capture threat: white on c7, e7 and g7 against a7 and i7.</p>')] \
+            + self.trap_blocks(pg, k89, e89, '9×8', '', [(['d8', 'e7', 'f8'], ['b8', 'h8']),
+                                                          (['c7', 'e7', 'g7'], ['a7', 'i7'])], partner89)
         body = [t('''
 <p>Een dam op de twee randvelden van een dubbele hoek kan nooit geslagen worden en heeft altijd een wachtzet. Op 9×8
 maakt een zwarte dam in elke dubbele hoek remise in de helft van de stellingen, en welke helft dat is, beslist de
@@ -634,17 +628,7 @@ move, and kings cannot lose a tempo, so with black to move the parity is fixed f
 <p>With black to move and the black kings on the edge squares of the two double corners (quiet positions, nobody can
 capture), on 9×8 every position is drawn at even parity (8,228 positions) and none at odd parity (8,244).</p>'''),
                 *act89,
-                fig,
-                t(f'<p>Val 2 is de passieve, een dubbele vangstdreiging: zwart op a7 en i7 (pendelend met b8 en h8), wit op '
-                  f'c7, e7 en g7. Met wit aan zet houdt elke zet remise: zwart pendelt gewoon a7-b8-a7 en/of i7-h8-i7. ',
-                  f'<p>Trap 2 is the passive one, a double capture threat: black on a7 and i7 (shuttling with b8 and h8), '
-                  f'white on c7, e7 and g7. With white to move every move draws: black just shuttles a7-b8-a7 and/or '
-                  f'i7-h8-i7. ') + f'{self.moves_list(pg, i0, legal, "1. ")}.</p>',
-                '<div style="clear:both"></div>', figb,
-                t(f'<p>Dezelfde stelling met zwart aan zet: zwart staat in zetdwang en verliest in {vb[1:]} ply: {hb} en 2 '
-                  f'tegen 1 wint: ',
-                  f'<p>The same position with black to move: black is in zugzwang and loses in {vb[1:]} plies: {hb} and 2-1 '
-                  f'wins: ') + f'{hb2}</p>', '<div style="clear:both"></div>', t('''
+                t('''
 <p>Wat beslist, is de afstand tussen de hoeken van de dubbele hoeken die zwart bezet (<em>D</em> = grootste,
 <em>d</em> = kleinste coördinaatverschil; <em>d</em> = 0 als ze aan dezelfde kant liggen), niet of ze aan dezelfde
 kant liggen:</p>
@@ -673,12 +657,16 @@ same side:</p>
         # the other of the two traps on 9x8 (the trap of the previous page is the first), on a page of its own
         pgp = self.page((k89, e89))
         trap2 = [
-            t('<p>De passieve val 2 wint dus alleen met zwart aan zet, en anders dan op 8×8 kan wit vanuit die val geen tempo '
-              'wisselen: de twee vallen liggen bij dezelfde pariteit. Dat staat op de '
-              '<a href="vesting-pariteit.html">volgende pagina</a>.</p>',
-              '<p>So the passive trap 2 wins with black to move only, and unlike on 8×8 white cannot change the tempo from '
-              'that trap: the two traps lie at the same parity. That is on the <a href="vesting-pariteit.html">next page</a>.</p>')]
-        extra = [t(
+            t('<p>En met wit aan zet? De actieve val 1 wint dan ook, maar de passieve val 2 niet, en anders dan op 8×8 kan '
+              'wit vanuit die val geen tempo wisselen. Dat staat op de <a href="vesting-pariteit.html">volgende '
+              'pagina</a>.</p>',
+              '<p>And with white to move? The active trap 1 wins then too, but the passive trap 2 does not, and unlike on '
+              '8×8 white cannot change the tempo from that trap. That is on the <a href="vesting-pariteit.html">next '
+              'page</a>.</p>')]
+        extra = [t(f'<p>Met wit aan zet wint de actieve val 1 van de <a href="vesting.html">vorige pagina</a> ook, want '
+                   f'dan ruilt wit meteen: {x89}. De passieve val 2 wint met wit aan zet niet.</p>',
+                   f'<p>With white to move the active trap 1 of the <a href="vesting.html">previous page</a> wins too, since '
+                   f'then white exchanges at once: {x89}. The passive trap 2 does not win with white to move.</p>'), t(
             '<p>De twee vallen van de <a href="vesting.html">vorige pagina</a> gaan in elkaar over met een even aantal zetten: '
             'van de passieve val 2 (wit op c7, e7 en g7, zwart op a7 en i7) naar de actieve val 1 doen twee witte dammen elk één stap (c7-d8 en g7-f8) en pendelen beide '
             'zwarte dammen. Ze liggen dus bij dezelfde pariteit (oneven). Wit kan het tempo niet wisselen, anders dan op 8×8 met de '
@@ -688,7 +676,7 @@ same side:</p>
             'kings shuttle. They therefore lie at the same parity (odd). White cannot change the tempo, unlike on 8×8 with the '
             'change-over to the other diagonal. The win here is not strategic: the opposition decides.</p>')] \
             + self.no_tempo(pgp, k89, e89, '9×8', ['c7', 'e7', 'g7'], ['a7', 'i7'], '1. c7-d8 a7-b8 2. g7-f8 b8-a7',
-                            t('de witte opstelling van val 1', 'the white set-up of trap 1'))
+                            t('de witte opstelling van val 1', 'the white set-up of trap 1'), all_moves=True)
         self.write('vesting-pariteit.html', None, '\n'.join(extra), pgp, k89)
         rule = next(k for k, x in enumerate(body) if isinstance(x, str) and 'D × d' in x)
         self.write('vesting.html', None, '\n'.join(body[:rule] + trap2), pg, k89)
@@ -984,19 +972,22 @@ are 8 traps, at even parity not a single one.</p>''')]
                     + self.moves_list(pg, i0, legal, '1. … ') + '.</p>', '<div style="clear:both"></div>']
         return out
 
-    def no_tempo(self, pg, gid, e, name, W, B, line, target):
+    def no_tempo(self, pg, gid, e, name, W, B, line, target, all_moves=False):
         """from a trap set-up with white to move, white steps over to another trap while black shuttles: an even number
         of moves, so white is to move again and it stays a draw"""
         t = self.t
         fen = e.fen(W, B, 'W')
-        v, _ = e.analyse(fen)
+        v, legal = e.analyse(fen)
         fig, i0 = pg.diagram(fen, t(f'{name}, wit aan zet: {v}', f'{name}, white to move: {v}'), gid=gid)
+        assert not all_moves or all(m[1] == 'D' for m in legal)
+        every = (t(' Elke witte zet houdt remise, want zwart pendelt gewoon: ', ' Every white move draws, since black just '
+                   'shuttles: ') + self.moves_list(pg, i0, legal, '1. ') + '.') if all_moves else ''
         h, i_end, f_end, _ = pg.moves(fen, self.plan(line), 1, False, 'm1', i0, nbook=len(self.plan(line)))
         v2, _ = e.analyse(f_end)
         assert v == v2 == 'D' and f_end[0] == 'W'
         fig2, _ = pg.diagram(f_end, t(f'{name}, wit aan zet: {v2}', f'{name}, white to move: {v2}'), gid=gid)
-        return [fig, t(f'<p>Met wit aan zet is de opstelling van de passieve val geen val. Stapt wit over naar {target}, terwijl zwart '
-                       f'pendelt, ', f'<p>With white to move the set-up of the passive trap is no trap. If white steps over to '
+        return [fig, t(f'<p>Met wit aan zet is de opstelling van de passieve val geen val.{every} Stapt wit over naar {target}, terwijl zwart '
+                       f'pendelt, ', f'<p>With white to move the set-up of the passive trap is no trap.{every} If white steps over to '
                        f'{target} while black shuttles, ') + f'{h}' + t(
                        ', dan is dat na een even aantal zetten bereikt, en is wit weer aan zet: het tempo is niet '
                        'omgedraaid, en het blijft remise.</p>',

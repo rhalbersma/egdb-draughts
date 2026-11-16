@@ -58,6 +58,7 @@
 //   unitcompress <dir> <n> <m> [t]       compress the raw file of the unit
 //   unitcompare <dir> <n> <m> [t]        compare every block of the compressed unit with the raw file
 //   unitcrc <dir> <n> <m>                CRC32C of the stored bytes of the compressed unit (independent of zstd)
+//   unitmax <dir> <n> <m> [t]            per material the longest win and the longest loss, with a position for each
 //   perft <depth> [FEN] [dups]           leaf counts to each depth from the position (default: the start position);
 //                                        with "dups" every capture sequence counts, also when two give the same
 //                                        position (as the checkers perft of dctl and the forum thread)
@@ -1886,6 +1887,43 @@ bool unit_verify(std::string const& dir, int n, int m, bool compressed, int thre
         return errors == 0 && checked + skipped == unit_positions(lay);
 }
 
+// the longest win and the longest loss per material of a unit (stored positions, capture positions resolved):
+// for each material the largest odd and the largest even DTM, each with the first stored position that has it
+bool unit_max(std::string const& dir, int n, int m, int threads)
+{
+        auto const lay = unit_layout(n, m);
+        if (lay.empty()) { std::cout << "empty " << n << " " << m << '\n'; return true; }
+        if (!store_open(dir, n, m, 3)) return false;
+        Unit const& u = units.back();
+        struct Best { std::uint16_t v = 0; std::uint64_t off = ~0ull; };
+        std::size_t const M = lay.size();
+        std::vector<Best> win(std::size_t(threads) * M), loss(std::size_t(threads) * M);
+        auto better = [](Best const& a, std::uint16_t v, std::uint64_t off) { return v > a.v || (v == a.v && off < a.off); };
+        for_each_stored(lay, threads, "max", [&](Cursor const& cur, std::uint64_t off) {
+                Pos const q = cur.pos();
+                std::uint16_t const v = has_capture(q) ? lookup(q) : widen(block_cache.byte(u, off));
+                if (v == DRAW) return;
+                std::size_t const i = std::size_t(omp_get_thread_num()) * M + cur.mi;
+                Best& b = (v & 1) ? win[i] : loss[i];
+                if (better(b, v, off)) b = { v, off };
+        });
+        for (std::size_t mi = 0; mi < M; ++mi) {
+                Best w, l;
+                for (int t = 0; t < threads; ++t) {
+                        Best const& a = win[std::size_t(t) * M + mi];
+                        Best const& b = loss[std::size_t(t) * M + mi];
+                        if (a.off != ~0ull && better(w, a.v, a.off)) w = a;
+                        if (b.off != ~0ull && better(l, b.v, b.off)) l = b;
+                }
+                auto fen = [&](Best const& b) { if (b.off == ~0ull) return std::string("-"); Cursor c(lay); c.seek(b.off); return fen_of(c.pos()); };
+                UnitMat const& x = lay[mi];
+                std::cout << "max " << n << " " << m << " material " << x.wm << " " << x.bm << " " << x.wk << " " << x.bk
+                          << " win " << (w.off == ~0ull ? "-" : show(w.v)) << " " << fen(w)
+                          << " loss " << (l.off == ~0ull ? "-" : show(l.v)) << " " << fen(l) << '\n';
+        }
+        return true;
+}
+
 // compress the raw file of unit (n, m) into blocks of 4096 positions (zstd -19)
 // file: magic, n, m, materials, positions, block, blocks, 0; per material (code, base); offsets[blocks + 1]; data
 bool unit_compress(std::string const& dir, int n, int m, int threads)
@@ -2084,6 +2122,14 @@ int main()
                         rs >> dir >> n >> m;
                         bool ok = unit_crc(dir, n, m);
                         std::cout << (ok ? "unitcrc ok" : "error unitcrc failed") << "\nend" << std::endl;
+                        continue;
+                }
+                if (cmd == "unitmax") {
+                        std::string dir;
+                        int n = 0, m = 0, threads = 4;
+                        rs >> dir >> n >> m >> threads;
+                        bool const ok = unit_max(dir, n, m, threads);
+                        std::cout << (ok ? "unitmax ok" : "error unitmax failed") << "\nend" << std::endl;
                         continue;
                 }
                 if (cmd == "unitbuild" || cmd == "unitverify" || cmd == "unitcompress" || cmd == "unitcompare") {

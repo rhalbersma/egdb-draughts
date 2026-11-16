@@ -56,6 +56,13 @@
 // FEN: W:W17,K16:B2,K15 (side to move, white pieces, black pieces; K = king).
 // Values: "W<n>" win in n plies, "L<n>" loss in n plies, "D" draw (for the side to move).
 
+#include <xstd/bits/bit/bit_compress.hpp>          // bit_compress
+#include <xstd/bits/bit/bit_convert.hpp>           // bit_convert
+#include <xstd/bits/bit/bit_expand.hpp>            // bit_expand
+#include <xstd/bits/bit_set/bit_fixed_set.hpp>     // bit_fixed_set
+#include <xstd/bits/bit_type_traits/bit_align.hpp> // bit_align
+#include <xstd/bits/bit_type_traits/bit_least.hpp> // bit_least
+#include <xstd/ints/bit/bit_reverse.hpp>           // bit_reverse
 #include <algorithm>
 #include <array>
 #include <barrier>
@@ -89,7 +96,14 @@
 namespace {
 
 constexpr int N = 18;
-constexpr std::uint32_t FULL = (1u << N) - 1;
+
+// bitboards: the 18 squares in one std::uint32_t block (bit_least), widened to its 32 bits (bit_align); the full
+// board is FULL, so a complement is FULL - x
+using bitboard = xstd::bit_align<xstd::bit_least<xstd::bit_fixed_set<N>>>;
+constexpr bitboard bb_of(std::uint32_t x) { return xstd::bit_convert<bitboard>(x); }
+constexpr std::uint32_t u32(bitboard const& x) { return xstd::bit_convert<std::uint32_t>(x); }
+bitboard square_bb(int s) { return bitboard{ std::size_t(s) }; }
+constexpr bitboard FULL = bb_of((1u << N) - 1);
 
 int row_of(int s) { return s / 3; }                                    // 0 = top row (squares 1-3)
 int col_of(int s) { return 2 * (s % 3) + (row_of(s) % 2 == 0 ? 1 : 0); } // 0 = file a
@@ -106,6 +120,12 @@ constexpr int DC[4] = { -1, 1, -1, 1 };
 std::array<std::array<std::vector<int>, 4>, N> rays;
 std::array<std::array<std::uint64_t, N + 1>, N + 1> binom{};
 
+// colex ranks of the kings packed onto consecutive bits (xstd::bit_compress / bit_expand): the rank of a packed subset
+// does not depend on the mask it was packed from, so one table of 2^18 ranks serves every mask, and per number of
+// kings k one table of the packed subsets in rank order (2^18 entries over all k)
+std::vector<std::uint32_t> rank_table, unrank_table;
+std::array<std::uint32_t, N + 2> unrank_offset{};
+
 void init_tables()
 {
         for (int s = 0; s < N; ++s)
@@ -116,26 +136,34 @@ void init_tables()
                 binom[n][0] = 1;
                 for (int k = 1; k <= n; ++k) binom[n][k] = binom[n - 1][k - 1] + (k <= n - 1 ? binom[n - 1][k] : 0);
         }
+        rank_table.assign(std::size_t(1) << N, 0);
+        unrank_table.assign(std::size_t(1) << N, 0);
+        for (std::uint32_t c = 0; c < (1u << N); ++c) {
+                std::uint64_t r = 0;
+                int i = 0;
+                for (auto const sq : bb_of(c)) r += binom[std::size_t(sq)][std::size_t(++i)];
+                rank_table[c] = std::uint32_t(r);
+        }
+        for (int k = 0; k <= N; ++k) unrank_offset[std::size_t(k) + 1] = unrank_offset[std::size_t(k)] + std::uint32_t(binom[N][std::size_t(k)]);
+        for (std::uint32_t c = 0; c < (1u << N); ++c) unrank_table[unrank_offset[bb_of(c).size()] + rank_table[c]] = c;
 }
 
-constexpr std::uint32_t PROMO_WHITE = 0b111;                 // squares 1-3
-constexpr std::uint32_t PROMO_BLACK = 0b111u << 15;          // squares 16-18
+constexpr bitboard PROMO_WHITE = bb_of(0b111);                // squares 1-3
+constexpr bitboard PROMO_BLACK = bb_of(0b111u << 15);         // squares 16-18
 
 struct Pos {
-        std::uint32_t m[2]{};   // men   [0] = white, [1] = black
-        std::uint32_t k[2]{};   // kings
+        bitboard m[2]{};        // men   [0] = white, [1] = black
+        bitboard k[2]{};        // kings
         int stm = 0;            // 0 = white to move, 1 = black to move
 
-        std::uint32_t occ() const { return m[0] | m[1] | k[0] | k[1]; }
+        bitboard occ() const { return m[0] | m[1] | k[0] | k[1]; }
         bool operator==(Pos const&) const = default;
 };
 
-// 180 degree rotation with colours swapped: square n <-> 19 - n, white <-> black
-std::uint32_t flip(std::uint32_t x)
+// 180 degree rotation with colours swapped: square n <-> 19 - n, white <-> black (the 32 bits reversed, shifted down)
+bitboard flip(bitboard const& x)
 {
-        std::uint32_t y = 0;
-        for (; x; x &= x - 1) y |= 1u << (N - 1 - __builtin_ctz(x));
-        return y;
+        return bb_of(xstd::bit_reverse(u32(x)) >> (32 - N));
 }
 
 Pos mirror(Pos const& p)
@@ -151,7 +179,7 @@ Pos mirror(Pos const& p)
 
 struct Move {
         int from, to;
-        std::uint32_t captured;
+        bitboard captured;
         Pos next;
 };
 
@@ -182,7 +210,7 @@ struct MoveList {
 struct Gen {
         Pos const& p;
         int us, them;
-        std::uint32_t enemy, empty0;
+        bitboard enemy, empty0;
         int best = 0;
         MoveList* out;
         int from = 0;
@@ -193,38 +221,38 @@ struct Gen {
                 enemy = p.m[them] | p.k[them];
         }
 
-        void emit(int to, std::uint32_t cap, int n)
+        void emit(int to, bitboard const& cap, int n)
         {
                 if (n < best) return;
                 if (n > best) { best = n; out->clear(); }
                 Pos q = p;
-                std::uint32_t fb = 1u << from, tb = 1u << to;
-                bool promote = !is_king && ((us == 0 ? PROMO_WHITE : PROMO_BLACK) & tb);
-                if (is_king) { q.k[us] = (q.k[us] & ~fb) | tb; }
-                else if (promote) { q.m[us] &= ~fb; q.k[us] |= tb; }
-                else { q.m[us] = (q.m[us] & ~fb) | tb; }
-                q.m[them] &= ~cap; q.k[them] &= ~cap;
+                std::size_t const fb = std::size_t(from), tb = std::size_t(to);
+                bool promote = !is_king && (us == 0 ? PROMO_WHITE : PROMO_BLACK).contains(tb);
+                if (is_king) { q.k[us].erase(fb); q.k[us].insert(tb); }
+                else if (promote) { q.m[us].erase(fb); q.k[us].insert(tb); }
+                else { q.m[us].erase(fb); q.m[us].insert(tb); }
+                q.m[them] -= cap; q.k[them] -= cap;
                 q.stm = them;
                 for (auto const& mv : *out) if (mv.next == q) return;  // same resulting position
                 out->push_back({ from, to, cap, q });
         }
 
         // empty: squares that are empty during this capture (origin is vacated; captured pieces stay)
-        void capture(int s, std::uint32_t empty, std::uint32_t cap, int n)
+        void capture(int s, bitboard const& empty, bitboard const& cap, int n)
         {
                 bool any = false;
                 for (int d = 0; d < 4; ++d) {
                         auto const& ray = rays[s][d];
                         std::size_t i = 0;
-                        if (is_king) while (i < ray.size() && (empty >> ray[i] & 1)) ++i;
+                        if (is_king) while (i < ray.size() && empty.contains(std::size_t(ray[i]))) ++i;
                         if (i >= ray.size()) continue;
                         int v = ray[i];
-                        if (!(enemy >> v & 1) || (cap >> v & 1)) continue;
+                        if (!enemy.contains(std::size_t(v)) || cap.contains(std::size_t(v))) continue;
                         std::size_t j = i + 1;
-                        if (j >= ray.size() || !(empty >> ray[j] & 1)) continue;
-                        for (; j < ray.size() && (empty >> ray[j] & 1); ++j) {
+                        if (j >= ray.size() || !empty.contains(std::size_t(ray[j]))) continue;
+                        for (; j < ray.size() && empty.contains(std::size_t(ray[j])); ++j) {
                                 any = true;
-                                capture(ray[j], empty, cap | (1u << v), n + 1);
+                                capture(ray[j], empty, cap | square_bb(v), n + 1);
                                 if (!is_king) break;
                         }
                 }
@@ -233,24 +261,24 @@ struct Gen {
 
         void run()
         {
-                std::uint32_t occ = p.occ();
-                std::uint32_t pieces = p.m[us] | p.k[us];
+                bitboard const occ = p.occ();
+                bitboard const pieces = p.m[us] | p.k[us];
                 // captures
-                for (std::uint32_t b = pieces; b; b &= b - 1) {
-                        from = __builtin_ctz(b);
-                        is_king = p.k[us] >> from & 1;
-                        capture(from, (~occ & FULL) | (1u << from), 0, 0);
+                for (auto const sq : pieces) {
+                        from = int(sq);
+                        is_king = p.k[us].contains(sq);
+                        capture(from, (FULL - occ) | square_bb(from), bitboard{}, 0);
                 }
                 if (best > 0) return;
                 // quiet moves
-                for (std::uint32_t b = pieces; b; b &= b - 1) {
-                        from = __builtin_ctz(b);
-                        is_king = p.k[us] >> from & 1;
+                for (auto const sq : pieces) {
+                        from = int(sq);
+                        is_king = p.k[us].contains(sq);
                         for (int d = 0; d < 4; ++d) {
                                 if (!is_king && (us == 0 ? d >= 2 : d < 2)) continue;
                                 for (int t : rays[from][d]) {
-                                        if (occ >> t & 1) break;
-                                        emit(t, 0, 0);
+                                        if (occ.contains(std::size_t(t))) break;
+                                        emit(t, bitboard{}, 0);
                                         if (!is_king) break;
                                 }
                         }
@@ -269,22 +297,20 @@ MoveList moves(Pos const& p)
 bool has_capture(Pos const& p)
 {
         int us = p.stm, them = 1 - us;
-        std::uint32_t enemy = p.m[them] | p.k[them];
-        std::uint32_t empty = ~p.occ() & FULL;
-        for (std::uint32_t b = p.m[us]; b; b &= b - 1) {
-                int s = __builtin_ctz(b);
+        bitboard const enemy = p.m[them] | p.k[them];
+        bitboard const empty = FULL - p.occ();
+        for (auto const sq : p.m[us]) {
                 for (int d = 0; d < 4; ++d) {
-                        auto const& r = rays[s][d];
-                        if (r.size() >= 2 && (enemy >> r[0] & 1) && (empty >> r[1] & 1)) return true;
+                        auto const& r = rays[std::size_t(sq)][std::size_t(d)];
+                        if (r.size() >= 2 && enemy.contains(std::size_t(r[0])) && empty.contains(std::size_t(r[1]))) return true;
                 }
         }
-        for (std::uint32_t b = p.k[us]; b; b &= b - 1) {
-                int s = __builtin_ctz(b);
+        for (auto const sq : p.k[us]) {
                 for (int d = 0; d < 4; ++d) {
-                        auto const& r = rays[s][d];
+                        auto const& r = rays[std::size_t(sq)][std::size_t(d)];
                         std::size_t i = 0;
-                        while (i < r.size() && (empty >> r[i] & 1)) ++i;
-                        if (i + 1 < r.size() && (enemy >> r[i] & 1) && (empty >> r[i + 1] & 1)) return true;
+                        while (i < r.size() && empty.contains(std::size_t(r[i]))) ++i;
+                        if (i + 1 < r.size() && enemy.contains(std::size_t(r[i])) && empty.contains(std::size_t(r[i + 1]))) return true;
                 }
         }
         return false;
@@ -313,21 +339,22 @@ std::string show(std::uint16_t v)
 // ---------------------------------------------------------------- slices
 
 struct Key {
-        std::uint32_t wm, bm;
+        bitboard wm, bm;
         int nwk, nbk;
-        std::uint64_t pack() const { return std::uint64_t(wm) | std::uint64_t(bm) << 18 | std::uint64_t(nwk) << 36 | std::uint64_t(nbk) << 40; }
+        std::uint64_t pack() const { return std::uint64_t(u32(wm)) | std::uint64_t(u32(bm)) << 18 | std::uint64_t(nwk) << 36 | std::uint64_t(nbk) << 40; }
         static Key unpack(std::uint64_t x)
         {
-                return { std::uint32_t(x) & FULL, std::uint32_t(x >> 18) & FULL, int(x >> 36 & 15), int(x >> 40 & 15) };
+                constexpr std::uint32_t low = (1u << N) - 1;
+                return { bb_of(std::uint32_t(x) & low), bb_of(std::uint32_t(x >> 18) & low), int(x >> 36 & 15), int(x >> 40 & 15) };
         }
 };
 
 Key key_of(Pos const& p)
 {
-        return { p.m[0], p.m[1], __builtin_popcount(p.k[0]), __builtin_popcount(p.k[1]) };
+        return { p.m[0], p.m[1], int(p.k[0].size()), int(p.k[1].size()) };
 }
 
-int pieces(Key const& k) { return __builtin_popcount(k.wm) + __builtin_popcount(k.bm) + k.nwk + k.nbk; }
+int pieces(Key const& k) { return int(k.wm.size() + k.bm.size()) + k.nwk + k.nbk; }
 
 // slices are stored for one of each pair (slice, mirror(slice)) only
 bool canonical_key(Key const& k)
@@ -338,7 +365,7 @@ bool canonical_key(Key const& k)
 
 struct Meta {
         Key key;
-        std::uint32_t free;
+        bitboard free;
         std::uint64_t nb;        // C(F - nwk, nbk)
         std::uint64_t P;         // positions per side to move
 };
@@ -347,44 +374,29 @@ Meta meta_of(Key const& key)
 {
         Meta s;
         s.key = key;
-        s.free = ~(key.wm | key.bm) & FULL;
-        int F = __builtin_popcount(s.free);
+        s.free = FULL - (key.wm | key.bm);
+        int F = int(s.free.size());
         s.nb = key.nwk <= F ? binom[F - key.nwk][key.nbk] : 0;
         s.P = key.nwk <= F ? binom[F][key.nwk] * s.nb : 0;
         return s;
 }
 
-// colex rank of the bits of x within mask (x subset of mask)
-std::uint64_t rank_in(std::uint32_t x, std::uint32_t mask)
+// colex rank of x within mask (x subset of mask): x packed onto the low bits (PEXT), then one table entry
+std::uint64_t rank_in(bitboard const& x, bitboard const& mask)
 {
-        std::uint64_t r = 0;
-        int pos = 0, i = 0;
-        for (std::uint32_t b = mask; b; b &= b - 1, ++pos) {
-                int sq = __builtin_ctz(b);
-                if (x >> sq & 1) { ++i; r += binom[pos][i]; }
-        }
-        return r;
+        return rank_table[xstd::bit_compress<std::uint32_t>(x, mask)];
 }
 
-std::uint32_t unrank_in(std::uint64_t r, int k, std::uint32_t mask)
+// the k-subset of mask with colex rank r: one table entry, spread over the mask (PDEP)
+bitboard unrank_in(std::uint64_t r, int k, bitboard const& mask)
 {
-        int sq[N]; int n = 0;
-        for (std::uint32_t b = mask; b; b &= b - 1) sq[n++] = __builtin_ctz(b);
-        std::uint32_t x = 0;
-        for (int i = k; i >= 1; --i) {
-                int pos = i - 1;
-                while (pos + 1 < n && binom[pos + 1][i] <= r) ++pos;
-                r -= binom[pos][i];
-                x |= 1u << sq[pos];
-                n = pos;
-        }
-        return x;
+        return xstd::bit_expand(unrank_table[unrank_offset[std::size_t(k)] + r], mask);
 }
 
 std::uint64_t index_of(Meta const& s, Pos const& p)
 {
         std::uint64_t rw = rank_in(p.k[0], s.free);
-        std::uint64_t rb = rank_in(p.k[1], s.free & ~p.k[0]);
+        std::uint64_t rb = rank_in(p.k[1], s.free - p.k[0]);
         return rw * s.nb + rb;
 }
 
@@ -393,7 +405,7 @@ Pos pos_of(Meta const& s, std::uint64_t idx, int stm)
         Pos p;
         p.m[0] = s.key.wm; p.m[1] = s.key.bm;
         p.k[0] = unrank_in(idx / s.nb, s.key.nwk, s.free);
-        p.k[1] = unrank_in(idx % s.nb, s.key.nbk, s.free & ~p.k[0]);
+        p.k[1] = unrank_in(idx % s.nb, s.key.nbk, s.free - p.k[0]);
         p.stm = stm;
         return p;
 }
@@ -492,7 +504,7 @@ SliceRef slice_values(Key const& key)
 using PosKey = unsigned __int128;
 PosKey pack(Pos const& p)
 {
-        return PosKey(p.m[0]) | PosKey(p.m[1]) << 18 | PosKey(p.k[0]) << 36 | PosKey(p.k[1]) << 54 | PosKey(p.stm) << 72;
+        return PosKey(u32(p.m[0])) | PosKey(u32(p.m[1])) << 18 | PosKey(u32(p.k[0])) << 36 | PosKey(u32(p.k[1])) << 54 | PosKey(p.stm) << 72;
 }
 struct PosKeyHash {
         std::size_t operator()(PosKey x) const
@@ -527,7 +539,7 @@ std::uint64_t ab_nodes = 0;
 
 bool in_slices(Pos const& p)
 {
-        return __builtin_popcount(p.occ()) <= slice_max || (p.k[0] && p.k[1]);
+        return int(p.occ().size()) <= slice_max || (!p.k[0].empty() && !p.k[1].empty());
 }
 
 std::uint16_t from_successors(Pos const& p);
@@ -567,7 +579,7 @@ int alphabeta(Pos const& p, int alpha, int beta)
         for (std::size_t i = 0; i < ms.size(); ++i) {
                 int pri;
                 if (in_slices(ms[i].next)) { exact[i] = up(to_score((lookup_slice(ms[i].next)))); pri = exact[i]; }
-                else pri = ms[i].captured ? -WSC + 1000 : -WSC + 500;
+                else pri = !ms[i].captured.empty() ? -WSC + 1000 : -WSC + 500;
                 order.push_back({ -pri, i });
         }
         std::sort(order.begin(), order.end());
@@ -630,21 +642,21 @@ std::uint16_t from_successors(Pos const& p)
 
 bool internal_move(Pos const& p, Move const& mv)
 {
-        return mv.captured == 0 && (p.k[p.stm] >> mv.from & 1);
+        return mv.captured.empty() && p.k[p.stm].contains(std::size_t(mv.from));
 }
 
 template<class F>
 void for_each_predecessor(Meta const& s, Pos const& q, F&& f)
 {
         int mover = 1 - q.stm;
-        std::uint32_t occ = q.occ();
-        for (std::uint32_t b = q.k[mover]; b; b &= b - 1) {
-                int t = __builtin_ctz(b);
+        bitboard const occ = q.occ();
+        for (auto const t : q.k[mover]) {
                 for (int d = 0; d < 4; ++d)
-                        for (int fr : rays[t][d]) {
-                                if (occ >> fr & 1) break;
+                        for (int fr : rays[std::size_t(t)][std::size_t(d)]) {
+                                if (occ.contains(std::size_t(fr))) break;
                                 Pos pr = q;
-                                pr.k[mover] = (pr.k[mover] & ~(1u << t)) | (1u << fr);
+                                pr.k[mover].erase(t);
+                                pr.k[mover].insert(std::size_t(fr));
                                 pr.stm = mover;
                                 if (has_capture(pr)) continue;   // captures are compulsory: no quiet move from pr
                                 f(std::uint64_t(mover) * s.P + index_of(s, pr));
@@ -918,8 +930,8 @@ struct Job { std::uint64_t key; int level_n, men, dist; std::uint64_t P; };
 int distance(Key const& k)
 {
         int d = 0;
-        for (std::uint32_t b = k.wm; b; b &= b - 1) d += __builtin_ctz(b) / 3;           // white: rows to row 0
-        for (std::uint32_t b = k.bm; b; b &= b - 1) d += 5 - __builtin_ctz(b) / 3;       // black: rows to row 5
+        for (auto const sq : k.wm) d += int(sq) / 3;           // white: rows to row 0
+        for (auto const sq : k.bm) d += 5 - int(sq) / 3;       // black: rows to row 5
         return d;
 }
 
@@ -928,17 +940,19 @@ int distance(Key const& k)
 std::vector<Job> make_jobs(int nmin, int nmax)
 {
         std::vector<Job> jobs;
-        std::uint32_t const allowW = FULL & ~PROMO_WHITE, allowB = FULL & ~PROMO_BLACK;
-        std::vector<std::uint32_t> wsets;
+        // the subsets of a mask by the integer enumeration s = (s - 1) & mask, from the mask down to the empty set
+        std::uint32_t const allowW = u32(FULL - PROMO_WHITE), allowB = u32(FULL - PROMO_BLACK);
+        std::vector<bitboard> wsets;
         for (std::uint32_t w = allowW;; w = (w - 1) & allowW) {
-                if (__builtin_popcount(w) <= nmax) wsets.push_back(w);
+                if (int(bb_of(w).size()) <= nmax) wsets.push_back(bb_of(w));
                 if (w == 0) break;
         }
-        for (std::uint32_t wm : wsets) {
-                std::uint32_t ab = allowB & ~wm;
-                int rest0 = nmax - __builtin_popcount(wm);
-                for (std::uint32_t bm = ab;; bm = (bm - 1) & ab) {
-                        int rest = rest0 - __builtin_popcount(bm);
+        for (bitboard const& wm : wsets) {
+                std::uint32_t const ab = allowB & ~u32(wm);
+                int rest0 = nmax - int(wm.size());
+                for (std::uint32_t b = ab;; b = (b - 1) & ab) {
+                        bitboard const bm = bb_of(b);
+                        int rest = rest0 - int(bm.size());
                         if (rest >= 0)
                                 for (int nwk = 0; nwk <= rest; ++nwk)
                                         for (int nbk = 0; nwk + nbk <= rest; ++nbk) {
@@ -946,9 +960,9 @@ std::vector<Job> make_jobs(int nmin, int nmax)
                                                 if (pieces(k) < std::max(1, nmin) || !canonical_key(k)) continue;
                                                 Meta m = meta_of(k);
                                                 if (m.P == 0) continue;
-                                                jobs.push_back({ k.pack(), pieces(k), __builtin_popcount(wm | bm), distance(k), m.P });
+                                                jobs.push_back({ k.pack(), pieces(k), int((wm | bm).size()), distance(k), m.P });
                                         }
-                        if (bm == 0) break;
+                        if (b == 0) break;
                 }
         }
         std::sort(jobs.begin(), jobs.end(), [](Job const& a, Job const& b) {
@@ -1250,12 +1264,12 @@ bool parse_fen(std::string const& fen, Pos& p)
                         bool king = item[0] == 'K';
                         int sq = std::stoi(king ? item.substr(1) : item) - 1;
                         if (sq < 0 || sq >= N) return false;
-                        (king ? p.k[side] : p.m[side]) |= 1u << sq;
+                        (king ? p.k[side] : p.m[side]).insert(std::size_t(sq));
                 }
                 i = j;
         }
         // men on their own promotion row are illegal
-        if ((p.m[0] & PROMO_WHITE) || (p.m[1] & PROMO_BLACK)) return false;
+        if (!(p.m[0] & PROMO_WHITE).empty() || !(p.m[1] & PROMO_BLACK).empty()) return false;
         return true;
 }
 
@@ -1266,7 +1280,7 @@ std::string fen_of(Pos const& p)
                 s += side ? ":B" : ":W";
                 bool first = true;
                 for (int sq = 0; sq < N; ++sq) {
-                        bool m = p.m[side] >> sq & 1, k = p.k[side] >> sq & 1;
+                        bool m = p.m[side].contains(std::size_t(sq)), k = p.k[side].contains(std::size_t(sq));
                         if (!m && !k) continue;
                         if (!first) s += ',';
                         first = false;
@@ -1279,7 +1293,7 @@ std::string fen_of(Pos const& p)
 
 std::string notation(Move const& mv)
 {
-        return std::to_string(mv.from + 1) + (mv.captured ? "x" : "-") + std::to_string(mv.to + 1);
+        return std::to_string(mv.from + 1) + (!mv.captured.empty() ? "x" : "-") + std::to_string(mv.to + 1);
 }
 
 // ---------------------------------------------------------------- store: units of compressed DTM
@@ -1302,9 +1316,9 @@ std::string notation(Move const& mv)
 // where the side to move can capture repeat the previous value of the block; their values follow from the captures
 // and are resolved at lookup (captures are compulsory, so a capture position takes the best of its captures).
 
-constexpr std::uint32_t MEN_W = FULL & ~PROMO_WHITE;      // squares where a white man can stand
-constexpr std::uint32_t MEN_B = FULL & ~PROMO_BLACK;      // squares where a black man can stand
-constexpr std::uint32_t MEN_MID = MEN_W & MEN_B;          // squares 4-15
+constexpr bitboard MEN_W = FULL - PROMO_WHITE;            // squares where a white man can stand
+constexpr bitboard MEN_B = FULL - PROMO_BLACK;            // squares where a black man can stand
+constexpr bitboard MEN_MID = MEN_W & MEN_B;               // squares 4-15
 constexpr std::uint64_t BLOCK = 4096;                     // positions (bytes) per compressed block
 constexpr std::uint64_t CDB_MAGIC = 0x3678364244424331ull;
 constexpr int ZLEVEL = 19;
@@ -1324,16 +1338,16 @@ std::uint64_t men_count(int nwm, int nbm)
 }
 
 // rank of a placement of men: [white men on 16-18 (count j)][white men on 16-18][white men on 4-15][black men]
-std::uint64_t men_rank(std::uint32_t wm, std::uint32_t bm)
+std::uint64_t men_rank(bitboard const& wm, bitboard const& bm)
 {
-        int const nwm = __builtin_popcount(wm), nbm = __builtin_popcount(bm), j = __builtin_popcount(wm & PROMO_BLACK);
+        int const nwm = int(wm.size()), nbm = int(bm.size()), j = int((wm & PROMO_BLACK).size());
         std::uint64_t r = 0;
         for (int i = 0; i < j; ++i) r += men_part(nwm, nbm, i);
         std::uint64_t const cm = binom[12][nwm - j], cb = binom[15 - (nwm - j)][nbm];
-        return r + (rank_in(wm & PROMO_BLACK, PROMO_BLACK) * cm + rank_in(wm & MEN_MID, MEN_MID)) * cb + rank_in(bm, MEN_B & ~wm);
+        return r + (rank_in(wm & PROMO_BLACK, PROMO_BLACK) * cm + rank_in(wm & MEN_MID, MEN_MID)) * cb + rank_in(bm, MEN_B - wm);
 }
 
-void men_unrank(int nwm, int nbm, std::uint64_t r, std::uint32_t& wm, std::uint32_t& bm)
+void men_unrank(int nwm, int nbm, std::uint64_t r, bitboard& wm, bitboard& bm)
 {
         int j = 0;
         while (r >= men_part(nwm, nbm, j)) r -= men_part(nwm, nbm, j++);
@@ -1341,7 +1355,7 @@ void men_unrank(int nwm, int nbm, std::uint64_t r, std::uint32_t& wm, std::uint3
         std::uint64_t const c = r % cb;
         r /= cb;
         wm = unrank_in(r / cm, j, PROMO_BLACK) | unrank_in(r % cm, nwm - j, MEN_MID);
-        bm = unrank_in(c, nbm, MEN_B & ~wm);
+        bm = unrank_in(c, nbm, MEN_B - wm);
 }
 
 struct UnitMat {
@@ -1375,7 +1389,7 @@ std::uint64_t unit_positions(std::vector<UnitMat> const& lay) { return lay.empty
 // the stored representative of a position: the canonical material, white to move for a symmetric one
 Pos canon(Pos const& p)
 {
-        auto const a = std::tuple(__builtin_popcount(p.m[0]), __builtin_popcount(p.m[1]), __builtin_popcount(p.k[0]), __builtin_popcount(p.k[1]));
+        auto const a = std::tuple(p.m[0].size(), p.m[1].size(), p.k[0].size(), p.k[1].size());
         auto const b = std::tuple(std::get<1>(a), std::get<0>(a), std::get<3>(a), std::get<2>(a));
         if (a < b) return p;
         if (b < a) return mirror(p);
@@ -1384,10 +1398,10 @@ Pos canon(Pos const& p)
 
 std::uint64_t king_index(Pos const& p)
 {
-        std::uint32_t const free = ~(p.m[0] | p.m[1]) & FULL;
-        int const F = __builtin_popcount(free);
-        std::uint64_t const nb = binom[F - __builtin_popcount(p.k[0])][__builtin_popcount(p.k[1])];
-        return rank_in(p.k[0], free) * nb + rank_in(p.k[1], free & ~p.k[0]);
+        bitboard const free = FULL - (p.m[0] | p.m[1]);
+        std::size_t const F = free.size();
+        std::uint64_t const nb = binom[F - p.k[0].size()][p.k[1].size()];
+        return rank_in(p.k[0], free) * nb + rank_in(p.k[1], free - p.k[0]);
 }
 
 struct Unit {
@@ -1542,7 +1556,7 @@ std::uint64_t stored_offset(MatRef const& r, Pos const& q)
 
 MatRef const& mat_of(Pos const& q)
 {
-        return mat_ref[__builtin_popcount(q.m[0])][__builtin_popcount(q.m[1])][__builtin_popcount(q.k[0])][__builtin_popcount(q.k[1])];
+        return mat_ref[q.m[0].size()][q.m[1].size()][q.k[0].size()][q.k[1].size()];
 }
 
 // the values of capture positions resolved through compressed units, per thread (direct mapped, 2^20 entries):
@@ -1568,7 +1582,7 @@ std::uint16_t resolve_capture(Pos const& q)
 
 std::uint16_t store_lookup(Pos const& p)
 {
-        int const w = __builtin_popcount(p.m[0] | p.k[0]), b = __builtin_popcount(p.m[1] | p.k[1]);
+        int const w = int((p.m[0] | p.k[0]).size()), b = int((p.m[1] | p.k[1]).size());
         if ((p.stm ? b : w) == 0) return 0;                     // no pieces: no moves
         if (w == 0 || b == 0) return from_successors(p);
         if (w > 6 || b > 6) throw NotInDatabase{};
@@ -1595,7 +1609,7 @@ struct Cursor {
         {
                 if (mi >= lay.size()) return;
                 UnitMat const& x = lay[mi];
-                std::uint32_t wm, bm;
+                bitboard wm, bm;
                 men_unrank(x.wm, x.bm, slot / std::uint64_t(x.S), wm, bm);
                 stm = x.S == 2 ? int(slot % 2) : 0;
                 meta = meta_of(Key{ wm, bm, x.wk, x.bk });
@@ -1689,7 +1703,7 @@ bool unit_build(std::string const& dir, int n, int m, int threads, double mem_gb
         std::vector<std::pair<int, std::uint64_t>> jobs;
         for (auto const& x : lay)
                 for (std::uint64_t r = 0; r < x.men; ++r) {
-                        std::uint32_t wm, bm;
+                        bitboard wm, bm;
                         men_unrank(x.wm, x.bm, r, wm, bm);
                         Key const k{ wm, bm, x.wk, x.bk };
                         if (x.S == 1 && !canonical_key(k)) continue;

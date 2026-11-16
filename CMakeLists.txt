@@ -56,8 +56,8 @@ target_compile_options(bench_index_6x6 PRIVATE
 # (used to check "Strategie der 36 velden", see strategie_der_36_velden/)
 add_executable(egdb_6x6 src/egdb_6x6.cpp)
 find_library(ZSTD_LIBRARY zstd REQUIRED)
-target_link_libraries(egdb_6x6 PRIVATE OpenMP::OpenMP_CXX ${ZSTD_LIBRARY})
-target_compile_features(egdb_6x6 PRIVATE cxx_std_20)
+target_link_libraries(egdb_6x6 PRIVATE xstd::bits OpenMP::OpenMP_CXX ${ZSTD_LIBRARY})
+target_compile_features(egdb_6x6 PRIVATE cxx_std_23)
 target_compile_options(egdb_6x6 PRIVATE
     $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -march=native>
 )

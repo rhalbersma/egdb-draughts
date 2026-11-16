@@ -476,6 +476,21 @@ python3 -m venv ~/smk && ~/smk/bin/pip install snakemake
 nohup ~/smk/bin/snakemake -s strongly_solving_6x6/international/Snakefile --cores 4 --config engine=build/egdb_6x6 > data/units.out 2>&1 &
 ```
 
+English checkers on the same board (short kings, men capture forwards only, free choice of capture) is the same
+engine built as `egdb_6x6_checkers`; its store goes in a directory of its own:
+
+```bash
+cmake --build build --target egdb_6x6_checkers
+```
+
+```bash
+nohup ~/smk/bin/snakemake -s strongly_solving_6x6/international/Snakefile --cores 4 --config engine=build/egdb_6x6_checkers dir=data/units_checkers > data/units_checkers.out 2>&1 &
+```
+
+Both engines reproduce the perft numbers of the forum thread [*Perft for arbitrary board sizes*](https://damforum.nl/viewtopic.php?p=76677#p76677)
+(and of dctl) to depth 17: `echo "perft 17" | build/egdb_6x6` and, counting every capture sequence as the checkers
+numbers do, `echo "perft 17 dups" | build/egdb_6x6_checkers`.
+
 * `--threads` (driver) or `--cores` (Snakemake): the number of cores to use for every step of `egdb_6x6`.
 * Progress: `tail data/units.out`, one line per step and unit; the results of every step are in `data/units/units.log`.
 * Files: `data/units/6x6-nn-mm.cdb` for the unit with nn pieces of which mm are men; with the leading zeros the

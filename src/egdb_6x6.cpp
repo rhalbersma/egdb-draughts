@@ -3,12 +3,17 @@
 //    (See accompanying file LICENSE_1_0.txt or copy at
 //          http://www.boost.org/LICENSE_1_0.txt)
 
-// Exact endgame databases for international draughts on the 6x6 board, with men and kings.
+// Exact endgame databases for international draughts on the 6x6 board, with men and kings, or (built with
+// -DEGDB_6X6_CHECKERS=1, as egdb_6x6_checkers) for English checkers on the same board.
 //
 // Rules: international draughts on 6x6: men move one square diagonally forward and capture forwards
 // and backwards, flying kings, mandatory capture, majority capture (kings and men count the same),
 // Turkish strike (captured pieces are removed after the capture and cannot be jumped twice), a man
 // only promotes when it ends its move on the last row. The side to move without a legal move loses.
+// Checkers: kings move and capture one square at a time, men capture forwards only, capture is mandatory
+// but any capture may be chosen (no majority rule), a capture is completed; a man that reaches the last row
+// ends there and is crowned (it cannot capture backwards, so this needs no rule of its own). The board, the
+// numbering and the start position are the same (tabula's draughts::micro, dctl's rectangular<6, 6>).
 //
 // Squares 1..18 as in "Strategie der 36 velden" (H.J. Brascamp): square 1 = b6 (top left),
 // 16 = a1 (bottom left, a dark square), the long diagonal is 16-13-11-8-6-3. White starts on 13-18
@@ -53,6 +58,9 @@
 //   unitcompress <dir> <n> <m> [t]       compress the raw file of the unit
 //   unitcompare <dir> <n> <m> [t]        compare every block of the compressed unit with the raw file
 //   unitcrc <dir> <n> <m>                CRC32C of the stored bytes of the compressed unit (independent of zstd)
+//   perft <depth> [FEN] [dups]           leaf counts to each depth from the position (default: the start position);
+//                                        with "dups" every capture sequence counts, also when two give the same
+//                                        position (as the checkers perft of dctl and the forum thread)
 // FEN: W:W17,K16:B2,K15 (side to move, white pieces, black pieces; K = king).
 // Values: "W<n>" win in n plies, "L<n>" loss in n plies, "D" draw (for the side to move).
 
@@ -96,6 +104,16 @@
 namespace {
 
 constexpr int N = 18;
+
+// the rules (see the top of the file)
+#ifndef EGDB_6X6_CHECKERS
+#define EGDB_6X6_CHECKERS 0
+#endif
+constexpr bool CHECKERS = EGDB_6X6_CHECKERS != 0;
+constexpr bool LONG_KINGS = !CHECKERS;            // kings move and capture over any distance
+constexpr bool MEN_CAPTURE_BACK = !CHECKERS;      // men capture backwards too
+constexpr bool MAJORITY = !CHECKERS;              // the capture of the most pieces is compulsory
+bool keep_duplicates = false;                     // perft only: keep moves that give the same position
 
 // bitboards: the 18 squares in one std::uint32_t block (bit_least), widened to its 32 bits (bit_align); the full
 // board is FULL, so a complement is FULL - x
@@ -223,6 +241,7 @@ struct Gen {
 
         void emit(int to, bitboard const& cap, int n)
         {
+                if constexpr (!MAJORITY) n = n > 0 ? 1 : 0;     // every capture counts the same, but a capture is compulsory
                 if (n < best) return;
                 if (n > best) { best = n; out->clear(); }
                 Pos q = p;
@@ -233,7 +252,8 @@ struct Gen {
                 else { q.m[us].erase(fb); q.m[us].insert(tb); }
                 q.m[them] -= cap; q.k[them] -= cap;
                 q.stm = them;
-                for (auto const& mv : *out) if (mv.next == q) return;  // same resulting position
+                if (!keep_duplicates)
+                        for (auto const& mv : *out) if (mv.next == q) return;  // same resulting position
                 out->push_back({ from, to, cap, q });
         }
 
@@ -242,9 +262,10 @@ struct Gen {
         {
                 bool any = false;
                 for (int d = 0; d < 4; ++d) {
+                        if (!MEN_CAPTURE_BACK && !is_king && (us == 0 ? d >= 2 : d < 2)) continue;
                         auto const& ray = rays[s][d];
                         std::size_t i = 0;
-                        if (is_king) while (i < ray.size() && empty.contains(std::size_t(ray[i]))) ++i;
+                        if (LONG_KINGS && is_king) while (i < ray.size() && empty.contains(std::size_t(ray[i]))) ++i;
                         if (i >= ray.size()) continue;
                         int v = ray[i];
                         if (!enemy.contains(std::size_t(v)) || cap.contains(std::size_t(v))) continue;
@@ -253,7 +274,7 @@ struct Gen {
                         for (; j < ray.size() && empty.contains(std::size_t(ray[j])); ++j) {
                                 any = true;
                                 capture(ray[j], empty, cap | square_bb(v), n + 1);
-                                if (!is_king) break;
+                                if (!LONG_KINGS || !is_king) break;
                         }
                 }
                 if (!any && n > 0) emit(s, cap, n);
@@ -279,7 +300,7 @@ struct Gen {
                                 for (int t : rays[from][d]) {
                                         if (occ.contains(std::size_t(t))) break;
                                         emit(t, bitboard{}, 0);
-                                        if (!is_king) break;
+                                        if (!LONG_KINGS || !is_king) break;
                                 }
                         }
                 }
@@ -301,6 +322,7 @@ bool has_capture(Pos const& p)
         bitboard const empty = FULL - p.occ();
         for (auto const sq : p.m[us]) {
                 for (int d = 0; d < 4; ++d) {
+                        if (!MEN_CAPTURE_BACK && (us == 0 ? d >= 2 : d < 2)) continue;
                         auto const& r = rays[std::size_t(sq)][std::size_t(d)];
                         if (r.size() >= 2 && enemy.contains(std::size_t(r[0])) && empty.contains(std::size_t(r[1]))) return true;
                 }
@@ -309,7 +331,7 @@ bool has_capture(Pos const& p)
                 for (int d = 0; d < 4; ++d) {
                         auto const& r = rays[std::size_t(sq)][std::size_t(d)];
                         std::size_t i = 0;
-                        while (i < r.size() && empty.contains(std::size_t(r[i]))) ++i;
+                        if constexpr (LONG_KINGS) while (i < r.size() && empty.contains(std::size_t(r[i]))) ++i;
                         if (i + 1 < r.size() && enemy.contains(std::size_t(r[i])) && empty.contains(std::size_t(r[i + 1]))) return true;
                 }
         }
@@ -658,8 +680,8 @@ void for_each_predecessor(Meta const& s, Pos const& q, F&& f)
                                 pr.k[mover].erase(t);
                                 pr.k[mover].insert(std::size_t(fr));
                                 pr.stm = mover;
-                                if (has_capture(pr)) continue;   // captures are compulsory: no quiet move from pr
-                                f(std::uint64_t(mover) * s.P + index_of(s, pr));
+                                if (!has_capture(pr)) f(std::uint64_t(mover) * s.P + index_of(s, pr));  // captures are compulsory
+                                if (!LONG_KINGS) break;
                         }
         }
 }
@@ -2077,6 +2099,27 @@ int main()
                                 : cmd == "unitcompress" ? unit_compress(dir, n, m, threads)
                                 : unit_compare(dir, n, m, threads);
                         std::cout << (ok ? cmd + " ok" : "error " + cmd + " failed") << "\nend" << std::endl;
+                        continue;
+                }
+                if (cmd == "perft") {
+                        // perft <depth> [FEN] [dups]: leaf counts per depth from the position (default: the start position)
+                        int depth = 0;
+                        rs >> depth;
+                        std::string fen = "W:W13,14,15,16,17,18:B1,2,3,4,5,6", word;
+                        keep_duplicates = false;
+                        while (rs >> word) { if (word == "dups") keep_duplicates = true; else fen = word; }
+                        Pos p0;
+                        if (!parse_fen(fen, p0)) { std::cout << "error bad fen\nend" << std::endl; keep_duplicates = false; continue; }
+                        std::function<std::uint64_t(Pos const&, int)> perft = [&](Pos const& q, int d) -> std::uint64_t {
+                                auto const ms = moves(q);
+                                if (d == 1) return ms.size();
+                                std::uint64_t c = 0;
+                                for (auto const& mv : ms) c += perft(mv.next, d - 1);
+                                return c;
+                        };
+                        for (int d = 1; d <= depth; ++d) std::cout << "perft " << d << " " << perft(p0, d) << std::endl;
+                        keep_duplicates = false;
+                        std::cout << "end" << std::endl;
                         continue;
                 }
                 if (cmd == "verify") {

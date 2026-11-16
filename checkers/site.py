@@ -818,13 +818,15 @@ are 8 traps, at even parity not a single one.</p>''')]
         rulebody.append(t('<p>Toch beslist hier de oppositie, want er is geen val op een tweede diagonaal. Op 8×8 verbinden twee '
                           'diagonalen de dubbele hoeken, één voor elke helft, en door van de ene naar de andere over te stappen '
                           'wisselt wit het tempo. Op 9×7 liggen alleen de hoeken b1 en h7 op één diagonaal; de andere helften '
-                          'van de dubbele hoeken, a2 en i6, liggen niet op een gemeenschappelijke diagonaal. De tweede val, wit op '
-                          'c2, e4 en g6 tegen a2 en i6, staat daarom op dezelfde diagonaal b1–h7, bij dezelfde pariteit.</p>',
+                          'van de dubbele hoeken, a2 en i6, liggen niet op een gemeenschappelijke diagonaal. Er is dus wel een tweede '
+                          'val, wit op c2, e4 en g6 tegen a2 en i6, maar die staat op dezelfde diagonaal b1–h7, bij dezelfde '
+                          'pariteit:</p>',
                           '<p>Still the opposition decides here, because there is no trap on a second diagonal. On 8×8 two '
                           'diagonals connect the double corners, one for each half, and by moving over from the one to the other '
                           'white changes the tempo. On 9×7 only the corners b1 and h7 lie on one diagonal; the other halves of '
-                          'the double corners, a2 and i6, do not lie on a common diagonal. The second trap, white on c2, e4 and g6 '
-                          'against a2 and i6, therefore stands on the same diagonal b1–h7, at the same parity.</p>'))
+                          'the double corners, a2 and i6, do not lie on a common diagonal. So there is a second trap, white on c2, e4 '
+                          'and g6 against a2 and i6, but it stands on the same diagonal b1–h7, at the same parity:</p>'))
+        rulebody += self.trap_blocks(pga, k97, e97, name, '', [(['c2', 'e4', 'g6'], ['a2', 'i6'])], partner, 3)
         # the longest win with black in the diagonally opposite double corners (even parity, black to move)
         f97 = e97.fen(['b7', 'a6', 'a4'], ['i6', 'b1'], 'B')
         v97, _ = e97.analyse(f97)

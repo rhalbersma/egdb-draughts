@@ -701,7 +701,10 @@ dammen op de randvelden van twee dubbele hoeken zijn er maar 16 remise, en daari
 naar de dubbele hoeken langs de g-lijn: na 13. … f3-g2 staan ze op g6 en g2. Wit breekt de vesting door een zwarte dam
 uit zijn dubbele hoek te verdrijven: met 19. f3-g2! bezet wit het vrije randveld naast de zwarte dam op f1, die gaat de hoek
 uit (19. … f1-e2), en na 20. g2-f1 kan hij niet meer terug. Hij vlucht naar de dubbele hoek b1/a2, maar daar dwingt wit
-met een offer de beslissing af: 26. b3-c2! b1×d3 27. f7-g6 f5-e6 28. d5×f7, en 2 tegen 1 wint.</p>''', f'''
+met een offer de beslissing af: 26. b3-c2! b1×d3 27. f7-g6 f5-e6 28. d5×f7, en 2 tegen 1 wint.</p>
+<p>Je zou kunnen denken dat zwart zo eindeloos van dubbele hoek naar dubbele hoek kan blijven vluchten, zoals de zwarte dam
+bij <a href="twee-4x4.html">2 tegen 1 op 4×4</a>, en dat het remise is. Maar 7×7 is daar niet klein genoeg voor: wit vangt
+de verdreven dam in de tweede dubbele hoek alsnog.</p>''', f'''
 <p>On 7×7 with unplayable corner squares every corner is a double corner: b1/a2, f1/g2, a6/b7 and g6/f7. The double
 corners are 6 apart, on the same side and diagonally. Of the 28,276 quiet positions with black to move and both black
 kings on the edge squares of two double corners only 16 are drawn, and in those black has a shot.</p>
@@ -710,7 +713,10 @@ kings to the double corners along the g-file: after 13. … f3-g2 they stand on 
 driving a black king out of its double corner: with 19. f3-g2! white occupies the free edge square next to the black king
 on f1, which leaves the corner (19. … f1-e2), and after 20. g2-f1 it cannot come back. It flees to the double corner
 b1/a2, but there white forces the decision with a sacrifice: 26. b3-c2! b1×d3 27. f7-g6 f5-e6 28. d5×f7, and 2 against 1
-wins.</p>'''), fig77, f'<p class="var">{h77}</p>', '<div style="clear:both"></div>',
+wins.</p>
+<p>One might think that black could keep fleeing from double corner to double corner forever like this, as the black king
+does in <a href="twee-4x4.html">2 against 1 on 4×4</a>, and that it is a draw. But 7×7 is not small enough for that: white
+still catches the expelled king in the second double corner.</p>'''), fig77, f'<p class="var">{h77}</p>', '<div style="clear:both"></div>',
                   t('<p>Op 8×7 bekijken we de twee dubbele hoeken langs de zijde van 7 apart.</p>',
                     '<p>On 8×7 we look at the two double corners along the side of 7 on their own.</p>')]
         self.write('langste-7x7.html', None, '\n'.join(body77), pg77, k77)

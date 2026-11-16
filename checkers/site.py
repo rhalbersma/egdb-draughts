@@ -39,7 +39,7 @@ CHAPTERS = [
     ('3 tegen 2 op andere borden', '3 against 2 on other boards', [
         ('langste-7x7.html', 'De langste winst op 7×7', 'The longest win on 7×7'),
         ('vesting-8x7.html', 'Langs de zijde van 7 valt de vesting op 8×7', 'Along the side of 7 the fortress falls on 8×7'),
-        ('vesting.html', 'Eén val om de vesting te breken op 9×8', 'One trap to break the fortress on 9×8'),
+        ('vesting.html', 'Twee vallen om de vesting te breken op 9×8', 'Two traps to break the fortress on 9×8'),
         ('vesting-pariteit.html', 'De winst is niet strategisch, de pariteit doet ertoe op 9×8',
          'The win is non-strategic, parity matters on 9×8'),
         ('vesting-9x9.html', '9×9 onspeelbare hoeken: de val en de diagonaal', '9×9 unplayable corners: the trap and the diagonal'),
@@ -652,24 +652,28 @@ same side:</p>
                 ]
         # the other of the two traps on 9x8 (the trap of the previous page is the first), on a page of its own
         pgp = self.page((k89, e89))
-        extra = [t('<p>De val op de <a href="vesting.html">vorige pagina</a> is een van de twee vallen op 9×8. De andere, '
-                   'val 2:</p>', '<p>The trap on the <a href="vesting.html">previous page</a> is one of the two traps on '
-                   '9×8. The other one, trap 2:</p>')] + self.trap_blocks(
-            pgp, k89, e89, '9×8', '', [(['d8', 'e7', 'f8'], ['b8', 'h8'])],
-            {'b8': 'a7', 'a7': 'b8', 'h8': 'i7', 'i7': 'h8'}, 2) + [t(
-            '<p>De twee vallen gaan in elkaar over met een even aantal zetten: van de val van de vorige pagina (wit op c7, e7 '
-            'en g7, zwart op a7 en i7) naar val 2 doen twee witte dammen elk één stap (c7-d8 en g7-f8) en pendelen beide '
-            'zwarte dammen. Ze liggen dus bij dezelfde pariteit (oneven). Wit kan het tempo niet wisselen, zoals op 8×8 met de '
+        partner89 = {'b8': 'a7', 'a7': 'b8', 'h8': 'i7', 'i7': 'h8'}
+        trap2 = [t('<p>De tweede val: wit op d8, e7 en f8, zwart op b8 en h8. Ook hier wordt elke pendelzet gestraft.</p>',
+                   '<p>The second trap: white on d8, e7 and f8, black on b8 and h8. Here too every shuttle move is '
+                   'punished.</p>')] + self.trap_blocks(pg, k89, e89, '9×8', '', [(['d8', 'e7', 'f8'], ['b8', 'h8'])], partner89, 2) + [
+            t('<p>Wit heeft op 9×8 dus ook twee vallen, maar anders dan op 8×8 kan wit tussen die twee geen tempo wisselen: '
+              'ze liggen bij dezelfde pariteit. Dat staat op de <a href="vesting-pariteit.html">volgende pagina</a>.</p>',
+              '<p>So on 9×8 white also has two traps, but unlike on 8×8 white cannot change the tempo between them: they lie '
+              'at the same parity. That is on the <a href="vesting-pariteit.html">next page</a>.</p>')]
+        extra = [t(
+            '<p>De twee vallen van de <a href="vesting.html">vorige pagina</a> gaan in elkaar over met een even aantal zetten: '
+            'van de eerste (wit op c7, e7 en g7, zwart op a7 en i7) naar de tweede doen twee witte dammen elk één stap (c7-d8 en g7-f8) en pendelen beide '
+            'zwarte dammen. Ze liggen dus bij dezelfde pariteit (oneven). Wit kan het tempo niet wisselen, anders dan op 8×8 met de '
             'overstap naar de andere diagonaal. De winst is hier niet strategisch: de oppositie beslist.</p>',
-            '<p>The two traps turn into each other with an even number of moves: from the trap of the previous page (white on '
-            'c7, e7 and g7, black on a7 and i7) to trap 2 two white kings take one step each (c7-d8 and g7-f8) and both black '
-            'kings shuttle. They therefore lie at the same parity (odd). White cannot change the tempo, as on 8×8 with the '
+            '<p>The two traps of the <a href="vesting.html">previous page</a> turn into each other with an even number of '
+            'moves: from the first (white on c7, e7 and g7, black on a7 and i7) to the second two white kings take one step each (c7-d8 and g7-f8) and both black '
+            'kings shuttle. They therefore lie at the same parity (odd). White cannot change the tempo, unlike on 8×8 with the '
             'change-over to the other diagonal. The win here is not strategic: the opposition decides.</p>')] \
             + self.no_tempo(pgp, k89, e89, '9×8', ['c7', 'e7', 'g7'], ['a7', 'i7'], '1. c7-d8 a7-b8 2. g7-f8 b8-a7',
                             t('de witte opstelling van val 2', 'the white set-up of trap 2'))
         self.write('vesting-pariteit.html', None, '\n'.join(extra), pgp, k89)
         rule = next(k for k, x in enumerate(body) if isinstance(x, str) and 'D × d' in x)
-        self.write('vesting.html', None, '\n'.join(body[:rule]), pg, k89)
+        self.write('vesting.html', None, '\n'.join(body[:rule] + trap2), pg, k89)
         self.write('vesting-9x9.html', None, '\n'.join(self.fortress99(pg9, k99, e99)), pg9, k99)
         # 7x7 with unplayable corners: the longest win (quiet start, white to move); black flees to two double corners on
         # the g-file and white drives one king out of its double corner

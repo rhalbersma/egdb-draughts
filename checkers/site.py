@@ -811,14 +811,24 @@ are 8 traps, at even parity not a single one.</p>''')]
                       'the three white kings stand in a row between the black ones, as on 9×8:</p>')]
         rulebody += self.trap_blocks(pga, k97, e97, name, '', [(['c2', 'e2', 'g2'], ['a2', 'i2'])], partner)
         rulebody.append(t('<p>Diagonaal: op <a href="vesting-9x9.html">9×9</a> is de diagonaal te lang, op 9×7 niet. De drie '
-                          'witte dammen staan op een rij op de verbindingsdiagonaal, net als op 8×8, maar de val werkt maar bij '
-                          'één pariteit:</p>',
+                          'witte dammen staan op een rij op de verbindingsdiagonaal b1–h7, net als op 8×8:</p>',
                           '<p>Diagonally: on <a href="vesting-9x9.html">9×9</a> the diagonal is too long, on 9×7 it is not. The '
-                          'three white kings stand in a row on the connecting diagonal, as on 8×8, but the trap works at one '
-                          'parity only:</p>'))
+                          'three white kings stand in a row on the connecting diagonal b1–h7, as on 8×8:</p>'))
         rulebody += self.trap_blocks(pga, k97, e97, name, '', [(['d3', 'e4', 'f5'], ['b1', 'h7'])], partner, 2)
-        for W, B in ((['c2', 'e2', 'g2'], ['a2', 'i2']), (['d3', 'e4', 'f5'], ['b1', 'h7'])):
-            assert rank_parity(e97, e97.fen(W, B, 'B')) == 0
+        rulebody.append(t('<p>Toch beslist hier de oppositie, want er is geen val op een tweede diagonaal. Op 8×8 verbinden twee '
+                          'diagonalen de dubbele hoeken, één voor elke helft, en door van de ene naar de andere over te stappen '
+                          'wisselt wit het tempo. Op 9×7 liggen alleen de hoeken b1 en h7 op één diagonaal; de andere helften '
+                          'van de dubbele hoeken, a2 en i6, liggen niet op een gemeenschappelijke diagonaal. De tweede val, wit op '
+                          'c2, e4 en g6 tegen a2 en i6, staat daarom op dezelfde diagonaal b1–h7, bij dezelfde pariteit.</p>',
+                          '<p>Still the opposition decides here, because there is no trap on a second diagonal. On 8×8 two '
+                          'diagonals connect the double corners, one for each half, and by moving over from the one to the other '
+                          'white changes the tempo. On 9×7 only the corners b1 and h7 lie on one diagonal; the other halves of '
+                          'the double corners, a2 and i6, do not lie on a common diagonal. The second trap, white on c2, e4 and g6 '
+                          'against a2 and i6, therefore stands on the same diagonal b1–h7, at the same parity.</p>'))
+        diag = lambda a, b: abs(ord(a[0]) - ord(b[0])) == abs(int(a[1:]) - int(b[1:]))
+        assert diag('b1', 'h7') and not diag('a2', 'i6') and all(diag('b1', x) for x in ('c2', 'e4', 'g6', 'd3', 'f5'))
+        for W, B in ((['c2', 'e2', 'g2'], ['a2', 'i2']), (['d3', 'e4', 'f5'], ['b1', 'h7']), (['c2', 'e4', 'g6'], ['a2', 'i6'])):
+            assert rank_parity(e97, e97.fen(W, B, 'B')) == 0 and e97.analyse(e97.fen(W, B, 'B'))[0][0] == 'L'
         self.write('afstandsregel.html', None, body[rule] + '\n' + '\n'.join(rulebody), pga, k97)
         # the conclusion (for now: the traps per board)
         t = self.t

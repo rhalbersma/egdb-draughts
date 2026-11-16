@@ -59,6 +59,8 @@
 //   unitcompare <dir> <n> <m> [t]        compare every block of the compressed unit with the raw file
 //   unitcrc <dir> <n> <m>                CRC32C of the stored bytes of the compressed unit (independent of zstd)
 //   unitmax <dir> <n> <m> [t]            per material the longest win and the longest loss, with a position for each
+//   unitvalues <dir> <n> <m> [t]         a checksum of the values of the positions without capture (independent of how
+//                                        the values are encoded: compares a store built with EGDB_DTM8_MAX to a normal one)
 //   perft <depth> [FEN] [dups]           leaf counts to each depth from the position (default: the start position);
 //                                        with "dups" every capture sequence counts, also when two give the same
 //                                        position (as the checkers perft of dctl and the forum thread)
@@ -1436,7 +1438,52 @@ struct Unit {
         std::uint64_t const* off = nullptr; // compressed: block offsets (nblocks + 1) relative to data
         std::uint8_t const* data = nullptr;
         std::uint64_t id = 0;               // unique per opened unit (block cache tag)
+        std::uint64_t const* ovf = nullptr; // overflow table: sorted entries offset << 16 | DTM (see ESC8)
+        std::size_t novf = 0;
 };
+
+// DTM above dtm8_max plies: the byte ESC8, with the exact value in the unit's overflow table. During a build the table
+// of the raw unit is kept in memory (raw_ovf) and in the file .ovf next to the raw file, written at every checkpoint; a
+// compressed unit appends it after the blocks (header word 7 = number of entries). EGDB_DTM8_MAX lowers the limit, so
+// that the escape path can be tested on small units.
+constexpr std::uint8_t ESC8 = 252;
+int const dtm8_max = [] { char const* e = std::getenv("EGDB_DTM8_MAX"); return std::clamp(e ? std::atoi(e) : 251, 1, 251); }();
+std::vector<std::uint64_t> raw_ovf;
+
+std::vector<std::uint64_t> read_ovf(std::string const& path)
+{
+        std::vector<std::uint64_t> t;
+        if (std::FILE* f = std::fopen(path.c_str(), "rb")) {
+                std::uint64_t x;
+                while (std::fread(&x, 8, 1, f) == 1) t.push_back(x);
+                std::fclose(f);
+        }
+        return t;
+}
+
+bool write_ovf(std::string const& path, std::vector<std::uint64_t> const& t)
+{
+        if (t.empty()) { std::remove(path.c_str()); return true; }
+        std::string const tmp = path + ".tmp";
+        std::FILE* f = std::fopen(tmp.c_str(), "wb");
+        if (!f) return false;
+        bool ok = std::fwrite(t.data(), 8, t.size(), f) == t.size() && std::fflush(f) == 0 && ::fsync(::fileno(f)) == 0;
+        ok = std::fclose(f) == 0 && ok;
+        return ok && std::rename(tmp.c_str(), path.c_str()) == 0;
+}
+
+std::uint16_t ovf_find(std::uint64_t const* t, std::size_t n, std::uint64_t off)
+{
+        std::uint64_t const* it = std::lower_bound(t, t + n, off << 16);
+        if (it == t + n || (*it >> 16) != off) { std::cerr << "store: no overflow entry for offset " << off << std::endl; std::abort(); }
+        return std::uint16_t(*it & 0xFFFF);
+}
+
+// the value of a stored byte at offset off of unit u
+std::uint16_t value_of(Unit const& u, std::uint64_t off, std::uint8_t b)
+{
+        return b == ESC8 ? ovf_find(u.ovf, u.novf, off) : widen(b);
+}
 
 struct MatRef { int unit = -1; int S = 0; std::uint64_t base = 0, P = 0; };
 
@@ -1483,6 +1530,9 @@ bool unit_open(std::string const& dir, int n, int m, int mode)
         if (u.raw) {
                 u.p = map_any(unit_path(dir, n, m, ".raw"), u.size, mode, u.npos);
                 if (!u.p) { std::cerr << "store: cannot map " << unit_path(dir, n, m, ".raw") << std::endl; return false; }
+                if (mode == 1) { raw_ovf.clear(); std::remove(unit_path(dir, n, m, ".ovf").c_str()); }
+                else raw_ovf = read_ovf(unit_path(dir, n, m, ".ovf"));
+                u.ovf = raw_ovf.data(); u.novf = raw_ovf.size();
         } else {
                 std::string const path = unit_path(dir, n, m, ".cdb");
                 u.p = map_any(path, u.size, 0);
@@ -1495,7 +1545,12 @@ bool unit_open(std::string const& dir, int n, int m, int mode)
                 u.nblocks = h[6];
                 u.off = h + 8 + 2 * lay.size();
                 u.data = reinterpret_cast<std::uint8_t const*>(u.off + u.nblocks + 1);
-                if (std::size_t(u.data - u.p) + u.off[u.nblocks] != u.size) { std::cerr << "store: bad size of " << path << std::endl; ::munmap(u.p, u.size); return false; }
+                // the overflow table (if any) follows the blocks, padded to a multiple of 8 bytes from the start of the file
+                u.novf = std::size_t(h[7]);
+                std::size_t const end = std::size_t(u.data - u.p) + u.off[u.nblocks];
+                std::size_t const tab = u.novf ? (end + 7) / 8 * 8 : end;
+                u.ovf = reinterpret_cast<std::uint64_t const*>(u.p + tab);
+                if (tab + 8 * u.novf != u.size) { std::cerr << "store: bad size of " << path << std::endl; ::munmap(u.p, u.size); return false; }
         }
         units.push_back(u);
         for (auto const& x : lay) mat_ref[x.wm][x.bm][x.wk][x.bk] = MatRef{ int(units.size()) - 1, x.S, x.base, x.P };
@@ -1617,7 +1672,7 @@ std::uint16_t store_lookup(Pos const& p)
         std::uint64_t const off = stored_offset(r, q);
         std::uint8_t const v = u.raw ? u.p[off] : block_cache.byte(u, off);
         if (v > DRAW8) { std::cerr << "store: no value yet for " << fen_of(p) << std::endl; std::abort(); }
-        return widen(v);
+        return value_of(u, off, v);
 }
 
 // the stored positions of a unit in storage order: one slice (placement of the men, side to move) at a time
@@ -1746,10 +1801,25 @@ bool unit_build(std::string const& dir, int n, int m, int threads, double mem_gb
                   << (resume ? ", resuming after slice " + std::to_string(start) : std::string()) << std::endl;
         auto const t0 = std::chrono::steady_clock::now();
         std::uint64_t bad = 0;
+        // values above dtm8_max: the byte ESC8 and an entry for the overflow table, collected per thread and merged after
+        // each distance group (a slice reads only earlier groups, whose entries are merged by then)
+        std::string const ovf_path = unit_path(dir, n, m, ".ovf");
+        std::vector<std::vector<std::uint64_t>> pending(std::size_t(std::max(threads, small_threads)) + 1);
         auto put = [&](std::uint64_t off, std::uint16_t v) {
-                if (v != DRAW && v > MAXDTM8) { std::cerr << "DTM overflow (" << v << ")" << std::endl; std::abort(); }
-                std::uint8_t const b = v == DRAW ? DRAW8 : std::uint8_t(v);
-                return std::pair(off, b);
+                if (v == DRAW) return std::pair(off, DRAW8);
+                if (v > dtm8_max) {
+                        pending[std::size_t(omp_get_thread_num())].push_back(off << 16 | v);
+                        return std::pair(off, ESC8);
+                }
+                return std::pair(off, std::uint8_t(v));
+        };
+        auto merge_pending = [&] {
+                std::size_t const old = raw_ovf.size();
+                for (auto& q : pending) { raw_ovf.insert(raw_ovf.end(), q.begin(), q.end()); q.clear(); }
+                std::sort(raw_ovf.begin() + std::ptrdiff_t(old), raw_ovf.end());
+                std::inplace_merge(raw_ovf.begin(), raw_ovf.begin() + std::ptrdiff_t(old), raw_ovf.end());
+                raw_ovf.erase(std::unique(raw_ovf.begin(), raw_ovf.end()), raw_ovf.end());
+                u.ovf = raw_ovf.data(); u.novf = raw_ovf.size();
         };
         // write a solved slice to the unit (a slice is a contiguous range; for a symmetric material the positions with
         // black to move go to the mirrored slice, which is never solved itself)
@@ -1793,7 +1863,9 @@ bool unit_build(std::string const& dir, int n, int m, int threads, double mem_gb
                         bad += store(small[k], s, tmp);
                 }
                 if (bad) { std::cerr << "unit " << n << "/" << m << ": " << bad << " mirrored positions disagree" << std::endl; return false; }
+                merge_pending();
                 ::msync(u.p, u.size, MS_SYNC);
+                if (!write_ovf(ovf_path, raw_ovf)) { std::cerr << "unit " << n << "/" << m << ": cannot write " << ovf_path << std::endl; return false; }
                 write_progress(prog, std::to_string(h) + "\n");
                 std::cerr << "unit " << n << "/" << m << ": distance " << jobs[g].first << " done, " << h << " / " << jobs.size() << " slices, "
                           << seconds_since(t0) << " s" << std::endl;
@@ -1804,7 +1876,8 @@ bool unit_build(std::string const& dir, int n, int m, int threads, double mem_gb
         for (std::uint64_t o = 0; o < npos; ++o) unknown += u.p[o] == UNKNOWN8;
         if (unknown) { std::cerr << "unit " << n << "/" << m << ": " << unknown << " positions without value" << std::endl; return false; }
         write_progress(prog, std::to_string(jobs.size()) + " complete\n");
-        std::cout << "built " << n << " " << m << " positions " << npos << " slices " << jobs.size() << " seconds " << seconds_since(t0) << '\n';
+        std::cout << "built " << n << " " << m << " positions " << npos << " slices " << jobs.size() << " overflow " << raw_ovf.size()
+                  << " seconds " << seconds_since(t0) << '\n';
         return true;
 }
 
@@ -1858,14 +1931,15 @@ bool unit_verify(std::string const& dir, int n, int m, bool compressed, int thre
                         int best_win = INF, max_loss = -1;
                         bool draw = false;
                         for (auto const& mv : moves(q)) {
-                                std::uint16_t const v = internal_move(q, mv) ? widen(u.p[other + index_of(cur.meta, mv.next)]) : lookup(mv.next);
+                                std::uint64_t const o = other + index_of(cur.meta, mv.next);
+                                std::uint16_t const v = internal_move(q, mv) ? value_of(u, o, u.p[o]) : lookup(mv.next);
                                 if (v == DRAW) draw = true;
                                 else if (v & 1) max_loss = std::max(max_loss, v + 1);
                                 else best_win = std::min(best_win, v + 1);
                         }
                         b = best_win < INF ? std::uint16_t(best_win) : draw ? DRAW : std::uint16_t(std::max(max_loss, 0));
                 } else b = from_successors(q);
-                std::uint16_t const a = widen(compressed ? block_cache.byte(u, off) : u.p[off]);
+                std::uint16_t const a = value_of(u, off, compressed ? block_cache.byte(u, off) : u.p[off]);
                 ++t[0];
                 if (a != b) {
                         if (++t[2] <= 10) {
@@ -1901,7 +1975,7 @@ bool unit_max(std::string const& dir, int n, int m, int threads)
         auto better = [](Best const& a, std::uint16_t v, std::uint64_t off) { return v > a.v || (v == a.v && off < a.off); };
         for_each_stored(lay, threads, "max", [&](Cursor const& cur, std::uint64_t off) {
                 Pos const q = cur.pos();
-                std::uint16_t const v = has_capture(q) ? lookup(q) : widen(block_cache.byte(u, off));
+                std::uint16_t const v = has_capture(q) ? lookup(q) : value_of(u, off, block_cache.byte(u, off));
                 if (v == DRAW) return;
                 std::size_t const i = std::size_t(omp_get_thread_num()) * M + cur.mi;
                 Best& b = (v & 1) ? win[i] : loss[i];
@@ -1924,6 +1998,30 @@ bool unit_max(std::string const& dir, int n, int m, int threads)
         return true;
 }
 
+// a checksum of the values (not the stored bytes) of a compressed unit: every position without capture with its
+// value (overflow entries resolved), order independent; equal for two stores of the same values in different encodings
+bool unit_values(std::string const& dir, int n, int m, int threads)
+{
+        auto const lay = unit_layout(n, m);
+        if (lay.empty()) { std::cout << "empty " << n << " " << m << '\n'; return true; }
+        if (!store_open(dir, n, m, 3)) return false;
+        Unit const& u = units.back();
+        std::vector<std::uint64_t> sum(std::size_t(threads), 0), cnt(std::size_t(threads), 0);
+        for_each_stored(lay, threads, "values", [&](Cursor const& cur, std::uint64_t off) {
+                if (has_capture(cur.pos())) return;
+                std::uint64_t x = (off << 16 | value_of(u, off, block_cache.byte(u, off))) * 0x9E3779B97F4A7C15ull;
+                x ^= x >> 29; x *= 0xBF58476D1CE4E5B9ull; x ^= x >> 32;
+                std::size_t const t = std::size_t(omp_get_thread_num());
+                sum[t] += x; ++cnt[t];
+        });
+        std::uint64_t s = 0, c = 0;
+        for (int t = 0; t < threads; ++t) { s += sum[std::size_t(t)]; c += cnt[std::size_t(t)]; }
+        char hex[24];
+        std::snprintf(hex, sizeof hex, "%016llx", static_cast<unsigned long long>(s));
+        std::cout << "values " << n << " " << m << " positions " << c << " " << hex << '\n';
+        return true;
+}
+
 // compress the raw file of unit (n, m) into blocks of 4096 positions (zstd -19)
 // file: magic, n, m, materials, positions, block, blocks, 0; per material (code, base); offsets[blocks + 1]; data
 bool unit_compress(std::string const& dir, int n, int m, int threads)
@@ -1935,9 +2033,10 @@ bool unit_compress(std::string const& dir, int n, int m, int threads)
         std::uint8_t* raw = map_any(unit_path(dir, n, m, ".raw"), rsize, 0, npos);
         if (!raw) return false;
         std::string const path = unit_path(dir, n, m, ".cdb"), tmp = path + ".tmp";
+        std::vector<std::uint64_t> const ovf = read_ovf(unit_path(dir, n, m, ".ovf"));
         std::FILE* f = std::fopen(tmp.c_str(), "wb");
         if (!f) return false;
-        std::vector<std::uint64_t> head{ CDB_MAGIC, std::uint64_t(n), std::uint64_t(m), lay.size(), npos, BLOCK, nb, 0 };
+        std::vector<std::uint64_t> head{ CDB_MAGIC, std::uint64_t(n), std::uint64_t(m), lay.size(), npos, BLOCK, nb, ovf.size() };
         for (auto const& x : lay) { head.push_back(x.code()); head.push_back(x.base); }
         std::vector<std::uint64_t> off(nb + 1, 0);
         std::fwrite(head.data(), 8, head.size(), f);
@@ -1972,14 +2071,17 @@ bool unit_compress(std::string const& dir, int n, int m, int threads)
                 if ((b0 / batch) % 64 == 63) std::cerr << "compress: " << b1 << " / " << nb << " blocks, " << seconds_since(t0) << " s" << std::endl;
         }
         off[nb] = total;
-        bool ok = ::fseeko(f, off_t(head.size() * 8), SEEK_SET) == 0 && std::fwrite(off.data(), 8, off.size(), f) == off.size();
+        std::uint64_t const end = (head.size() + off.size()) * 8 + total, pad = ovf.empty() ? 0 : (8 - end % 8) % 8;
+        std::uint8_t const zeros[8]{};
+        bool ok = std::fwrite(zeros, 1, pad, f) == pad && std::fwrite(ovf.data(), 8, ovf.size(), f) == ovf.size();
+        ok = ok && ::fseeko(f, off_t(head.size() * 8), SEEK_SET) == 0 && std::fwrite(off.data(), 8, off.size(), f) == off.size();
         ok = ok && std::fflush(f) == 0 && ::fsync(::fileno(f)) == 0;
         ok = std::fclose(f) == 0 && ok;
         ::munmap(raw, rsize);
         if (!ok || std::rename(tmp.c_str(), path.c_str()) != 0) return false;
-        std::uint64_t const fsize = head.size() * 8 + off.size() * 8 + total;
+        std::uint64_t const fsize = end + pad + 8 * ovf.size();
         std::cout << "compressed " << n << " " << m << " positions " << npos << " blocks " << nb << " bytes " << fsize
-                  << " bits_per_position " << 8.0 * double(fsize) / double(npos) << " seconds " << seconds_since(t0) << '\n';
+                  << " bits_per_position " << 8.0 * double(fsize) / double(npos) << " overflow " << ovf.size() << " seconds " << seconds_since(t0) << '\n';
         return true;
 }
 
@@ -2009,6 +2111,7 @@ bool unit_crc(std::string const& dir, int n, int m)
                 crc = crc32c(crc, buf.data(), std::size_t(std::min(BLOCK, u.npos - b * BLOCK)));
         }
         ZSTD_freeDCtx(dx);
+        if (u.novf) crc = crc32c(crc, reinterpret_cast<std::uint8_t const*>(u.ovf), 8 * u.novf);   // values above dtm8_max
         char hex[16];
         std::snprintf(hex, sizeof hex, "%08x", crc);
         std::cout << "crc32c " << n << " " << m << " positions " << u.npos << " " << hex << '\n';
@@ -2046,9 +2149,11 @@ bool unit_compare(std::string const& dir, int n, int m, int threads)
                 ZSTD_freeDCtx(dx);
         }
         ::munmap(raw, rsize);
+        std::vector<std::uint64_t> const ovf = read_ovf(unit_path(dir, n, m, ".ovf"));
+        bool const same_ovf = ovf.size() == u.novf && std::equal(ovf.begin(), ovf.end(), u.ovf);
         std::cout << "compare " << n << " " << m << " positions " << npos << " blocks " << u.nblocks << " bytes_compared " << bytes
-                  << " byte_errors " << bad_bytes << " seconds " << seconds_since(t0) << '\n';
-        return bad_bytes == 0 && bytes == npos;
+                  << " byte_errors " << bad_bytes << " overflow " << u.novf << (same_ovf ? "" : " overflow_differs") << " seconds " << seconds_since(t0) << '\n';
+        return bad_bytes == 0 && bytes == npos && same_ovf;
 }
 
 // order: best move first (fastest win, then draw, then slowest loss)
@@ -2122,6 +2227,14 @@ int main()
                         rs >> dir >> n >> m;
                         bool ok = unit_crc(dir, n, m);
                         std::cout << (ok ? "unitcrc ok" : "error unitcrc failed") << "\nend" << std::endl;
+                        continue;
+                }
+                if (cmd == "unitvalues") {
+                        std::string dir;
+                        int n = 0, m = 0, threads = 4;
+                        rs >> dir >> n >> m >> threads;
+                        bool const ok = unit_values(dir, n, m, threads);
+                        std::cout << (ok ? "unitvalues ok" : "error unitvalues failed") << "\nend" << std::endl;
                         continue;
                 }
                 if (cmd == "unitmax") {

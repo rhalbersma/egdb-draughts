@@ -57,7 +57,7 @@ def step(w, what, command=None):
     n, m = int(w.n), int(w.m)
     key = f'{n}/{m}'
     if command is None:                # delete raw
-        for f in (name(n, m) + '.raw', name(n, m) + '.raw.progress'):
+        for f in (name(n, m) + '.raw', name(n, m) + '.raw.progress', name(n, m) + '.ovf'):
             if os.path.exists(f):
                 os.remove(f)
         ok, lines, sec = True, ['deleted ' + name(n, m) + '.raw'], 0.0

@@ -84,7 +84,7 @@ def main():
             else:
                 cmd = None
             if cmd is None:
-                for f in (raw, raw + '.progress'):
+                for f in (raw, raw + '.progress', raw[:-len('.raw')] + '.ovf'):
                     if os.path.exists(f):
                         os.remove(f)
                 ok, lines, sec = True, ['deleted ' + raw], 0.0

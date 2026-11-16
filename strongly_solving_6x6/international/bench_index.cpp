@@ -7,8 +7,10 @@
 //
 //   loops     the code of egdb_6x6: colex rank and unrank by walking the free squares (rank_in, unrank_in)
 //   ints      the same ranks over the packed squares, with xstd::bit_compress / xstd::bit_expand on std::uint32_t
-//   fixed_set the same with the bitboards as xstd::bit_fixed_set<18>: bit_compress<std::uint32_t> and bit_expand
+//   fixed_set the same with the bitboards as xstd::bit_align<xstd::bit_least<xstd::bit_fixed_set<18>>>: one
+//             std::uint32_t block, all 32 bits; bit_compress<std::uint32_t> and bit_expand
 //   tables    ints with the colex rank and unrank of the packed squares looked up in two tables of 2^18 entries
+//   set+tab   fixed_set with the same tables
 //
 // xstd-ints runs bit_compress and bit_expand as PEXT and PDEP where the target makes them fast (BMI2, not AMD before
 // Zen 3) and as a portable kernel everywhere else; with BMI2 they are also checked against _pext_u32 / _pdep_u32.
@@ -24,6 +26,8 @@
 #include <xstd/bits/bit/bit_expand.hpp>         // bit_expand
 #include <xstd/bits/bit_ranges/from_blocks.hpp> // from_blocks
 #include <xstd/bits/bit_set/bit_fixed_set.hpp>  // bit_fixed_set
+#include <xstd/bits/bit_type_traits/bit_align.hpp> // bit_align
+#include <xstd/bits/bit_type_traits/bit_least.hpp> // bit_least
 
 #include <array>
 #include <bit>
@@ -33,6 +37,7 @@
 #include <cstdlib>
 #include <random>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #ifdef __BMI2__
@@ -151,13 +156,15 @@ std::uint32_t unrank_tab(std::uint64_t r, int k, std::uint32_t mask)
         return xstd::bit_expand(unrank_table[unrank_offset[k] + r], mask);
 }
 
-// ---------------------------------------------------------------- fixed_set: xstd::bit_fixed_set<18> bitboards
+// ---------------------------------------------------------------- fixed_set: bitboards as xstd::bit_fixed_set
 
-using set = xstd::bit_fixed_set<N>;
+// 18 squares in one std::uint32_t block (bit_least), widened to its 32 bits (bit_align): no tail to mask off
+using set = xstd::bit_align<xstd::bit_least<xstd::bit_fixed_set<N>>>;
+static_assert(std::is_same_v<set, xstd::basic_bit_fixed_set<std::size_t, std::uint32_t, 32>>);
 
 set to_set(std::uint32_t x)
 {
-        return set(xstd::from_blocks, std::size_t{x});
+        return set(xstd::from_blocks, x);
 }
 
 set minus(set a, set const& b)
@@ -180,6 +187,16 @@ std::uint64_t rank_set(set const& x, set const& mask)
 set unrank_set(std::uint64_t r, int k, set const& mask)
 {
         return xstd::bit_expand(unrank_packed(r, k, static_cast<int>(mask.size())), mask);
+}
+
+std::uint64_t rank_set_tab(set const& x, set const& mask)
+{
+        return rank_table[xstd::bit_compress<std::uint32_t>(x, mask)];
+}
+
+set unrank_set_tab(std::uint64_t r, int k, set const& mask)
+{
+        return xstd::bit_expand(unrank_table[unrank_offset[k] + r], mask);
 }
 
 // ---------------------------------------------------------------- the positions
@@ -250,6 +267,8 @@ int check(std::vector<Sample> const& s)
                 bad += unrank_ints(rw, x.nwk, x.free) != x.wk || unrank_ints(rb, x.nbk, rest) != x.bk;
                 bad += to_u32(unrank_set(rw, x.nwk, to_set(x.free))) != x.wk || to_u32(unrank_set(rb, x.nbk, to_set(rest))) != x.bk;
                 bad += rank_tab(x.wk, x.free) != rw || rank_tab(x.bk, rest) != rb;
+                bad += rank_set_tab(to_set(x.wk), to_set(x.free)) != rw || rank_set_tab(to_set(x.bk), to_set(rest)) != rb;
+                bad += to_u32(unrank_set_tab(rw, x.nwk, to_set(x.free))) != x.wk || to_u32(unrank_set_tab(rb, x.nbk, to_set(rest))) != x.bk;
                 bad += unrank_tab(rw, x.nwk, x.free) != x.wk || unrank_tab(rb, x.nbk, rest) != x.bk;
 #ifdef __BMI2__
                 // xstd's bit_compress / bit_expand are the instructions themselves
@@ -269,6 +288,7 @@ int check(std::vector<Sample> const& s)
                         bad += rank_ints(x, mask) != r || unrank_ints(r, k, mask) != x;
                         bad += rank_set(to_set(x), to_set(mask)) != r || to_u32(unrank_set(r, k, to_set(mask))) != x;
                         bad += rank_tab(x, mask) != r || unrank_tab(r, k, mask) != x;
+                        bad += rank_set_tab(to_set(x), to_set(mask)) != r || to_u32(unrank_set_tab(r, k, to_set(mask))) != x;
                 }
         }
         std::printf("check: %zu random slices, %ld exhaustive subsets: %s\n", s.size(), exhaustive, bad ? "MISMATCH" : "all identical");
@@ -335,5 +355,9 @@ int main(int argc, char** argv)
                [&](std::size_t i) { auto const& x = s[i]; return rank_tab(x.wk, x.free) * x.nb + rank_tab(x.bk, x.free & ~x.wk); },
                [&](std::size_t i) { auto const& x = s[i]; std::uint32_t const wk = unrank_tab(idx[i] / x.nb, x.nwk, x.free);
                                     return std::uint64_t{wk} ^ unrank_tab(idx[i] % x.nb, x.nbk, x.free & ~wk); });
+        report("set+tab",
+               [&](std::size_t i) { auto const& x = ss[i]; return rank_set_tab(x.wk, x.free) * s[i].nb + rank_set_tab(x.bk, minus(x.free, x.wk)); },
+               [&](std::size_t i) { auto const& x = ss[i]; set const wk = unrank_set_tab(idx[i] / s[i].nb, s[i].nwk, x.free);
+                                    return std::uint64_t{wk.size()} ^ unrank_set_tab(idx[i] % s[i].nb, s[i].nbk, minus(x.free, wk)).size(); });
         return 0;
 }

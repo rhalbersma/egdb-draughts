@@ -707,6 +707,87 @@
    }
   },
   {
+   "id": "3.1",
+   "fen": "W:W4,10,18:B3,K6",
+   "note": "wit wint (als diagram 2.2)",
+   "sides": {
+    "W": {
+     "claim": "W+",
+     "val": "W45",
+     "result": "W+",
+     "ok": true,
+     "keeping": [
+      [
+       "4-1",
+       "W45"
+      ]
+     ],
+     "moves": [
+      [
+       "4-1",
+       "W45"
+      ],
+      [
+       "10-7",
+       "D"
+      ],
+      [
+       "18-14",
+       "D"
+      ],
+      [
+       "18-15",
+       "D"
+      ]
+     ],
+     "nmoves": 4
+    },
+    "B": {
+     "claim": null,
+     "val": "D",
+     "result": "=",
+     "ok": null,
+     "keeping": [
+      [
+       "6-16",
+       "D"
+      ],
+      [
+       "6-9",
+       "D"
+      ]
+     ],
+     "moves": [
+      [
+       "6-16",
+       "D"
+      ],
+      [
+       "6-9",
+       "D"
+      ],
+      [
+       "6-2",
+       "L46"
+      ],
+      [
+       "6-8",
+       "L46"
+      ],
+      [
+       "6-11",
+       "L46"
+      ],
+      [
+       "6-13",
+       "L8"
+      ]
+     ],
+     "nmoves": 6
+    }
+   }
+  },
+  {
    "id": "3.3",
    "fen": "W:W10,14,K15:B3,K16",
    "note": "wit wint door 10-7",
@@ -1289,7 +1370,7 @@
   {
    "id": "3.5c",
    "fen": "W:WK8,10,14:B3,K9",
-   "note": "luchtige opgave, wit wint",
+   "note": "luchtige opgave, wit wint (op de website ook diagram 3.5)",
    "sides": {
     "W": {
      "claim": "W+",
@@ -1368,6 +1449,163 @@
       ]
      ],
      "nmoves": 1
+    }
+   }
+  },
+  {
+   "id": "4.1",
+   "fen": "W:WK16,K17,K18:BK2,15",
+   "note": "wit wint (als diagram 1.1)",
+   "sides": {
+    "W": {
+     "claim": "W+",
+     "val": "W13",
+     "result": "W+",
+     "ok": true,
+     "keeping": [
+      [
+       "16-11",
+       "W13"
+      ],
+      [
+       "16-8",
+       "W13"
+      ],
+      [
+       "16-3",
+       "W13"
+      ],
+      [
+       "17-9",
+       "W13"
+      ],
+      [
+       "16-13",
+       "W17"
+      ],
+      [
+       "17-13",
+       "W17"
+      ],
+      [
+       "17-10",
+       "W17"
+      ],
+      [
+       "17-14",
+       "W17"
+      ]
+     ],
+     "moves": [
+      [
+       "16-11",
+       "W13"
+      ],
+      [
+       "16-8",
+       "W13"
+      ],
+      [
+       "16-3",
+       "W13"
+      ],
+      [
+       "17-9",
+       "W13"
+      ],
+      [
+       "16-13",
+       "W17"
+      ],
+      [
+       "17-13",
+       "W17"
+      ],
+      [
+       "17-10",
+       "W17"
+      ],
+      [
+       "17-14",
+       "W17"
+      ],
+      [
+       "16-6",
+       "D"
+      ],
+      [
+       "17-12",
+       "D"
+      ],
+      [
+       "18-14",
+       "D"
+      ],
+      [
+       "18-11",
+       "D"
+      ],
+      [
+       "18-7",
+       "D"
+      ],
+      [
+       "18-4",
+       "D"
+      ]
+     ],
+     "nmoves": 14
+    },
+    "B": {
+     "claim": null,
+     "val": "L12",
+     "result": "W+",
+     "ok": null,
+     "keeping": [
+      [
+       "2-9",
+       "L12"
+      ],
+      [
+       "2-10",
+       "L10"
+      ],
+      [
+       "2-7",
+       "L6"
+      ],
+      [
+       "2-5",
+       "L4"
+      ],
+      [
+       "2-6",
+       "L2"
+      ]
+     ],
+     "moves": [
+      [
+       "2-9",
+       "L12"
+      ],
+      [
+       "2-10",
+       "L10"
+      ],
+      [
+       "2-7",
+       "L6"
+      ],
+      [
+       "2-5",
+       "L4"
+      ],
+      [
+       "2-6",
+       "L2"
+      ]
+     ],
+     "nmoves": 5
     }
    }
   },
@@ -2073,6 +2311,135 @@
    }
   },
   {
+   "id": "4.2",
+   "fen": "W:WK2,K17,K18:BK8,15",
+   "note": "wit wint (als diagram 2.3)",
+   "sides": {
+    "W": {
+     "claim": "W+",
+     "val": "W11",
+     "result": "W+",
+     "ok": true,
+     "keeping": [
+      [
+       "17-12",
+       "W11"
+      ]
+     ],
+     "moves": [
+      [
+       "17-12",
+       "W11"
+      ],
+      [
+       "2-5",
+       "D"
+      ],
+      [
+       "2-7",
+       "D"
+      ],
+      [
+       "2-10",
+       "D"
+      ],
+      [
+       "2-6",
+       "D"
+      ],
+      [
+       "2-9",
+       "D"
+      ],
+      [
+       "17-13",
+       "D"
+      ],
+      [
+       "17-10",
+       "D"
+      ],
+      [
+       "17-14",
+       "D"
+      ],
+      [
+       "17-9",
+       "D"
+      ],
+      [
+       "18-14",
+       "D"
+      ],
+      [
+       "18-11",
+       "D"
+      ],
+      [
+       "18-7",
+       "D"
+      ],
+      [
+       "18-4",
+       "D"
+      ]
+     ],
+     "nmoves": 14
+    },
+    "B": {
+     "claim": null,
+     "val": "D",
+     "result": "=",
+     "ok": null,
+     "keeping": [
+      [
+       "8-3",
+       "D"
+      ],
+      [
+       "8-16",
+       "D"
+      ]
+     ],
+     "moves": [
+      [
+       "8-3",
+       "D"
+      ],
+      [
+       "8-16",
+       "D"
+      ],
+      [
+       "8-1",
+       "L6"
+      ],
+      [
+       "8-11",
+       "L6"
+      ],
+      [
+       "8-5",
+       "L2"
+      ],
+      [
+       "8-6",
+       "L2"
+      ],
+      [
+       "8-13",
+       "L2"
+      ],
+      [
+       "8-12",
+       "L2"
+      ]
+     ],
+     "nmoves": 8
+    }
+   }
+  },
+  {
    "id": "4.2b",
    "fen": "W:WK2,K17,K18:BK3,15",
    "note": "zwarte dam op 3 in diagram 4.2: remise",
@@ -2524,6 +2891,296 @@
       ]
      ],
      "nmoves": 5
+    }
+   }
+  },
+  {
+   "id": "4.8",
+   "fen": "W:WK2,K17,K18:B15,K16",
+   "note": "spoken (als diagram 4.4)",
+   "sides": {
+    "W": {
+     "claim": "=",
+     "val": "D",
+     "result": "=",
+     "ok": true,
+     "keeping": [
+      [
+       "2-5",
+       "D"
+      ],
+      [
+       "2-7",
+       "D"
+      ],
+      [
+       "2-10",
+       "D"
+      ],
+      [
+       "2-6",
+       "D"
+      ],
+      [
+       "2-9",
+       "D"
+      ],
+      [
+       "17-13",
+       "D"
+      ],
+      [
+       "17-10",
+       "D"
+      ],
+      [
+       "17-14",
+       "D"
+      ],
+      [
+       "17-12",
+       "D"
+      ],
+      [
+       "17-9",
+       "D"
+      ],
+      [
+       "18-14",
+       "D"
+      ],
+      [
+       "18-11",
+       "D"
+      ],
+      [
+       "18-7",
+       "D"
+      ],
+      [
+       "18-4",
+       "D"
+      ]
+     ],
+     "moves": [
+      [
+       "2-5",
+       "D"
+      ],
+      [
+       "2-7",
+       "D"
+      ],
+      [
+       "2-10",
+       "D"
+      ],
+      [
+       "2-6",
+       "D"
+      ],
+      [
+       "2-9",
+       "D"
+      ],
+      [
+       "17-13",
+       "D"
+      ],
+      [
+       "17-10",
+       "D"
+      ],
+      [
+       "17-14",
+       "D"
+      ],
+      [
+       "17-12",
+       "D"
+      ],
+      [
+       "17-9",
+       "D"
+      ],
+      [
+       "18-14",
+       "D"
+      ],
+      [
+       "18-11",
+       "D"
+      ],
+      [
+       "18-7",
+       "D"
+      ],
+      [
+       "18-4",
+       "D"
+      ]
+     ],
+     "nmoves": 14
+    },
+    "B": {
+     "claim": null,
+     "val": "D",
+     "result": "=",
+     "ok": null,
+     "keeping": [
+      [
+       "16-3",
+       "D"
+      ]
+     ],
+     "moves": [
+      [
+       "16-3",
+       "D"
+      ],
+      [
+       "16-8",
+       "L12"
+      ],
+      [
+       "16-11",
+       "L6"
+      ],
+      [
+       "16-13",
+       "L2"
+      ],
+      [
+       "16-6",
+       "L2"
+      ]
+     ],
+     "nmoves": 5
+    }
+   }
+  },
+  {
+   "id": "4.9",
+   "fen": "W:WK16,K18:BK3,15",
+   "note": "waz remise (als diagram 4.3): de drie dammen winnen niet doordat deze stand met wit aan zet remise is",
+   "sides": {
+    "W": {
+     "claim": "=",
+     "val": "D",
+     "result": "=",
+     "ok": true,
+     "keeping": [
+      [
+       "16-13",
+       "D"
+      ],
+      [
+       "16-11",
+       "D"
+      ],
+      [
+       "16-8",
+       "D"
+      ],
+      [
+       "16-6",
+       "D"
+      ],
+      [
+       "18-14",
+       "D"
+      ],
+      [
+       "18-11",
+       "D"
+      ],
+      [
+       "18-7",
+       "D"
+      ],
+      [
+       "18-4",
+       "D"
+      ]
+     ],
+     "moves": [
+      [
+       "16-13",
+       "D"
+      ],
+      [
+       "16-11",
+       "D"
+      ],
+      [
+       "16-8",
+       "D"
+      ],
+      [
+       "16-6",
+       "D"
+      ],
+      [
+       "18-14",
+       "D"
+      ],
+      [
+       "18-11",
+       "D"
+      ],
+      [
+       "18-7",
+       "D"
+      ],
+      [
+       "18-4",
+       "D"
+      ]
+     ],
+     "nmoves": 8
+    },
+    "B": {
+     "claim": null,
+     "val": "L2",
+     "result": "W+",
+     "ok": null,
+     "keeping": [
+      [
+       "3-6",
+       "L2"
+      ],
+      [
+       "3-8",
+       "L2"
+      ],
+      [
+       "3-11",
+       "L2"
+      ],
+      [
+       "3-13",
+       "L2"
+      ]
+     ],
+     "moves": [
+      [
+       "3-6",
+       "L2"
+      ],
+      [
+       "3-8",
+       "L2"
+      ],
+      [
+       "3-11",
+       "L2"
+      ],
+      [
+       "3-13",
+       "L2"
+      ]
+     ],
+     "nmoves": 4
     }
    }
   },
@@ -8232,6 +8889,87 @@
    }
   },
   {
+   "id": "6.15",
+   "fen": "W:W5,K17:B6,K9",
+   "note": "de slotstand na 15. 10-17 (als de eindstand van hoofdstuk 9)",
+   "sides": {
+    "W": {
+     "claim": null,
+     "val": "W5",
+     "result": "W+",
+     "ok": null,
+     "keeping": [
+      [
+       "5-1",
+       "W5"
+      ]
+     ],
+     "moves": [
+      [
+       "5-1",
+       "W5"
+      ],
+      [
+       "5-2",
+       "D"
+      ],
+      [
+       "17-13",
+       "D"
+      ],
+      [
+       "17-10",
+       "D"
+      ],
+      [
+       "17-14",
+       "D"
+      ],
+      [
+       "17-12",
+       "D"
+      ]
+     ],
+     "nmoves": 6
+    },
+    "B": {
+     "claim": "W+",
+     "val": "L4",
+     "result": "W+",
+     "ok": true,
+     "keeping": [
+      [
+       "6-8",
+       "L4"
+      ],
+      [
+       "9-12",
+       "L2"
+      ],
+      [
+       "9-14",
+       "L2"
+      ]
+     ],
+     "moves": [
+      [
+       "6-8",
+       "L4"
+      ],
+      [
+       "9-12",
+       "L2"
+      ],
+      [
+       "9-14",
+       "L2"
+      ]
+     ],
+     "nmoves": 3
+    }
+   }
+  },
+  {
    "id": "7.1",
    "fen": "W:W14,15,16,17,18:B1,3,4,5,9",
    "note": "na 1. 13-11 6-8 2. 11x6 2x9??: wit wint snel met 3. 15-12",
@@ -8501,7 +9239,7 @@
   {
    "id": "7.4j",
    "fen": "W:W10,14,15,17,18:B1,4,5,8,9",
-   "note": "kerstpuzzel Hans Jansen (na 3. … 3-6 4. 13-10 6-8): toch wint wit",
+   "note": "kerstpuzzel Hans Jansen (na 3. … 3-6 4. 13-10 6-8): toch wint wit (op de website ook diagram 7.4)",
    "sides": {
     "W": {
      "claim": "W+",
@@ -12615,6 +13353,389 @@
    }
   },
   {
+   "id": "9.9",
+   "fen": "W:WK2,8,15:B3,K14",
+   "note": "stand na 17. … 7-14 (als diagram 6.14)",
+   "sides": {
+    "W": {
+     "claim": "W+",
+     "val": "W35",
+     "result": "W+",
+     "ok": true,
+     "keeping": [
+      [
+       "2-10",
+       "W35"
+      ],
+      [
+       "2-9",
+       "W41"
+      ],
+      [
+       "2-6",
+       "W43"
+      ],
+      [
+       "2-5",
+       "W45"
+      ]
+     ],
+     "moves": [
+      [
+       "2-10",
+       "W35"
+      ],
+      [
+       "2-9",
+       "W41"
+      ],
+      [
+       "2-6",
+       "W43"
+      ],
+      [
+       "2-5",
+       "W45"
+      ],
+      [
+       "2-7",
+       "D"
+      ],
+      [
+       "8-5",
+       "D"
+      ],
+      [
+       "8-6",
+       "D"
+      ],
+      [
+       "15-12",
+       "D"
+      ]
+     ],
+     "nmoves": 8
+    },
+    "B": {
+     "claim": null,
+     "val": "L50",
+     "result": "W+",
+     "ok": null,
+     "keeping": [
+      [
+       "14-9",
+       "L50"
+      ],
+      [
+       "14-17",
+       "L40"
+      ],
+      [
+       "14-4",
+       "L38"
+      ],
+      [
+       "14-18",
+       "L38"
+      ],
+      [
+       "14-12",
+       "L8"
+      ],
+      [
+       "14-11",
+       "L4"
+      ],
+      [
+       "14-7",
+       "L4"
+      ],
+      [
+       "3-6",
+       "L2"
+      ]
+     ],
+     "moves": [
+      [
+       "14-9",
+       "L50"
+      ],
+      [
+       "14-17",
+       "L40"
+      ],
+      [
+       "14-4",
+       "L38"
+      ],
+      [
+       "14-18",
+       "L38"
+      ],
+      [
+       "14-12",
+       "L8"
+      ],
+      [
+       "14-11",
+       "L4"
+      ],
+      [
+       "14-7",
+       "L4"
+      ],
+      [
+       "3-6",
+       "L2"
+      ]
+     ],
+     "nmoves": 8
+    }
+   }
+  },
+  {
+   "id": "9.10",
+   "fen": "W:WK2,8,15:B3,K18",
+   "note": "stand na 17. … 7-18",
+   "sides": {
+    "W": {
+     "claim": "W+",
+     "val": "W37",
+     "result": "W+",
+     "ok": true,
+     "keeping": [
+      [
+       "2-5",
+       "W37"
+      ],
+      [
+       "2-9",
+       "W41"
+      ],
+      [
+       "2-6",
+       "W43"
+      ],
+      [
+       "2-10",
+       "W45"
+      ]
+     ],
+     "moves": [
+      [
+       "2-5",
+       "W37"
+      ],
+      [
+       "2-9",
+       "W41"
+      ],
+      [
+       "2-6",
+       "W43"
+      ],
+      [
+       "2-10",
+       "W45"
+      ],
+      [
+       "2-7",
+       "D"
+      ],
+      [
+       "8-5",
+       "D"
+      ],
+      [
+       "8-6",
+       "D"
+      ],
+      [
+       "15-12",
+       "D"
+      ]
+     ],
+     "nmoves": 8
+    },
+    "B": {
+     "claim": null,
+     "val": "L38",
+     "result": "W+",
+     "ok": null,
+     "keeping": [
+      [
+       "18-4",
+       "L38"
+      ],
+      [
+       "18-14",
+       "L36"
+      ],
+      [
+       "3-6",
+       "L16"
+      ],
+      [
+       "18-11",
+       "L4"
+      ],
+      [
+       "18-7",
+       "L4"
+      ]
+     ],
+     "moves": [
+      [
+       "18-4",
+       "L38"
+      ],
+      [
+       "18-14",
+       "L36"
+      ],
+      [
+       "3-6",
+       "L16"
+      ],
+      [
+       "18-11",
+       "L4"
+      ],
+      [
+       "18-7",
+       "L4"
+      ]
+     ],
+     "nmoves": 5
+    }
+   }
+  },
+  {
+   "id": "9.11",
+   "fen": "W:WK2,8,15:B3,K4",
+   "note": "stand na 17. … 7-4",
+   "sides": {
+    "W": {
+     "claim": "W+",
+     "val": "W37",
+     "result": "W+",
+     "ok": true,
+     "keeping": [
+      [
+       "2-5",
+       "W37"
+      ],
+      [
+       "2-9",
+       "W41"
+      ],
+      [
+       "2-6",
+       "W43"
+      ],
+      [
+       "2-10",
+       "W45"
+      ]
+     ],
+     "moves": [
+      [
+       "2-5",
+       "W37"
+      ],
+      [
+       "2-9",
+       "W41"
+      ],
+      [
+       "2-6",
+       "W43"
+      ],
+      [
+       "2-10",
+       "W45"
+      ],
+      [
+       "8-5",
+       "D"
+      ],
+      [
+       "8-6",
+       "D"
+      ],
+      [
+       "15-12",
+       "D"
+      ],
+      [
+       "2-7",
+       "L8"
+      ]
+     ],
+     "nmoves": 8
+    },
+    "B": {
+     "claim": null,
+     "val": "L38",
+     "result": "W+",
+     "ok": null,
+     "keeping": [
+      [
+       "4-18",
+       "L38"
+      ],
+      [
+       "4-14",
+       "L36"
+      ],
+      [
+       "3-6",
+       "L16"
+      ],
+      [
+       "4-1",
+       "L4"
+      ],
+      [
+       "4-7",
+       "L4"
+      ],
+      [
+       "4-11",
+       "L4"
+      ]
+     ],
+     "moves": [
+      [
+       "4-18",
+       "L38"
+      ],
+      [
+       "4-14",
+       "L36"
+      ],
+      [
+       "3-6",
+       "L16"
+      ],
+      [
+       "4-1",
+       "L4"
+      ],
+      [
+       "4-7",
+       "L4"
+      ],
+      [
+       "4-11",
+       "L4"
+      ]
+     ],
+     "nmoves": 6
+    }
+   }
+  },
+  {
    "id": "9.slot",
    "fen": "W:W5,K17:B6,K9",
    "note": "eindstand",
@@ -12659,10 +13780,10 @@
      "nmoves": 6
     },
     "B": {
-     "claim": null,
+     "claim": "W+",
      "val": "L4",
      "result": "W+",
-     "ok": null,
+     "ok": true,
      "keeping": [
       [
        "6-8",
@@ -13910,7 +15031,7 @@
   },
   {
    "section": "3.1",
-   "start": "2.2",
+   "start": "3.1",
    "text": "1. 18-14 6-9 2. 14-11 9-6 3. 11-7 6-16",
    "claim": "=",
    "note": "gevolgd door 3-6-9, remise",
@@ -13997,7 +15118,7 @@
   },
   {
    "section": "3.1",
-   "start": "2.2",
+   "start": "3.1",
    "text": "1. 4-1[enige]",
    "claim": "W+",
    "note": "dus de enige zet is 1. 4-1",
@@ -14026,7 +15147,7 @@
   },
   {
    "section": "3.1",
-   "start": "2.2",
+   "start": "3.1",
    "text": "1. 4-1 6-16 2. 18-14 16-6 3. 1-15 6-16",
    "claim": "W+",
    "note": "wit heeft zijn doel bereikt, diagram 3.3",
@@ -14117,7 +15238,7 @@
   },
   {
    "section": "3.1",
-   "start": "2.2",
+   "start": "3.1",
    "text": "1. 4-1 6-11! 2. 1-15[enige] 11-16 3. 18-14 16-6 4. 15-5! 6-16 5. 5-1 16-6 6. 1-15 6-16",
    "claim": "W+",
    "note": "zwart draait de tempo's om, wit ook",
@@ -14290,7 +15411,7 @@
   },
   {
    "section": "3.1",
-   "start": "2.2",
+   "start": "3.1",
    "text": "1. 4-1 6-11 2. 1-15 11-6 3. 14-11 6-16",
    "claim": "W+",
    "note": "tekst: op 11-6 komt 14-11 6-16 en wit is er weer",
@@ -14360,7 +15481,7 @@
   },
   {
    "section": "3.1",
-   "start": "2.2",
+   "start": "3.1",
    "text": "1. 4-1 6-11 2. 1-15 11-6 3. 18-14 6-16",
    "claim": "W+",
    "note": "gecorrigeerd: 3. 18-14 6-16 (diagram 3.3)",
@@ -14454,7 +15575,7 @@
   },
   {
    "section": "3.1",
-   "start": "2.2",
+   "start": "3.1",
    "text": "1. 4-1 6-11 2. 1-15 11-16 3. 18-14 16-6 4. 15-5 6-16 5. 5-1 16-6 6. 1-15 6-9 7. 14-11 9-6 8. 15-8 6-2 9. 11-7 2-6 10. 8-16 6-8 11. 16×6 3×8 12. 7-5 8×1 13. 10-7",
    "claim": "W+",
    "note": "allemaal gedwongen zetten voor wit, maar wel gewonnen",
@@ -17293,7 +18414,7 @@
   },
   {
    "section": "4.1",
-   "start": "1.1",
+   "start": "4.1",
    "text": "1. 17-9 2-10 2. 16-11 10-2 3. 11-13 2-10 4. 13-17 2-5 5. 9-12 15×8 6. 18-11 8×13 7. 17×2",
    "claim": "W+",
    "note": "slotfinesse",
@@ -17419,7 +18540,7 @@
   },
   {
    "section": "4.2",
-   "start": "2.3",
+   "start": "4.2",
    "text": "1. 17-12[enige]",
    "claim": "W+",
    "note": "de winnende zet is 1. 17-12",
@@ -17448,7 +18569,7 @@
   },
   {
    "section": "4.2",
-   "start": "2.3",
+   "start": "4.2",
    "text": "1. 17-12 8-1 2. 2-4",
    "claim": "W+",
    "note": "op 1. … 8-1 wint wit meteen door 2. 2-4 (vergelijk 2-5 in hoofdstuk 2)",
@@ -17492,7 +18613,7 @@
   },
   {
    "section": "4.2",
-   "start": "2.3",
+   "start": "4.2",
    "text": "1. 17-12 8-3 2. 18-4 15×8 3. 2-6 8-12 4. 6-16 12-15 5. 4-18",
    "claim": "W+",
    "note": "finesse 1",
@@ -17611,7 +18732,7 @@
   },
   {
    "section": "4.2",
-   "start": "2.3",
+   "start": "4.2",
    "text": "1. 17-12 8-16 2. 2-10 15×8 3. 10-13",
    "claim": "W+",
    "note": "finesse 2",
@@ -17684,7 +18805,7 @@
   },
   {
    "section": "4.2",
-   "start": "2.3",
+   "start": "4.2",
    "text": "1. 17-12 8-16 2. 2-9 15×8 3. 18-11 8×13 4. 9-17",
    "claim": "W+",
    "note": "finesse 3",
@@ -17882,7 +19003,7 @@
   },
   {
    "section": "4.2",
-   "start": "4.4",
+   "start": "4.8",
    "text": "1. 17-14 16-13 2. 14-9 13-16 3. 9-17",
    "claim": "=",
    "note": "spoken",
@@ -17984,7 +19105,7 @@
   },
   {
    "section": "4.2",
-   "start": "4.4",
+   "start": "4.8",
    "text": "1. 17-14 16-8 2. 14-12",
    "claim": "W+",
    "note": "op 16-8 verliest 14-12 (echt)",
@@ -18047,7 +19168,7 @@
   },
   {
    "section": "4.2",
-   "start": "4.4",
+   "start": "4.8",
    "text": "1. 17-14 16-3",
    "claim": "=",
    "note": "op 16-3 ziet zwart het spook",
@@ -18097,7 +19218,7 @@
   },
   {
    "section": "4.2",
-   "start": "4.4",
+   "start": "4.8",
    "text": "1. 17-14 16-13 2. 14-9 13-8",
    "claim": "W+",
    "note": "geen 13-8 (terecht)",
@@ -18181,7 +19302,7 @@
   },
   {
    "section": "4.2",
-   "start": "4.4",
+   "start": "4.8",
    "text": "1. 17-14 16-13 2. 14-9 13-3",
    "claim": "=",
    "note": "en 13-3 (spook)",
@@ -41865,13 +42986,11 @@
   {
    "section": "9.3",
    "start": "9.8",
-   "text": "17. … 7-14 18. 2-10[enige]",
+   "text": "17. … 7-14 18. 2-10",
    "claim": "W+",
-   "note": "de enige winnende zet",
+   "note": "een problemist zou 17. … 7-14 de hoofdvariant noemen: wit wint dan alleen door 18. 2-10",
    "start_fen": "B:WK2,8,15:B3,K7",
-   "issues": [
-    "zet 2 2-10 (W35) \"de enige\": ook 2-9 (W41), 2-6 (W43), 2-5 (W45) behoudt/behouden het resultaat"
-   ],
+   "issues": [],
    "plies": [
     {
      "fen": "B:WK2,8,15:B3,K7",
@@ -41907,64 +43026,6 @@
    "end_val": "L34",
    "end_result": "W+",
    "claim_ok": true,
-   "status": "opmerking"
-  },
-  {
-   "section": "9.3",
-   "start": "9.8",
-   "text": "17. … 7-18 18. 15-12? 18-15",
-   "claim": "=",
-   "note": "verbazend genoeg remise",
-   "start_fen": "B:WK2,8,15:B3,K7",
-   "issues": [],
-   "plies": [
-    {
-     "fen": "B:WK2,8,15:B3,K7",
-     "move": "7-18",
-     "val_before": "L38",
-     "val_after_mover": "L38",
-     "keeping": [
-      "7-4",
-      "7-18",
-      "7-14",
-      "3-6",
-      "7-10",
-      "7-5",
-      "7-11"
-     ],
-     "marks": ""
-    },
-    {
-     "fen": "W:WK2,8,15:B3,K18",
-     "move": "15-12",
-     "val_before": "W37",
-     "val_after_mover": "D",
-     "keeping": [
-      "2-5",
-      "2-9",
-      "2-6",
-      "2-10"
-     ],
-     "marks": "?"
-    },
-    {
-     "fen": "B:WK2,8,12:B3,K18",
-     "move": "18-15",
-     "val_before": "D",
-     "val_after_mover": "D",
-     "keeping": [
-      "18-15"
-     ],
-     "marks": ""
-    }
-   ],
-   "confirmed": [
-    "15-12? geeft de winst weg (remise), terecht als fout gemarkeerd (beter: 2-5, 2-9, 2-6, 2-10)"
-   ],
-   "end_fen": "W:WK2,8,12:B3,K15",
-   "end_val": "D",
-   "end_result": "=",
-   "claim_ok": true,
    "status": "ok"
   },
   {
@@ -41972,7 +43033,7 @@
    "start": "9.8",
    "text": "17. … 7-18 18. 2-5 18-14 19. 5-10",
    "claim": "W+",
-   "note": "de snelste winst",
+   "note": "de hoofdvariant: zwart verleidt wit tot 15-12",
    "start_fen": "B:WK2,8,15:B3,K7",
    "issues": [],
    "plies": [
@@ -42034,481 +43095,6 @@
    ],
    "end_fen": "B:W8,K10,15:B3,K14",
    "end_val": "L34",
-   "end_result": "W+",
-   "claim_ok": true,
-   "status": "ok"
-  },
-  {
-   "section": "9.3",
-   "start": "9.8",
-   "text": "17. … 7-18 18. 2-5 18-4 19. 15-12",
-   "claim": "W+",
-   "note": "op 18-4 wint 15-12 wel",
-   "start_fen": "B:WK2,8,15:B3,K7",
-   "issues": [],
-   "plies": [
-    {
-     "fen": "B:WK2,8,15:B3,K7",
-     "move": "7-18",
-     "val_before": "L38",
-     "val_after_mover": "L38",
-     "keeping": [
-      "7-4",
-      "7-18",
-      "7-14",
-      "3-6",
-      "7-10",
-      "7-5",
-      "7-11"
-     ],
-     "marks": ""
-    },
-    {
-     "fen": "W:WK2,8,15:B3,K18",
-     "move": "2-5",
-     "val_before": "W37",
-     "val_after_mover": "W37",
-     "keeping": [
-      "2-5",
-      "2-9",
-      "2-6",
-      "2-10"
-     ],
-     "marks": ""
-    },
-    {
-     "fen": "B:WK5,8,15:B3,K18",
-     "move": "18-4",
-     "val_before": "L36",
-     "val_after_mover": "L30",
-     "keeping": [
-      "18-14",
-      "18-4",
-      "3-6",
-      "18-11",
-      "18-7"
-     ],
-     "marks": ""
-    },
-    {
-     "fen": "W:WK5,8,15:B3,K4",
-     "move": "15-12",
-     "val_before": "W29",
-     "val_after_mover": "W29",
-     "keeping": [
-      "15-12",
-      "5-1",
-      "5-2",
-      "5-10"
-     ],
-     "marks": ""
-    }
-   ],
-   "end_fen": "B:WK5,8,12:B3,K4",
-   "end_val": "L28",
-   "end_result": "W+",
-   "claim_ok": true,
-   "status": "ok"
-  },
-  {
-   "section": "9.3",
-   "start": "9.8",
-   "text": "17. … 7-18 18. 2-10 18-14 19. 10-5 14-17 20. 5-7 17-9 21. 7-2 9-14 22. 2-10",
-   "claim": "W+",
-   "note": "ook 18. 2-10 is winnend",
-   "start_fen": "B:WK2,8,15:B3,K7",
-   "issues": [],
-   "plies": [
-    {
-     "fen": "B:WK2,8,15:B3,K7",
-     "move": "7-18",
-     "val_before": "L38",
-     "val_after_mover": "L38",
-     "keeping": [
-      "7-4",
-      "7-18",
-      "7-14",
-      "3-6",
-      "7-10",
-      "7-5",
-      "7-11"
-     ],
-     "marks": ""
-    },
-    {
-     "fen": "W:WK2,8,15:B3,K18",
-     "move": "2-10",
-     "val_before": "W37",
-     "val_after_mover": "W45",
-     "keeping": [
-      "2-5",
-      "2-9",
-      "2-6",
-      "2-10"
-     ],
-     "marks": ""
-    },
-    {
-     "fen": "B:W8,K10,15:B3,K18",
-     "move": "18-14",
-     "val_before": "L44",
-     "val_after_mover": "L44",
-     "keeping": [
-      "18-14",
-      "18-4",
-      "3-6",
-      "18-11",
-      "18-7"
-     ],
-     "marks": ""
-    },
-    {
-     "fen": "W:W8,K10,15:B3,K14",
-     "move": "10-5",
-     "val_before": "W43",
-     "val_after_mover": "W45",
-     "keeping": [
-      "10-17",
-      "10-5",
-      "10-2"
-     ],
-     "marks": ""
-    },
-    {
-     "fen": "B:WK5,8,15:B3,K14",
-     "move": "14-17",
-     "val_before": "L44",
-     "val_after_mover": "L44",
-     "keeping": [
-      "14-17",
-      "14-9",
-      "14-4",
-      "14-18",
-      "3-6",
-      "14-11",
-      "14-12",
-      "14-7"
-     ],
-     "marks": ""
-    },
-    {
-     "fen": "W:WK5,8,15:B3,K17",
-     "move": "5-7",
-     "val_before": "W43",
-     "val_after_mover": "W43",
-     "keeping": [
-      "5-7",
-      "5-10",
-      "5-2"
-     ],
-     "marks": ""
-    },
-    {
-     "fen": "B:WK7,8,15:B3,K17",
-     "move": "17-9",
-     "val_before": "L42",
-     "val_after_mover": "L42",
-     "keeping": [
-      "17-9",
-      "17-10",
-      "3-6",
-      "17-12",
-      "17-13",
-      "17-14"
-     ],
-     "marks": ""
-    },
-    {
-     "fen": "W:WK7,8,15:B3,K9",
-     "move": "7-2",
-     "val_before": "W41",
-     "val_after_mover": "W41",
-     "keeping": [
-      "7-2",
-      "7-11",
-      "7-4",
-      "7-18"
-     ],
-     "marks": ""
-    },
-    {
-     "fen": "B:WK2,8,15:B3,K9",
-     "move": "9-14",
-     "val_before": "L40",
-     "val_after_mover": "L36",
-     "keeping": [
-      "9-17",
-      "9-14",
-      "3-6",
-      "9-12",
-      "9-6"
-     ],
-     "marks": ""
-    },
-    {
-     "fen": "W:WK2,8,15:B3,K14",
-     "move": "2-10",
-     "val_before": "W35",
-     "val_after_mover": "W35",
-     "keeping": [
-      "2-10",
-      "2-9",
-      "2-6",
-      "2-5"
-     ],
-     "marks": ""
-    }
-   ],
-   "end_fen": "B:W8,K10,15:B3,K14",
-   "end_val": "L34",
-   "end_result": "W+",
-   "claim_ok": true,
-   "status": "ok"
-  },
-  {
-   "section": "9.3",
-   "start": "9.8",
-   "text": "17. … 7-4 18. 15-12? 4-1",
-   "claim": "=",
-   "note": "",
-   "start_fen": "B:WK2,8,15:B3,K7",
-   "issues": [],
-   "plies": [
-    {
-     "fen": "B:WK2,8,15:B3,K7",
-     "move": "7-4",
-     "val_before": "L38",
-     "val_after_mover": "L38",
-     "keeping": [
-      "7-4",
-      "7-18",
-      "7-14",
-      "3-6",
-      "7-10",
-      "7-5",
-      "7-11"
-     ],
-     "marks": ""
-    },
-    {
-     "fen": "W:WK2,8,15:B3,K4",
-     "move": "15-12",
-     "val_before": "W37",
-     "val_after_mover": "D",
-     "keeping": [
-      "2-5",
-      "2-9",
-      "2-6",
-      "2-10"
-     ],
-     "marks": "?"
-    },
-    {
-     "fen": "B:WK2,8,12:B3,K4",
-     "move": "4-1",
-     "val_before": "D",
-     "val_after_mover": "D",
-     "keeping": [
-      "4-1"
-     ],
-     "marks": ""
-    }
-   ],
-   "confirmed": [
-    "15-12? geeft de winst weg (remise), terecht als fout gemarkeerd (beter: 2-5, 2-9, 2-6, 2-10)"
-   ],
-   "end_fen": "W:WK2,8,12:BK1,3",
-   "end_val": "D",
-   "end_result": "=",
-   "claim_ok": true,
-   "status": "ok"
-  },
-  {
-   "section": "9.3",
-   "start": "9.8",
-   "text": "17. … 7-4 18. 2-5 4-14 19. 5-10",
-   "claim": "W+",
-   "note": "",
-   "start_fen": "B:WK2,8,15:B3,K7",
-   "issues": [],
-   "plies": [
-    {
-     "fen": "B:WK2,8,15:B3,K7",
-     "move": "7-4",
-     "val_before": "L38",
-     "val_after_mover": "L38",
-     "keeping": [
-      "7-4",
-      "7-18",
-      "7-14",
-      "3-6",
-      "7-10",
-      "7-5",
-      "7-11"
-     ],
-     "marks": ""
-    },
-    {
-     "fen": "W:WK2,8,15:B3,K4",
-     "move": "2-5",
-     "val_before": "W37",
-     "val_after_mover": "W37",
-     "keeping": [
-      "2-5",
-      "2-9",
-      "2-6",
-      "2-10"
-     ],
-     "marks": ""
-    },
-    {
-     "fen": "B:WK5,8,15:B3,K4",
-     "move": "4-14",
-     "val_before": "L36",
-     "val_after_mover": "L36",
-     "keeping": [
-      "4-14",
-      "4-18",
-      "3-6",
-      "4-11",
-      "4-1",
-      "4-7"
-     ],
-     "marks": ""
-    },
-    {
-     "fen": "W:WK5,8,15:B3,K14",
-     "move": "5-10",
-     "val_before": "W35",
-     "val_after_mover": "W35",
-     "keeping": [
-      "5-10",
-      "5-1",
-      "5-2"
-     ],
-     "marks": ""
-    }
-   ],
-   "end_fen": "B:W8,K10,15:B3,K14",
-   "end_val": "L34",
-   "end_result": "W+",
-   "claim_ok": true,
-   "status": "ok"
-  },
-  {
-   "section": "9.3",
-   "start": "9.8",
-   "text": "17. … 7-4 18. 2-5 4-18 19. 15-12",
-   "claim": "W+",
-   "note": "",
-   "start_fen": "B:WK2,8,15:B3,K7",
-   "issues": [],
-   "plies": [
-    {
-     "fen": "B:WK2,8,15:B3,K7",
-     "move": "7-4",
-     "val_before": "L38",
-     "val_after_mover": "L38",
-     "keeping": [
-      "7-4",
-      "7-18",
-      "7-14",
-      "3-6",
-      "7-10",
-      "7-5",
-      "7-11"
-     ],
-     "marks": ""
-    },
-    {
-     "fen": "W:WK2,8,15:B3,K4",
-     "move": "2-5",
-     "val_before": "W37",
-     "val_after_mover": "W37",
-     "keeping": [
-      "2-5",
-      "2-9",
-      "2-6",
-      "2-10"
-     ],
-     "marks": ""
-    },
-    {
-     "fen": "B:WK5,8,15:B3,K4",
-     "move": "4-18",
-     "val_before": "L36",
-     "val_after_mover": "L30",
-     "keeping": [
-      "4-14",
-      "4-18",
-      "3-6",
-      "4-11",
-      "4-1",
-      "4-7"
-     ],
-     "marks": ""
-    },
-    {
-     "fen": "W:WK5,8,15:B3,K18",
-     "move": "15-12",
-     "val_before": "W29",
-     "val_after_mover": "W29",
-     "keeping": [
-      "15-12",
-      "5-1",
-      "5-2",
-      "5-10"
-     ],
-     "marks": ""
-    }
-   ],
-   "end_fen": "B:WK5,8,12:B3,K18",
-   "end_val": "L28",
-   "end_result": "W+",
-   "claim_ok": true,
-   "status": "ok"
-  },
-  {
-   "section": "9.3",
-   "start": "9.8",
-   "text": "17. … 7-4 18. 2-10",
-   "claim": "W+",
-   "note": "ook 18. 2-10 is winnend",
-   "start_fen": "B:WK2,8,15:B3,K7",
-   "issues": [],
-   "plies": [
-    {
-     "fen": "B:WK2,8,15:B3,K7",
-     "move": "7-4",
-     "val_before": "L38",
-     "val_after_mover": "L38",
-     "keeping": [
-      "7-4",
-      "7-18",
-      "7-14",
-      "3-6",
-      "7-10",
-      "7-5",
-      "7-11"
-     ],
-     "marks": ""
-    },
-    {
-     "fen": "W:WK2,8,15:B3,K4",
-     "move": "2-10",
-     "val_before": "W37",
-     "val_after_mover": "W45",
-     "keeping": [
-      "2-5",
-      "2-9",
-      "2-6",
-      "2-10"
-     ],
-     "marks": ""
-    }
-   ],
-   "end_fen": "B:W8,K10,15:B3,K4",
-   "end_val": "L44",
    "end_result": "W+",
    "claim_ok": true,
    "status": "ok"
@@ -43115,9 +43701,1044 @@
    "end_result": "W+",
    "claim_ok": true,
    "status": "ok"
+  },
+  {
+   "section": "9.3",
+   "start": "9.9",
+   "text": "18. 2-10[enige]",
+   "claim": "W+",
+   "note": "de enige winnende zet, en daarmee zijn we al bij diagram 9.12",
+   "start_fen": "W:WK2,8,15:B3,K14",
+   "issues": [
+    "zet 1 2-10 (W35) \"de enige\": ook 2-9 (W41), 2-6 (W43), 2-5 (W45) behoudt/behouden het resultaat"
+   ],
+   "plies": [
+    {
+     "fen": "W:WK2,8,15:B3,K14",
+     "move": "2-10",
+     "val_before": "W35",
+     "val_after_mover": "W35",
+     "keeping": [
+      "2-10",
+      "2-9",
+      "2-6",
+      "2-5"
+     ],
+     "marks": ""
+    }
+   ],
+   "end_fen": "B:W8,K10,15:B3,K14",
+   "end_val": "L34",
+   "end_result": "W+",
+   "claim_ok": true,
+   "status": "opmerking"
+  },
+  {
+   "section": "9.3",
+   "start": "9.9",
+   "text": "18. 2-9 14-7",
+   "claim": null,
+   "note": "op 2-9 komt 14-7: terug naar de stand na de 16e zet van zwart (herhaling)",
+   "start_fen": "W:WK2,8,15:B3,K14",
+   "issues": [],
+   "plies": [
+    {
+     "fen": "W:WK2,8,15:B3,K14",
+     "move": "2-9",
+     "val_before": "W35",
+     "val_after_mover": "W41",
+     "keeping": [
+      "2-10",
+      "2-9",
+      "2-6",
+      "2-5"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "B:W8,K9,15:B3,K14",
+     "move": "14-7",
+     "val_before": "L40",
+     "val_after_mover": "L40",
+     "keeping": [
+      "14-7",
+      "14-4",
+      "14-18",
+      "14-17",
+      "3-6",
+      "14-11",
+      "14-12"
+     ],
+     "marks": ""
+    }
+   ],
+   "end_fen": "W:W8,K9,15:B3,K7",
+   "end_val": "W39",
+   "end_result": "W+",
+   "claim_ok": null,
+   "status": "info"
+  },
+  {
+   "section": "9.3",
+   "start": "9.9",
+   "text": "18. 2-6 14-9 19. 6-2 9-14",
+   "claim": null,
+   "note": "op 2-6 komt 14-9 6-2 9-14: terug naar de stand na de 17e zet van zwart (herhaling)",
+   "start_fen": "W:WK2,8,15:B3,K14",
+   "issues": [],
+   "plies": [
+    {
+     "fen": "W:WK2,8,15:B3,K14",
+     "move": "2-6",
+     "val_before": "W35",
+     "val_after_mover": "W43",
+     "keeping": [
+      "2-10",
+      "2-9",
+      "2-6",
+      "2-5"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "B:WK6,8,15:B3,K14",
+     "move": "14-9",
+     "val_before": "L42",
+     "val_after_mover": "L42",
+     "keeping": [
+      "14-9",
+      "14-7",
+      "14-4",
+      "14-17",
+      "14-18",
+      "14-11",
+      "14-12"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "W:WK6,8,15:B3,K9",
+     "move": "6-2",
+     "val_before": "W41",
+     "val_after_mover": "W41",
+     "keeping": [
+      "6-2"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "B:WK2,8,15:B3,K9",
+     "move": "9-14",
+     "val_before": "L40",
+     "val_after_mover": "L36",
+     "keeping": [
+      "9-17",
+      "9-14",
+      "3-6",
+      "9-12",
+      "9-6"
+     ],
+     "marks": ""
+    }
+   ],
+   "end_fen": "W:WK2,8,15:B3,K14",
+   "end_val": "W35",
+   "end_result": "W+",
+   "claim_ok": null,
+   "status": "info"
+  },
+  {
+   "section": "9.3",
+   "start": "9.9",
+   "text": "18. 2-5 14-9 19. 5-2 9-14",
+   "claim": null,
+   "note": "op 2-5 komt 14-9 met 5-2 9-14: terug naar de stand na de 17e zet van zwart (herhaling)",
+   "start_fen": "W:WK2,8,15:B3,K14",
+   "issues": [],
+   "plies": [
+    {
+     "fen": "W:WK2,8,15:B3,K14",
+     "move": "2-5",
+     "val_before": "W35",
+     "val_after_mover": "W45",
+     "keeping": [
+      "2-10",
+      "2-9",
+      "2-6",
+      "2-5"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "B:WK5,8,15:B3,K14",
+     "move": "14-9",
+     "val_before": "L44",
+     "val_after_mover": "L42",
+     "keeping": [
+      "14-17",
+      "14-9",
+      "14-4",
+      "14-18",
+      "3-6",
+      "14-11",
+      "14-12",
+      "14-7"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "W:WK5,8,15:B3,K9",
+     "move": "5-2",
+     "val_before": "W41",
+     "val_after_mover": "W41",
+     "keeping": [
+      "5-2",
+      "5-7"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "B:WK2,8,15:B3,K9",
+     "move": "9-14",
+     "val_before": "L40",
+     "val_after_mover": "L36",
+     "keeping": [
+      "9-17",
+      "9-14",
+      "3-6",
+      "9-12",
+      "9-6"
+     ],
+     "marks": ""
+    }
+   ],
+   "end_fen": "W:WK2,8,15:B3,K14",
+   "end_val": "W35",
+   "end_result": "W+",
+   "claim_ok": null,
+   "status": "info"
+  },
+  {
+   "section": "9.3",
+   "start": "9.9",
+   "text": "18. 2-5 14-9 19. 5-7 9-6 20. 7-11 6-2",
+   "claim": null,
+   "note": "of 5-7 9-6 7-11 6-2: terug naar de stand na de 13e zet van zwart (herhaling)",
+   "start_fen": "W:WK2,8,15:B3,K14",
+   "issues": [],
+   "plies": [
+    {
+     "fen": "W:WK2,8,15:B3,K14",
+     "move": "2-5",
+     "val_before": "W35",
+     "val_after_mover": "W45",
+     "keeping": [
+      "2-10",
+      "2-9",
+      "2-6",
+      "2-5"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "B:WK5,8,15:B3,K14",
+     "move": "14-9",
+     "val_before": "L44",
+     "val_after_mover": "L42",
+     "keeping": [
+      "14-17",
+      "14-9",
+      "14-4",
+      "14-18",
+      "3-6",
+      "14-11",
+      "14-12",
+      "14-7"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "W:WK5,8,15:B3,K9",
+     "move": "5-7",
+     "val_before": "W41",
+     "val_after_mover": "W49",
+     "keeping": [
+      "5-2",
+      "5-7"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "B:WK7,8,15:B3,K9",
+     "move": "9-6",
+     "val_before": "L48",
+     "val_after_mover": "L48",
+     "keeping": [
+      "9-6",
+      "9-2",
+      "9-17",
+      "3-6",
+      "9-12",
+      "9-14"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "W:WK7,8,15:B3,K6",
+     "move": "7-11",
+     "val_before": "W47",
+     "val_after_mover": "W47",
+     "keeping": [
+      "7-11"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "B:W8,K11,15:B3,K6",
+     "move": "6-2",
+     "val_before": "L46",
+     "val_after_mover": "L46",
+     "keeping": [
+      "6-2",
+      "6-9"
+     ],
+     "marks": ""
+    }
+   ],
+   "end_fen": "W:W8,K11,15:BK2,3",
+   "end_val": "W45",
+   "end_result": "W+",
+   "claim_ok": null,
+   "status": "info"
+  },
+  {
+   "section": "9.3",
+   "start": "9.10",
+   "text": "18. 15-12? 18-15",
+   "claim": "=",
+   "note": "nu is 15-12 verbazend genoeg remise door 18-15",
+   "start_fen": "W:WK2,8,15:B3,K18",
+   "issues": [],
+   "plies": [
+    {
+     "fen": "W:WK2,8,15:B3,K18",
+     "move": "15-12",
+     "val_before": "W37",
+     "val_after_mover": "D",
+     "keeping": [
+      "2-5",
+      "2-9",
+      "2-6",
+      "2-10"
+     ],
+     "marks": "?"
+    },
+    {
+     "fen": "B:WK2,8,12:B3,K18",
+     "move": "18-15",
+     "val_before": "D",
+     "val_after_mover": "D",
+     "keeping": [
+      "18-15"
+     ],
+     "marks": ""
+    }
+   ],
+   "confirmed": [
+    "15-12? geeft de winst weg (remise), terecht als fout gemarkeerd (beter: 2-5, 2-9, 2-6, 2-10)"
+   ],
+   "end_fen": "W:WK2,8,12:B3,K15",
+   "end_val": "D",
+   "end_result": "=",
+   "claim_ok": true,
+   "status": "ok"
+  },
+  {
+   "section": "9.3",
+   "start": "9.10",
+   "text": "18. 2-5 18-14 19. 5-10",
+   "claim": "W+",
+   "note": "de snelste winst (weer diagram 9.12)",
+   "start_fen": "W:WK2,8,15:B3,K18",
+   "issues": [],
+   "plies": [
+    {
+     "fen": "W:WK2,8,15:B3,K18",
+     "move": "2-5",
+     "val_before": "W37",
+     "val_after_mover": "W37",
+     "keeping": [
+      "2-5",
+      "2-9",
+      "2-6",
+      "2-10"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "B:WK5,8,15:B3,K18",
+     "move": "18-14",
+     "val_before": "L36",
+     "val_after_mover": "L36",
+     "keeping": [
+      "18-14",
+      "18-4",
+      "3-6",
+      "18-11",
+      "18-7"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "W:WK5,8,15:B3,K14",
+     "move": "5-10",
+     "val_before": "W35",
+     "val_after_mover": "W35",
+     "keeping": [
+      "5-10",
+      "5-1",
+      "5-2"
+     ],
+     "marks": ""
+    }
+   ],
+   "end_fen": "B:W8,K10,15:B3,K14",
+   "end_val": "L34",
+   "end_result": "W+",
+   "claim_ok": true,
+   "status": "ok"
+  },
+  {
+   "section": "9.3",
+   "start": "9.10",
+   "text": "18. 2-5 18-4 19. 15-12",
+   "claim": "W+",
+   "note": "op 18-4 wint 15-12 wel",
+   "start_fen": "W:WK2,8,15:B3,K18",
+   "issues": [],
+   "plies": [
+    {
+     "fen": "W:WK2,8,15:B3,K18",
+     "move": "2-5",
+     "val_before": "W37",
+     "val_after_mover": "W37",
+     "keeping": [
+      "2-5",
+      "2-9",
+      "2-6",
+      "2-10"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "B:WK5,8,15:B3,K18",
+     "move": "18-4",
+     "val_before": "L36",
+     "val_after_mover": "L30",
+     "keeping": [
+      "18-14",
+      "18-4",
+      "3-6",
+      "18-11",
+      "18-7"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "W:WK5,8,15:B3,K4",
+     "move": "15-12",
+     "val_before": "W29",
+     "val_after_mover": "W29",
+     "keeping": [
+      "15-12",
+      "5-1",
+      "5-2",
+      "5-10"
+     ],
+     "marks": ""
+    }
+   ],
+   "end_fen": "B:WK5,8,12:B3,K4",
+   "end_val": "L28",
+   "end_result": "W+",
+   "claim_ok": true,
+   "status": "ok"
+  },
+  {
+   "section": "9.3",
+   "start": "9.10",
+   "text": "18. 2-10 18-14 19. 10-5 14-17 20. 5-7 17-9 21. 7-2 9-14 22. 2-10",
+   "claim": "W+",
+   "note": "ook 18. 2-10 is winnend, en daar zijn we weer bij diagram 9.12",
+   "start_fen": "W:WK2,8,15:B3,K18",
+   "issues": [],
+   "plies": [
+    {
+     "fen": "W:WK2,8,15:B3,K18",
+     "move": "2-10",
+     "val_before": "W37",
+     "val_after_mover": "W45",
+     "keeping": [
+      "2-5",
+      "2-9",
+      "2-6",
+      "2-10"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "B:W8,K10,15:B3,K18",
+     "move": "18-14",
+     "val_before": "L44",
+     "val_after_mover": "L44",
+     "keeping": [
+      "18-14",
+      "18-4",
+      "3-6",
+      "18-11",
+      "18-7"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "W:W8,K10,15:B3,K14",
+     "move": "10-5",
+     "val_before": "W43",
+     "val_after_mover": "W45",
+     "keeping": [
+      "10-17",
+      "10-5",
+      "10-2"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "B:WK5,8,15:B3,K14",
+     "move": "14-17",
+     "val_before": "L44",
+     "val_after_mover": "L44",
+     "keeping": [
+      "14-17",
+      "14-9",
+      "14-4",
+      "14-18",
+      "3-6",
+      "14-11",
+      "14-12",
+      "14-7"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "W:WK5,8,15:B3,K17",
+     "move": "5-7",
+     "val_before": "W43",
+     "val_after_mover": "W43",
+     "keeping": [
+      "5-7",
+      "5-10",
+      "5-2"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "B:WK7,8,15:B3,K17",
+     "move": "17-9",
+     "val_before": "L42",
+     "val_after_mover": "L42",
+     "keeping": [
+      "17-9",
+      "17-10",
+      "3-6",
+      "17-12",
+      "17-13",
+      "17-14"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "W:WK7,8,15:B3,K9",
+     "move": "7-2",
+     "val_before": "W41",
+     "val_after_mover": "W41",
+     "keeping": [
+      "7-2",
+      "7-11",
+      "7-4",
+      "7-18"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "B:WK2,8,15:B3,K9",
+     "move": "9-14",
+     "val_before": "L40",
+     "val_after_mover": "L36",
+     "keeping": [
+      "9-17",
+      "9-14",
+      "3-6",
+      "9-12",
+      "9-6"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "W:WK2,8,15:B3,K14",
+     "move": "2-10",
+     "val_before": "W35",
+     "val_after_mover": "W35",
+     "keeping": [
+      "2-10",
+      "2-9",
+      "2-6",
+      "2-5"
+     ],
+     "marks": ""
+    }
+   ],
+   "end_fen": "B:W8,K10,15:B3,K14",
+   "end_val": "L34",
+   "end_result": "W+",
+   "claim_ok": true,
+   "status": "ok"
+  },
+  {
+   "section": "9.3",
+   "start": "9.10",
+   "text": "18. 2-10 18-4 19. 15-12",
+   "claim": "W+",
+   "note": "op 18-4 15-12",
+   "start_fen": "W:WK2,8,15:B3,K18",
+   "issues": [],
+   "plies": [
+    {
+     "fen": "W:WK2,8,15:B3,K18",
+     "move": "2-10",
+     "val_before": "W37",
+     "val_after_mover": "W45",
+     "keeping": [
+      "2-5",
+      "2-9",
+      "2-6",
+      "2-10"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "B:W8,K10,15:B3,K18",
+     "move": "18-4",
+     "val_before": "L44",
+     "val_after_mover": "L34",
+     "keeping": [
+      "18-14",
+      "18-4",
+      "3-6",
+      "18-11",
+      "18-7"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "W:W8,K10,15:B3,K4",
+     "move": "15-12",
+     "val_before": "W33",
+     "val_after_mover": "W33",
+     "keeping": [
+      "15-12",
+      "10-5",
+      "10-2",
+      "10-17"
+     ],
+     "marks": ""
+    }
+   ],
+   "end_fen": "B:W8,K10,12:B3,K4",
+   "end_val": "L32",
+   "end_result": "W+",
+   "claim_ok": true,
+   "status": "ok"
+  },
+  {
+   "section": "9.3",
+   "start": "9.10",
+   "text": "18. 2-10 18-14 19. 10-5 14-9 20. 5-2",
+   "claim": "W+",
+   "note": "14-9 5-2 wint een zet sneller",
+   "start_fen": "W:WK2,8,15:B3,K18",
+   "issues": [],
+   "plies": [
+    {
+     "fen": "W:WK2,8,15:B3,K18",
+     "move": "2-10",
+     "val_before": "W37",
+     "val_after_mover": "W45",
+     "keeping": [
+      "2-5",
+      "2-9",
+      "2-6",
+      "2-10"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "B:W8,K10,15:B3,K18",
+     "move": "18-14",
+     "val_before": "L44",
+     "val_after_mover": "L44",
+     "keeping": [
+      "18-14",
+      "18-4",
+      "3-6",
+      "18-11",
+      "18-7"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "W:W8,K10,15:B3,K14",
+     "move": "10-5",
+     "val_before": "W43",
+     "val_after_mover": "W45",
+     "keeping": [
+      "10-17",
+      "10-5",
+      "10-2"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "B:WK5,8,15:B3,K14",
+     "move": "14-9",
+     "val_before": "L44",
+     "val_after_mover": "L42",
+     "keeping": [
+      "14-17",
+      "14-9",
+      "14-4",
+      "14-18",
+      "3-6",
+      "14-11",
+      "14-12",
+      "14-7"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "W:WK5,8,15:B3,K9",
+     "move": "5-2",
+     "val_before": "W41",
+     "val_after_mover": "W41",
+     "keeping": [
+      "5-2",
+      "5-7"
+     ],
+     "marks": ""
+    }
+   ],
+   "end_fen": "B:WK2,8,15:B3,K9",
+   "end_val": "L40",
+   "end_result": "W+",
+   "claim_ok": true,
+   "status": "ok"
+  },
+  {
+   "section": "9.3",
+   "start": "9.10",
+   "text": "18. 2-10 18-14 19. 10-5 14-17 20. 5-7 17-10 21. 7-14",
+   "claim": "W+",
+   "note": "17-10 7-14 als diagram 9.5",
+   "start_fen": "W:WK2,8,15:B3,K18",
+   "issues": [],
+   "plies": [
+    {
+     "fen": "W:WK2,8,15:B3,K18",
+     "move": "2-10",
+     "val_before": "W37",
+     "val_after_mover": "W45",
+     "keeping": [
+      "2-5",
+      "2-9",
+      "2-6",
+      "2-10"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "B:W8,K10,15:B3,K18",
+     "move": "18-14",
+     "val_before": "L44",
+     "val_after_mover": "L44",
+     "keeping": [
+      "18-14",
+      "18-4",
+      "3-6",
+      "18-11",
+      "18-7"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "W:W8,K10,15:B3,K14",
+     "move": "10-5",
+     "val_before": "W43",
+     "val_after_mover": "W45",
+     "keeping": [
+      "10-17",
+      "10-5",
+      "10-2"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "B:WK5,8,15:B3,K14",
+     "move": "14-17",
+     "val_before": "L44",
+     "val_after_mover": "L44",
+     "keeping": [
+      "14-17",
+      "14-9",
+      "14-4",
+      "14-18",
+      "3-6",
+      "14-11",
+      "14-12",
+      "14-7"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "W:WK5,8,15:B3,K17",
+     "move": "5-7",
+     "val_before": "W43",
+     "val_after_mover": "W43",
+     "keeping": [
+      "5-7",
+      "5-10",
+      "5-2"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "B:WK7,8,15:B3,K17",
+     "move": "17-10",
+     "val_before": "L42",
+     "val_after_mover": "L38",
+     "keeping": [
+      "17-9",
+      "17-10",
+      "3-6",
+      "17-12",
+      "17-13",
+      "17-14"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "W:WK7,8,15:B3,K10",
+     "move": "7-14",
+     "val_before": "W37",
+     "val_after_mover": "W37",
+     "keeping": [
+      "7-14",
+      "7-2",
+      "7-11"
+     ],
+     "marks": ""
+    }
+   ],
+   "end_fen": "B:W8,K14,15:B3,K10",
+   "end_val": "L36",
+   "end_result": "W+",
+   "claim_ok": true,
+   "status": "ok"
+  },
+  {
+   "section": "9.3",
+   "start": "9.11",
+   "text": "18. 15-12? 4-1",
+   "claim": "=",
+   "note": "ook nu is 15-12 remise, namelijk door 4-1",
+   "start_fen": "W:WK2,8,15:B3,K4",
+   "issues": [],
+   "plies": [
+    {
+     "fen": "W:WK2,8,15:B3,K4",
+     "move": "15-12",
+     "val_before": "W37",
+     "val_after_mover": "D",
+     "keeping": [
+      "2-5",
+      "2-9",
+      "2-6",
+      "2-10"
+     ],
+     "marks": "?"
+    },
+    {
+     "fen": "B:WK2,8,12:B3,K4",
+     "move": "4-1",
+     "val_before": "D",
+     "val_after_mover": "D",
+     "keeping": [
+      "4-1"
+     ],
+     "marks": ""
+    }
+   ],
+   "confirmed": [
+    "15-12? geeft de winst weg (remise), terecht als fout gemarkeerd (beter: 2-5, 2-9, 2-6, 2-10)"
+   ],
+   "end_fen": "W:WK2,8,12:BK1,3",
+   "end_val": "D",
+   "end_result": "=",
+   "claim_ok": true,
+   "status": "ok"
+  },
+  {
+   "section": "9.3",
+   "start": "9.11",
+   "text": "18. 2-5 4-14 19. 5-10",
+   "claim": "W+",
+   "note": "de snelste winst is weer 18. 2-5 4-14 19. 5-10 (diagram 9.12)",
+   "start_fen": "W:WK2,8,15:B3,K4",
+   "issues": [],
+   "plies": [
+    {
+     "fen": "W:WK2,8,15:B3,K4",
+     "move": "2-5",
+     "val_before": "W37",
+     "val_after_mover": "W37",
+     "keeping": [
+      "2-5",
+      "2-9",
+      "2-6",
+      "2-10"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "B:WK5,8,15:B3,K4",
+     "move": "4-14",
+     "val_before": "L36",
+     "val_after_mover": "L36",
+     "keeping": [
+      "4-14",
+      "4-18",
+      "3-6",
+      "4-11",
+      "4-1",
+      "4-7"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "W:WK5,8,15:B3,K14",
+     "move": "5-10",
+     "val_before": "W35",
+     "val_after_mover": "W35",
+     "keeping": [
+      "5-10",
+      "5-1",
+      "5-2"
+     ],
+     "marks": ""
+    }
+   ],
+   "end_fen": "B:W8,K10,15:B3,K14",
+   "end_val": "L34",
+   "end_result": "W+",
+   "claim_ok": true,
+   "status": "ok"
+  },
+  {
+   "section": "9.3",
+   "start": "9.11",
+   "text": "18. 2-5 4-18 19. 15-12",
+   "claim": "W+",
+   "note": "op 4-18 wint 15-12 wel",
+   "start_fen": "W:WK2,8,15:B3,K4",
+   "issues": [],
+   "plies": [
+    {
+     "fen": "W:WK2,8,15:B3,K4",
+     "move": "2-5",
+     "val_before": "W37",
+     "val_after_mover": "W37",
+     "keeping": [
+      "2-5",
+      "2-9",
+      "2-6",
+      "2-10"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "B:WK5,8,15:B3,K4",
+     "move": "4-18",
+     "val_before": "L36",
+     "val_after_mover": "L30",
+     "keeping": [
+      "4-14",
+      "4-18",
+      "3-6",
+      "4-11",
+      "4-1",
+      "4-7"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "W:WK5,8,15:B3,K18",
+     "move": "15-12",
+     "val_before": "W29",
+     "val_after_mover": "W29",
+     "keeping": [
+      "15-12",
+      "5-1",
+      "5-2",
+      "5-10"
+     ],
+     "marks": ""
+    }
+   ],
+   "end_fen": "B:WK5,8,12:B3,K18",
+   "end_val": "L28",
+   "end_result": "W+",
+   "claim_ok": true,
+   "status": "ok"
+  },
+  {
+   "section": "9.3",
+   "start": "9.11",
+   "text": "18. 2-10",
+   "claim": "W+",
+   "note": "ook 18. 2-10 is winnend",
+   "start_fen": "W:WK2,8,15:B3,K4",
+   "issues": [],
+   "plies": [
+    {
+     "fen": "W:WK2,8,15:B3,K4",
+     "move": "2-10",
+     "val_before": "W37",
+     "val_after_mover": "W45",
+     "keeping": [
+      "2-5",
+      "2-9",
+      "2-6",
+      "2-10"
+     ],
+     "marks": ""
+    }
+   ],
+   "end_fen": "B:W8,K10,15:B3,K4",
+   "end_val": "L44",
+   "end_result": "W+",
+   "claim_ok": true,
+   "status": "ok"
   }
  ],
  "stats": [
-  "built 10 dtm 99 slices 25029665 dtm bytes 7342710904 wdl bytes 0 extra slices 0 positions 0 tt 0 nodes 0"
+  "built 0 dtm 99 slices 0 dtm bytes 0 wdl bytes 0 extra slices 0 positions 0 tt 0 nodes 0"
  ]
 }

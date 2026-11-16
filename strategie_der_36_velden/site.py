@@ -11,10 +11,10 @@ move is clickable, a large board follows, and for every position the database va
 The pages are generated locally (the databases are needed) into _site/strategie_der_36_velden/ (not tracked) and published on the
 gh-pages branch:
 
-    python3 strategie_der_36_velden/site.py data/egdb_6x6
+    python3 strategie_der_36_velden/site.py data/egdb_6x6 --store data/units
     git worktree add ../gh-pages gh-pages && cp -r _site/* ../gh-pages/ && cd ../gh-pages && git add -A && git commit
 
-usage: site.py path/to/egdb_6x6 [--out _site/strategie_der_36_velden]
+usage: site.py path/to/egdb_6x6 [--store data/units | --db data/6x6_le9.db --attach data/6x6_10.dtm] [--out _site/strategie_der_36_velden]
 """
 
 import argparse
@@ -527,9 +527,10 @@ def main():
     ap.add_argument('engine')
     ap.add_argument('--db', default=str(ROOT / 'data' / '6x6_le9.db'))
     ap.add_argument('--attach', default=str(ROOT / 'data' / '6x6_10.dtm'))
+    ap.add_argument('--store', help='the unit store of units_6x6.py (e.g. data/units), instead of --db/--attach')
     ap.add_argument('--out', default=str(ROOT / '_site' / 'strategie_der_36_velden'))
     args = ap.parse_args()
-    eng = Engine(args.engine, 10, args.db, args.attach)
+    eng = Engine(args.engine, 10, args.db, args.attach, store=args.store)
     for lang in ('nl', 'en'):
         out = Path(args.out) / ('' if lang == 'nl' else 'en')
         out.mkdir(parents=True, exist_ok=True)

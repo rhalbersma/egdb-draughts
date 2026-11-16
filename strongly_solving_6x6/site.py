@@ -8,7 +8,7 @@
 the 6x6 board, with the solved start position and the complete opening tree to 4 plies (international/). English by
 default, Dutch in nl/.
 
-usage: site.py path/to/egdb_6x6 [--db data/6x6_le9.db] [--attach data/6x6_10.dtm] [--out _site/strongly_solving_6x6]
+usage: site.py path/to/egdb_6x6 [--store data/units | --db data/6x6_le9.db --attach data/6x6_10.dtm] [--out _site/strongly_solving_6x6]
 """
 
 import argparse
@@ -638,9 +638,10 @@ def main():
     ap.add_argument('engine')
     ap.add_argument('--db', default=str(ROOT / 'data' / '6x6_le9.db'))
     ap.add_argument('--attach', default=str(ROOT / 'data' / '6x6_10.dtm'))
+    ap.add_argument('--store', help='the unit store of units_6x6.py (e.g. data/units), instead of --db/--attach')
     ap.add_argument('--out', default=str(ROOT / '_site' / 'strongly_solving_6x6'))
     args = ap.parse_args()
-    eng = Engine(args.engine, 10, args.db, args.attach)
+    eng = Engine(args.engine, 10, args.db, args.attach, store=args.store)
     for lang in ('en', 'nl'):
         out = Path(args.out) / ('' if lang == 'en' else 'nl')
         out.mkdir(parents=True, exist_ok=True)

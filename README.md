@@ -434,6 +434,56 @@ scripts/run_all.sh                 # all databases, a few minutes; writes data/ 
 * [`checkers/checkers_draws.py`](checkers/checkers_draws.py): classifies checkers draws (immediate shots versus blockades).
 * [`checkers/force_capture.py`](checkers/force_capture.py): can black force the win of a white king, and how fast.
 
+### 6×6 databases up to 12 pieces on your own machine
+
+The 6×6 databases (men and kings, at most 6 pieces per side) are built unit by unit, a unit being all positions with
+n pieces of which m are men, by [`units_6x6.py`](strongly_solving_6x6/international/units_6x6.py). Each unit is built,
+verified position by position, compressed (zstd -19, blocks of 4 KiB), compared block by block with the raw values
+and checksummed. A run that is interrupted continues where it stopped, so it can be stopped and started at will.
+
+Requirements: the C++ toolchain above, the zstd library (`libzstd-dev` on Debian/Ubuntu), Python 3, 16 GB of memory
+and about 30 GB of free disk space (the compressed store, plus one raw unit of up to some 6 GB at a time).
+
+```bash
+cmake -B build && cmake --build build --target egdb_6x6
+```
+
+```bash
+mkdir -p data
+```
+
+```bash
+nohup python3 strongly_solving_6x6/international/units_6x6.py build/egdb_6x6 --dir data/units --nmax 12 --threads 4 > data/units.out 2>&1 &
+```
+
+* `--threads`: the number of cores to use; the driver passes it to every step of `egdb_6x6`.
+* Progress: `tail data/units.out`, one line per step and unit; the results of every step are in `data/units/units.log`.
+* Resume: run the same command again. The state is kept in `data/units/state.json`, and an interrupted build continues
+  from its last checkpoint (`*.raw.progress`).
+* Time on 4 cores: up to 10 pieces about 10 hours (of which 10 pieces 7 hours); 11 and 12 pieces together roughly
+  30 to 40 hours more. Building and verifying take most of it; the time scales about inversely with the number of cores.
+* Check: every finished unit appends its CRC32C to `data/units/crc32c.txt`. It must equal the line for that unit in
+  [`crc32c_6x6.txt`](strongly_solving_6x6/international/crc32c_6x6.txt) (the checksum is of the stored bytes and does
+  not depend on the zstd version):
+
+```bash
+diff <(grep -v '^#' strongly_solving_6x6/international/crc32c_6x6.txt) <(head -n "$(grep -vc '^#' strongly_solving_6x6/international/crc32c_6x6.txt)" data/units/crc32c.txt)
+```
+
+With the store complete, the claims of the book and the sites are checked and regenerated from it:
+
+```bash
+python3 strategie_der_36_velden/check.py build/egdb_6x6 --store data/units
+```
+
+```bash
+python3 strategie_der_36_velden/site.py build/egdb_6x6 --store data/units
+```
+
+```bash
+python3 strongly_solving_6x6/site.py build/egdb_6x6 --store data/units
+```
+
 ---
 
 ## License

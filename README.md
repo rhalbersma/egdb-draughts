@@ -448,6 +448,14 @@ and about 30 GB of free disk space (the compressed store, plus one raw unit of u
 cmake -B build && cmake --build build --target egdb_6x6
 ```
 
+CMake also fetches tabula and xstd-bits for the other programs. `egdb_6x6` needs neither: a single command with a
+C++20 compiler, OpenMP and zstd builds it as well (`egdb_6x6` then sits in the root directory of the repo, so use
+`./egdb_6x6` instead of `build/egdb_6x6` below):
+
+```bash
+g++ -std=c++20 -O3 -DNDEBUG -march=native -fopenmp src/egdb_6x6.cpp -lzstd -o egdb_6x6
+```
+
 ```bash
 mkdir -p data
 ```

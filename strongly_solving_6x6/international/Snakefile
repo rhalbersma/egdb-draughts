@@ -1,0 +1,141 @@
+#          Copyright Rein Halbersma 2026.
+# Distributed under the Boost Software License, Version 1.0.
+#    (See accompanying file LICENSE_1_0.txt or copy at
+#          http://www.boost.org/LICENSE_1_0.txt)
+
+# Build, check and compress every unit of the 6x6 databases (at most 12 pieces, at most 6 per side) with egdb_6x6:
+# the same steps as units_6x6.py, with every step a Snakemake job and its result a file in the unit directory:
+#
+#   6x6-nn-mm.built      build: the unit as a raw file 6x6-nn-mm.raw (an interrupted build continues from its checkpoint)
+#   6x6-nn-mm.verified   verify raw: every position equals the value recomputed from its successors
+#   6x6-nn-mm.cdb        compress: blocks of 4096 positions, zstd -19, capture positions filled in
+#   6x6-nn-mm.compared   compare: every compressed block decoded and compared byte for byte with the raw values
+#   6x6-nn-mm.crc        crc: CRC32C of the stored bytes (crc32c.txt is regenerated from these files)
+#   6x6-nn-mm.done       delete raw
+#
+# A unit is built with the units before it compressed, so every unit waits for the previous one (in the order of
+# units_6x6.units(): n pieces, m men). Snakemake sees from these files where a run stopped and continues there.
+# Results go to <dir>/units.log (one JSON object per step, as with units_6x6.py) and <dir>/state.json is kept up to
+# date, so that units_6x6.py can take over again. A store built with units_6x6.py gets its files with units_markers.py.
+#
+# usage (from the root of the repo; the settings of profiles/default are used):
+#   snakemake -s strongly_solving_6x6/international/Snakefile --cores 4 [--config engine=data/egdb_6x6 dir=data/units nmax=12]
+
+import json
+import os
+import sys
+import time
+
+sys.path.insert(0, workflow.basedir)
+from units_6x6 import run, units  # noqa: E402
+
+ENGINE = config.get('engine', 'data/egdb_6x6')
+D = config.get('dir', 'data/units')
+UNITS = units(int(config.get('nmax', 12)))
+
+
+def name(n, m):
+    return f'{D}/6x6-{n:02}-{m:02}'
+
+
+wildcard_constraints:
+    n=r'\d{2}',
+    m=r'\d{2}'
+
+
+rule all:
+    input: [name(n, m) + '.done' for n, m in UNITS]
+
+
+def previous(w):
+    k = UNITS.index((int(w.n), int(w.m)))
+    return [name(*UNITS[k - 1]) + '.done'] if k else []
+
+
+def step(w, what, command=None):
+    """run one step of unit (n, m) with the engine; log it as units_6x6.py does"""
+    n, m = int(w.n), int(w.m)
+    key = f'{n}/{m}'
+    if command is None:                # delete raw
+        for f in (name(n, m) + '.raw', name(n, m) + '.raw.progress'):
+            if os.path.exists(f):
+                os.remove(f)
+        ok, lines, sec = True, ['deleted ' + name(n, m) + '.raw'], 0.0
+    else:
+        print(time.strftime('%H:%M:%S'), key, what, flush=True)
+        with open(f'{D}/engine.err', 'a') as err:
+            ok, lines, sec = run(ENGINE, command, err)
+    with open(f'{D}/units.log', 'a') as log:
+        log.write(json.dumps({'unit': key, 'step': what, 'ok': ok, 'out': lines, 'seconds': round(sec, 1),
+                              'time': time.strftime('%Y-%m-%d %H:%M:%S')}) + '\n')
+    if not ok:
+        raise RuntimeError(f'{key} {what} FAILED: {lines}')
+    path = f'{D}/state.json'
+    state = json.load(open(path)) if os.path.exists(path) else {}
+    if what not in state.setdefault(key, []):
+        state[key].append(what)
+    json.dump(state, open(path + '.tmp', 'w'), indent=0)
+    os.replace(path + '.tmp', path)
+    return lines
+
+
+def touch(path):
+    open(path, 'w').close()
+
+
+rule build:
+    input: previous
+    output: D + '/6x6-{n}-{m}.built'
+    threads: workflow.cores
+    run:
+        step(wildcards, 'build', f'unitbuild {D} {int(wildcards.n)} {int(wildcards.m)} {threads}')
+        touch(output[0])
+
+
+rule verify_raw:
+    input: D + '/6x6-{n}-{m}.built'
+    output: D + '/6x6-{n}-{m}.verified'
+    threads: workflow.cores
+    run:
+        step(wildcards, 'verify_raw', f'unitverify {D} {int(wildcards.n)} {int(wildcards.m)} raw {threads}')
+        touch(output[0])
+
+
+rule compress:
+    input: D + '/6x6-{n}-{m}.verified'
+    output: D + '/6x6-{n}-{m}.cdb'
+    threads: workflow.cores
+    run:
+        step(wildcards, 'compress', f'unitcompress {D} {int(wildcards.n)} {int(wildcards.m)} {threads}')
+
+
+rule compare:
+    input: D + '/6x6-{n}-{m}.cdb'
+    output: D + '/6x6-{n}-{m}.compared'
+    threads: workflow.cores
+    run:
+        step(wildcards, 'compare', f'unitcompare {D} {int(wildcards.n)} {int(wildcards.m)} {threads}')
+        touch(output[0])
+
+
+rule crc:
+    input: D + '/6x6-{n}-{m}.compared'
+    output: D + '/6x6-{n}-{m}.crc'
+    run:
+        lines = step(wildcards, 'crc', f'unitcrc {D} {int(wildcards.n)} {int(wildcards.m)}')
+        assert lines and lines[0].startswith('crc32c '), lines
+        with open(output[0], 'w') as f:
+            f.write(lines[0][len('crc32c '):] + '\n')
+        # crc32c.txt: the checksums of all finished units, in build order
+        rows = [open(name(n, m) + '.crc').read() for n, m in UNITS if os.path.exists(name(n, m) + '.crc')]
+        with open(f'{D}/crc32c.txt.tmp', 'w') as f:
+            f.write(''.join(rows))
+        os.replace(f'{D}/crc32c.txt.tmp', f'{D}/crc32c.txt')
+
+
+rule delete_raw:
+    input: D + '/6x6-{n}-{m}.crc'
+    output: D + '/6x6-{n}-{m}.done'
+    run:
+        step(wildcards, 'delete_raw')
+        touch(output[0])

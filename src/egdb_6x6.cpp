@@ -1410,7 +1410,9 @@ std::uint64_t store_gen = 0;           // changes whenever the store is opened a
 
 std::string unit_path(std::string const& dir, int n, int m, char const* ext)
 {
-        return dir + "/6x6_" + std::to_string(n) + "_" + std::to_string(m) + ext;
+        char name[32];   // 6x6-nn-mm: with leading zeros the names sort in build order
+        std::snprintf(name, sizeof name, "/6x6-%02d-%02d", n, m);
+        return dir + name + ext;
 }
 
 // mode 0: read only; 1: create (truncate) for writing; 2: open existing for writing

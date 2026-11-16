@@ -464,8 +464,24 @@ mkdir -p data
 nohup python3 strongly_solving_6x6/international/units_6x6.py build/egdb_6x6 --dir data/units --nmax 12 --threads 4 > data/units.out 2>&1 &
 ```
 
-* `--threads`: the number of cores to use; the driver passes it to every step of `egdb_6x6`.
+Instead of the driver, [Snakemake](https://snakemake.readthedocs.io) can run the same steps from the
+[`Snakefile`](strongly_solving_6x6/international/Snakefile): every step is a job whose result is a file next to the
+unit (`6x6-nn-mm.built`, `.verified`, `.cdb`, `.compared`, `.crc`, `.done`), so Snakemake sees where a run stopped and
+continues there (a store begun with the driver gets those files with
+[`units_markers.py`](strongly_solving_6x6/international/units_markers.py)):
+
+```bash
+python3 -m venv ~/smk && ~/smk/bin/pip install snakemake
+```
+
+```bash
+nohup ~/smk/bin/snakemake -s strongly_solving_6x6/international/Snakefile --cores 4 --config engine=build/egdb_6x6 > data/units.out 2>&1 &
+```
+
+* `--threads` (driver) or `--cores` (Snakemake): the number of cores to use for every step of `egdb_6x6`.
 * Progress: `tail data/units.out`, one line per step and unit; the results of every step are in `data/units/units.log`.
+* Files: `data/units/6x6-nn-mm.cdb` for the unit with nn pieces of which mm are men; with the leading zeros the
+  names sort in build order.
 * Resume: run the same command again. The state is kept in `data/units/state.json`, and an interrupted build continues
   from its last checkpoint (`*.raw.progress`).
 * Time on 4 cores: up to 10 pieces about 10 hours (of which 10 pieces 7 hours); 11 and 12 pieces together roughly

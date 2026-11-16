@@ -68,7 +68,7 @@ def main():
         for step in STEPS:
             if step in done:
                 continue
-            raw = os.path.join(d, f'6x6_{n}_{m}.raw')
+            raw = os.path.join(d, f'6x6-{n:02}-{m:02}.raw')
             if step == 'build':
                 cmd = f'unitbuild {d} {n} {m} {t}'
             elif step == 'verify_raw':

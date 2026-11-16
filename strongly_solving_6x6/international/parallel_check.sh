@@ -15,11 +15,11 @@ mkdir -p "$work"; cd "$work"
 ln -sf "$store"/*.cdb .
 status=0
 for u in $units; do
-  n=${u%/*}; m=${u#*/}
+  n=${u%/*}; m=${u#*/}; f=$(printf '6x6-%02d-%02d' "$n" "$m")
   for t in 1 "$threads"; do
-    rm -f "6x6_${n}_${m}.raw" "6x6_${n}_${m}.raw.progress"
+    rm -f "$f.raw" "$f.raw.progress"
     echo "unitbuild . $n $m $t" | EGDB_BIG_SLICE=${EGDB_BIG_SLICE:-1} "$engine" > /dev/null 2>&1
-    mv "6x6_${n}_${m}.raw" "t${t}_${n}_${m}.raw"
+    mv "$f.raw" "t${t}_${n}_${m}.raw"
   done
   a=$("$crc" "t1_${n}_${m}.raw" | cut -d' ' -f1); b=$("$crc" "t${threads}_${n}_${m}.raw" | cut -d' ' -f1)
   echo "$u: 1 thread $a, $threads threads $b $([ "$a" = "$b" ] && echo identical || echo DIFFERENT)"

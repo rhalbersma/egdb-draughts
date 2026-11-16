@@ -6,7 +6,7 @@
 <script>
 // the language of a site: its default, unless the visitor chose the other one on that site (remembered per site)
 (function () {
-  const key = 'lang:' + "ck";
+  const key = 'lang:' + "checkers";
   try { const pref = localStorage.getItem(key); if (pref && pref !== "nl" && "../vesting-9x9.html") location.replace("../vesting-9x9.html" + location.hash); } catch (e) {}
   document.addEventListener('click', function (e) {
     const a = e.target.closest && e.target.closest('a[data-setlang]');

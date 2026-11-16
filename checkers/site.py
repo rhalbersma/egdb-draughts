@@ -827,6 +827,12 @@ are 8 traps, at even parity not a single one.</p>''')]
                           'the double corners, a2 and i6, do not lie on a common diagonal. So there is a second trap, white on c2, e4 '
                           'and g6 against a2 and i6, but it stands on the same diagonal b1–h7, at the same parity:</p>'))
         rulebody += self.trap_blocks(pga, k97, e97, name, '', [(['c2', 'e4', 'g6'], ['a2', 'i6'])], partner, 3)
+        rulebody.append(t('<p>Omdat beide vallen op dezelfde diagonaal staan, kost de overstap van val 3 naar val 2 twee witte '
+                          'zetten (c2-d3 en g6-f5), terwijl zwart twee keer pendelt (a2-b1 en i6-h7): een even aantal, dus het '
+                          'tempo draait niet om.</p>',
+                          '<p>Because both traps stand on the same diagonal, the change-over from trap 3 to trap 2 costs two white '
+                          'moves (c2-d3 and g6-f5), while black shuttles twice (a2-b1 and i6-h7): an even number, so the tempo '
+                          'does not turn over.</p>'))
         # the longest win with black in the diagonally opposite double corners (even parity, black to move)
         f97 = e97.fen(['b7', 'a6', 'a4'], ['i6', 'b1'], 'B')
         v97, _ = e97.analyse(f97)

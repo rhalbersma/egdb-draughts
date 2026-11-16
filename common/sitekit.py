@@ -157,7 +157,9 @@ class Page:
 
     # single squares: algebraic names (h10) in algebraic texts; in numeric texts numbers after "op", "veld(en)",
     # "on", "square(s)" (dam op 9, schijven op 14 en 18)
-    SQ_ALG_RE = re.compile(r'(?<![\w.,/×-])([a-z]\d{1,2})(?![\w/×-]|\.\d)')
+    # a square on its own; a '/' next to it only between two squares (double corners written as b1/a2)
+    SQ_ALG_RE = re.compile(r'(?<![\w.,×-])(?:(?<!/)|(?<=[a-z]\d/)|(?<=[a-z]\d\d/))([a-z]\d{1,2})'
+                           r'(?![\w×-]|/(?![a-z]\d)|\.\d)')
     SQ_NUM_RE = re.compile(r'\b(op|veld|velden|on|square|squares) (\d{1,2}(?:(?:, | en | and )\d{1,2})*)(?![\d×x-]|\.\d)'
                            r'(?!\s*(?:ply|plies|stuk|piece|zet|move|dam|schijf|king|man\b|men\b|keer|time|tegen|against))')
 

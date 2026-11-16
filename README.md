@@ -474,6 +474,8 @@ continues there (a store begun with the driver gets those files with
 python3 -m venv ~/smk && ~/smk/bin/pip install snakemake
 ```
 
+(On Debian and Ubuntu `venv` is a separate package: `sudo apt-get install python3-venv`.)
+
 ```bash
 nohup ~/smk/bin/snakemake -s strongly_solving_6x6/international/Snakefile --cores 4 --config engine=build/egdb_6x6 > data/units.out 2>&1 &
 ```

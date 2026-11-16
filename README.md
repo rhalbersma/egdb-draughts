@@ -507,6 +507,17 @@ numbers do, `echo "perft 17 dups" | build/egdb_6x6_checkers`.
 diff <(grep -v '^#' strongly_solving_6x6/international/crc32c_6x6.txt) <(head -n "$(grep -vc '^#' strongly_solving_6x6/international/crc32c_6x6.txt)" data/units/crc32c.txt)
 ```
 
+* Format: the engine writes `.cdb` version 2 (one byte per position: 255 a draw, 0 .. E - 1 the DTM, E .. 254 escape
+  codes with an extra byte for a DTM above 254 plies; E per unit, 255 when no unit needs escapes). Version 1 (draw
+  byte 253, written by earlier engines) is still read. The values are the same, but the stored bytes and so the CRCs
+  differ: `crc32c_6x6.txt` still lists version 1 checksums until it is regenerated from a recoded complete store
+  (`crc32c_6x6_checkers.txt` lists version 2). A finished version 1 store is converted in place, with its
+  `crc32c.txt` and `.crc` files rewritten (`--values` also compares a hash of all values before and after):
+
+```bash
+python3 strongly_solving_6x6/international/recode_store.py build/egdb_6x6 --dir data/units --threads 10 --values
+```
+
 With the store complete, the claims of the book and the sites are checked and regenerated from it:
 
 ```bash

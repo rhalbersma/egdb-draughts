@@ -1,5 +1,5 @@
 # CRC32C of the stored bytes of every unit (n pieces, m men) of the 6x6 databases (at most 12 pieces, at most 6 per side),
-# built and fully verified with units_6x6.py; columns: n m positions <count> crc32c (see the unitcrc command of egdb_6x6)
+# built and fully verified with units_6x6.py; columns: n m positions <count> crc32c (see the unitcrc command of egdb_6x6) [.cdb version 1: draw byte 253]
 2 0 positions 306 38c503fd
 2 1 positions 510 97c7c13d
 2 2 positions 213 8dc46217

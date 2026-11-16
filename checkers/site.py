@@ -825,6 +825,41 @@ are 8 traps, at even parity not a single one.</p>''')]
                           'white changes the tempo. On 9×7 only the corners b1 and h7 lie on one diagonal; the other halves of '
                           'the double corners, a2 and i6, do not lie on a common diagonal. The second trap, white on c2, e4 and g6 '
                           'against a2 and i6, therefore stands on the same diagonal b1–h7, at the same parity.</p>'))
+        # the longest win with black in the diagonally opposite double corners (even parity, black to move)
+        f97 = e97.fen(['b7', 'a6', 'a4'], ['i6', 'b1'], 'B')
+        v97, _ = e97.analyse(f97)
+        line97 = ('1. i6-h5 2. b7-c6 h5-g4 3. a6-b5 g4-f3 4. c6-d5 b1-c2 5. b5-c4 c2-b1 6. a4-b5 b1-c2 7. b5-c6 c2-b1 '
+                  '8. c4-d3 f3-g4 9. d5-e4 b1-a2 10. c6-d7 g4-h3 11. d7-e6 h3-g4 12. d3-c2 g4-h5 13. e6-f5 a2-b1 '
+                  '14. e4-d3 b1-a2 15. d3-e2 a2-b1 16. c2-d1 h5-i6 17. f5-g4 i6-h7 18. e2-d3 h7-i6 19. d3-e4 i6-h7 '
+                  '20. g4-f5 b1-a2 21. d1-c2 h7-i6 22. f5-g6 i6-h7 23. c2-d3 h7xf5 24. e4xg6')
+        g = f97
+        for k, ((mv,), _) in enumerate(self.plan(line97)):   # black a longest defence, white a strongest move
+            ms = e97.analyse(g)[1]
+            m = next(x for x in ms if x[0] == mv)
+            w = g[0] == 'W'
+            assert m[1][0] == ('W' if w else 'L') and int(m[1][1:]) == (min if w else max)(
+                int(x[1][1:]) for x in ms if x[1][0] == m[1][0]), (mv, m[1])
+            g = m[2]
+            if mv == 'f5-g6':                  # black to move in the second trap on the diagonal b1-h7
+                key = lambda x: [sorted(p[1:].split(',')) for p in x.split(':')]
+                assert key(g) == key(e97.fen(['c2', 'e4', 'g6'], ['a2', 'i6'], 'B')), (g, e97.fen(['c2', 'e4', 'g6'], ['a2', 'i6'], 'B'))
+        assert [len([x for x in side[1:].split(',') if x]) for side in g.split(':')[1:]] == [2, 1] and e97.analyse(g)[0][0] == 'L'
+        assert rank_parity(e97, f97) == 0
+        fig97, i97 = pga.diagram(f97, t(f'{name}, zwart aan zet: {v97}', f'{name}, black to move: {v97}'), gid=k97)
+        h97, *_ = pga.moves(f97, self.plan(line97), 1, True, 'm1', i97)
+        rulebody += [t(f'<p>De langste winst met zwart in de diagonaal tegenover elkaar liggende dubbele hoeken, bij even '
+                       f'pariteit en zwart aan zet, duurt {v97[1:]} ply. Zwart verlaat de hoeken nog even, maar wit zet zijn '
+                       f'dammen rustig op de diagonaal b1–h7 en bouwt daar de tweede val: na 22. f5-g6 staat zwart aan zet '
+                       f'met wit op c2, e4 en g6 tegen a2 en i6, en op 22. … i6-h7 volgt 23. c2-d3 h7×f5 24. e4×g6. Wit kan '
+                       f'dat afdwingen omdat de pariteit goed is: zwart kan het tempo niet wisselen, dus wit staat met de val '
+                       f'klaar terwijl zwart aan zet is.</p>',
+                       f'<p>The longest win with black in the diagonally opposite double corners, at even parity and black to '
+                       f'move, takes {v97[1:]} plies. Black leaves the corners for a while, but white calmly places his kings '
+                       f'on the diagonal b1–h7 and builds the second trap there: after 22. f5-g6 black is to move with white '
+                       f'on c2, e4 and g6 against a2 and i6, and 22. … i6-h7 is met by 23. c2-d3 h7×f5 24. e4×g6. White can '
+                       f'force this because the parity is right: black cannot change the tempo, so white stands ready with the '
+                       f'trap while black is to move.</p>'),
+                     fig97, f'<p class="var">{h97}</p>', '<div style="clear:both"></div>']
         diag = lambda a, b: abs(ord(a[0]) - ord(b[0])) == abs(int(a[1:]) - int(b[1:]))
         assert diag('b1', 'h7') and not diag('a2', 'i6') and all(diag('b1', x) for x in ('c2', 'e4', 'g6', 'd3', 'f5'))
         for W, B in ((['c2', 'e2', 'g2'], ['a2', 'i2']), (['d3', 'e4', 'f5'], ['b1', 'h7']), (['c2', 'e4', 'g6'], ['a2', 'i6'])):

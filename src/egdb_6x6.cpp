@@ -865,10 +865,11 @@ void solve_slice_pull(Meta const& s, std::uint16_t* out)
 // round (until the switch) the cost of both is estimated from exact counts: U the positions the forward round examines
 // (odd n: all undecided; even n: the undecided whose exits all lose) and F the frontier (the positions with value
 // n - 1). In units of one forward position (decode, generate moves, look up king moves):
-//      forward    a_f T + U
-//      retrograde a_r T + r_w F (odd n), a_r T + r_l F (even n: predecessors, plus the loss candidates verified)
+//      forward    k_f + a_f T + U
+//      retrograde k_r + a_r T + r_w F (odd n), k_r + a_r T + r_l F (even n: predecessors, plus the loss candidates
+//                 verified), with k the fixed cost of a round and a T its scans of the whole slice
 // switch when retrograde < forward. The constants are measured with EGDB_PROFILE (strongly_solving_6x6/materials/
-// switch.py); EGDB_COSTS="a_f a_r r_w r_l" overrides them. EGDB_SWITCH: "forward" never switches, "retrograde"
+// switch.py); EGDB_COSTS="k_f k_r a_f a_r r_w r_l" overrides them. EGDB_SWITCH: "forward" never switches, "retrograde"
 // switches before round 1 (tests).
 // EGDB_PROFILE=file: every round is done both ways from the same state, timed and checked equal; one line per round:
 //      wp bp wm bm slice T n U F edges candidates forward_ns retrograde_ns
@@ -891,10 +892,10 @@ Tally over(bool par, std::vector<std::uint64_t> const& items, F&& f)
                    : std::transform_reduce(items.begin(), items.end(), Tally{}, std::plus<>{}, f);
 }
 
-struct Costs { double a_f, a_r, r_w, r_l; };
+struct Costs { double k_f, k_r, a_f, a_r, r_w, r_l; };
 Costs const costs = [] {
-        Costs c{ 0.0, 0.0, 1.0, 1.0 };
-        if (char const* e = std::getenv("EGDB_COSTS")) std::sscanf(e, "%lf %lf %lf %lf", &c.a_f, &c.a_r, &c.r_w, &c.r_l);
+        Costs c{ 0.0, 0.0, 0.0, 0.0, 1.0, 1.0 };
+        if (char const* e = std::getenv("EGDB_COSTS")) std::sscanf(e, "%lf %lf %lf %lf %lf %lf", &c.k_f, &c.k_r, &c.a_f, &c.a_r, &c.r_w, &c.r_l);
         return c;
 }();
 int const switch_mode = [] { char const* e = std::getenv("EGDB_SWITCH"); return !e ? 0 : std::string(e) == "forward" ? 1 : std::string(e) == "retrograde" ? 2 : 0; }();
@@ -1082,7 +1083,7 @@ void solve_slice_hybrid(Meta const& s, std::uint16_t* out, bool par)
                         if (!retro && switch_mode == 0) {
                                 double const F = double(count([&](std::uint64_t i) { return cur[i] == prev; }));
                                 double const U = wins ? double(open) : double(count([&](std::uint64_t i) { return cur[i] == UNKNOWN16 && eloss[i] != NONE16; }));
-                                retro = costs.a_r * double(T) + (wins ? costs.r_w : costs.r_l) * F < costs.a_f * double(T) + U;
+                                retro = costs.k_r + costs.a_r * double(T) + (wins ? costs.r_w : costs.r_l) * F < costs.k_f + costs.a_f * double(T) + U;
                         }
                         if (retro) { ++retrograde_rounds; t = retrograde(n); }
                         else { ++forward_rounds; t = forward(n); cur.swap(nxt); }

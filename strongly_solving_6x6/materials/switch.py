@@ -47,7 +47,6 @@ def fit(d):
 
 def totals(d, costs):
     """per slice: forward only, retrograde only, best single switch, optimum per round, model per round (ns)"""
-    d = d.copy()
     k_f, k_r, a_f, a_r, r_w, r_l = costs
     pred_f = k_f + a_f * d.S + d.U
     pred_r = k_r + a_r * d.S + np.where(d.n % 2 == 1, r_w, r_l) * d.F
@@ -72,18 +71,21 @@ def main():
     ap.add_argument('--materials', action='store_true', help='one line per material')
     a = ap.parse_args()
 
-    d = pd.read_csv(a.profile, sep=' ', header=None, names=COLS, dtype='int64', on_bad_lines='skip')
-    d['mat'] = (d.wp.map('{:02}'.format) + '-' + d.bp.map('{:02}'.format) + '-' + d.wm.map('{:02}'.format) + '-'
-                + d.bm.map('{:02}'.format))
-    d['key'] = d.mat + '/' + d.slice.astype(str)
-    men = d.wm + d.bm
-    d['cls'] = np.where(men == 0, 'kings only', np.where(men == 1, 'one man', 'two or more men'))
+    types = dict(wp='int8', bp='int8', wm='int8', bm='int8', slice='int32', S='int32', n='int16', U='int32', F='int32',
+                 E='int64', C='int64', f='int64', r='int64')
+    d = pd.read_csv(a.profile, sep=' ', header=None, names=COLS, dtype=types, on_bad_lines='skip', engine='c')
+    d['mat'] = ((d.wp.astype('int32') * 16 + d.bp) * 16 + d.wm) * 16 + d.bm      # a material as one integer
+    d['key'] = d.mat.astype('int64') * (1 << 32) + d.slice.astype('int64')
+    men = (d.wm + d.bm).to_numpy()
+    d['cls'] = pd.Categorical(np.where(men == 0, 'kings only', np.where(men == 1, 'one man', 'two or more men')))
+    d.drop(columns=['wp', 'bp', 'wm', 'bm', 'slice'], inplace=True)
     print(f'{d.key.nunique():,} slices, {len(d):,} rounds, {d.mat.nunique()} materials')
 
     m = fit(d)
     b_b = d.E.sum() / max(1, d.F.sum())
-    even = d[d.n % 2 == 0]
-    gamma = even.C.sum() / max(1, even.E.sum())
+    even = (d.n % 2 == 0).to_numpy()
+    gamma = d.C[even].sum() / max(1, d.E[even].sum())
+    d.drop(columns=['E', 'C'], inplace=True)
     print(f'forward:    {m["k_f"]:.0f} ns per round + {m["a_f"]:.2f} ns per position of the slice + {m["c"]:.1f} ns per examined position')
     print(f'retrograde: {m["k_r"]:.0f} ns per round + {m["a_r"]:.2f} ns per position of the slice + {m["w"]:.1f} ns per frontier position '
           f'(odd n), {m["l"]:.1f} (even n)')
@@ -100,6 +102,7 @@ def main():
     per = totals(d, costs)
     first = d.groupby('key', sort=False)[['mat', 'cls']].first()
     per = per.join(first)
+    per['mat'] = per.mat.map(lambda x: f'{int(x) >> 12:02}-{int(x) >> 8 & 15:02}-{int(x) >> 4 & 15:02}-{int(x) & 15:02}')
 
     def line(label, p):
         s = p[['forward', 'retrograde', 'single', 'opt', 'model']].sum() / 1e9

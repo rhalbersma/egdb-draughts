@@ -103,6 +103,7 @@
 #include <omp.h>
 #define ZSTD_STATIC_LINKING_ONLY
 #include <zstd.h>
+#include "durable_file.hpp"
 
 namespace {
 
@@ -1148,10 +1149,9 @@ bool extend(int n, int threads, std::string const& path, bool resume = false)
                 ::msync(db2, db2_size, MS_SYNC);
                 if (std::FILE* pf = std::fopen((path + ".progress.tmp").c_str(), "w")) {
                         std::fprintf(pf, "%llu\n", (unsigned long long)h);
-                        std::fflush(pf);
-                        ::fsync(::fileno(pf));
+                        sync_file(pf);
                         std::fclose(pf);
-                        std::rename((path + ".progress.tmp").c_str(), (path + ".progress").c_str());
+                        durable_rename(path + ".progress.tmp", path + ".progress");
                 }
                 if (h == jobs.size() || jobs[h].men != jobs[g].men) {
                         double sec = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
@@ -1476,9 +1476,9 @@ bool write_ovf(std::string const& path, std::vector<std::uint64_t> const& t)
         std::string const tmp = path + ".tmp";
         std::FILE* f = std::fopen(tmp.c_str(), "wb");
         if (!f) return false;
-        bool ok = std::fwrite(t.data(), 8, t.size(), f) == t.size() && std::fflush(f) == 0 && ::fsync(::fileno(f)) == 0;
+        bool ok = std::fwrite(t.data(), 8, t.size(), f) == t.size() && sync_file(f);
         ok = std::fclose(f) == 0 && ok;
-        return ok && std::rename(tmp.c_str(), path.c_str()) == 0;
+        return ok && durable_rename(tmp, path);
 }
 
 std::uint16_t ovf_find(std::uint64_t const* t, std::size_t n, std::uint64_t off)
@@ -1819,10 +1819,9 @@ void write_progress(std::string const& path, std::string const& text)
         std::string const tmp = path + ".tmp";
         if (std::FILE* f = std::fopen(tmp.c_str(), "w")) {
                 std::fputs(text.c_str(), f);
-                std::fflush(f);
-                ::fsync(::fileno(f));
+                sync_file(f);
                 std::fclose(f);
-                std::rename(tmp.c_str(), path.c_str());
+                durable_rename(tmp, path);
         }
 }
 
@@ -2161,10 +2160,10 @@ bool unit_compress(std::string const& dir, int n, int m, int threads)
         }
         off[nb] = total;
         bool ok = ::fseeko(f, off_t(head.size() * 8), SEEK_SET) == 0 && std::fwrite(off.data(), 8, off.size(), f) == off.size();
-        ok = ok && std::fflush(f) == 0 && ::fsync(::fileno(f)) == 0;
+        ok = ok && sync_file(f);
         ok = std::fclose(f) == 0 && ok;
         ::munmap(raw, rsize);
-        if (!ok || std::rename(tmp.c_str(), path.c_str()) != 0) return false;
+        if (!ok || !durable_rename(tmp, path)) return false;
         std::uint64_t const fsize = head.size() * 8 + off.size() * 8 + total;
         std::cout << "compressed " << n << " " << m << " positions " << npos << " blocks " << nb << " bytes " << fsize
                   << " bits_per_position " << 8.0 * double(fsize) / double(npos) << " longest " << longest << " escape " << esc
@@ -2259,10 +2258,10 @@ bool unit_recode(std::string const& dir, int n, int m, int threads)
         }
         off[nb] = total;
         bool ok = !bad && ::fseeko(f, off_t(head.size() * 8), SEEK_SET) == 0 && std::fwrite(off.data(), 8, off.size(), f) == off.size();
-        ok = ok && std::fflush(f) == 0 && ::fsync(::fileno(f)) == 0;
+        ok = ok && sync_file(f);
         ok = std::fclose(f) == 0 && ok;
         if (!ok) { std::remove(tmp.c_str()); std::cerr << "recode: unit " << n << "/" << m << " failed" << std::endl; return false; }
-        if (std::rename(tmp.c_str(), path.c_str()) != 0) return false;
+        if (!durable_rename(tmp, path)) return false;
         std::cout << "recoded " << n << " " << m << " positions " << u.npos << " draws " << draws << " bytes "
                   << (head.size() + off.size()) * 8 + total << " seconds " << seconds_since(t0) << '\n';
         return true;

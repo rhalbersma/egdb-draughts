@@ -897,10 +897,11 @@ Tally over(bool par, std::size_t n, F&& f)              // f(k) for every k in [
                    : std::transform_reduce(ids.begin(), ids.end(), Tally{}, std::plus<>{}, f);
 }
 
-struct Costs { double k_f, k_r, r_w, r_l; };
+struct Costs { double k_f, k_r, r_w, r_l, r_s, r_x; };
 Costs const costs = [] {
-        Costs c{ 0.0, 0.0, 1.0, 1.0 };
-        if (char const* e = std::getenv("EGDB_COSTS")) std::sscanf(e, "%lf %lf %lf %lf", &c.k_f, &c.k_r, &c.r_w, &c.r_l);
+        Costs c{ 0.0, 0.0, 1.0, 1.0, 0.0, 0.0 };
+        if (char const* e = std::getenv("EGDB_COSTS"))
+                std::sscanf(e, "%lf %lf %lf %lf %lf %lf", &c.k_f, &c.k_r, &c.r_w, &c.r_l, &c.r_s, &c.r_x);
         return c;
 }();
 int const switch_mode = [] {
@@ -1065,34 +1066,44 @@ void solve_slice_hybrid(Meta const& s, std::uint16_t* out, bool par)
         for (int n = 1; n <= maxd + 1 && open > 0; ++n) {      // no undecided position left: nothing more to decide
                 bool const wins = n & 1;
                 if (std::size_t(n) > front.size()) front.resize(std::size_t(n));
+                // U: the undecided positions forward examines; L: the length of the lists it walks (with the positions
+                // decided by retrograde rounds since it last compacted them); X: the wins through an exit in n
                 std::uint64_t const F = front[std::size_t(n - 1)].size(), U = wins ? open : open_l;
+                std::uint64_t const L = lossable.size() + (wins ? others.size() : 0);
+                std::uint64_t const X = wins && std::size_t(n) < exits.size() ? exits[std::size_t(n)].size() : 0;
                 Tally t;
                 if (profile_file) {             // both ways from the same state, timed, checked equal; retrograde followed
                         std::vector<std::uint16_t> fcur = cur;
                         std::vector<std::uint8_t> fcnt = cnt;
-                        std::swap(cur, fcur);   // forward on a copy of the state
+                        std::vector<std::uint32_t> flossable = lossable, fothers = others;
+                        std::swap(cur, fcur);   // forward on a copy of the state and of the lists
                         std::swap(cnt, fcnt);
+                        std::swap(lossable, flossable);
+                        std::swap(others, fothers);
                         auto const t0 = std::chrono::steady_clock::now();
                         forward(n);
                         auto const t1 = std::chrono::steady_clock::now();
                         for (auto& g : got) g.clear();
                         std::swap(cur, fcur);
                         std::swap(cnt, fcnt);
+                        std::swap(lossable, flossable);
+                        std::swap(others, fothers);
                         auto const t2 = std::chrono::steady_clock::now();
                         t = retrograde(n);
                         auto const t3 = std::chrono::steady_clock::now();
                         bool same = cur == fcur;
-                        if (!wins) for (std::uint32_t i : lossable) same = same && (cur[i] != UNKNOWN16 || cnt[i] == fcnt[i]);
+                        if (!wins) for (std::uint32_t i : flossable) same = same && (cur[i] != UNKNOWN16 || cnt[i] == fcnt[i]);
                         if (!same) { std::cerr << "error: forward and retrograde round " << n << " differ" << std::endl; std::abort(); }
                         auto const ns = [](auto d) { return (long long)std::chrono::duration_cast<std::chrono::nanoseconds>(d).count(); };
                         std::lock_guard<std::mutex> lock(profile_mutex);
-                        std::fprintf(profile_file, "%s %llu %llu %d %llu %llu %llu 0 %lld %lld\n", profile_tag.c_str(),
+                        std::fprintf(profile_file, "%s %llu %llu %d %llu %llu %llu %llu %llu %lld %lld\n", profile_tag.c_str(),
                                      (unsigned long long)id, (unsigned long long)T, n, (unsigned long long)U, (unsigned long long)F,
-                                     (unsigned long long)t.edges, ns(t1 - t0), ns(t3 - t2));
+                                     (unsigned long long)t.edges, (unsigned long long)L, (unsigned long long)X, ns(t1 - t0), ns(t3 - t2));
                         std::fflush(profile_file);
                 } else {
                         bool const retro = switch_mode == 2 || (switch_mode == 0
-                                && costs.k_r + (wins ? costs.r_w : costs.r_l) * double(F) < costs.k_f + double(U));
+                                && costs.k_r + (wins ? costs.r_w : costs.r_l) * double(F) + costs.r_x * double(X)
+                                   < costs.k_f + double(U) + costs.r_s * double(L - U));
                         if (retro) { ++retrograde_rounds; t = retrograde(n); }
                         else { ++forward_rounds; t = forward(n); }
                 }

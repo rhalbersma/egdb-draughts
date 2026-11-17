@@ -491,6 +491,32 @@ Both engines reproduce the perft numbers of the forum thread [*Perft for arbitra
 (and of dctl) to depth 17: `echo "perft 17" | build/egdb_6x6` and, counting every capture sequence as the checkers
 numbers do, `echo "perft 17 dups" | build/egdb_6x6_checkers`.
 
+#### Per material: Snakemake manages all dependencies and all parallelism
+
+The [`materials`](strongly_solving_6x6/materials/) workflow builds the same databases one material at a time, a
+material being named wp-bp-wm-bm (white pieces, black pieces, white men, black men; `6x6-06-06-00-00` is 6 kings
+against 6 kings). [`materials.py`](strongly_solving_6x6/materials/materials.py) plans the 378 materials: their exact
+dependencies (promotions and captures), sizes and critical-path priorities. The engine needs Intel TBB for
+`std::execution::par` (`sudo apt-get install libtbb-dev`).
+
+* Every material is a chain of jobs (build, verify, compress, compare, crc, delete raw), started as soon as the
+  materials it depends on are done, not after a whole unit.
+* An ordinary material runs on one thread, under `nice`. A big one (all kings or one man, at least 4 M positions, such
+  as 6 kings against 6 kings) runs with all cores: Snakemake counts it as 2 threads and keeps starting other jobs next
+  to it, so the OS shares the cores while they run and gives all of them to the big job when it runs alone.
+* Jobs on the longest chains (all kings, few men) get the highest priority and start first.
+
+```bash
+nohup ~/smk/bin/snakemake -s strongly_solving_6x6/materials/Snakefile --cores 10 --config engine=build/egdb_6x6_checkers dir=data/materials_checkers > data/materials_checkers.out 2>&1 &
+```
+
+* Files: `data/materials_checkers/6x6-wp-bp-wm-bm.cdb`; results of every step in `materials.log`; `crc32c.txt`
+  is written when the run ends.
+* Plan: `python3 strongly_solving_6x6/materials/materials.py --nmax 12 --cores 10` lists every material with its
+  positions, dependencies and priority; `snakemake ... --dag | dot -Tsvg > dag.svg` draws the jobs.
+* Check against a unit store of the same game (a hash of the values per material, keyed by position):
+  `python3 strongly_solving_6x6/materials/crosscheck.py build/egdb_6x6_checkers --units data/units_checkers --materials data/materials_checkers --nmax 12`.
+
 * `--threads` (driver) or `--cores` (Snakemake): the number of cores to use for every step of `egdb_6x6`.
 * Progress: `tail data/units.out`, one line per step and unit; the results of every step are in `data/units/units.log`.
 * Files: `data/units/6x6-nn-mm.cdb` for the unit with nn pieces of which mm are men; with the leading zeros the

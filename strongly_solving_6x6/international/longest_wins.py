@@ -7,7 +7,8 @@
 """The longest wins in a 6x6 unit store: per number of pieces (or per material with --materials) the position with the
 largest DTM, as FEN and depth in plies, from the unitmax command of egdb_6x6 (capture positions resolved).
 
-Only finished units are read (those with a line in <dir>/crc32c.txt). unitmax reads every stored position of a unit, so
+Only finished units are read (those with a line in <dir>/crc32c.txt). A per-material store (strongly_solving_6x6/materials,
+lines "wp bp wm bm crc") is recognised by its crc32c.txt and read with matmax instead. unitmax reads every stored position of a unit, so
 it takes about as long as a verification of that unit; use few threads while a build is running.
 
 usage: longest_wins.py path/to/egdb_6x6 [--dir data/units] [--pieces 2-8] [--threads 2] [--materials] [--losses]
@@ -19,15 +20,19 @@ from pathlib import Path
 
 
 def finished_units(d):
+    """(pieces, command) per finished unit or material"""
     units = []
     for line in (Path(d) / 'crc32c.txt').read_text().splitlines():
-        n, m, *_ = line.split()
-        units.append((int(n), int(m)))
+        t = line.split()
+        if len(t) > 2 and t[2] == 'positions':                       # unit store: n m positions <count> <crc>
+            units.append((int(t[0]), f'unitmax {d} {t[0]} {t[1]}'))
+        else:                                                        # material store: wp bp wm bm <crc>
+            units.append((int(t[0]) + int(t[1]), f'matmax {d} {" ".join(t[:4])}'))
     return units
 
 
-def unitmax(engine, d, n, m, threads):
-    out = subprocess.run([engine], input=f'unitmax {d} {n} {m} {threads}\n', capture_output=True, text=True).stdout
+def unitmax(engine, command, n, threads):
+    out = subprocess.run([engine], input=f'{command} {threads}\n', capture_output=True, text=True).stdout
     rows = []
     for line in out.splitlines():
         t = line.split()
@@ -37,7 +42,7 @@ def unitmax(engine, d, n, m, threads):
                          'win': None if t[9] == '-' else (int(t[9][1:]), t[10]),
                          'loss': None if t[12] == '-' else (int(t[12][1:]), t[13])})
         elif t and t[0] == 'error':
-            raise RuntimeError(f'{n}/{m}: {line}')
+            raise RuntimeError(f'{command}: {line}')
     return rows
 
 
@@ -54,10 +59,10 @@ def main():
     lo, hi = int(lo), int(hi or lo)
     key = 'loss' if a.losses else 'win'
     best = {}
-    for n, m in finished_units(a.dir):
+    for n, command in finished_units(a.dir):
         if not lo <= n <= hi:
             continue
-        for r in unitmax(a.engine, a.dir, n, m, a.threads):
+        for r in unitmax(a.engine, command, n, a.threads):
             if r[key] is None:
                 continue
             k = (n, r['material']) if a.materials else n

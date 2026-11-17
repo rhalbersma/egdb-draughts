@@ -1,0 +1,146 @@
+#          Copyright Rein Halbersma 2026.
+# Distributed under the Boost Software License, Version 1.0.
+#    (See accompanying file LICENSE_1_0.txt or copy at
+#          http://www.boost.org/LICENSE_1_0.txt)
+
+# The 6x6 databases built per material (wp-bp-wm-bm: white pieces, black pieces, white men, black men), with Snakemake
+# managing all dependencies and all parallelism (see materials.py for the plan):
+#
+#   6x6-wp-bp-wm-bm.built      build: raw file .raw (an interrupted build continues from its checkpoint)
+#   6x6-wp-bp-wm-bm.verified   verify raw: every position equals the value recomputed from its successors
+#   6x6-wp-bp-wm-bm.cdb        compress: blocks of 4096 positions, zstd -19, capture positions filled in
+#   6x6-wp-bp-wm-bm.compared   compare: every compressed block decoded and compared with the raw values
+#   6x6-wp-bp-wm-bm.crc        crc: CRC32C of the stored bytes (crc32c.txt is written from these when the run ends)
+#   6x6-wp-bp-wm-bm.done       the raw file deleted
+#
+# A material is built as soon as the materials it depends on are compared (promotions, captures). Parallelism:
+#   - an ordinary material is one job on one thread, run with nice, so that the critical jobs win contended cores;
+#   - a big material (all kings or one man, at least `big` positions) declares 2 threads to Snakemake but runs with all
+#     cores (std::execution::par): while other jobs run, the OS shares the cores; alone, it gets them all;
+#   - every job has a priority from the critical path (its duration plus the longest chain of jobs depending on it),
+#     so that Snakemake starts the jobs on the longest chains first.
+#
+# usage (from the root of the repo):
+#   snakemake -s strongly_solving_6x6/materials/Snakefile --cores 10 \
+#       --config engine=build/egdb_6x6_checkers dir=data/materials_checkers nmax=12 [big=4000000]
+
+import json
+import os
+import subprocess
+import sys
+import time
+
+sys.path.insert(0, workflow.basedir)
+from materials import plan  # noqa: E402
+
+ENGINE = config.get('engine', 'build/egdb_6x6_checkers')
+D = config.get('dir', 'data/materials_checkers')
+NMAX = int(config.get('nmax', 12))
+PLAN = plan(NMAX, workflow.cores, int(config.get('big', 4_000_000)))
+os.makedirs(D, exist_ok=True)
+
+
+def f(mat, ext):
+    return f'{D}/6x6-{mat}{ext}'
+
+
+wildcard_constraints:
+    mat=r'\d{2}-\d{2}-\d{2}-\d{2}'
+
+
+rule all:
+    input: [f(m, '.done') for m in PLAN]
+
+
+onsuccess:
+    # crc32c.txt: the checksums of all finished materials, in build order
+    rows = [open(f(m, '.crc')).read() for m in PLAN if os.path.exists(f(m, '.crc'))]
+    with open(f'{D}/crc32c.txt.tmp', 'w') as out:
+        out.write(''.join(rows))
+    os.replace(f'{D}/crc32c.txt.tmp', f'{D}/crc32c.txt')
+
+
+def step(w, what, command):
+    """run one step of a material with the engine (with nice unless it is big); log it as one JSON line"""
+    big = PLAN[w.mat]['big']
+    threads = workflow.cores if big else 1
+    wp, bp, wm, bm = w.mat.split('-')
+    args = f'{D} {int(wp)} {int(bp)} {int(wm)} {int(bm)}'
+    line = command.format(args=args, threads=threads)
+    cmd = [ENGINE] if big else ['nice', '-n', '10', ENGINE]
+    t0 = time.time()
+    r = subprocess.run(cmd, input=line + '\n', capture_output=True, text=True)
+    lines = [x for x in r.stdout.splitlines() if x and x != 'end']
+    ok = r.returncode == 0 and any(x.endswith(' ok') for x in lines) and not any(x.startswith('error') for x in lines)
+    with open(f'{D}/engine.err', 'a') as err:
+        err.write(r.stderr)
+    with open(f'{D}/materials.log', 'a') as log:
+        log.write(json.dumps({'material': w.mat, 'step': what, 'ok': ok, 'threads': threads, 'out': lines,
+                              'seconds': round(time.time() - t0, 2), 'time': time.strftime('%Y-%m-%d %H:%M:%S')}) + '\n')
+    if not ok:
+        raise RuntimeError(f'{w.mat} {what} FAILED: {lines} {r.stderr[-2000:]}')
+    return lines
+
+
+def touch(path):
+    open(path, 'w').close()
+
+
+rule build:
+    input: lambda w: [f(d, '.compared') for d in PLAN[w.mat]['deps']]
+    output: f('{mat}', '.built')
+    threads: lambda w: PLAN[w.mat]['threads']
+    priority: lambda w: PLAN[w.mat]['priority']
+    run:
+        step(wildcards, 'build', 'matbuild {args} {threads}')
+        touch(output[0])
+
+
+rule verify:
+    input: f('{mat}', '.built')
+    output: f('{mat}', '.verified')
+    threads: lambda w: PLAN[w.mat]['threads']
+    priority: lambda w: PLAN[w.mat]['priority']
+    run:
+        step(wildcards, 'verify_raw', 'matverify {args} raw {threads}')
+        touch(output[0])
+
+
+rule compress:
+    input: f('{mat}', '.verified')
+    output: f('{mat}', '.cdb')
+    threads: lambda w: PLAN[w.mat]['threads']
+    priority: lambda w: PLAN[w.mat]['priority']
+    run:
+        step(wildcards, 'compress', 'matcompress {args} {threads}')
+
+
+rule compare:
+    input: f('{mat}', '.cdb')
+    output: f('{mat}', '.compared')
+    threads: lambda w: PLAN[w.mat]['threads']
+    priority: lambda w: PLAN[w.mat]['priority']
+    run:
+        step(wildcards, 'compare', 'matcompare {args} {threads}')
+        touch(output[0])
+
+
+rule crc:
+    input: f('{mat}', '.compared')
+    output: f('{mat}', '.crc')
+    run:
+        lines = step(wildcards, 'crc', 'matcrc {args}')
+        crc = next(x for x in lines if x.startswith('crc32c '))
+        wp, bp, wm, bm = wildcards.mat.split('-')
+        with open(output[0], 'w') as out:
+            out.write(f'{int(wp)} {int(bp)} {int(wm)} {int(bm)} {crc.split()[-1]}\n')
+
+
+rule finish:
+    input: f('{mat}', '.crc')
+    output: f('{mat}', '.done')
+    run:
+        for ext in ('.raw', '.raw.progress', '.ovf'):
+            if os.path.exists(f(wildcards.mat, ext)):
+                os.remove(f(wildcards.mat, ext))
+        touch(output[0])

@@ -103,6 +103,7 @@
 #include <omp.h>
 #define ZSTD_STATIC_LINKING_ONLY
 #include <zstd.h>
+#include <execution>
 #include "durable_file.hpp"
 
 namespace {
@@ -763,6 +764,90 @@ void solve_slice(Meta const& s, std::uint16_t* out)
                 if (out[i] == UNKNOWN16) out[i] = DRAW;
 }
 
+// ---------------------------------------------------------------- one slice by pull passes, in parallel
+//
+// The same values as solve_slice, for one big slice with all cores (std::execution::par, no other synchronisation).
+// Every round reads the values of the previous round and writes a new array, each position only its own entry:
+//   pass 0   as in solve_slice; besides the fastest exit win (ewin) also eloss, for a position whose exits all lose
+//            for the side to move (all lead to a win of the opponent): one more than the slowest of those wins
+//   n odd    an undecided position is won in n if its fastest exit wins in n or a king move reaches a position lost
+//            in n - 1
+//   n even   an undecided position whose exits all lose is lost if every king move reaches a won position; its DTM is
+//            the larger of eloss and one more than the slowest of those wins (it can exceed n, as in solve_slice)
+// Each round scans every undecided position (more work than the frontier of solve_slice), in chunks of 4096.
+
+void solve_slice_pull(Meta const& s, std::uint16_t* out)
+{
+        std::uint64_t const T = 2 * s.P;
+        std::vector<std::uint64_t> chunks;
+        for (std::uint64_t c = 0; c < T; c += 4096) chunks.push_back(c);
+        std::vector<std::uint16_t> cur(T), nxt(T), ewin(T, NONE16), eloss(T, NONE16);
+        auto const top = [](int a, int b) { return std::max(a, b); };
+        int maxd = std::transform_reduce(std::execution::par, chunks.begin(), chunks.end(), 0, top, [&](std::uint64_t c0) {
+                int md = 0;
+                for (std::uint64_t i = c0; i < std::min(T, c0 + 4096); ++i) {
+                        Pos const p = pos_of(s, i % s.P, int(i / s.P));
+                        int c = 0, ew = INF, el = 0;
+                        bool ed = false;
+                        for (auto const& mv : moves(p)) {
+                                if (internal_move(p, mv)) { ++c; continue; }
+                                std::uint16_t const v = lookup(mv.next);
+                                if (v == DRAW) ed = true;
+                                else if (v & 1) el = std::max(el, v + 1);
+                                else ew = std::min(ew, v + 1);
+                        }
+                        if (c == 0) {
+                                cur[i] = ew < INF ? std::uint16_t(ew) : ed ? DRAW : std::uint16_t(el);
+                                if (cur[i] != DRAW) md = std::max(md, int(cur[i]));
+                        } else {
+                                cur[i] = UNKNOWN16;
+                                if (ew < INF) { ewin[i] = std::uint16_t(ew); md = std::max(md, ew); }
+                                else if (!ed) eloss[i] = std::uint16_t(el);
+                        }
+                }
+                return md;
+        });
+        if (maxd >= 0xFF00) { std::cerr << "DTM overflow" << std::endl; std::abort(); }
+        for (int n = 1; n <= maxd + 1; ++n) {
+                bool const wins = n & 1;
+                std::uint16_t const prev = std::uint16_t(n - 1);
+                int const md = std::transform_reduce(std::execution::par, chunks.begin(), chunks.end(), 0, top, [&](std::uint64_t c0) {
+                        int md = 0;
+                        for (std::uint64_t i = c0; i < std::min(T, c0 + 4096); ++i) {
+                                std::uint16_t v = cur[i];
+                                if (v == UNKNOWN16 && (wins || eloss[i] != NONE16)) {
+                                        Pos const p = pos_of(s, i % s.P, int(i / s.P));
+                                        std::uint64_t const other = std::uint64_t(1 - p.stm) * s.P;
+                                        if (wins) {
+                                                bool won = ewin[i] == n;
+                                                for (auto const& mv : moves(p)) {
+                                                        if (won) break;
+                                                        if (internal_move(p, mv) && cur[other + index_of(s, mv.next)] == prev) won = true;
+                                                }
+                                                if (won) { v = std::uint16_t(n); md = std::max(md, n); }
+                                        } else {
+                                                int d = eloss[i];
+                                                bool lost = true;
+                                                for (auto const& mv : moves(p)) {
+                                                        if (!internal_move(p, mv)) continue;
+                                                        std::uint16_t const w = cur[other + index_of(s, mv.next)];
+                                                        if (w >= UNKNOWN16 || !(w & 1)) { lost = false; break; }
+                                                        d = std::max(d, int(w) + 1);
+                                                }
+                                                if (lost) { v = std::uint16_t(d); md = std::max(md, d); }
+                                        }
+                                }
+                                nxt[i] = v;
+                        }
+                        return md;
+                });
+                maxd = std::max(maxd, md);
+                if (maxd >= 0xFF00) { std::cerr << "DTM overflow" << std::endl; std::abort(); }
+                cur.swap(nxt);
+        }
+        for (std::uint64_t i = 0; i < T; ++i) out[i] = cur[i] == UNKNOWN16 ? DRAW : cur[i];
+}
+
 // ---------------------------------------------------------------- one slice solved by several threads
 //
 // A persistent pool of std::jthread workers (the calling thread takes part as worker 0), so that the per-thread caches
@@ -1392,8 +1477,34 @@ struct UnitMat {
         std::uint64_t size() const { return men * std::uint64_t(S) * P; }
 };
 
+// Material mode (the mat* commands): the store holds one file per material, 6x6-wp-bp-wm-bm (white pieces, black
+// pieces, white men, black men), each a .cdb with a material table of one entry. While only_mat is set, unit_layout and
+// unit_path for its (n, m) give that material and its file, so that the unit functions (build, verify, compress, ...)
+// work on it unchanged; store_open then opens the files of all finished materials.
+struct OnlyMat {
+        bool on = false;
+        int wm = 0, bm = 0, wk = 0, bk = 0;
+        int n() const { return wm + bm + wk + bk; }
+        int m() const { return wm + bm; }
+} only_mat;
+
+// a material as stored: at most 6 pieces and at least one per side, and not the colour mirror of a smaller one
+bool stored_material(int wm, int bm, int wk, int bk)
+{
+        if (wm < 0 || bm < 0 || wk < 0 || bk < 0 || wm + wk < 1 || bm + bk < 1 || wm + wk > 6 || bm + bk > 6) return false;
+        return !(std::tuple(bm, wm, bk, wk) < std::tuple(wm, bm, wk, bk));
+}
+
+std::vector<UnitMat> mat_layout(int wm, int bm, int wk, int bk)
+{
+        int const F = N - wm - bm;
+        bool const sym = std::tuple(wm, bm, wk, bk) == std::tuple(bm, wm, bk, wk);
+        return { UnitMat{ wm, bm, wk, bk, 0, men_count(wm, bm), binom[F][wk] * binom[F - wk][bk], sym ? 1 : 2 } };
+}
+
 std::vector<UnitMat> unit_layout(int n, int m)
 {
+        if (only_mat.on && n == only_mat.n() && m == only_mat.m()) return mat_layout(only_mat.wm, only_mat.bm, only_mat.wk, only_mat.bk);
         std::vector<UnitMat> v;
         std::uint64_t base = 0;
         for (int wm = 0; wm <= m; ++wm)
@@ -1501,8 +1612,16 @@ MatRef mat_ref[7][7][7][7];
 std::uint64_t next_unit_id = 1;
 std::uint64_t store_gen = 0;           // changes whenever the store is opened again (capture cache tag)
 
+std::string mat_path(std::string const& dir, int wm, int bm, int wk, int bk, char const* ext)
+{
+        char name[40];   // 6x6-wp-bp-wm-bm
+        std::snprintf(name, sizeof name, "/6x6-%02d-%02d-%02d-%02d", wm + wk, bm + bk, wm, bm);
+        return dir + name + ext;
+}
+
 std::string unit_path(std::string const& dir, int n, int m, char const* ext)
 {
+        if (only_mat.on && n == only_mat.n() && m == only_mat.m()) return mat_path(dir, only_mat.wm, only_mat.bm, only_mat.wk, only_mat.bk, ext);
         char name[32];   // 6x6-nn-mm: with leading zeros the names sort in build order
         std::snprintf(name, sizeof name, "/6x6-%02d-%02d", n, m);
         return dir + name + ext;
@@ -1571,6 +1690,22 @@ bool unit_before(int n1, int m1, int n2, int m2) { return n1 < n2 || (n1 == n2 &
 bool store_open(std::string const& dir, int n, int m, int own, bool partial = false)
 {
         store_close();
+        if (only_mat.on) {      // material mode: every finished material (a missing one answers "not in database")
+                OnlyMat const self = only_mat;
+                for (int wm = 0; wm <= 6; ++wm) for (int bm = 0; bm <= 6; ++bm) for (int wk = 0; wk <= 6; ++wk) for (int bk = 0; bk <= 6; ++bk) {
+                        if (!stored_material(wm, bm, wk, bk) || std::tuple(wm, bm, wk, bk) == std::tuple(self.wm, self.bm, self.wk, self.bk)) continue;
+                        if (::access(mat_path(dir, wm, bm, wk, bk, ".cdb").c_str(), R_OK) != 0) continue;
+                        only_mat = OnlyMat{ true, wm, bm, wk, bk };
+                        bool const ok = unit_open(dir, wm + bm + wk + bk, wm + bm, 3);
+                        only_mat = self;
+                        if (!ok) return false;
+                }
+                if (own >= 0 && !unit_open(dir, n, m, own)) return false;
+                store_on = true;
+                store_gen = next_unit_id;
+                slice_max = std::max(slice_max, 12);
+                return true;
+        }
         for (int a = 2; a <= 12; ++a)
                 for (int b = 0; b <= a; ++b) {
                         if (!unit_before(a, b, n, m)) continue;
@@ -1837,6 +1972,110 @@ std::uint64_t thread_bytes(std::uint64_t largest)
         return largest * 4 + largest / 8 + (std::uint64_t(1) << cache_bits) * (2 * BLOCK + 8) + CaptureCache::SLOTS * 26;
 }
 
+// Build the material of only_mat (material mode): its slices one wave (distance) at a time, every dependency read
+// from the finished materials or from earlier waves of this one. threads == 1: one slice after another (solve_slice).
+// threads > 1: the slices of a wave side by side (std::for_each with std::execution::par), and a big slice by itself
+// with all cores (solve_slice_pull). No other synchronisation: every slice writes only its own positions.
+bool mat_build(std::string const& dir, int threads)
+{
+        int const n = only_mat.n(), m = only_mat.m();
+        auto const lay = unit_layout(n, m);
+        std::uint64_t const npos = unit_positions(lay);
+        std::string const raw = unit_path(dir, n, m, ".raw"), prog = raw + ".progress";
+        std::size_t start = 0;
+        bool resume = false;
+        if (std::FILE* f = std::fopen(prog.c_str(), "r")) {
+                unsigned long long s = 0;
+                if (std::fscanf(f, "%llu", &s) == 1) { start = std::size_t(s); resume = true; }
+                std::fclose(f);
+        }
+        if (!store_open(dir, n, m, resume ? 2 : 1)) return false;
+        Unit& u = units.back();
+        if (!resume) {
+                std::memset(u.p, UNKNOWN8, std::size_t(npos));
+                write_progress(prog, "0\n");
+        }
+        std::vector<std::pair<int, std::uint64_t>> jobs;       // (distance, slice key), in build order
+        for (auto const& x : lay)
+                for (std::uint64_t r = 0; r < x.men; ++r) {
+                        bitboard wm, bm;
+                        men_unrank(x.wm, x.bm, r, wm, bm);
+                        Key const k{ wm, bm, x.wk, x.bk };
+                        if (x.S == 1 && !canonical_key(k)) continue;
+                        jobs.push_back({ distance(k), k.pack() });
+                }
+        std::sort(jobs.begin(), jobs.end());
+        std::cerr << "material " << only_mat.wm + only_mat.wk << "-" << only_mat.bm + only_mat.bk << "-" << only_mat.wm << "-" << only_mat.bm
+                  << ": " << jobs.size() << " slices, " << npos << " positions, " << threads << (threads == 1 ? " thread" : " threads")
+                  << (resume ? ", resuming after slice " + std::to_string(start) : std::string()) << std::endl;
+        auto const t0 = std::chrono::steady_clock::now();
+        std::string const ovf_path = unit_path(dir, n, m, ".ovf");
+        // write a solved slice (for a symmetric material the positions with black to move go to the mirrored slice);
+        // values above dtm8_max go to the slice's own overflow list
+        auto store = [&](std::size_t i, Meta const& s, std::vector<std::uint16_t> const& tmp, std::vector<std::uint64_t>& ovf) {
+                auto put = [&](std::uint64_t off, std::uint16_t v) {
+                        if (v == DRAW) return DRAW8;
+                        if (v > dtm8_max) { ovf.push_back(off << 16 | v); return ESC8; }
+                        return std::uint8_t(v);
+                };
+                std::uint64_t bad = 0;
+                MatRef const r = mat_of(pos_of(s, 0, 0));
+                std::uint64_t const base = stored_offset(r, pos_of(s, 0, 0));
+                for (std::uint64_t x = 0; x < std::uint64_t(r.S) * s.P; ++x) u.p[base + x] = put(base + x, tmp[x]);
+                if (r.S == 1)
+                        for (std::uint64_t x = 0; x < s.P; ++x) {
+                                Pos const q = mirror(pos_of(s, x, 1));
+                                std::uint64_t const o = stored_offset(r, q);
+                                std::uint8_t const b = put(o, tmp[s.P + x]);
+                                if (u.p[o] != UNKNOWN8 && u.p[o] != b && Key::unpack(jobs[i].second).pack() == key_of(q).pack()) ++bad;
+                                u.p[o] = b;
+                        }
+                return bad;
+        };
+        for (std::size_t g = start; g < jobs.size();) {
+                std::size_t h = g;
+                while (h < jobs.size() && jobs[h].first == jobs[g].first) ++h;
+                std::vector<std::vector<std::uint64_t>> ovf(h - g);
+                std::vector<std::uint64_t> bad(h - g, 0);
+                std::vector<std::size_t> big, small;
+                for (std::size_t i = g; i < h; ++i)
+                        (threads > 1 && 2 * meta_of(Key::unpack(jobs[i].second)).P >= BIG_SLICE ? big : small).push_back(i);
+                for (std::size_t i : big) {
+                        Meta const s = meta_of(Key::unpack(jobs[i].second));
+                        std::vector<std::uint16_t> tmp(2 * s.P);
+                        solve_slice_pull(s, tmp.data());
+                        bad[i - g] = store(i, s, tmp, ovf[i - g]);
+                }
+                auto solve = [&](std::size_t i) {
+                        Meta const s = meta_of(Key::unpack(jobs[i].second));
+                        std::vector<std::uint16_t> tmp(2 * s.P);
+                        solve_slice(s, tmp.data());
+                        bad[i - g] = store(i, s, tmp, ovf[i - g]);
+                };
+                if (threads > 1) std::for_each(std::execution::par, small.begin(), small.end(), solve);
+                else std::for_each(small.begin(), small.end(), solve);
+                std::uint64_t nbad = 0;
+                for (auto b : bad) nbad += b;
+                if (nbad) { std::cerr << "material: " << nbad << " mirrored positions disagree" << std::endl; return false; }
+                std::size_t const old = raw_ovf.size();
+                for (auto const& q : ovf) raw_ovf.insert(raw_ovf.end(), q.begin(), q.end());
+                std::sort(raw_ovf.begin() + std::ptrdiff_t(old), raw_ovf.end());
+                std::inplace_merge(raw_ovf.begin(), raw_ovf.begin() + std::ptrdiff_t(old), raw_ovf.end());
+                raw_ovf.erase(std::unique(raw_ovf.begin(), raw_ovf.end()), raw_ovf.end());
+                u.ovf = raw_ovf.data(); u.novf = raw_ovf.size();
+                ::msync(u.p, u.size, MS_SYNC);
+                if (!write_ovf(ovf_path, raw_ovf)) { std::cerr << "material: cannot write " << ovf_path << std::endl; return false; }
+                write_progress(prog, std::to_string(h) + "\n");
+                g = h;
+        }
+        std::uint64_t const unknown = std::uint64_t(std::count(u.p, u.p + npos, UNKNOWN8));
+        if (unknown) { std::cerr << "material: " << unknown << " positions without value" << std::endl; return false; }
+        write_progress(prog, std::to_string(jobs.size()) + " complete\n");
+        std::cout << "built " << only_mat.wm + only_mat.wk << " " << only_mat.bm + only_mat.bk << " " << only_mat.wm << " " << only_mat.bm
+                  << " positions " << npos << " slices " << jobs.size() << " overflow " << raw_ovf.size() << " seconds " << seconds_since(t0) << '\n';
+        return true;
+}
+
 bool unit_build(std::string const& dir, int n, int m, int threads, double mem_gb = 0)
 {
         auto const lay = unit_layout(n, m);
@@ -2089,13 +2328,26 @@ bool unit_values(std::string const& dir, int n, int m, int threads)
         if (!store_open(dir, n, m, 3)) return false;
         Unit const& u = units.back();
         std::vector<std::uint64_t> sum(std::size_t(threads), 0), cnt(std::size_t(threads), 0);
+        std::size_t const M = lay.size();
+        std::vector<std::uint64_t> msum(std::size_t(threads) * M, 0), mcnt(std::size_t(threads) * M, 0);
+        auto mix = [](std::uint64_t x) { x *= 0x9E3779B97F4A7C15ull; x ^= x >> 29; x *= 0xBF58476D1CE4E5B9ull; x ^= x >> 32; return x; };
         for_each_stored(lay, threads, "values", [&](Cursor const& cur, std::uint64_t off) {
-                if (has_capture(cur.pos())) return;
-                std::uint64_t x = (off << 16 | block_cache.value(u, off)) * 0x9E3779B97F4A7C15ull;
-                x ^= x >> 29; x *= 0xBF58476D1CE4E5B9ull; x ^= x >> 32;
+                Pos const q = cur.pos();
+                if (has_capture(q)) return;
+                std::uint16_t const v = block_cache.value(u, off);
                 std::size_t const t = std::size_t(omp_get_thread_num());
-                sum[t] += x; ++cnt[t];
+                sum[t] += mix(off << 16 | v); ++cnt[t];
+                PosKey const k = pack(q);       // keyed by the position, not its offset: the same in any layout
+                msum[t * M + cur.mi] += mix(mix(std::uint64_t(k)) ^ std::uint64_t(k >> 64) ^ (std::uint64_t(v) << 48)); ++mcnt[t * M + cur.mi];
         });
+        for (std::size_t mi = 0; mi < M; ++mi) {
+                std::uint64_t a = 0, b = 0;
+                for (int t = 0; t < threads; ++t) { a += msum[std::size_t(t) * M + mi]; b += mcnt[std::size_t(t) * M + mi]; }
+                char h[24];
+                std::snprintf(h, sizeof h, "%016llx", static_cast<unsigned long long>(a));
+                UnitMat const& x = lay[mi];
+                std::cout << "material " << x.wm + x.wk << " " << x.bm + x.bk << " " << x.wm << " " << x.bm << " positions " << b << " " << h << '\n';
+        }
         std::uint64_t s = 0, c = 0;
         for (int t = 0; t < threads; ++t) { s += sum[std::size_t(t)]; c += cnt[std::size_t(t)]; }
         char hex[24];
@@ -2374,6 +2626,32 @@ int main()
                         rs >> dir >> n >> m;
                         bool ok = unit_crc(dir, n, m);
                         std::cout << (ok ? "unitcrc ok" : "error unitcrc failed") << "\nend" << std::endl;
+                        continue;
+                }
+                if (cmd.rfind("mat", 0) == 0) {
+                        // material mode: mat<step> <dir> <wp> <bp> <wm> <bm> [raw|cdb] [threads]
+                        std::string dir, kind;
+                        int wp = 0, bp = 0, wm = 0, bm = 0, threads = 1;
+                        rs >> dir >> wp >> bp >> wm >> bm;
+                        if (cmd == "matverify") rs >> kind;
+                        rs >> threads;
+                        threads = std::max(threads, 1);
+                        bool ok = stored_material(wm, bm, wp - wm, bp - bm);
+                        if (!ok) std::cout << "error not a stored material " << wp << "-" << bp << "-" << wm << "-" << bm << '\n';
+                        else {
+                                only_mat = OnlyMat{ true, wm, bm, wp - wm, bp - bm };
+                                int const n = wp + bp, m = wm + bm;
+                                ok = cmd == "matbuild" ? mat_build(dir, threads)
+                                   : cmd == "matverify" ? unit_verify(dir, n, m, kind == "cdb", threads)
+                                   : cmd == "matcompress" ? unit_compress(dir, n, m, threads)
+                                   : cmd == "matcompare" ? unit_compare(dir, n, m, threads)
+                                   : cmd == "matcrc" ? unit_crc(dir, n, m)
+                                   : cmd == "matvalues" ? unit_values(dir, n, m, threads)
+                                   : cmd == "matmax" ? unit_max(dir, n, m, threads)
+                                   : (std::cout << "error unknown command " << cmd << '\n', false);
+                                only_mat = OnlyMat{};
+                        }
+                        std::cout << (ok ? cmd + " ok" : "error " + cmd + " failed") << "\nend" << std::endl;
                         continue;
                 }
                 if (cmd == "unitrecode") {

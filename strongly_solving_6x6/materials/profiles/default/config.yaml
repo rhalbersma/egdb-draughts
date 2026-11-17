@@ -1,0 +1,4 @@
+# settings for snakemake -s strongly_solving_6x6/materials/Snakefile
+rerun-incomplete: true       # a step that was interrupted runs again (an interrupted build continues from its checkpoint)
+rerun-triggers: [mtime]      # files made outside Snakemake (units_markers.py) have no Snakemake metadata
+cores: 4

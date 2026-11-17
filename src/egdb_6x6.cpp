@@ -80,6 +80,7 @@
 #include <condition_variable>
 #include <functional>
 #include <mutex>
+#include <numeric>
 #include <thread>
 #include <atomic>
 #include <chrono>
@@ -848,60 +849,63 @@ void solve_slice_pull(Meta const& s, std::uint16_t* out)
         for (std::uint64_t i = 0; i < T; ++i) out[i] = cur[i] == UNKNOWN16 ? DRAW : cur[i];
 }
 
-// ---------------------------------------------------------------- one slice: each round forward or retrograde
+// ---------------------------------------------------------------- one slice: each round forward or retrograde, on work lists
 //
-// The same values as solve_slice. As Chinook and Ed Gilbert observed, forward rounds are cheaper while many positions
-// are still being decided and retrograde rounds once the frontiers are thin; here every round is done whichever way is
-// cheaper. With par, every round is a parallel algorithm (std::execution::par); without, the same code runs sequentially.
-//   forward round n    every undecided position looks at its own moves (as solve_slice_pull): won in n (odd n) if
-//                      its fastest exit wins in n or a king move reaches a loss in n - 1; lost (even n) if its exits
-//                      all lose and every king move reaches a win. Each position writes only its own entry.
-//   retrograde round n the frontier (positions with value n - 1, found by a scan) generates its predecessors (king
-//                      unmoves): odd n, an undecided predecessor is won in n; even n, an undecided predecessor whose
-//                      exits all lose becomes a candidate, verified by its own moves as in solve_slice. Concurrent
-//                      writers of the same predecessor write the same value (relaxed std::atomic_ref stores).
-// Both decide the same positions with the same values in the same array (except that a forward loss round can decide
-// a loss early, when its slowest successor was decided in pass 0), so the least work for a slice is the cheaper way in
-// every round. Before each round both costs are estimated from exact counts: U the positions the forward round examines
-// (odd n: all undecided; even n: the undecided whose exits all lose) and F the frontier (the positions with value n - 1).
-// In units of one examined forward position (decode, generate moves, look up king moves):
-//      forward    k_f + a_f T + U
-//      retrograde k_r + a_r T + r_w F (odd n), k_r + a_r T + r_l F (even n: predecessors and loss candidates)
-// with k the fixed cost of a round and a T its scans of the whole slice. The constants are measured with EGDB_PROFILE
-// (strongly_solving_6x6/materials/switch.py); EGDB_COSTS="k_f k_r a_f a_r r_w r_l" overrides them. EGDB_SWITCH:
-// "forward" or "retrograde" in every round (tests).
-// EGDB_SWITCH=counting: win rounds retrograde, loss rounds with counts (see counting below).
-// EGDB_PROFILE=file: every round is done every way from the same state (forward, retrograde, and for loss rounds
-// retrograde with counts, which is then followed), timed and checked; one line per round:
-//      wp bp wm bm slice T n U F edges candidates forward_ns retrograde_ns counting_ns
+// The same values as solve_slice. Pass 0 looks up every move that leaves the slice (man moves, captures, promotions):
+// a position without a king move inside the slice (every position with a capture, as captures are compulsory) is
+// decided at once and is final. After pass 0 only two kinds of positions take part, both kept in work lists, so that
+// no round scans the slice:
+//   the frontier of round n, the positions with value n - 1 (lists by value; every position is a frontier once);
+//   the undecided positions (two lists: those whose exits all lose, which can still be lost, and the others).
+// Per undecided position: ex, the value through its best exit (odd: won in ex through an exit; even: its exits all
+// lose, the slowest in ex; NONE16: an exit draws), and cnt, its king moves not known to reach a win of value at most
+// n - 1. Round n (odd n: wins in n; even n: losses) goes either way, with exactly the same result:
+//   forward     every undecided position (even n: whose exits all lose) looks at its own king moves. Odd n: won if
+//               ex = n or a king move reaches a loss in n - 1. Even n: lost in max(ex, slowest win + 1) if every king
+//               move reaches a win of value at most n - 1; otherwise its count is set to the king moves that do not.
+//   retrograde  the frontier generates its predecessors (king unmoves). Odd n: an undecided predecessor is won in n,
+//               and so is every undecided position with ex = n. Even n: the count of an undecided predecessor whose
+//               exits all lose goes down by one; at zero it is lost in max(ex, n) (counts as in Gasser 1996; the wins
+//               are counted in increasing value, so the last one has value n - 1).
+// Before each round the cheaper way is estimated from exact counts, U the undecided positions a forward round examines
+// and F the frontier, in units of one examined forward position (decode, generate moves, look up the king moves):
+//      forward k_f + U,  retrograde k_r + r_w F (odd n) or k_r + r_l F (even n)
+// The constants are measured with EGDB_PROFILE (strongly_solving_6x6/materials/switch.py); EGDB_COSTS="k_f k_r r_w r_l"
+// overrides them. EGDB_SWITCH: "forward" or "retrograde" in every round (tests). With par, every round is a parallel
+// algorithm (std::execution::par): concurrent writers of a position write the same value (relaxed std::atomic_ref
+// compare-exchange, and only the winner lists it); a count reaches zero for exactly one decrement (relaxed fetch_sub).
+// EGDB_PROFILE=file: every round is done both ways from the same state, timed, checked equal (values and counts), and
+// the retrograde way is followed; one line per round:
+//      wp bp wm bm slice T n U F edges 0 forward_ns retrograde_ns
 
 struct Tally {
         int maxd = 0;
-        std::uint64_t wins = 0, losses = 0, open = 0, count = 0, edges = 0, cands = 0;
+        std::uint64_t decided = 0, lossable = 0, edges = 0;    // positions decided, of which with all exits lost
         friend Tally operator+(Tally a, Tally const& b)
         {
-                a.maxd = std::max(a.maxd, b.maxd); a.wins += b.wins; a.losses += b.losses; a.open += b.open;
-                a.count += b.count; a.edges += b.edges; a.cands += b.cands;
+                a.maxd = std::max(a.maxd, b.maxd); a.decided += b.decided; a.lossable += b.lossable; a.edges += b.edges;
                 return a;
         }
 };
 
 template<class F>
-Tally over(bool par, std::vector<std::uint64_t> const& items, F&& f)
+Tally over(bool par, std::size_t n, F&& f)              // f(k) for every k in [0, n), summed
 {
-        return par ? std::transform_reduce(std::execution::par, items.begin(), items.end(), Tally{}, std::plus<>{}, f)
-                   : std::transform_reduce(items.begin(), items.end(), Tally{}, std::plus<>{}, f);
+        std::vector<std::size_t> ids(n);
+        std::iota(ids.begin(), ids.end(), std::size_t(0));
+        return par ? std::transform_reduce(std::execution::par, ids.begin(), ids.end(), Tally{}, std::plus<>{}, f)
+                   : std::transform_reduce(ids.begin(), ids.end(), Tally{}, std::plus<>{}, f);
 }
 
-struct Costs { double k_f, k_r, a_f, a_r, r_w, r_l; };
+struct Costs { double k_f, k_r, r_w, r_l; };
 Costs const costs = [] {
-        Costs c{ 0.0, 0.0, 0.0, 0.0, 1.0, 1.0 };
-        if (char const* e = std::getenv("EGDB_COSTS")) std::sscanf(e, "%lf %lf %lf %lf %lf %lf", &c.k_f, &c.k_r, &c.a_f, &c.a_r, &c.r_w, &c.r_l);
+        Costs c{ 0.0, 0.0, 1.0, 1.0 };
+        if (char const* e = std::getenv("EGDB_COSTS")) std::sscanf(e, "%lf %lf %lf %lf", &c.k_f, &c.k_r, &c.r_w, &c.r_l);
         return c;
 }();
 int const switch_mode = [] {
         char const* e = std::getenv("EGDB_SWITCH");
-        return !e ? 0 : std::string(e) == "forward" ? 1 : std::string(e) == "retrograde" ? 2 : std::string(e) == "counting" ? 3 : 0;
+        return !e ? 0 : std::string(e) == "forward" ? 1 : std::string(e) == "retrograde" ? 2 : 0;
 }();
 std::atomic<std::uint64_t> forward_rounds{0}, retrograde_rounds{0}, slice_ids{0};
 std::FILE* const profile_file = [] { char const* e = std::getenv("EGDB_PROFILE"); return e ? std::fopen(e, "a") : nullptr; }();
@@ -911,18 +915,18 @@ std::mutex profile_mutex;
 void solve_slice_hybrid(Meta const& s, std::uint16_t* out, bool par)
 {
         static_assert(std::atomic_ref<std::uint16_t>::is_always_lock_free && std::atomic_ref<std::uint8_t>::is_always_lock_free);
-        std::uint64_t const T = 2 * s.P, CH = 4096;
-        std::vector<std::uint64_t> chunks;
-        for (std::uint64_t c = 0; c < T; c += CH) chunks.push_back(c);
-        auto const end_of = [&](std::uint64_t c0) { return std::min(T, c0 + CH); };
-        std::vector<std::uint16_t> cur(T), nxt(T), ewin(T, NONE16), eloss(T, NONE16);
-        std::vector<std::uint8_t> cnt(T);       // king moves not (yet) known to reach a win (at most 6 kings x 9 moves)
+        std::uint64_t const T = 2 * s.P;
+        std::size_t const B = 4096;                             // positions or list entries per parallel task
+        if (T >> 32) { std::cerr << "slice too large for 32-bit work lists" << std::endl; std::abort(); }
+        auto const blocks = [&](std::size_t n) { return (n + B - 1) / B; };
         auto const pos = [&](std::uint64_t i) { return pos_of(s, i % s.P, int(i / s.P)); };
+        std::vector<std::uint16_t> cur(T), ex(T, NONE16);
+        std::vector<std::uint8_t> cnt(T);                       // at most 6 kings x 9 moves
         auto const at = [&](std::uint64_t i) { return std::atomic_ref<std::uint16_t>(cur[i]); };
         // pass 0: exits looked up; positions without king moves decided at once
-        Tally const t0 = over(par, chunks, [&](std::uint64_t c0) {
+        int maxd = over(par, blocks(T), [&](std::size_t k) {
                 Tally t;
-                for (std::uint64_t i = c0; i < end_of(c0); ++i) {
+                for (std::uint64_t i = k * B; i < std::min<std::uint64_t>(T, k * B + B); ++i) {
                         Pos const p = pos(i);
                         int c = 0, ew = INF, el = 0;
                         bool ed = false;
@@ -939,208 +943,165 @@ void solve_slice_hybrid(Meta const& s, std::uint16_t* out, bool par)
                         } else {
                                 cur[i] = UNKNOWN16;
                                 cnt[i] = std::uint8_t(c);
-                                ++t.open;
-                                if (ew < INF) { ewin[i] = std::uint16_t(ew); t.maxd = std::max(t.maxd, ew); }
-                                else if (!ed) eloss[i] = std::uint16_t(el);
+                                ex[i] = ew < INF ? std::uint16_t(ew) : ed ? NONE16 : std::uint16_t(el);
+                                if (ew < INF) t.maxd = std::max(t.maxd, ew);
                         }
                 }
                 return t;
-        });
-        int maxd = t0.maxd;
-        std::uint64_t open = t0.open;
-        std::vector<std::uint8_t> mark;
-        std::vector<std::vector<std::uint64_t>> front(chunks.size()), found(chunks.size());
-        std::vector<std::uint64_t> ids(chunks.size());
-        for (std::uint64_t k = 0; k < ids.size(); ++k) ids[k] = k;
-        auto const count = [&](auto const& pred) {
-                return over(par, chunks, [&](std::uint64_t c0) { Tally r; for (std::uint64_t i = c0; i < end_of(c0); ++i) r.count += pred(i); return r; }).count;
+        }).maxd;
+        // the work lists
+        std::vector<std::vector<std::uint32_t>> front(std::size_t(maxd) + 2);  // by value, until they are a frontier
+        std::vector<std::vector<std::uint32_t>> exits(std::size_t(maxd) + 2);  // undecided, won through an exit in ex
+        std::vector<std::uint32_t> lossable, others;                            // undecided: ex even, and the others
+        for (std::uint64_t i = 0; i < T; ++i) {
+                if (cur[i] == UNKNOWN16) {
+                        (ex[i] & 1 ? others : lossable).push_back(std::uint32_t(i));
+                        if (ex[i] != NONE16 && (ex[i] & 1)) exits[ex[i]].push_back(std::uint32_t(i));
+                } else if (cur[i] != DRAW) front[cur[i]].push_back(std::uint32_t(i));
+        }
+        std::uint64_t open = lossable.size() + others.size(), open_l = lossable.size();
+        std::vector<std::vector<std::uint64_t>> got, keep;      // per task: decided (value << 32 | position), kept
+        auto const tasks = [&](std::size_t n) { if (got.size() < n) got.resize(n); if (keep.size() < n) keep.resize(n); };
+        auto const decide = [&](Tally& r, std::size_t k, std::uint32_t i, int d) {
+                got[k].push_back(std::uint64_t(d) << 32 | i);
+                ++r.decided; r.lossable += !(ex[i] & 1); r.maxd = std::max(r.maxd, d);
         };
-        // forward round n: from cur into nxt (cur unchanged); count = the positions examined
+        auto const merge = [&] {                                // the decided positions into the lists by value
+                for (auto& g : got) {
+                        for (std::uint64_t x : g) {
+                                std::size_t const d = std::size_t(x >> 32);
+                                if (d >= front.size()) front.resize(d + 1);
+                                front[d].push_back(std::uint32_t(x));
+                        }
+                        g.clear();
+                }
+        };
+        // forward round n (in place: a position written in this round reads the same as before for the others); the
+        // lists it walks are compacted on the way
         auto const forward = [&](int n) {
                 bool const wins = n & 1;
                 std::uint16_t const prev = std::uint16_t(n - 1);
-                return over(par, chunks, [&](std::uint64_t c0) {
-                        Tally r;
-                        for (std::uint64_t i = c0; i < end_of(c0); ++i) {
-                                std::uint16_t v = cur[i];
-                                if (v == UNKNOWN16 && (wins || eloss[i] != NONE16)) {
-                                        ++r.count;
+                Tally t;
+                for (std::vector<std::uint32_t>* list : { &lossable, &others }) {
+                        if (!wins && list == &others) break;
+                        std::size_t const nb = blocks(list->size());
+                        tasks(nb);
+                        t = t + over(par, nb, [&](std::size_t k) {
+                                Tally r;
+                                for (std::size_t j = k * B; j < std::min(list->size(), k * B + B); ++j) {
+                                        std::uint32_t const i = (*list)[j];
+                                        if (at(i).load(std::memory_order_relaxed) != UNKNOWN16) continue;
                                         Pos const p = pos(i);
                                         std::uint64_t const other = std::uint64_t(1 - p.stm) * s.P;
                                         if (wins) {
-                                                bool won = ewin[i] == n;
+                                                bool won = ex[i] == n;
                                                 for (auto const& mv : moves(p)) {
                                                         if (won) break;
-                                                        if (internal_move(p, mv) && cur[other + index_of(s, mv.next)] == prev) won = true;
+                                                        if (internal_move(p, mv) && at(other + index_of(s, mv.next)).load(std::memory_order_relaxed) == prev) won = true;
                                                 }
-                                                if (won) { v = std::uint16_t(n); r.maxd = std::max(r.maxd, n); }
+                                                if (won) { at(i).store(std::uint16_t(n), std::memory_order_relaxed); decide(r, k, i, n); continue; }
                                         } else {
-                                                int d = eloss[i];
-                                                bool lost = true;
+                                                int d = ex[i], c = 0;
                                                 for (auto const& mv : moves(p)) {
                                                         if (!internal_move(p, mv)) continue;
-                                                        std::uint16_t const w = cur[other + index_of(s, mv.next)];
-                                                        if (w >= UNKNOWN16 || !(w & 1)) { lost = false; break; }
-                                                        d = std::max(d, int(w) + 1);
+                                                        std::uint16_t const w = at(other + index_of(s, mv.next)).load(std::memory_order_relaxed);
+                                                        if (w < UNKNOWN16 && (w & 1) && w <= prev) d = std::max(d, int(w) + 1);
+                                                        else ++c;
                                                 }
-                                                if (lost) { v = std::uint16_t(d); r.maxd = std::max(r.maxd, d); }
+                                                if (c == 0) { at(i).store(std::uint16_t(d), std::memory_order_relaxed); decide(r, k, i, d); continue; }
+                                                cnt[i] = std::uint8_t(c);
                                         }
-                                }
-                                r.open += v == UNKNOWN16;
-                                nxt[i] = v;
-                        }
-                        return r;
-                });
-        };
-        // retrograde round n: in place in cur; edges = the predecessors generated, cands = the loss candidates verified
-        auto const frontier = [&](std::uint16_t prev) {        // the positions with value prev (per chunk)
-                over(par, ids, [&](std::uint64_t k) {
-                        front[k].clear();
-                        for (std::uint64_t i = chunks[k]; i < end_of(chunks[k]); ++i) if (cur[i] == prev) front[k].push_back(i);
-                        return Tally{};
-                });
-        };
-        auto const retrograde = [&](int n) {
-                bool const wins = n & 1;
-                std::uint16_t const prev = std::uint16_t(n - 1);
-                if (mark.empty()) mark.assign(T, 0);
-                frontier(prev);
-                Tally t;
-                if (wins) {
-                        t = over(par, ids, [&](std::uint64_t k) {
-                                Tally r;
-                                for (std::uint64_t i : front[k])
-                                        for_each_predecessor(s, pos(i), [&](std::uint64_t j) {
-                                                ++r.edges;
-                                                if (at(j).load(std::memory_order_relaxed) != UNKNOWN16) return;
-                                                at(j).store(std::uint16_t(n), std::memory_order_relaxed);
-                                                r.maxd = n;
-                                        });
-                                return r;
-                        });
-                        t = t + over(par, chunks, [&](std::uint64_t c0) {     // wins through exits; count
-                                Tally r;
-                                for (std::uint64_t i = c0; i < end_of(c0); ++i) {
-                                        if (cur[i] == UNKNOWN16 && ewin[i] == n) { cur[i] = std::uint16_t(n); r.maxd = n; }
-                                        r.open += cur[i] == UNKNOWN16;
+                                        keep[k].push_back(i);
                                 }
                                 return r;
                         });
-                } else {
-                        t = over(par, ids, [&](std::uint64_t k) {
-                                Tally r;
-                                for (std::uint64_t i : front[k])
-                                        for_each_predecessor(s, pos(i), [&](std::uint64_t j) {
-                                                ++r.edges;
-                                                if (cur[j] == UNKNOWN16 && eloss[j] != NONE16) std::atomic_ref<std::uint8_t>(mark[j]).store(1, std::memory_order_relaxed);
-                                        });
-                                return r;
-                        });
-                        t = t + over(par, ids, [&](std::uint64_t k) {  // verify the candidates; results applied after
-                                Tally r;
-                                found[k].clear();
-                                for (std::uint64_t i = chunks[k]; i < end_of(chunks[k]); ++i) {
-                                        if (!mark[i]) continue;
-                                        mark[i] = 0;
-                                        ++r.cands;
-                                        Pos const p = pos(i);
-                                        std::uint64_t const other = std::uint64_t(1 - p.stm) * s.P;
-                                        int d = eloss[i];
-                                        bool lost = true;
-                                        for (auto const& mv : moves(p)) {
-                                                if (!internal_move(p, mv)) continue;
-                                                std::uint16_t const w = cur[other + index_of(s, mv.next)];
-                                                if (w >= UNKNOWN16 || !(w & 1)) { lost = false; break; }
-                                                d = std::max(d, int(w) + 1);
-                                        }
-                                        if (lost) { found[k].push_back(i << 16 | std::uint64_t(d)); r.maxd = std::max(r.maxd, d); ++r.losses; }
-                                }
-                                return r;
-                        });
-                        for (auto const& f : found) for (std::uint64_t x : f) cur[x >> 16] = std::uint16_t(x & 0xFFFF);
-                        t.open = open - t.losses;
+                        list->clear();
+                        for (std::size_t k = 0; k < nb; ++k) { for (std::uint64_t x : keep[k]) list->push_back(std::uint32_t(x)); keep[k].clear(); }
                 }
                 return t;
         };
-        // retrograde loss round n with counts (Gasser 1996): every king move from a predecessor of a win in n - 1 reaches
-        // a win; when none is left (count zero) and its exits all lose, the predecessor is lost in max(eloss, n) (the
-        // wins are counted in increasing value, so the last one has value n - 1). Exact only if every loss round counts.
-        auto const counting = [&](int n) {
-                frontier(std::uint16_t(n - 1));
-                Tally t = over(par, ids, [&](std::uint64_t k) {
+        // retrograde round n from the frontier (the positions with value n - 1)
+        auto const retrograde = [&](int n) {
+                bool const wins = n & 1;
+                std::vector<std::uint32_t> const& F = front[std::size_t(n - 1)];
+                std::size_t const nb = blocks(F.size());
+                tasks(nb);
+                Tally t = over(par, nb, [&](std::size_t k) {
                         Tally r;
-                        for (std::uint64_t i : front[k])
-                                for_each_predecessor(s, pos(i), [&](std::uint64_t j) {
+                        for (std::size_t j = k * B; j < std::min(F.size(), k * B + B); ++j)
+                                for_each_predecessor(s, pos(F[j]), [&](std::uint64_t i) {
                                         ++r.edges;
-                                        if (eloss[j] == NONE16 || at(j).load(std::memory_order_relaxed) != UNKNOWN16) return;
-                                        if (std::atomic_ref<std::uint8_t>(cnt[j]).fetch_sub(1, std::memory_order_relaxed) != 1) return;
-                                        int const d = std::max(int(eloss[j]), n);
-                                        at(j).store(std::uint16_t(d), std::memory_order_relaxed);
-                                        r.maxd = std::max(r.maxd, d);
-                                        ++r.losses;
+                                        if (wins) {
+                                                std::uint16_t e = UNKNOWN16;
+                                                if (at(i).load(std::memory_order_relaxed) != UNKNOWN16
+                                                    || !at(i).compare_exchange_strong(e, std::uint16_t(n), std::memory_order_relaxed)) return;
+                                                decide(r, k, std::uint32_t(i), n);
+                                        } else {
+                                                if ((ex[i] & 1) || at(i).load(std::memory_order_relaxed) != UNKNOWN16) return;
+                                                if (std::atomic_ref<std::uint8_t>(cnt[i]).fetch_sub(1, std::memory_order_relaxed) != 1) return;
+                                                int const d = std::max(int(ex[i]), n);
+                                                at(i).store(std::uint16_t(d), std::memory_order_relaxed);
+                                                decide(r, k, std::uint32_t(i), d);
+                                        }
                                 });
                         return r;
                 });
-                t.open = open - t.losses;
+                if (wins && std::size_t(n) < exits.size()) {   // wins through an exit in n
+                        std::vector<std::uint32_t> const& X = exits[std::size_t(n)];
+                        std::size_t const nx = blocks(X.size());
+                        tasks(nx);
+                        t = t + over(par, nx, [&](std::size_t k) {
+                                Tally r;
+                                for (std::size_t j = k * B; j < std::min(X.size(), k * B + B); ++j) {
+                                        std::uint16_t e = UNKNOWN16;
+                                        if (at(X[j]).compare_exchange_strong(e, std::uint16_t(n), std::memory_order_relaxed)) decide(r, k, X[j], n);
+                                }
+                                return r;
+                        });
+                }
                 return t;
         };
         std::uint64_t const id = slice_ids++;
         for (int n = 1; n <= maxd + 1 && open > 0; ++n) {      // no undecided position left: nothing more to decide
                 bool const wins = n & 1;
-                std::uint16_t const prev = std::uint16_t(n - 1);
+                if (std::size_t(n) > front.size()) front.resize(std::size_t(n));
+                std::uint64_t const F = front[std::size_t(n - 1)].size(), U = wins ? open : open_l;
                 Tally t;
-                if (profile_file) {             // every way from the same state, timed, checked; the counting way is followed
-                        std::uint64_t const F = count([&](std::uint64_t i) { return cur[i] == prev; });
-                        std::vector<std::uint16_t> verified;
-                        if (!wins) verified = cur;
+                if (profile_file) {             // both ways from the same state, timed, checked equal; retrograde followed
+                        std::vector<std::uint16_t> fcur = cur;
+                        std::vector<std::uint8_t> fcnt = cnt;
+                        std::swap(cur, fcur);   // forward on a copy of the state
+                        std::swap(cnt, fcnt);
                         auto const t0 = std::chrono::steady_clock::now();
-                        Tally const f = forward(n);
+                        forward(n);
                         auto const t1 = std::chrono::steady_clock::now();
-                        t = retrograde(n);
+                        for (auto& g : got) g.clear();
+                        std::swap(cur, fcur);
+                        std::swap(cnt, fcnt);
                         auto const t2 = std::chrono::steady_clock::now();
-                        auto t3 = t2;
-                        if (!wins) {            // the same loss round with counts, from the same state
-                                std::swap(cur, verified);
-                                Tally const tc = counting(n);
-                                t3 = std::chrono::steady_clock::now();
-                                if (cur != verified) { std::cerr << "error: counting and verifying round " << n << " differ" << std::endl; std::abort(); }
-                                t.open = tc.open; t.maxd = tc.maxd;
-                        }
-                        // equal, except that a forward loss round can decide a loss early (value above n) that the
-                        // retrograde rounds decide in the round of its value (when its slowest successor is a frontier)
-                        for (std::uint64_t i = 0; i < T; ++i)
-                                if (cur[i] != nxt[i] && !(!wins && cur[i] == UNKNOWN16 && nxt[i] < UNKNOWN16 && nxt[i] > n)) {
-                                        std::cerr << "error: forward and retrograde round " << n << " differ" << std::endl;
-                                        std::abort();
-                                }
+                        t = retrograde(n);
+                        auto const t3 = std::chrono::steady_clock::now();
+                        bool same = cur == fcur;
+                        if (!wins) for (std::uint32_t i : lossable) same = same && (cur[i] != UNKNOWN16 || cnt[i] == fcnt[i]);
+                        if (!same) { std::cerr << "error: forward and retrograde round " << n << " differ" << std::endl; std::abort(); }
                         auto const ns = [](auto d) { return (long long)std::chrono::duration_cast<std::chrono::nanoseconds>(d).count(); };
                         std::lock_guard<std::mutex> lock(profile_mutex);
-                        std::fprintf(profile_file, "%s %llu %llu %d %llu %llu %llu %llu %lld %lld %lld\n", profile_tag.c_str(),
-                                     (unsigned long long)id, (unsigned long long)T, n, (unsigned long long)f.count, (unsigned long long)F,
-                                     (unsigned long long)t.edges, (unsigned long long)t.cands, ns(t1 - t0), ns(t2 - t1),
-                                     wins ? ns(t2 - t1) : ns(t3 - t2));
+                        std::fprintf(profile_file, "%s %llu %llu %d %llu %llu %llu 0 %lld %lld\n", profile_tag.c_str(),
+                                     (unsigned long long)id, (unsigned long long)T, n, (unsigned long long)U, (unsigned long long)F,
+                                     (unsigned long long)t.edges, ns(t1 - t0), ns(t3 - t2));
                         std::fflush(profile_file);
                 } else {
-                        bool retro = switch_mode == 2;
-                        if (switch_mode == 0) {         // one scan: F (count) and, for a loss round, U (open)
-                                Tally const c = over(par, chunks, [&](std::uint64_t c0) {
-                                        Tally r;
-                                        for (std::uint64_t i = c0; i < end_of(c0); ++i) {
-                                                r.count += cur[i] == prev;
-                                                r.open += cur[i] == UNKNOWN16 && eloss[i] != NONE16;
-                                        }
-                                        return r;
-                                });
-                                double const F = double(c.count), U = double(wins ? open : c.open);
-                                retro = costs.k_r + costs.a_r * double(T) + (wins ? costs.r_w : costs.r_l) * F < costs.k_f + costs.a_f * double(T) + U;
-                        }
-                        if (switch_mode == 3) { ++retrograde_rounds; t = wins ? retrograde(n) : counting(n); }
-                        else if (retro) { ++retrograde_rounds; t = retrograde(n); }
-                        else { ++forward_rounds; t = forward(n); cur.swap(nxt); }
+                        bool const retro = switch_mode == 2 || (switch_mode == 0
+                                && costs.k_r + (wins ? costs.r_w : costs.r_l) * double(F) < costs.k_f + double(U));
+                        if (retro) { ++retrograde_rounds; t = retrograde(n); }
+                        else { ++forward_rounds; t = forward(n); }
                 }
+                merge();
                 maxd = std::max(maxd, t.maxd);
                 if (maxd >= 0xFF00) { std::cerr << "DTM overflow" << std::endl; std::abort(); }
-                open = t.open;
+                open -= t.decided;
+                open_l -= t.lossable;
+                std::vector<std::uint32_t>().swap(front[std::size_t(n - 1)]);   // a frontier only once
         }
         for (std::uint64_t i = 0; i < T; ++i) out[i] = cur[i] == UNKNOWN16 ? DRAW : cur[i];
 }

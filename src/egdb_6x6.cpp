@@ -1054,7 +1054,7 @@ void solve_slice_hybrid(Meta const& s, std::uint16_t* out, bool par)
         };
         std::uint64_t const id = slice_ids++;
         bool retro = switch_mode == 2;
-        for (int n = 1; n <= maxd + 1; ++n) {
+        for (int n = 1; n <= maxd + 1 && open > 0; ++n) {      // no undecided position left: nothing more to decide
                 bool const wins = n & 1;
                 std::uint16_t const prev = std::uint16_t(n - 1);
                 Tally t;

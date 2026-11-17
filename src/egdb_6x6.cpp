@@ -848,6 +848,209 @@ void solve_slice_pull(Meta const& s, std::uint16_t* out)
         for (std::uint64_t i = 0; i < T; ++i) out[i] = cur[i] == UNKNOWN16 ? DRAW : cur[i];
 }
 
+// ---------------------------------------------------------------- one slice: forward passes, then retrograde passes
+//
+// The same values as solve_slice, by the method of Chinook and Ed Gilbert: forward passes while many positions are
+// still being decided, then (once) retrograde passes from the thin frontiers. With par, every pass is a parallel
+// algorithm (std::execution::par); without, the same code runs sequentially.
+//   forward round n    every undecided position looks at its own moves (as solve_slice_pull): won in n (odd n) if
+//                      its fastest exit wins in n or a king move reaches a loss in n - 1; lost (even n) if its exits
+//                      all lose and every king move reaches a win. Each position writes only its own entry.
+//   retrograde round n the frontier (positions with value n - 1, found by a scan) generates its predecessors (king
+//                      unmoves): odd n, an undecided predecessor is won in n; even n, an undecided predecessor whose
+//                      exits all lose becomes a candidate, verified by its own moves as in solve_slice. Concurrent
+//                      writers of the same predecessor write the same value (relaxed std::atomic_ref stores).
+// Switch (before an odd round, once): with U undecided positions, F_W and F_L the wins and losses decided in the
+// previous rounds, rho_W = F_W / U, rho_L = F_L / U, kappa = (b_f c_f) / (b_b c_b) (forward / backward branching
+// times work per edge; EGDB_KAPPA, default 1) and g = gamma b_b the loss candidates per new win (sampled), a forward
+// pair of rounds costs U b_f c_f and a retrograde pair (F_W + F_L) b_b c_b + gamma F_W b_b b_f c_f, so
+//      switch when (rho_W + rho_L) / kappa + g rho_W < 1.
+// EGDB_SWITCH: "forward" never switches, "retrograde" switches before round 1 (tests).
+
+struct Tally {
+        int maxd = 0;
+        std::uint64_t wins = 0, losses = 0, open = 0, edges = 0;
+        friend Tally operator+(Tally a, Tally const& b)
+        {
+                a.maxd = std::max(a.maxd, b.maxd); a.wins += b.wins; a.losses += b.losses; a.open += b.open; a.edges += b.edges;
+                return a;
+        }
+};
+
+template<class F>
+Tally over(bool par, std::vector<std::uint64_t> const& items, F&& f)
+{
+        return par ? std::transform_reduce(std::execution::par, items.begin(), items.end(), Tally{}, std::plus<>{}, f)
+                   : std::transform_reduce(items.begin(), items.end(), Tally{}, std::plus<>{}, f);
+}
+
+double const kappa = [] { char const* e = std::getenv("EGDB_KAPPA"); return e ? std::atof(e) : 1.0; }();
+int const switch_mode = [] { char const* e = std::getenv("EGDB_SWITCH"); return !e ? 0 : std::string(e) == "forward" ? 1 : std::string(e) == "retrograde" ? 2 : 0; }();
+std::atomic<std::uint64_t> forward_rounds{0}, retrograde_rounds{0};
+
+void solve_slice_hybrid(Meta const& s, std::uint16_t* out, bool par)
+{
+        static_assert(std::atomic_ref<std::uint16_t>::is_always_lock_free && std::atomic_ref<std::uint8_t>::is_always_lock_free);
+        std::uint64_t const T = 2 * s.P, CH = 4096;
+        std::vector<std::uint64_t> chunks;
+        for (std::uint64_t c = 0; c < T; c += CH) chunks.push_back(c);
+        auto const end_of = [&](std::uint64_t c0) { return std::min(T, c0 + CH); };
+        std::vector<std::uint16_t> cur(T), nxt(T), ewin(T, NONE16), eloss(T, NONE16);
+        auto const pos = [&](std::uint64_t i) { return pos_of(s, i % s.P, int(i / s.P)); };
+        auto const at = [&](std::uint64_t i) { return std::atomic_ref<std::uint16_t>(cur[i]); };
+        // pass 0: exits looked up; positions without king moves decided at once
+        Tally const t0 = over(par, chunks, [&](std::uint64_t c0) {
+                Tally t;
+                for (std::uint64_t i = c0; i < end_of(c0); ++i) {
+                        Pos const p = pos(i);
+                        int c = 0, ew = INF, el = 0;
+                        bool ed = false;
+                        for (auto const& mv : moves(p)) {
+                                if (internal_move(p, mv)) { ++c; continue; }
+                                std::uint16_t const v = lookup(mv.next);
+                                if (v == DRAW) ed = true;
+                                else if (v & 1) el = std::max(el, v + 1);
+                                else ew = std::min(ew, v + 1);
+                        }
+                        if (c == 0) {
+                                cur[i] = ew < INF ? std::uint16_t(ew) : ed ? DRAW : std::uint16_t(el);
+                                if (cur[i] != DRAW) { t.maxd = std::max(t.maxd, int(cur[i])); ++((cur[i] & 1) ? t.wins : t.losses); }
+                        } else {
+                                cur[i] = UNKNOWN16;
+                                ++t.open; t.edges += std::uint64_t(c);
+                                if (ew < INF) { ewin[i] = std::uint16_t(ew); t.maxd = std::max(t.maxd, ew); }
+                                else if (!ed) eloss[i] = std::uint16_t(el);
+                        }
+                }
+                return t;
+        });
+        int maxd = t0.maxd;
+        std::uint64_t open = t0.open, fw = t0.wins, fl = t0.losses;
+        bool retro = switch_mode == 2;
+        std::vector<std::uint8_t> mark;
+        std::vector<std::vector<std::uint64_t>> front(chunks.size()), found(chunks.size());
+        std::vector<std::uint64_t> ids(chunks.size());
+        for (std::uint64_t k = 0; k < ids.size(); ++k) ids[k] = k;
+        for (int n = 1; n <= maxd + 1; ++n) {
+                bool const wins = n & 1;
+                std::uint16_t const prev = std::uint16_t(n - 1);
+                if (!retro && switch_mode == 0 && wins && open > 0) {
+                        // loss candidates per new win (gamma b_b), sampled on wins of the previous win round
+                        std::uint64_t sample = 0, hits = 0;
+                        std::uint64_t const stride = std::max<std::uint64_t>(1, T / 65536);
+                        for (std::uint64_t i = 0; i < T && sample < 256; i += stride) {
+                                if (n < 3 || cur[i] != std::uint16_t(n - 2)) continue;
+                                ++sample;
+                                for_each_predecessor(s, pos(i), [&](std::uint64_t j) { hits += cur[j] == UNKNOWN16 && eloss[j] != NONE16; });
+                        }
+                        double const g = sample ? double(hits) / double(sample) : 0;
+                        double const rw = double(fw) / double(open), rl = double(fl) / double(open);
+                        retro = (rw + rl) / kappa + g * rw < 1;
+                }
+                Tally t;
+                if (!retro) {
+                        ++forward_rounds;
+                        t = over(par, chunks, [&](std::uint64_t c0) {
+                                Tally r;
+                                for (std::uint64_t i = c0; i < end_of(c0); ++i) {
+                                        std::uint16_t v = cur[i];
+                                        if (v == UNKNOWN16 && (wins || eloss[i] != NONE16)) {
+                                                Pos const p = pos(i);
+                                                std::uint64_t const other = std::uint64_t(1 - p.stm) * s.P;
+                                                if (wins) {
+                                                        bool won = ewin[i] == n;
+                                                        for (auto const& mv : moves(p)) {
+                                                                if (won) break;
+                                                                if (internal_move(p, mv) && cur[other + index_of(s, mv.next)] == prev) won = true;
+                                                        }
+                                                        if (won) { v = std::uint16_t(n); r.maxd = std::max(r.maxd, n); ++r.wins; }
+                                                } else {
+                                                        int d = eloss[i];
+                                                        bool lost = true;
+                                                        for (auto const& mv : moves(p)) {
+                                                                if (!internal_move(p, mv)) continue;
+                                                                std::uint16_t const w = cur[other + index_of(s, mv.next)];
+                                                                if (w >= UNKNOWN16 || !(w & 1)) { lost = false; break; }
+                                                                d = std::max(d, int(w) + 1);
+                                                        }
+                                                        if (lost) { v = std::uint16_t(d); r.maxd = std::max(r.maxd, d); ++r.losses; }
+                                                }
+                                        }
+                                        r.open += v == UNKNOWN16;
+                                        nxt[i] = v;
+                                }
+                                return r;
+                        });
+                        cur.swap(nxt);
+                } else {
+                        ++retrograde_rounds;
+                        if (mark.empty()) mark.assign(T, 0);
+                        // the frontier: positions with value n - 1 (per chunk)
+                        over(par, ids, [&](std::uint64_t k) {
+                                front[k].clear();
+                                for (std::uint64_t i = chunks[k]; i < end_of(chunks[k]); ++i) if (cur[i] == prev) front[k].push_back(i);
+                                return Tally{};
+                        });
+                        if (wins) {
+                                t = over(par, ids, [&](std::uint64_t k) {
+                                        Tally r;
+                                        for (std::uint64_t i : front[k])
+                                                for_each_predecessor(s, pos(i), [&](std::uint64_t j) {
+                                                        if (at(j).load(std::memory_order_relaxed) != UNKNOWN16) return;
+                                                        at(j).store(std::uint16_t(n), std::memory_order_relaxed);
+                                                        r.maxd = n;
+                                                });
+                                        return r;
+                                });
+                                t = t + over(par, chunks, [&](std::uint64_t c0) {     // wins through exits; count
+                                        Tally r;
+                                        for (std::uint64_t i = c0; i < end_of(c0); ++i) {
+                                                if (cur[i] == UNKNOWN16 && ewin[i] == n) { cur[i] = std::uint16_t(n); r.maxd = n; }
+                                                r.wins += cur[i] == n;
+                                                r.open += cur[i] == UNKNOWN16;
+                                        }
+                                        return r;
+                                });
+                        } else {
+                                over(par, ids, [&](std::uint64_t k) {
+                                        for (std::uint64_t i : front[k])
+                                                for_each_predecessor(s, pos(i), [&](std::uint64_t j) {
+                                                        if (cur[j] == UNKNOWN16 && eloss[j] != NONE16) std::atomic_ref<std::uint8_t>(mark[j]).store(1, std::memory_order_relaxed);
+                                                });
+                                        return Tally{};
+                                });
+                                t = over(par, ids, [&](std::uint64_t k) {      // verify the candidates; results applied after
+                                        Tally r;
+                                        found[k].clear();
+                                        for (std::uint64_t i = chunks[k]; i < end_of(chunks[k]); ++i) {
+                                                if (!mark[i]) continue;
+                                                mark[i] = 0;
+                                                Pos const p = pos(i);
+                                                std::uint64_t const other = std::uint64_t(1 - p.stm) * s.P;
+                                                int d = eloss[i];
+                                                bool lost = true;
+                                                for (auto const& mv : moves(p)) {
+                                                        if (!internal_move(p, mv)) continue;
+                                                        std::uint16_t const w = cur[other + index_of(s, mv.next)];
+                                                        if (w >= UNKNOWN16 || !(w & 1)) { lost = false; break; }
+                                                        d = std::max(d, int(w) + 1);
+                                                }
+                                                if (lost) { found[k].push_back(i << 16 | std::uint64_t(d)); r.maxd = std::max(r.maxd, d); ++r.losses; }
+                                        }
+                                        return r;
+                                });
+                                for (auto const& f : found) for (std::uint64_t x : f) cur[x >> 16] = std::uint16_t(x & 0xFFFF);
+                                t.open = open - t.losses;
+                        }
+                }
+                maxd = std::max(maxd, t.maxd);
+                if (maxd >= 0xFF00) { std::cerr << "DTM overflow" << std::endl; std::abort(); }
+                if (wins) fw = t.wins; else fl = t.losses;
+                open = t.open;
+        }
+        for (std::uint64_t i = 0; i < T; ++i) out[i] = cur[i] == UNKNOWN16 ? DRAW : cur[i];
+}
+
 // ---------------------------------------------------------------- one slice solved by several threads
 //
 // A persistent pool of std::jthread workers (the calling thread takes part as worker 0), so that the per-thread caches
@@ -1976,6 +2179,9 @@ std::uint64_t thread_bytes(std::uint64_t largest)
 // from the finished materials or from earlier waves of this one. threads == 1: one slice after another (solve_slice).
 // threads > 1: the slices of a wave side by side (std::for_each with std::execution::par), and a big slice by itself
 // with all cores (solve_slice_pull). No other synchronisation: every slice writes only its own positions.
+// EGDB_SOLVER=classic: solve_slice (one thread) and solve_slice_pull (big slices), as before solve_slice_hybrid
+bool const classic_solver = [] { char const* e = std::getenv("EGDB_SOLVER"); return e && std::string(e) == "classic"; }();
+
 bool mat_build(std::string const& dir, int threads)
 {
         int const n = only_mat.n(), m = only_mat.m();
@@ -2043,13 +2249,13 @@ bool mat_build(std::string const& dir, int threads)
                 for (std::size_t i : big) {
                         Meta const s = meta_of(Key::unpack(jobs[i].second));
                         std::vector<std::uint16_t> tmp(2 * s.P);
-                        solve_slice_pull(s, tmp.data());
+                        if (classic_solver) solve_slice_pull(s, tmp.data()); else solve_slice_hybrid(s, tmp.data(), true);
                         bad[i - g] = store(i, s, tmp, ovf[i - g]);
                 }
                 auto solve = [&](std::size_t i) {
                         Meta const s = meta_of(Key::unpack(jobs[i].second));
                         std::vector<std::uint16_t> tmp(2 * s.P);
-                        solve_slice(s, tmp.data());
+                        if (classic_solver) solve_slice(s, tmp.data()); else solve_slice_hybrid(s, tmp.data(), false);
                         bad[i - g] = store(i, s, tmp, ovf[i - g]);
                 };
                 if (threads > 1) std::for_each(std::execution::par, small.begin(), small.end(), solve);
@@ -2072,7 +2278,8 @@ bool mat_build(std::string const& dir, int threads)
         if (unknown) { std::cerr << "material: " << unknown << " positions without value" << std::endl; return false; }
         write_progress(prog, std::to_string(jobs.size()) + " complete\n");
         std::cout << "built " << only_mat.wm + only_mat.wk << " " << only_mat.bm + only_mat.bk << " " << only_mat.wm << " " << only_mat.bm
-                  << " positions " << npos << " slices " << jobs.size() << " overflow " << raw_ovf.size() << " seconds " << seconds_since(t0) << '\n';
+                  << " positions " << npos << " slices " << jobs.size() << " overflow " << raw_ovf.size() << " seconds " << seconds_since(t0)
+                  << " solver " << (classic_solver ? "classic" : "hybrid") << " forward_rounds " << forward_rounds << " retrograde_rounds " << retrograde_rounds << '\n';
         return true;
 }
 

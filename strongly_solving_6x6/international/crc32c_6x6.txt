@@ -1,5 +1,6 @@
 # CRC32C of the stored bytes of every unit (n pieces, m men) of the 6x6 databases (at most 12 pieces, at most 6 per side),
 # built and fully verified with units_6x6.py; columns: n m positions <count> crc32c (see the unitcrc command of egdb_6x6) [.cdb version 1: draw byte 253]
+# all 88 units through 12 pieces (63,836,439,921 positions): 26 h 37 min on 10 cores (Xeon E5-1650 v4, virtual machine)
 2 0 positions 306 38c503fd
 2 1 positions 510 97c7c13d
 2 2 positions 213 8dc46217
@@ -63,3 +64,28 @@
 10 8 positions 273245940 50994075
 10 9 positions 48900258 4ccd542a
 10 10 positions 3921984 0ae2db92
+11 0 positions 29405376 de10daea
+11 1 positions 269549280 898dd6a0
+11 2 positions 1118557440 b88c4f28
+11 3 positions 2773510740 3bce8667
+11 4 positions 4565472912 a036ee67
+11 5 positions 5238409176 cf26c3ae
+11 6 positions 4275038592 82f19df3
+11 7 positions 2481518160 c58686d1
+11 8 positions 1004121360 df15d588
+11 9 positions 269779752 fc2bf68b
+11 10 positions 43322400 81b1fb9c
+11 11 positions 3150972 49356504
+12 0 positions 17153136 b765313f
+12 1 positions 171531360 91ef2e07
+12 2 positions 782990208 24116710
+12 3 positions 2157175020 d2b871cb
+12 4 positions 3994788798 a2ac6ac5
+12 5 positions 5238409176 226e1e0f
+12 6 positions 4987545024 3f718b49
+12 7 positions 3474125424 2e2de945
+12 8 positions 1757212380 f9d4465c
+12 9 positions 629486088 d32c90b6
+12 10 positions 151628400 f8b6ac3b
+12 11 positions 22056804 cbaa6a6d
+12 12 positions 1465926 beed9830

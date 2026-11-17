@@ -529,6 +529,8 @@ nohup ~/smk/bin/snakemake -s strongly_solving_6x6/materials/Snakefile --cores 10
   from its last checkpoint (`*.raw.progress`).
 * Time on 4 cores: up to 10 pieces about 10 hours (of which 10 pieces 7 hours); 11 and 12 pieces together roughly
   30 to 40 hours more. Building and verifying take most of it; the time scales about inversely with the number of cores.
+  The complete store through 12 pieces (88 units, 63.8 billion positions) took 26 h 37 min on 10 cores (Xeon E5-1650 v4,
+  virtual machine).
 * Check: every finished unit appends its CRC32C to `data/units/crc32c.txt`. It must equal the line for that unit in
   [`crc32c_6x6.txt`](strongly_solving_6x6/international/crc32c_6x6.txt) (the checksum is of the stored bytes and does
   not depend on the zstd version):

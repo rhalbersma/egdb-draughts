@@ -914,6 +914,9 @@ int const switch_mode = [] {
         char const* e = std::getenv("EGDB_SWITCH");
         return !e ? 0 : std::string(e) == "forward" ? 1 : std::string(e) == "retrograde" ? 2 : 0;
 }();
+// EGDB_COUNT=0: retrograde loss rounds without counts (a predecessor of the frontier examines all its king moves), to
+// measure what counting saves
+bool const counting = [] { char const* e = std::getenv("EGDB_COUNT"); return !e || std::string(e) != "0"; }();
 std::atomic<std::uint64_t> forward_rounds{0}, retrograde_rounds{0}, slice_ids{0};
 std::FILE* const profile_file = [] { char const* e = std::getenv("EGDB_PROFILE"); return e ? std::fopen(e, "a") : nullptr; }();
 std::string profile_tag;                // the material being built (set by mat_build)
@@ -1043,12 +1046,24 @@ void solve_slice_hybrid(Meta const& s, std::uint16_t* out, bool par)
                                                 if (at(i).load(std::memory_order_relaxed) != UNKNOWN16
                                                     || !at(i).compare_exchange_strong(e, std::uint16_t(n), std::memory_order_relaxed)) return;
                                                 decide(r, k, std::uint32_t(i), n);
-                                        } else {
+                                        } else if (counting) {
                                                 if ((ex[i] & 1) || at(i).load(std::memory_order_relaxed) != UNKNOWN16) return;
                                                 if (std::atomic_ref<std::uint8_t>(cnt[i]).fetch_sub(1, std::memory_order_relaxed) != 1) return;
                                                 int const d = std::max(int(ex[i]), n);
                                                 at(i).store(std::uint16_t(d), std::memory_order_relaxed);
                                                 decide(r, k, std::uint32_t(i), d);
+                                        } else {                // lost if every king move reaches a win in at most n - 1
+                                                if ((ex[i] & 1) || at(i).load(std::memory_order_relaxed) != UNKNOWN16) return;
+                                                Pos const q = pos(i);
+                                                std::uint64_t const other = std::uint64_t(1 - q.stm) * s.P;
+                                                for (auto const& mv : moves(q)) {
+                                                        if (!internal_move(q, mv)) continue;
+                                                        std::uint16_t const w = at(other + index_of(s, mv.next)).load(std::memory_order_relaxed);
+                                                        if (!(w < UNKNOWN16 && (w & 1) && w < n)) return;
+                                                }
+                                                std::uint16_t e = UNKNOWN16;
+                                                int const d = std::max(int(ex[i]), n);
+                                                if (at(i).compare_exchange_strong(e, std::uint16_t(d), std::memory_order_relaxed)) decide(r, k, std::uint32_t(i), d);
                                         }
                                 });
                         return r;
@@ -1098,7 +1113,7 @@ void solve_slice_hybrid(Meta const& s, std::uint16_t* out, bool par)
                         t = retrograde(n);
                         auto const t3 = std::chrono::steady_clock::now();
                         bool same = cur == fcur;
-                        if (!wins) for (std::uint32_t i : flossable) same = same && (cur[i] != UNKNOWN16 || cnt[i] == fcnt[i]);
+                        if (!wins && counting) for (std::uint32_t i : flossable) same = same && (cur[i] != UNKNOWN16 || cnt[i] == fcnt[i]);
                         if (!same) { std::cerr << "error: forward and retrograde round " << n << " differ" << std::endl; std::abort(); }
                         auto const ns = [](auto d) { return (long long)std::chrono::duration_cast<std::chrono::nanoseconds>(d).count(); };
                         std::lock_guard<std::mutex> lock(profile_mutex);

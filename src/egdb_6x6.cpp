@@ -918,6 +918,7 @@ int const switch_mode = [] {
 // measure what counting saves
 bool const counting = [] { char const* e = std::getenv("EGDB_COUNT"); return !e || std::string(e) != "0"; }();
 std::atomic<std::uint64_t> forward_rounds{0}, retrograde_rounds{0}, slice_ids{0};
+std::atomic<std::uint64_t> forward_ns{0}, retrograde_ns{0}, pass0_ns{0};      // time in the rounds, and in pass 0 and the lists
 std::FILE* const profile_file = [] { char const* e = std::getenv("EGDB_PROFILE"); return e ? std::fopen(e, "a") : nullptr; }();
 std::string profile_tag;                // the material being built (set by mat_build)
 std::mutex profile_mutex;
@@ -933,6 +934,7 @@ void solve_slice_hybrid(Meta const& s, std::uint16_t* out, bool par)
         std::vector<std::uint16_t> cur(T), ex(T, NONE16);
         std::vector<std::uint8_t> cnt(T);                       // at most 6 kings x 9 moves
         auto const at = [&](std::uint64_t i) { return std::atomic_ref<std::uint16_t>(cur[i]); };
+        auto const p0 = std::chrono::steady_clock::now();
         // pass 0: exits looked up; positions without king moves decided at once
         int maxd = over(par, blocks(T), [&](std::size_t k) {
                 Tally t;
@@ -970,6 +972,7 @@ void solve_slice_hybrid(Meta const& s, std::uint16_t* out, bool par)
                 } else if (cur[i] != DRAW) front[cur[i]].push_back(std::uint32_t(i));
         }
         std::uint64_t open = lossable.size() + others.size(), open_l = lossable.size();
+        pass0_ns += std::uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - p0).count());
         std::vector<std::vector<std::uint64_t>> got, keep;      // per task: decided (value << 32 | position), kept
         auto const tasks = [&](std::size_t n) { if (got.size() < n) got.resize(n); if (keep.size() < n) keep.resize(n); };
         auto const decide = [&](Tally& r, std::size_t k, std::uint32_t i, int d) {
@@ -1125,8 +1128,11 @@ void solve_slice_hybrid(Meta const& s, std::uint16_t* out, bool par)
                         bool const retro = switch_mode == 2 || (switch_mode == 0
                                 && costs.k_r + (wins ? costs.r_w : costs.r_l) * double(F) + costs.r_x * double(X)
                                    < costs.k_f + double(U) + costs.r_s * double(L - U));
+                        auto const t0 = std::chrono::steady_clock::now();
                         if (retro) { ++retrograde_rounds; t = retrograde(n); }
                         else { ++forward_rounds; t = forward(n); }
+                        auto const ns = std::uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - t0).count());
+                        (retro ? retrograde_ns : forward_ns) += ns;
                 }
                 merge();
                 maxd = std::max(maxd, t.maxd);
@@ -2367,7 +2373,8 @@ bool mat_build(std::string const& dir, int threads)
         write_progress(prog, std::to_string(jobs.size()) + " complete\n");
         std::cout << "built " << only_mat.wm + only_mat.wk << " " << only_mat.bm + only_mat.bk << " " << only_mat.wm << " " << only_mat.bm
                   << " positions " << npos << " slices " << jobs.size() << " overflow " << raw_ovf.size() << " seconds " << seconds_since(t0)
-                  << " solver " << (classic_solver ? "classic" : "hybrid") << " forward_rounds " << forward_rounds << " retrograde_rounds " << retrograde_rounds << '\n';
+                  << " solver " << (classic_solver ? "classic" : "hybrid") << " forward_rounds " << forward_rounds << " retrograde_rounds " << retrograde_rounds
+                  << " forward_ns " << forward_ns << " retrograde_ns " << retrograde_ns << " pass0_ns " << pass0_ns << '\n';
         return true;
 }
 

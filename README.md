@@ -512,6 +512,10 @@ nohup ~/smk/bin/snakemake -s strongly_solving_6x6/materials/Snakefile --cores 10
 
 * Files: `data/materials_checkers/6x6-wp-bp-wm-bm.cdb`; results of every step in `materials.log`; `crc32c.txt`
   is written when the run ends.
+* Check: the lines of `crc32c.txt` must equal
+  [`crc32c_6x6_checkers_materials.txt`](strongly_solving_6x6/materials/crc32c_6x6_checkers_materials.txt) (194
+  materials through 8 pieces: built in 20 minutes on 4 cores, all equal to the unit store, longest win at 8 pieces 147
+  plies as in Van Horssen's paper).
 * Plan: `python3 strongly_solving_6x6/materials/materials.py --nmax 12 --cores 10` lists every material with its
   positions, dependencies and priority; `snakemake ... --dag | dot -Tsvg > dag.svg` draws the jobs.
 * Check against a unit store of the same game (a hash of the values per material, keyed by position):

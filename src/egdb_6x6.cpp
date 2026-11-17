@@ -870,8 +870,10 @@ void solve_slice_pull(Meta const& s, std::uint16_t* out)
 // with k the fixed cost of a round and a T its scans of the whole slice. The constants are measured with EGDB_PROFILE
 // (strongly_solving_6x6/materials/switch.py); EGDB_COSTS="k_f k_r a_f a_r r_w r_l" overrides them. EGDB_SWITCH:
 // "forward" or "retrograde" in every round (tests).
-// EGDB_PROFILE=file: every round is done both ways from the same state, timed and checked equal; one line per round:
-//      wp bp wm bm slice T n U F edges candidates forward_ns retrograde_ns
+// EGDB_SWITCH=counting: win rounds retrograde, loss rounds with counts (see counting below).
+// EGDB_PROFILE=file: every round is done every way from the same state (forward, retrograde, and for loss rounds
+// retrograde with counts, which is then followed), timed and checked; one line per round:
+//      wp bp wm bm slice T n U F edges candidates forward_ns retrograde_ns counting_ns
 
 struct Tally {
         int maxd = 0;
@@ -897,7 +899,10 @@ Costs const costs = [] {
         if (char const* e = std::getenv("EGDB_COSTS")) std::sscanf(e, "%lf %lf %lf %lf %lf %lf", &c.k_f, &c.k_r, &c.a_f, &c.a_r, &c.r_w, &c.r_l);
         return c;
 }();
-int const switch_mode = [] { char const* e = std::getenv("EGDB_SWITCH"); return !e ? 0 : std::string(e) == "forward" ? 1 : std::string(e) == "retrograde" ? 2 : 0; }();
+int const switch_mode = [] {
+        char const* e = std::getenv("EGDB_SWITCH");
+        return !e ? 0 : std::string(e) == "forward" ? 1 : std::string(e) == "retrograde" ? 2 : std::string(e) == "counting" ? 3 : 0;
+}();
 std::atomic<std::uint64_t> forward_rounds{0}, retrograde_rounds{0}, slice_ids{0};
 std::FILE* const profile_file = [] { char const* e = std::getenv("EGDB_PROFILE"); return e ? std::fopen(e, "a") : nullptr; }();
 std::string profile_tag;                // the material being built (set by mat_build)
@@ -911,6 +916,7 @@ void solve_slice_hybrid(Meta const& s, std::uint16_t* out, bool par)
         for (std::uint64_t c = 0; c < T; c += CH) chunks.push_back(c);
         auto const end_of = [&](std::uint64_t c0) { return std::min(T, c0 + CH); };
         std::vector<std::uint16_t> cur(T), nxt(T), ewin(T, NONE16), eloss(T, NONE16);
+        std::vector<std::uint8_t> cnt(T);       // king moves not (yet) known to reach a win (at most 6 kings x 9 moves)
         auto const pos = [&](std::uint64_t i) { return pos_of(s, i % s.P, int(i / s.P)); };
         auto const at = [&](std::uint64_t i) { return std::atomic_ref<std::uint16_t>(cur[i]); };
         // pass 0: exits looked up; positions without king moves decided at once
@@ -932,6 +938,7 @@ void solve_slice_hybrid(Meta const& s, std::uint16_t* out, bool par)
                                 if (cur[i] != DRAW) t.maxd = std::max(t.maxd, int(cur[i]));
                         } else {
                                 cur[i] = UNKNOWN16;
+                                cnt[i] = std::uint8_t(c);
                                 ++t.open;
                                 if (ew < INF) { ewin[i] = std::uint16_t(ew); t.maxd = std::max(t.maxd, ew); }
                                 else if (!ed) eloss[i] = std::uint16_t(el);
@@ -986,15 +993,18 @@ void solve_slice_hybrid(Meta const& s, std::uint16_t* out, bool par)
                 });
         };
         // retrograde round n: in place in cur; edges = the predecessors generated, cands = the loss candidates verified
-        auto const retrograde = [&](int n) {
-                bool const wins = n & 1;
-                std::uint16_t const prev = std::uint16_t(n - 1);
-                if (mark.empty()) mark.assign(T, 0);
-                over(par, ids, [&](std::uint64_t k) {          // the frontier: positions with value n - 1 (per chunk)
+        auto const frontier = [&](std::uint16_t prev) {        // the positions with value prev (per chunk)
+                over(par, ids, [&](std::uint64_t k) {
                         front[k].clear();
                         for (std::uint64_t i = chunks[k]; i < end_of(chunks[k]); ++i) if (cur[i] == prev) front[k].push_back(i);
                         return Tally{};
                 });
+        };
+        auto const retrograde = [&](int n) {
+                bool const wins = n & 1;
+                std::uint16_t const prev = std::uint16_t(n - 1);
+                if (mark.empty()) mark.assign(T, 0);
+                frontier(prev);
                 Tally t;
                 if (wins) {
                         t = over(par, ids, [&](std::uint64_t k) {
@@ -1052,18 +1062,50 @@ void solve_slice_hybrid(Meta const& s, std::uint16_t* out, bool par)
                 }
                 return t;
         };
+        // retrograde loss round n with counts (Gasser 1996): every king move from a predecessor of a win in n - 1 reaches
+        // a win; when none is left (count zero) and its exits all lose, the predecessor is lost in max(eloss, n) (the
+        // wins are counted in increasing value, so the last one has value n - 1). Exact only if every loss round counts.
+        auto const counting = [&](int n) {
+                frontier(std::uint16_t(n - 1));
+                Tally t = over(par, ids, [&](std::uint64_t k) {
+                        Tally r;
+                        for (std::uint64_t i : front[k])
+                                for_each_predecessor(s, pos(i), [&](std::uint64_t j) {
+                                        ++r.edges;
+                                        if (eloss[j] == NONE16 || at(j).load(std::memory_order_relaxed) != UNKNOWN16) return;
+                                        if (std::atomic_ref<std::uint8_t>(cnt[j]).fetch_sub(1, std::memory_order_relaxed) != 1) return;
+                                        int const d = std::max(int(eloss[j]), n);
+                                        at(j).store(std::uint16_t(d), std::memory_order_relaxed);
+                                        r.maxd = std::max(r.maxd, d);
+                                        ++r.losses;
+                                });
+                        return r;
+                });
+                t.open = open - t.losses;
+                return t;
+        };
         std::uint64_t const id = slice_ids++;
         for (int n = 1; n <= maxd + 1 && open > 0; ++n) {      // no undecided position left: nothing more to decide
                 bool const wins = n & 1;
                 std::uint16_t const prev = std::uint16_t(n - 1);
                 Tally t;
-                if (profile_file) {             // both ways from the same state, timed, checked equal
+                if (profile_file) {             // every way from the same state, timed, checked; the counting way is followed
                         std::uint64_t const F = count([&](std::uint64_t i) { return cur[i] == prev; });
+                        std::vector<std::uint16_t> verified;
+                        if (!wins) verified = cur;
                         auto const t0 = std::chrono::steady_clock::now();
                         Tally const f = forward(n);
                         auto const t1 = std::chrono::steady_clock::now();
                         t = retrograde(n);
                         auto const t2 = std::chrono::steady_clock::now();
+                        auto t3 = t2;
+                        if (!wins) {            // the same loss round with counts, from the same state
+                                std::swap(cur, verified);
+                                Tally const tc = counting(n);
+                                t3 = std::chrono::steady_clock::now();
+                                if (cur != verified) { std::cerr << "error: counting and verifying round " << n << " differ" << std::endl; std::abort(); }
+                                t.open = tc.open; t.maxd = tc.maxd;
+                        }
                         // equal, except that a forward loss round can decide a loss early (value above n) that the
                         // retrograde rounds decide in the round of its value (when its slowest successor is a frontier)
                         for (std::uint64_t i = 0; i < T; ++i)
@@ -1073,9 +1115,10 @@ void solve_slice_hybrid(Meta const& s, std::uint16_t* out, bool par)
                                 }
                         auto const ns = [](auto d) { return (long long)std::chrono::duration_cast<std::chrono::nanoseconds>(d).count(); };
                         std::lock_guard<std::mutex> lock(profile_mutex);
-                        std::fprintf(profile_file, "%s %llu %llu %d %llu %llu %llu %llu %lld %lld\n", profile_tag.c_str(),
+                        std::fprintf(profile_file, "%s %llu %llu %d %llu %llu %llu %llu %lld %lld %lld\n", profile_tag.c_str(),
                                      (unsigned long long)id, (unsigned long long)T, n, (unsigned long long)f.count, (unsigned long long)F,
-                                     (unsigned long long)t.edges, (unsigned long long)t.cands, ns(t1 - t0), ns(t2 - t1));
+                                     (unsigned long long)t.edges, (unsigned long long)t.cands, ns(t1 - t0), ns(t2 - t1),
+                                     wins ? ns(t2 - t1) : ns(t3 - t2));
                         std::fflush(profile_file);
                 } else {
                         bool retro = switch_mode == 2;
@@ -1091,7 +1134,8 @@ void solve_slice_hybrid(Meta const& s, std::uint16_t* out, bool par)
                                 double const F = double(c.count), U = double(wins ? open : c.open);
                                 retro = costs.k_r + costs.a_r * double(T) + (wins ? costs.r_w : costs.r_l) * F < costs.k_f + costs.a_f * double(T) + U;
                         }
-                        if (retro) { ++retrograde_rounds; t = retrograde(n); }
+                        if (switch_mode == 3) { ++retrograde_rounds; t = wins ? retrograde(n) : counting(n); }
+                        else if (retro) { ++retrograde_rounds; t = retrograde(n); }
                         else { ++forward_rounds; t = forward(n); cur.swap(nxt); }
                 }
                 maxd = std::max(maxd, t.maxd);

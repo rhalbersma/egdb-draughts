@@ -848,11 +848,11 @@ void solve_slice_pull(Meta const& s, std::uint16_t* out)
         for (std::uint64_t i = 0; i < T; ++i) out[i] = cur[i] == UNKNOWN16 ? DRAW : cur[i];
 }
 
-// ---------------------------------------------------------------- one slice: forward passes, then retrograde passes
+// ---------------------------------------------------------------- one slice: each round forward or retrograde
 //
-// The same values as solve_slice, by the method of Chinook and Ed Gilbert: forward passes while many positions are
-// still being decided, then (once) retrograde passes from the thin frontiers. With par, every pass is a parallel
-// algorithm (std::execution::par); without, the same code runs sequentially.
+// The same values as solve_slice. As Chinook and Ed Gilbert observed, forward rounds are cheaper while many positions
+// are still being decided and retrograde rounds once the frontiers are thin; here every round is done whichever way is
+// cheaper. With par, every round is a parallel algorithm (std::execution::par); without, the same code runs sequentially.
 //   forward round n    every undecided position looks at its own moves (as solve_slice_pull): won in n (odd n) if
 //                      its fastest exit wins in n or a king move reaches a loss in n - 1; lost (even n) if its exits
 //                      all lose and every king move reaches a win. Each position writes only its own entry.
@@ -860,17 +860,16 @@ void solve_slice_pull(Meta const& s, std::uint16_t* out)
 //                      unmoves): odd n, an undecided predecessor is won in n; even n, an undecided predecessor whose
 //                      exits all lose becomes a candidate, verified by its own moves as in solve_slice. Concurrent
 //                      writers of the same predecessor write the same value (relaxed std::atomic_ref stores).
-// Both rounds decide the same positions with the same values (except that a forward loss round can decide a loss early,
-// when its slowest successor was decided in pass 0), so the switch only changes the work. Before each
-// round (until the switch) the cost of both is estimated from exact counts: U the positions the forward round examines
-// (odd n: all undecided; even n: the undecided whose exits all lose) and F the frontier (the positions with value
-// n - 1). In units of one forward position (decode, generate moves, look up king moves):
+// Both decide the same positions with the same values in the same array (except that a forward loss round can decide
+// a loss early, when its slowest successor was decided in pass 0), so the least work for a slice is the cheaper way in
+// every round. Before each round both costs are estimated from exact counts: U the positions the forward round examines
+// (odd n: all undecided; even n: the undecided whose exits all lose) and F the frontier (the positions with value n - 1).
+// In units of one examined forward position (decode, generate moves, look up king moves):
 //      forward    k_f + a_f T + U
-//      retrograde k_r + a_r T + r_w F (odd n), k_r + a_r T + r_l F (even n: predecessors, plus the loss candidates
-//                 verified), with k the fixed cost of a round and a T its scans of the whole slice
-// switch when retrograde < forward. The constants are measured with EGDB_PROFILE (strongly_solving_6x6/materials/
-// switch.py); EGDB_COSTS="k_f k_r a_f a_r r_w r_l" overrides them. EGDB_SWITCH: "forward" never switches, "retrograde"
-// switches before round 1 (tests).
+//      retrograde k_r + a_r T + r_w F (odd n), k_r + a_r T + r_l F (even n: predecessors and loss candidates)
+// with k the fixed cost of a round and a T its scans of the whole slice. The constants are measured with EGDB_PROFILE
+// (strongly_solving_6x6/materials/switch.py); EGDB_COSTS="k_f k_r a_f a_r r_w r_l" overrides them. EGDB_SWITCH:
+// "forward" or "retrograde" in every round (tests).
 // EGDB_PROFILE=file: every round is done both ways from the same state, timed and checked equal; one line per round:
 //      wp bp wm bm slice T n U F edges candidates forward_ns retrograde_ns
 
@@ -1054,7 +1053,6 @@ void solve_slice_hybrid(Meta const& s, std::uint16_t* out, bool par)
                 return t;
         };
         std::uint64_t const id = slice_ids++;
-        bool retro = switch_mode == 2;
         for (int n = 1; n <= maxd + 1 && open > 0; ++n) {      // no undecided position left: nothing more to decide
                 bool const wins = n & 1;
                 std::uint16_t const prev = std::uint16_t(n - 1);
@@ -1080,9 +1078,17 @@ void solve_slice_hybrid(Meta const& s, std::uint16_t* out, bool par)
                                      (unsigned long long)t.edges, (unsigned long long)t.cands, ns(t1 - t0), ns(t2 - t1));
                         std::fflush(profile_file);
                 } else {
-                        if (!retro && switch_mode == 0) {
-                                double const F = double(count([&](std::uint64_t i) { return cur[i] == prev; }));
-                                double const U = wins ? double(open) : double(count([&](std::uint64_t i) { return cur[i] == UNKNOWN16 && eloss[i] != NONE16; }));
+                        bool retro = switch_mode == 2;
+                        if (switch_mode == 0) {         // one scan: F (count) and, for a loss round, U (open)
+                                Tally const c = over(par, chunks, [&](std::uint64_t c0) {
+                                        Tally r;
+                                        for (std::uint64_t i = c0; i < end_of(c0); ++i) {
+                                                r.count += cur[i] == prev;
+                                                r.open += cur[i] == UNKNOWN16 && eloss[i] != NONE16;
+                                        }
+                                        return r;
+                                });
+                                double const F = double(c.count), U = double(wins ? open : c.open);
                                 retro = costs.k_r + costs.a_r * double(T) + (wins ? costs.r_w : costs.r_l) * F < costs.k_f + costs.a_f * double(T) + U;
                         }
                         if (retro) { ++retrograde_rounds; t = retrograde(n); }

@@ -4,45 +4,65 @@
 #    (See accompanying file LICENSE_1_0.txt or copy at
 #          http://www.boost.org/LICENSE_1_0.txt)
 
-"""The switch from forward to retrograde rounds in solve_slice_hybrid (egdb_6x6), measured.
+"""The choice between a forward and a retrograde round in solve_slice_hybrid (egdb_6x6), measured.
 
-A build with EGDB_PROFILE=file does every round of every slice both ways from the same state, times both and checks
-that they decide the same positions. Each line of the file is one round:
+A forward round and a retrograde round decide the same positions from the same state, so every round can be done
+either way, and the least work for a slice is the sum over its rounds of min(forward, retrograde). A build with
+EGDB_PROFILE=file does every round of every slice both ways from the same state, times both and checks them. Each line
+of the file is one round:
     wp bp wm bm slice T n U F edges candidates forward_ns retrograde_ns
 with T the positions of the slice, U the positions the forward round examines, F the frontier of the retrograde round
 (the positions with value n - 1), edges the predecessors it generates and candidates the loss candidates it verifies.
 
 This script
-  - fits the cost model of the switch (least squares, in nanoseconds):
+  - fits the cost model (least squares, nanoseconds):
         forward    k_f + a_f T + c U
         retrograde k_r + a_r T + w F (odd n), k_r + a_r T + l F (even n)
-    and prints the constants in units of c, as EGDB_COSTS="k_f k_r a_f a_r r_w r_l" (r_w = w / c, r_l = l / c);
-    kappa = c / w is the forward cost per examined position over the retrograde cost per frontier position;
-  - finds, per slice, the best single switch round s (forward rounds before s, retrograde from s on; s = 1 is
-    retrograde only, s = R + 1 forward only) from the measured times, and the round the model picks;
-  - lists the switching points per material (pieces, then men), with the frontier ratio F / U at the best switch, and
-    the total time of forward only, retrograde only, the best switch and the model's switch.
+    and prints it in units of c as EGDB_COSTS="k_f k_r a_f a_r r_w r_l"; kappa = c / w (forward cost per examined
+    position over retrograde cost per frontier position);
+  - compares, by class of material and in total: forward only, retrograde only, the best single switch per slice
+    (forward rounds, then retrograde), the optimum per round (sum of min), and the model choosing per round;
+  - with --materials, lists per material the same totals, the share of rounds in which forward is cheaper and the
+    median best single switch round.
 
 usage: switch.py profile.txt [--costs "k_f k_r a_f a_r r_w r_l"] [--materials]
 """
 
 import argparse
-from collections import defaultdict
-from statistics import median
+
+import numpy as np
+import pandas as pd
+
+COLS = ['wp', 'bp', 'wm', 'bm', 'slice', 'S', 'n', 'U', 'F', 'E', 'C', 'f', 'r']
 
 
-def lstsq(rows, ys):
-    """least squares for a few unknowns (normal equations, Gaussian elimination)"""
-    k = len(rows[0])
-    A = [[sum(r[i] * r[j] for r in rows) for j in range(k)] + [sum(r[i] * y for r, y in zip(rows, ys))] for i in range(k)]
-    for i in range(k):
-        p = max(range(i, k), key=lambda q: abs(A[q][i]))
-        A[i], A[p] = A[p], A[i]
-        for q in range(k):
-            if q != i and A[i][i]:
-                f = A[q][i] / A[i][i]
-                A[q] = [a - f * b for a, b in zip(A[q], A[i])]
-    return [A[i][k] / A[i][i] if A[i][i] else 0.0 for i in range(k)]
+def fit(d):
+    odd = (d.n % 2).to_numpy()
+    one = np.ones(len(d))
+    (k_f, a_f, c), *_ = np.linalg.lstsq(np.column_stack([one, d.S, d.U]).astype(float), d.f.astype(float), rcond=None)
+    (k_r, a_r, w, l), *_ = np.linalg.lstsq(np.column_stack([one, d.S, d.F * odd, d.F * (1 - odd)]).astype(float),
+                                          d.r.astype(float), rcond=None)
+    return dict(k_f=k_f, a_f=a_f, c=c, k_r=k_r, a_r=a_r, w=w, l=l)
+
+
+def totals(d, costs):
+    """per slice: forward only, retrograde only, best single switch, optimum per round, model per round (ns)"""
+    d = d.copy()
+    k_f, k_r, a_f, a_r, r_w, r_l = costs
+    pred_f = k_f + a_f * d.S + d.U
+    pred_r = k_r + a_r * d.S + np.where(d.n % 2 == 1, r_w, r_l) * d.F
+    d['opt'] = np.minimum(d.f, d.r)
+    d['model'] = np.where(pred_r < pred_f, d.r, d.f)
+    d['fwd_cheaper'] = (d.f < d.r).astype(int)
+    g = d.groupby('key', sort=False)
+    # single switch before round s: forward rounds before it, retrograde from it on
+    d['single'] = g.f.cumsum() - d.f + g.r.transform('sum') - g.r.cumsum() + d.r
+    per = g.agg(forward=('f', 'sum'), retrograde=('r', 'sum'), opt=('opt', 'sum'), model=('model', 'sum'),
+                single=('single', 'min'), rounds=('n', 'size'), fwd_cheaper=('fwd_cheaper', 'sum'))
+    per['single'] = np.minimum(per.single, per.forward)
+    best_s = d.loc[g.single.idxmin(), ['key', 'n']].set_index('key').n
+    per['best_s'] = np.where(per.single < per.forward, best_s.reindex(per.index), per.rounds + 1)
+    return per
 
 
 def main():
@@ -52,92 +72,58 @@ def main():
     ap.add_argument('--materials', action='store_true', help='one line per material')
     a = ap.parse_args()
 
-    slices = defaultdict(list)          # (material, slice) -> rounds
-    for line in open(a.profile):
-        x = line.split()
-        if len(x) != 13:
-            continue
-        mat = '-'.join(f'{int(t):02}' for t in x[:4])
-        _, T, n, U, F, E, C, fns, rns = map(int, x[4:])
-        slices[(mat, x[4])].append(dict(T=T, n=n, U=U, F=F, E=E, C=C, f=fns, r=rns))
-    rounds = [r for rs in slices.values() for r in rs]
-    print(f'{len(slices):,} slices, {len(rounds):,} rounds')
+    d = pd.read_csv(a.profile, sep=' ', header=None, names=COLS, dtype='int64', on_bad_lines='skip')
+    d['mat'] = (d.wp.map('{:02}'.format) + '-' + d.bp.map('{:02}'.format) + '-' + d.wm.map('{:02}'.format) + '-'
+                + d.bm.map('{:02}'.format))
+    d['key'] = d.mat + '/' + d.slice.astype(str)
+    men = d.wm + d.bm
+    d['cls'] = np.where(men == 0, 'kings only', np.where(men == 1, 'one man', 'two or more men'))
+    print(f'{d.key.nunique():,} slices, {len(d):,} rounds, {d.mat.nunique()} materials')
 
-    # the cost model
-    k_f, a_f, c = lstsq([[1, r['T'], r['U']] for r in rounds], [r['f'] for r in rounds])
-    k_r, a_r, w, l = lstsq([[1, r['T'], r['F'] if r['n'] % 2 else 0, 0 if r['n'] % 2 else r['F']] for r in rounds], [r['r'] for r in rounds])
-    fit = [k_f / c, k_r / c, a_f / c, a_r / c, w / c, l / c]
-    detail = lstsq([[1, r['T'], r['F'], r['E'], r['C']] for r in rounds], [r['r'] for r in rounds])
-    odd = [r for r in rounds if r['n'] % 2]
-    even = [r for r in rounds if not r['n'] % 2]
-    b_b = sum(r['E'] for r in rounds) / max(1, sum(r['F'] for r in rounds))
-    gamma = sum(r['C'] for r in even) / max(1, sum(r['E'] for r in even))
-    print(f'forward:    {k_f:.0f} ns per round + {a_f:.2f} ns per position of the slice + {c:.1f} ns per examined position')
-    print(f'retrograde: {k_r:.0f} ns per round + {a_r:.2f} ns per position of the slice + {w:.1f} ns per frontier position (odd n), {l:.1f} (even n)')
-    print(f'            = {detail[0]:.0f} + {detail[1]:.2f} T + {detail[2]:.1f} F + {detail[3]:.1f} per predecessor + {detail[4]:.1f} per candidate (ns)')
+    m = fit(d)
+    b_b = d.E.sum() / max(1, d.F.sum())
+    even = d[d.n % 2 == 0]
+    gamma = even.C.sum() / max(1, even.E.sum())
+    print(f'forward:    {m["k_f"]:.0f} ns per round + {m["a_f"]:.2f} ns per position of the slice + {m["c"]:.1f} ns per examined position')
+    print(f'retrograde: {m["k_r"]:.0f} ns per round + {m["a_r"]:.2f} ns per position of the slice + {m["w"]:.1f} ns per frontier position '
+          f'(odd n), {m["l"]:.1f} (even n)')
     print(f'            predecessors per frontier position b_b = {b_b:.2f}, candidates per predecessor (even n) gamma = {gamma:.3f}')
-    print(f'kappa = c / w = {c / w:.2f};  measured EGDB_COSTS="{" ".join(f"{v:.4g}" for v in fit)}"')
-    costs = [float(v) for v in a.costs.split()] if a.costs else fit
+    fitted = [m['k_f'] / m['c'], m['k_r'] / m['c'], m['a_f'] / m['c'], m['a_r'] / m['c'], m['w'] / m['c'], m['l'] / m['c']]
+    print(f'kappa = c / w = {m["c"] / m["w"]:.2f};  EGDB_COSTS="{" ".join(f"{v:.4g}" for v in fitted)}"')
+    for k, g in d.groupby('cls'):
+        mk = fit(g)
+        print(f'  {k:16} c {mk["c"]:6.1f}  w {mk["w"]:6.1f}  l {mk["l"]:6.1f}  kappa {mk["c"] / mk["w"]:.2f}')
+    costs = [float(v) for v in a.costs.split()] if a.costs else fitted
     if a.costs:
         print(f'model with EGDB_COSTS="{a.costs}"')
 
-    def model_switch(rs):
-        for i, r in enumerate(rs):
-            ret = costs[1] + costs[3] * r['T'] + (costs[4] if r['n'] % 2 else costs[5]) * r['F']
-            if ret < costs[0] + costs[2] * r['T'] + r['U']:
-                return i
-        return len(rs)
+    per = totals(d, costs)
+    first = d.groupby('key', sort=False)[['mat', 'cls']].first()
+    per = per.join(first)
 
-    # per slice: the best switch and the model's
-    groups = defaultdict(lambda: defaultdict(float))
-    best_at = defaultdict(list)
-    ratio_at = defaultdict(list)
-    tot = defaultdict(float)
-    for (mat, _), rs in slices.items():
-        rs.sort(key=lambda r: r['n'])
-        f = [r['f'] for r in rs]
-        r_ = [r['r'] for r in rs]
-        cost = [sum(f[:s]) + sum(r_[s:]) for s in range(len(rs) + 1)]
-        s = min(range(len(cost)), key=lambda i: cost[i])
-        m = model_switch(rs)
-        for key, v in (('forward', cost[-1]), ('retrograde', cost[0]), ('best', cost[s]), ('model', cost[m])):
-            groups[mat][key] += v
-            tot[key] += v
-        groups[mat]['slices'] += 1
-        best_at[mat].append(s + 1)
-        if s < len(rs) and rs[s]['U']:
-            ratio_at[mat].append(rs[s]['F'] / rs[s]['U'])
+    def line(label, p):
+        s = p[['forward', 'retrograde', 'single', 'opt', 'model']].sum() / 1e9
+        print(f'  {label:16} {len(p):9,} slices  forward {s.forward:9.1f}  retrograde {s.retrograde:9.1f}  '
+              f'best single switch {s.single:9.1f}  optimum per round {s.opt:9.1f}  model per round {s.model:9.1f}  '
+              f'(model {100 * (s.model / s.opt - 1):+.1f}% over the optimum)')
 
-    def cls(mat):
-        wp, bp, wm, bm = map(int, mat.split('-'))
-        return 'kings only' if wm + bm == 0 else 'one man' if wm + bm == 1 else 'two or more men'
-
-    print()
-    print('switch round s (1 = retrograde from the start), best by the measured times, per class of material:')
-    for k in ('kings only', 'one man', 'two or more men'):
-        mats = [m for m in groups if cls(m) == k]
-        if not mats:
-            continue
-        ss = [s for m in mats for s in best_at[m]]
-        hist = defaultdict(int)
-        for s in ss:
-            hist[min(s, 6)] += 1
-        h = ', '.join(f'{"s>=6" if s == 6 else f"s={s}"} {100 * c / len(ss):.0f}%' for s, c in sorted(hist.items()))
-        t = {key: sum(groups[m][key] for m in mats) / 1e9 for key in ('forward', 'retrograde', 'best', 'model')}
-        print(f'  {k:16} {len(ss):6} slices: {h}')
-        print(f'  {"":16} seconds: forward only {t["forward"]:.1f}, retrograde only {t["retrograde"]:.1f}, '
-              f'best switch {t["best"]:.1f}, model {t["model"]:.1f}')
-    print(f'all seconds: forward only {tot["forward"] / 1e9:.1f}, retrograde only {tot["retrograde"] / 1e9:.1f}, '
-          f'best switch {tot["best"] / 1e9:.1f}, model {tot["model"] / 1e9:.1f}')
+    print('\nseconds:')
+    for k, p in per.groupby('cls'):
+        line(k, p)
+    line('all', per)
+    rounds = per.rounds.sum()
+    print(f'rounds in which forward is cheaper: {per.fwd_cheaper.sum():,} of {rounds:,} ({100 * per.fwd_cheaper.sum() / rounds:.1f}%)')
 
     if a.materials:
-        print()
-        print('material     slices  best s: median  max   F/U at the best switch (median)   seconds: forward retrograde best model')
-        for mat in sorted(groups, key=lambda m: (sum(map(int, m.split('-')[:2])), sum(map(int, m.split('-')[2:])), m)):
-            g = groups[mat]
-            ra = f'{median(ratio_at[mat]):.3f}' if ratio_at[mat] else '-'
-            print(f'{mat}  {int(g["slices"]):6}  {median(best_at[mat]):13}  {max(best_at[mat]):4}   {ra:>33}   '
-                  f'{g["forward"] / 1e9:8.2f} {g["retrograde"] / 1e9:8.2f} {g["best"] / 1e9:8.2f} {g["model"] / 1e9:8.2f}')
+        print('\nmaterial     slices   rounds  fwd cheaper  best s (median)   seconds: forward retrograde single optimum model')
+        mats = per.groupby('mat').agg(slices=('rounds', 'size'), rounds=('rounds', 'sum'), fc=('fwd_cheaper', 'sum'),
+                                      s=('best_s', 'median'), forward=('forward', 'sum'), retrograde=('retrograde', 'sum'),
+                                      single=('single', 'sum'), opt=('opt', 'sum'), model=('model', 'sum'))
+        order = sorted(mats.index, key=lambda x: (sum(map(int, x.split('-')[:2])), sum(map(int, x.split('-')[2:])), x))
+        for mat in order:
+            x = mats.loc[mat]
+            print(f'{mat}  {int(x.slices):7}  {int(x.rounds):7}  {100 * x.fc / max(1, x.rounds):10.1f}%  {x.s:15.0f}   '
+                  f'{x.forward / 1e9:8.2f} {x.retrograde / 1e9:8.2f} {x.single / 1e9:8.2f} {x.opt / 1e9:8.2f} {x.model / 1e9:8.2f}')
 
 
 if __name__ == '__main__':

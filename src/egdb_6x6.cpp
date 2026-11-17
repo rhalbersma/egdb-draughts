@@ -897,9 +897,15 @@ Tally over(bool par, std::size_t n, F&& f)              // f(k) for every k in [
                    : std::transform_reduce(ids.begin(), ids.end(), Tally{}, std::plus<>{}, f);
 }
 
+// A round is done retrograde if k_r + r_w F + r_x X (odd n) or k_r + r_l F (even n) < k_f + U + r_s (L - U), in units of
+// the cost of examining one position forward (F the frontier, X the wins through an exit, U the undecided positions a
+// forward round examines, L the length of the lists it walks). The constants are fitted per game to the least total time
+// of the rounds chosen, on the profile of every round up to 8 pieces (strongly_solving_6x6/materials/switch.py); within
+// about half a percent of choosing with the times of an identical earlier run. EGDB_COSTS="k_f k_r r_w r_l r_s r_x"
+// overrides them.
 struct Costs { double k_f, k_r, r_w, r_l, r_s, r_x; };
 Costs const costs = [] {
-        Costs c{ 0.0, 0.0, 1.0, 1.0, 0.0, 0.0 };
+        Costs c = CHECKERS ? Costs{ 0.23, 0.0, 1.75, 0.38, 0.008, -0.29 } : Costs{ 0.53, 0.0, 2.25, 0.79, 0.004, -0.37 };
         if (char const* e = std::getenv("EGDB_COSTS"))
                 std::sscanf(e, "%lf %lf %lf %lf %lf %lf", &c.k_f, &c.k_r, &c.r_w, &c.r_l, &c.r_s, &c.r_x);
         return c;

@@ -395,6 +395,66 @@ appended to disk, one merge at the end. Only when the bit planes themselves do n
 back: the cumulative bitmaps rewritten every level, and their random reads served from disk through a cache (or
 batched as in rule 6).
 
+### 7.2 Graceful memory degradation: the memory–algorithm hierarchy
+
+A builder should not fail when a material outgrows RAM; it should switch to the next algorithm down a ladder whose
+rungs keep less in memory. Three lineages have published such ladders, with their measured limits.
+
+**Lincke (ETH thesis 2002, §2.6; Lincke–Marzetta 2000): bits per position kept in RAM**, for Awari databases on a
+1 GB machine (values are scores, decomposed into WDL(k) threshold problems; WDL only, no depth):
+
+| RAM, as a share of one byte per position | algorithm | built that way |
+|---|---|---|
+| all | one byte per configuration | up to 28 stones |
+| ≥ 1/4 | two bits per configuration (W, L, D, U) in RAM | 29–30 stones (2.3, 3.1 GB) |
+| ≥ 1/8 | one bit in RAM (W, U) + two bits on disk (W, L, D, U), the disk only streamed | 31–33 stones (4.3–7.7 GB) |
+| ≥ 1/80 | the RAM bit cached (LRU, 16 KB blocks), with **dual indexing**: the RAM bits indexed for the other side to move, so successors land close together; ≥ 1000× fewer misses | 34–40 stones (10–47.6 GB) |
+
+The rule behind the ladder: keep in RAM only the state that is accessed at random (for the losses, the win bit:
+the one-ply forward look reads it, the push of new wins writes it), and stream everything else in index order.
+
+**Wu–Beal (1996 TR, IS 2001, MGoNC 2002, HPDC 2001): random-access bitmaps per position**, for Chinese chess with
+exact DTM or DTC for both sides to move (the byte databases W and B on disk, only streamed):
+
+| algorithm | randomly accessed in RAM | per position |
+|---|---|---|
+| Thompson 1986 | two bitmaps | about 2 bits (1/4 of the byte database) |
+| Wu–Beal 1992 | the byte database + one bitmap | 9 bits |
+| Wu–Beal one-bitmap (1996–2002) | one bitmap R | 1 bit, or 1 bit per two positions with the sides processed alternately |
+| the same, spare memory | extra bitmaps kept in RAM | fewer sequential database scans per level |
+
+Depth survives because every level is a fixed script of streamed bitmap algebra: `Load(W, WIN_IN_N(n))` extracts
+the frontier from the byte database, `Predecessor` pushes it into R, `ProveSuccessor` verifies the candidates against
+`Load(W, WIN_≤N(n))`, `Add` streams the new layer back into the database. That is §7.1's merge pass: several full
+sequential scans of the byte databases per level, paid for one random bit. 92 h for aegp-aaee (about 7 G entries
+with its 143 subgames) on 128 MB.
+
+**Wu–Liu–Hsu (CG 2004): nothing at random**, for databases with more positions than RAM has bits (8.8 G positions,
+1 GB RAM): values and child counters on disk, every scattered update appended to a list, externally sorted, combined
+by multiplicity, and applied in one sequential pass per layer (Allis-style layered counting). RAM holds only the sort
+runs. Sorted updates measured 30–600× faster than random disk updates (10^6 updates: 3787 s random, 6.5 s sorted);
+sorting is about 4 % of the time; restartable per layer.
+
+**One ladder for our builders.** Two knobs: the **group** (the cumulative state is needed only for the group being
+solved; everything outside it is a lookup into finished files, random reads, allowed by rule 6) and the **bits per
+position in RAM** for that group. Taking the rungs in order as a group outgrows memory:
+
+| rung | in RAM per position of the group | on disk | depth | from |
+|---|---|---|---|---|
+| 0 | everything (depth bytes, bit planes, seeds) | finished files only | exact | `thompson86`, `syzygy`, `egdb_6x6` today |
+| 1 | bit planes (cumulative W/B, frontier, candidates): a few bits | depth as appended frontier lists, one merge at the end | exact | §7.1 |
+| 2 | the same, for a smaller group: wave → slice (cheap once the half results are stored, since a move out is one read) | | exact | `thompson86` 1986 style, `egdb_6x6` |
+| 3 | 1 bit: the cumulative win bit; candidates and losses streamed | the byte database, merged per level (Wu–Beal), or the W/L/D/U state streamed (Lincke) | exact (Wu–Beal) or WDL (Lincke) | Wu–Beal, Lincke |
+| 4 | a cached fraction of 1 bit, dual-indexed for locality | as rung 3 | as rung 3 | Lincke |
+| 5 | sort runs only | everything; scatters as sorted batches | exact | Wu–Liu–Hsu |
+
+Before rung 3, the 4× symmetry of kings-only slices (§6) shrinks the largest groups for free. Each rung keeps the
+pass code and changes only where its inputs and outputs live, so a memory budget can pick the rung per group from
+the sizes known before the build (`Meta.P` of the slices). The builders today sit on rung 0 only: `thompson86` keeps
+the depth bytes of the whole material in RAM even when its groups are single slices (rung 1 removes that), and
+`syzygy`'s 16-bit value array is both depth store and cumulative state (about 7.5 bytes per position and side to
+move against rtbgen's 1 byte), so it needs cumulative bit planes before it can climb at all.
+
 ## 8. Best of breed for draughts
 
 Take from syzygy: the metric split (WDL + DTZ), one value cell with codes, the fused round, level synchrony.

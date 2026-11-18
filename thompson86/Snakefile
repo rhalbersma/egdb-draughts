@@ -3,11 +3,11 @@
 #    (See accompanying file LICENSE_1_0.txt or copy at
 #          http://www.boost.org/LICENSE_1_0.txt)
 
-# Thompson style runs of n pieces for 6x6 international draughts (thompson86.cpp), built in the order of the
-# promotion DAG: a run (WM white men, WK white kings, BM black men, BK black kings) needs the run where a white man
-# has become a king (WM - 1, WK + 1) and the run where a black man has (BM - 1, BK + 1). Captures stay inside a run
-# (graveyard squares), so they add no edges. Every run of n pieces is built; the runs with fewer pieces are not
-# needed, because each lies inside a run of n pieces.
+# Thompson style builds for 6x6 international draughts (thompson86.cpp), one file per material, built in the order
+# of the DAG of captures and promotions: a material (WM white men, WK white kings, BM black men, BK black kings) needs
+# every material one move can lead into: a promotion (a man of either side becomes a king), a capture of one or more
+# pieces of either side (the capturing man possibly promoting). A capture of a side's last piece ends the game and
+# needs no file. Every material with at most n pieces and a piece on each side is built.
 #
 # usage (from the root of the repo):
 #   snakemake -s thompson86/Snakefile --cores 4 --config engine=build/thompson86 dir=data/thompson86 pieces=6 \
@@ -21,25 +21,36 @@ METRIC = config.get('metric', 'dtm')
 STYLE = str(config.get('style', '86'))
 THREADS = int(config.get('threads', 4))
 
-RUNS = [(wm, wk, bm, N - wm - wk - bm)
-        for wm in range(N + 1) for wk in range(N + 1 - wm) for bm in range(N + 1 - wm - wk)
-        if wm + wk > 0 and N - wm - wk > 0]
+MATERIALS = [(wm, wk, bm, bk)
+             for wm in range(N + 1) for wk in range(N + 1 - wm) for bm in range(N + 1 - wm - wk)
+             for bk in range(N + 1 - wm - wk - bm)
+             if wm + wk > 0 and bm + bk > 0]
 
 
-def name(c):
-    return '-'.join(map(str, c))
+def name(m):
+    return '-'.join(map(str, m))
 
 
-def deps(c):
-    wm, wk, bm, bk = c
-    out = []
-    if wm > 0: out.append((wm - 1, wk + 1, bm, bk))
-    if bm > 0: out.append((wm, wk, bm - 1, bk + 1))
-    return out
+def deps(m):
+    wm, wk, bm, bk = m
+    out = set()
+    if wm > 0: out.add((wm - 1, wk + 1, bm, bk))                       # promotions
+    if bm > 0: out.add((wm, wk, bm - 1, bk + 1))
+    for i in range(bm + 1):                                            # White captures i men and j kings
+        for j in range(bk + 1):
+            if 0 < i + j < bm + bk:
+                out.add((wm, wk, bm - i, bk - j))
+                if wm > 0: out.add((wm - 1, wk + 1, bm - i, bk - j))
+    for i in range(wm + 1):                                            # Black captures i men and j kings
+        for j in range(wk + 1):
+            if 0 < i + j < wm + wk:
+                out.add((wm - i, wk - j, bm, bk))
+                if bm > 0: out.add((wm - i, wk - j, bm - 1, bk + 1))
+    return sorted(out)
 
 
 wildcard_constraints:
-    run=r'\d+-\d+-\d+-\d+'
+    mat=r'\d+-\d+-\d+-\d+'
 
 
 rule all:
@@ -47,15 +58,15 @@ rule all:
 
 
 rule build:
-    input: lambda w: [f'{D}/run-{name(d)}.{METRIC}' for d in deps(tuple(map(int, w.run.split('-'))))]
-    output: f'{D}/run-{{run}}.{METRIC}'
-    log: f'{D}/run-{{run}}.{METRIC}.log'
-    params: caps=lambda w: w.run.replace('-', ' ')
-    shell: '{ENGINE} build {D} {params.caps} {METRIC} {STYLE} > {log} 2>&1'
+    input: lambda w: [f'{D}/mat-{name(d)}.{METRIC}' for d in deps(tuple(map(int, w.mat.split('-'))))]
+    output: f'{D}/mat-{{mat}}.{METRIC}'
+    log: f'{D}/mat-{{mat}}.{METRIC}.log'
+    params: m=lambda w: w.mat.replace('-', ' ')
+    shell: '{ENGINE} build {D} {params.m} {METRIC} {STYLE} > {log} 2>&1'
 
 
 rule check:
-    input: [f'{D}/run-{name(c)}.{METRIC}' for c in RUNS]
+    input: [f'{D}/mat-{name(m)}.{METRIC}' for m in MATERIALS]
     output: f'{D}/check-{N}.{METRIC}.ok'
     log: f'{D}/check-{N}.{METRIC}.log'
     threads: THREADS

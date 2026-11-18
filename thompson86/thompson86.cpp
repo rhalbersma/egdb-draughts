@@ -10,26 +10,23 @@
 //   dtz   the end, or a capture or man move (a zeroing move of the 25-move rule) that keeps the win
 // A goal move by either side ends the count: a White win can end with Black's forced capture (an even number of plies).
 //
-// Runs. A run is a material (WM white men, WK white kings, BM black men, BK black kings), read as capacities: the run
-// holds every position with at most that many pieces of each colour and type, the captured ones parked on graveyard
-// squares above the board. Promotions leave the run (a man becomes a king: another run), captures stay inside it.
-// The runs form a DAG through promotions, which Snakemake builds in order (thompson86/Snakefile).
+// Materials. Every material (WM white men, WK white kings, BM black men, BK black kings, both sides with a piece)
+// is built once, into a file of its own. Its index: per colour and type the colex rank over the squares where such a
+// piece may stand (15 for men, 18 for kings),
+//   index = ((rank_wm * C(15, BM) + rank_bm) * C(18, WK) + rank_wk) * C(18, BK) + rank_bk
+// Slots where pieces of different colours or types share a square are never written (0 = not a win). A move into
+// another material (a capture, a promotion) is a lookup in that material's file at its own index: the smaller
+// materials are not copied or recomputed, the address of a position follows from its own pieces. The materials form
+// a DAG through captures and promotions, which Snakemake builds in order (thompson86/Snakefile).
 //
-// Index of a run: per colour and type a colex rank over the squares where such a piece may stand (15 for men, 18 for
-// kings) plus as many graveyard squares as the capacity; captured pieces fill the graveyard from its first square on,
-// so the parked layers are contiguous blocks at offsets given by the rank formula:
-//   rank = colex_d(squares on the board) + sum_{j=1..p} C(S + j - 1, d + j)     (d on the board, p parked)
-//   index = ((rank_wm * size_bm + rank_bm) * size_wk + rank_wk) * size_bk + rank_bk
-// Slots where pieces of different colours or types share a square are never written (0 = not a win).
-//
-// Groups. The positions of a run are solved group by group, each group after every group its moves can leave to:
-//   1986 style   a group is one slice of egdb_6x6 (a placement of the men and the numbers of kings), in order of pieces
-//                on the board, then distance of the men to promotion; only king moves without capture stay inside
-//   1996 style   a group is a wave: every slice with the same number of pieces on the board (for dtz: and the same
-//                distance, since a man move ends the count there); king moves and man moves without capture or
+// Groups. The positions of a material are solved group by group, each group after every group its moves can leave to:
+//   1986 style   a group is one slice of egdb_6x6 (a placement of the men and the numbers of kings), in order of
+//                distance of the men to promotion; only king moves without capture stay inside
+//   1996 style   a group is a wave: every slice of the material (for dtz: every slice with the same distance, since
+//                a man move ends the count there); king moves and man moves without capture or
 //                promotion stay inside; the passes mask late, as in Thompson's I/O-enhanced algorithm (Figure 3)
 // In both, every move that leaves a group (captures, promotions, and in the 1986 style man moves) is looked up
-// forward in pass 0, in a finished group or run: no uncaptures anywhere. A position without moves inside the group
+// forward in pass 0, in a finished group or material: no uncaptures anywhere. A position without moves inside the group
 // is decided there (captures are compulsory); the others keep their exit results as seeds at their depth.
 // Rounds, level d = 1, 2, ... in plies, on bit planes (Thompson's P2 / P3 / P4):
 //   W_d = unmoves of B_{d-1} into open White-to-move positions, plus exits that win in d
@@ -37,17 +34,17 @@
 //         the group leads into W (levels < d); plus positions decided in pass 0 at d
 // Only White-to-move results are kept. A Black-to-move value is one ply of search over White-to-move results.
 //
-// Memory: the run's result bytes (written to disk once, sequentially, at the end) and bit planes per group.
-// Disk: other runs are read through read-only memory maps (random reads); the only write is the sequential one.
+// Memory: the material's result bytes (written to disk once, sequentially, at the end) and bit planes per group.
+// Disk: other materials are read through read-only memory maps (random reads); the only write is the sequential one.
 //
 // build: g++-14 -std=c++23 -O2 -march=native -fopenmp -I<xstd-bits>/include -I<xstd-ints>/include
 //        -I<xstd-misc>/include thompson86/thompson86.cpp -lzstd -ltbb -o thompson86
-// usage: thompson86 build <dir> WM WK BM BK <metric> <style>   build one run (the runs it promotes into must exist)
-//        thompson86 checkall <dir> n <metric> [threads]         every run of n pieces against egdb_6x6 (built in
+// usage: thompson86 build <dir> WM WK BM BK <metric> <style>   build one material (its captures and promotions must exist)
+//        thompson86 checkall <dir> n <metric> [threads]         every material of at most n pieces against egdb_6x6 (built in
 //                                                               memory): dtm exactly, dtc / dtz their wins and losses,
 //                                                               and every value recomputed from its successors
 //        thompson86 order <dir_dtz> <dir_dtc> <dir_dtm> n       dtz <= dtc <= dtm for every White-to-move win
-//        thompson86 size WM WK BM BK                            the number of slots of a run
+//        thompson86 size WM WK BM BK                            the number of slots of a material
 // metric: dtm, dtc, dtz; style: 86, 96
 
 #define main egdb_6x6_main
@@ -110,97 +107,68 @@ bool inside(Pos const& p, Move const& mv)
         return g_waves && g_metric != Metric::dtz;                      // a man move: inside a wave, unless it ends the count
 }
 
-// ---------------------------------------------------------------- runs and their index
+// ---------------------------------------------------------------- materials and their index
 
-struct Caps {
+struct Material {
         int wm, wk, bm, bk;
-        auto operator<=>(Caps const&) const = default;
+        auto operator<=>(Material const&) const = default;
+        int pieces() const { return wm + wk + bm + bk; }
         std::string name() const
         {
                 return std::to_string(wm) + "-" + std::to_string(wk) + "-" + std::to_string(bm) + "-" + std::to_string(bk);
         }
 };
 
+Material material_of(Pos const& p)
+{
+        return { int(p.m[0].size()), int(p.k[0].size()), int(p.m[1].size()), int(p.k[1].size()) };
+}
+
 constexpr bitboard DOM_WM = FULL - PROMO_WHITE;    // squares a white man may stand on (15)
 constexpr bitboard DOM_BM = FULL - PROMO_BLACK;    // squares a black man may stand on (15)
 
-// one colour and type: colex rank over S squares plus n graveyard squares, captured pieces parked in order
-struct TypeIndex {
-        bitboard domain;
-        std::size_t S = 0, n = 0;
-        std::uint64_t size = 1;
-        std::array<std::uint64_t, 33> offset{};         // offset[d]: the block of d pieces on the board (n - d parked)
+struct MatIndex {
+        std::uint64_t swm, sbm, swk, sbk, size;
 
-        TypeIndex(bitboard dom, int cap) : domain(dom), S(dom.size()), n(std::size_t(cap))
-        {
-                size = CC[S + n][n];
-                for (std::size_t d = 0; d <= n; ++d) {
-                        std::uint64_t o = 0;
-                        for (std::size_t j = 1; j <= n - d; ++j) o += CC[S + j - 1][d + j];
-                        offset[d] = o;
-                }
-        }
-
-        std::uint64_t rank(bitboard const& pieces) const
-        {
-                return rank_in(pieces, domain) + offset[pieces.size()];
-        }
-};
-
-struct RunIndex {
-        Caps caps;
-        TypeIndex wm, bm, wk, bk;
-        std::uint64_t size;
-
-        explicit RunIndex(Caps c)
+        explicit MatIndex(Material m)
         :
-                caps(c), wm(DOM_WM, c.wm), bm(DOM_BM, c.bm), wk(FULL, c.wk), bk(FULL, c.bk),
-                size(wm.size * bm.size * wk.size * bk.size)
+                swm(CC[15][std::size_t(m.wm)]), sbm(CC[15][std::size_t(m.bm)]), swk(CC[18][std::size_t(m.wk)]),
+                sbk(CC[18][std::size_t(m.bk)]), size(swm * sbm * swk * sbk)
         {}
 
         std::uint64_t index(Pos const& p) const
         {
-                return ((wm.rank(p.m[0]) * bm.size + bm.rank(p.m[1])) * wk.size + wk.rank(p.k[0])) * bk.size + bk.rank(p.k[1]);
+                return ((rank_in(p.m[0], DOM_WM) * sbm + rank_in(p.m[1], DOM_BM)) * swk + rank_in(p.k[0], FULL)) * sbk
+                     + rank_in(p.k[1], FULL);
         }
 };
-
-// the run of a position reached by a move from a position of run c: a promotion moves it to the run with one man
-// fewer and one king more for the side that promoted
-Caps caps_after(Caps c, Pos const& before, Pos const& after)
-{
-        int const side = before.stm;
-        if (after.k[side].size() > before.k[side].size()) {
-                if (side == 0) { --c.wm; ++c.wk; } else { --c.bm; ++c.bk; }
-        }
-        return c;
-}
 
 char const* metric_name()
 {
         return g_metric == Metric::dtm ? "dtm" : g_metric == Metric::dtc ? "dtc" : "dtz";
 }
 
-std::string run_path(std::string const& dir, Caps c) { return dir + "/run-" + c.name() + "." + metric_name(); }
+std::string mat_path(std::string const& dir, Material m) { return dir + "/mat-" + m.name() + "." + metric_name(); }
 
-// ---------------------------------------------------------------- results: the run being built, and finished runs
+// ---------------------------------------------------------------- results: the material being built, and finished ones
 
 std::string g_dir;
-Caps g_current{ -1, -1, -1, -1 };
-std::vector<std::uint8_t> g_res;                    // the run being built (written to disk at the end)
-std::map<Caps, std::uint8_t const*> g_runs;         // finished runs, memory-mapped read-only
-std::map<Caps, RunIndex> g_index;
+Material g_current{ -1, -1, -1, -1 };
+std::vector<std::uint8_t> g_res;                    // the material being built (written to disk at the end)
+std::map<Material, std::uint8_t const*> g_files;    // finished materials, memory-mapped read-only
+std::map<Material, MatIndex> g_index;
 
-RunIndex const& run_index(Caps c)
+MatIndex const& mat_index(Material m)
 {
-        auto it = g_index.find(c);
-        if (it == g_index.end()) it = g_index.emplace(c, RunIndex(c)).first;
+        auto it = g_index.find(m);
+        if (it == g_index.end()) it = g_index.emplace(m, MatIndex(m)).first;
         return it->second;
 }
 
-std::uint8_t const* map_run(std::string const& path, std::size_t size)
+std::uint8_t const* map_file(std::string const& path, std::size_t size)
 {
         int fd = ::open(path.c_str(), O_RDONLY);
-        if (fd < 0) { std::cerr << "missing run " << path << std::endl; std::exit(1); }
+        if (fd < 0) { std::cerr << "missing " << path << std::endl; std::exit(1); }
         struct stat st{};
         ::fstat(fd, &st);
         if (std::size_t(st.st_size) != size) { std::cerr << "wrong size " << path << std::endl; std::exit(1); }
@@ -210,28 +178,29 @@ std::uint8_t const* map_run(std::string const& path, std::size_t size)
         return static_cast<std::uint8_t const*>(m);
 }
 
-std::uint8_t const* run_data(Caps c)
+std::uint8_t const* mat_data(Material m)
 {
-        if (c == g_current) return g_res.data();
-        auto it = g_runs.find(c);
-        if (it != g_runs.end()) return it->second;
-        return g_runs[c] = map_run(run_path(g_dir, c), run_index(c).size);
+        if (m == g_current) return g_res.data();
+        auto it = g_files.find(m);
+        if (it != g_files.end()) return it->second;
+        return g_files[m] = map_file(mat_path(g_dir, m), mat_index(m).size);
 }
 
 // White to move: plies to the goal of a White win, 0 if not a win
-int lookup_wtm(Caps c, Pos const& p)
+int lookup_wtm(Pos const& p)
 {
-        if ((p.m[0] | p.k[0]).empty()) return 0;          // White has no pieces: lost
-        return run_data(c)[run_index(c).index(p)];
+        if ((p.m[0] | p.k[0]).empty() || (p.m[1] | p.k[1]).empty()) return 0;   // a side without pieces: not a White win to look up
+        Material const m = material_of(p);
+        return mat_data(m)[mat_index(m).index(p)];
 }
 
 // Black to move: plies to the goal of Black's loss, -1 if Black is not lost (one ply over White-to-move results)
-int lookup_btm_lost(Caps c, Pos const& p)
+int lookup_btm_lost(Pos const& p)
 {
         if ((p.m[1] | p.k[1]).empty()) return 0;          // Black has no pieces: lost
         int lost = 0;
         for (auto const& mv : moves(p)) {                   // no move: lost now (0)
-                int const v = lookup_wtm(caps_after(c, p, mv.next), mv.next);
+                int const v = lookup_wtm(mv.next);
                 if (v == 0) return -1;
                 lost = std::max(lost, goal_move(p, mv) ? 1 : 1 + v);
         }
@@ -239,11 +208,11 @@ int lookup_btm_lost(Caps c, Pos const& p)
 }
 
 // White to move, recomputed from the successors: the fastest goal over the moves, 0 if none wins
-int wtm_from_successors(Caps c, Pos const& p)
+int wtm_from_successors(Pos const& p)
 {
         int best = INF;
         for (auto const& mv : moves(p)) {
-                int const j = lookup_btm_lost(caps_after(c, p, mv.next), mv.next);
+                int const j = lookup_btm_lost(mv.next);
                 if (j >= 0) best = std::min(best, goal_move(p, mv) ? 1 : 1 + j);
         }
         return best < INF ? best : 0;
@@ -323,20 +292,20 @@ void for_each_inside_predecessor(Group const& g, Pos const& q, F&& f)
                 }
 }
 
-void solve_group(Caps caps, RunIndex const& ri, Group const& g)
+void solve_group(MatIndex const& mi, Group const& g)
 {
         std::uint64_t const P = g.P;
         Plane open_w(P), open_b(P), lossable(P), exits_done(P), won(P), lost(P);
         std::vector<Seed> win_seeds, loss_decided, exit_seeds;
 
-        // pass 0: forward over every position, both sides to move; exits are looked up in finished groups and runs
+        // pass 0: forward over every position, both sides to move; exits are looked up in finished groups and materials
         for (std::uint64_t i = 0; i < P; ++i) {
                 Pos const p = g.pos(i, 0);
                 bool in = false;
                 int best = INF;
                 for (auto const& mv : moves(p)) {
                         if (inside(p, mv)) { in = true; continue; }
-                        int const j = lookup_btm_lost(caps_after(caps, p, mv.next), mv.next);
+                        int const j = lookup_btm_lost(mv.next);
                         if (j >= 0) best = std::min(best, goal_move(p, mv) ? 1 : 1 + j);
                 }
                 if (in) open_w.set(i);
@@ -350,7 +319,7 @@ void solve_group(Caps caps, RunIndex const& ri, Group const& g)
                 int slowest = 0;
                 for (auto const& mv : ml) {
                         if (inside(p, mv)) { in = true; continue; }
-                        int const v = lookup_wtm(caps_after(caps, p, mv.next), mv.next);
+                        int const v = lookup_wtm(mv.next);
                         if (v == 0) all_lose = false;
                         else slowest = std::max(slowest, goal_move(p, mv) ? 1 : 1 + v);
                 }
@@ -416,7 +385,7 @@ void solve_group(Caps caps, RunIndex const& ri, Group const& g)
 
                 w_new.for_each([&](std::uint64_t q) {
                         won.set(q);
-                        g_res[ri.index(g.pos(q, 0))] = std::uint8_t(d);
+                        g_res[mi.index(g.pos(q, 0))] = std::uint8_t(d);
                 });
                 b_new.for_each([&](std::uint64_t q) { lost.set(q); });
                 std::swap(w_last, w_new);
@@ -426,36 +395,30 @@ void solve_group(Caps caps, RunIndex const& ri, Group const& g)
         }
 }
 
-// ---------------------------------------------------------------- the groups of a run, in dependency order
+// ---------------------------------------------------------------- the groups of a material, in dependency order
 
-std::vector<Group> groups_of(Caps c)
+std::vector<Group> groups_of(Material c)
 {
-        std::vector<std::pair<std::tuple<int, int, std::uint64_t>, Meta>> units;
+        std::vector<std::pair<std::pair<int, std::uint64_t>, Meta>> units;     // (distance, key): the slices of the material
         for (std::uint32_t w = u32(DOM_WM);; w = (w - 1) & u32(DOM_WM)) {
                 bitboard const wm = bb_of(w);
-                if (int(wm.size()) <= c.wm) {
+                if (int(wm.size()) == c.wm) {
                         std::uint32_t const bdom = u32(DOM_BM - wm);
                         for (std::uint32_t b = bdom;; b = (b - 1) & bdom) {
                                 bitboard const bm = bb_of(b);
-                                if (int(bm.size()) <= c.bm)
-                                        for (int nwk = 0; nwk <= c.wk; ++nwk)
-                                                for (int nbk = 0; nbk <= c.bk; ++nbk) {
-                                                        if (int(wm.size()) + nwk == 0 || int(bm.size()) + nbk == 0) continue;
-                                                        Key const k{ wm, bm, nwk, nbk };
-                                                        Meta const m = meta_of(k);
-                                                        if (m.P == 0) continue;
-                                                        units.push_back({ { pieces(k), distance(k), k.pack() }, m });
-                                                }
+                                if (int(bm.size()) == c.bm) {
+                                        Key const k{ wm, bm, c.wk, c.bk };
+                                        Meta const m = meta_of(k);
+                                        if (m.P != 0) units.push_back({ { distance(k), k.pack() }, m });
+                                }
                                 if (b == 0) break;
                         }
                 }
                 if (w == 0) break;
         }
         std::ranges::sort(units, {}, [](auto const& u) { return u.first; });
-        // 1986: one slice per group; 1996: a wave per number of pieces (dtz: per number of pieces and distance)
-        auto wave = [](std::tuple<int, int, std::uint64_t> const& k) {
-                return std::pair(std::get<0>(k), g_metric == Metric::dtz ? std::get<1>(k) : 0);
-        };
+        // 1986: one slice per group; 1996: the whole material as one wave (dtz: one wave per distance)
+        auto wave = [](std::pair<int, std::uint64_t> const& k) { return g_metric == Metric::dtz ? k.first : 0; };
         std::vector<Group> out;
         for (std::size_t i = 0; i < units.size(); ++i) {
                 if (out.empty() || !g_waves || wave(units[i].first) != wave(units[i - 1].first)) out.emplace_back();
@@ -464,17 +427,17 @@ std::vector<Group> groups_of(Caps c)
         return out;
 }
 
-bool build_run(std::string const& dir, Caps c)
+bool build_material(std::string const& dir, Material c)
 {
         g_dir = dir;
         g_current = c;
-        RunIndex const& ri = run_index(c);
-        g_res.assign(ri.size, 0);
+        MatIndex const& mi = mat_index(c);
+        g_res.assign(mi.size, 0);
         auto const groups = groups_of(c);
         auto const t0 = std::chrono::steady_clock::now();
         std::uint64_t positions = 0;
-        for (auto const& g : groups) { solve_group(c, ri, g); positions += 2 * g.P; }
-        std::string const path = run_path(dir, c), tmp = path + ".tmp";
+        for (auto const& g : groups) { solve_group(mi, g); positions += 2 * g.P; }
+        std::string const path = mat_path(dir, c), tmp = path + ".tmp";
         {
                 std::ofstream f(tmp, std::ios::binary | std::ios::trunc);
                 f.write(reinterpret_cast<char const*>(g_res.data()), std::streamsize(g_res.size()));   // one sequential write
@@ -485,23 +448,23 @@ bool build_run(std::string const& dir, Caps c)
         int longest = 0;
         for (auto v : g_res) { wins += v != 0; longest = std::max(longest, int(v)); }
         double const sec = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-        std::cout << "run " << c.name() << " " << metric_name() << (g_waves ? " 1996" : " 1986") << ": " << groups.size()
-                  << " groups, " << positions << " positions, " << ri.size << " slots, " << wins << " White wins, longest "
+        std::cout << "material " << c.name() << " " << metric_name() << (g_waves ? " 1996" : " 1986") << ": " << groups.size()
+                  << " groups, " << positions << " positions, " << mi.size << " slots, " << wins << " White wins, longest "
                   << longest << " plies, " << sec << " s" << std::endl;
         return true;
 }
 
 // ---------------------------------------------------------------- checks
 
-std::vector<Caps> runs_of(int n)
+// every material with at most n pieces, both sides with a piece
+std::vector<Material> materials_up_to(int n)
 {
-        std::vector<Caps> out;
+        std::vector<Material> out;
         for (int wm = 0; wm <= n; ++wm)
                 for (int wk = 0; wm + wk <= n; ++wk)
-                        for (int bm = 0; wm + wk + bm <= n; ++bm) {
-                                int const bk = n - wm - wk - bm;
-                                if (wm + wk > 0 && bm + bk > 0) out.push_back({ wm, wk, bm, bk });
-                        }
+                        for (int bm = 0; wm + wk + bm <= n; ++bm)
+                                for (int bk = 0; wm + wk + bm + bk <= n; ++bk)
+                                        if (wm + wk > 0 && bm + bk > 0) out.push_back({ wm, wk, bm, bk });
         return out;
 }
 
@@ -510,34 +473,36 @@ std::vector<Caps> runs_of(int n)
 bool check_all(std::string const& dir, int n, int threads)
 {
         g_dir = dir;
-        build(n, threads, n);                                   // egdb_6x6, once for every run
+        build(n, threads, n);                                   // egdb_6x6, once for every material
         bool ok = true;
-        for (Caps const c : runs_of(n)) {
-                RunIndex const& ri = run_index(c);
-                std::uint8_t const* res = run_data(c);
+        std::uint64_t total = 0;
+        for (Material const c : materials_up_to(n)) {
+                MatIndex const& mi = mat_index(c);
+                std::uint8_t const* res = mat_data(c);
                 std::uint64_t checked = 0, bad_w = 0, bad_b = 0, bad_s = 0;
                 for (auto const& g : groups_of(c))
                         for (std::uint64_t i = 0; i < g.P; ++i) {
                                 Pos const pw = g.pos(i, 0), pb = g.pos(i, 1);
                                 std::uint16_t const v = lookup(pw), u = lookup(pb);
                                 bool const win = v != DRAW && (v & 1), loss = u != DRAW && !(u & 1);
-                                int const got = res[ri.index(pw)], got_b = lookup_btm_lost(c, pb);
+                                int const got = res[mi.index(pw)], got_b = lookup_btm_lost(pb);
                                 bool const w_ok = g_metric == Metric::dtm ? got == (win ? int(v) : 0) : (got != 0) == win;
                                 bool const b_ok = g_metric == Metric::dtm ? got_b == (loss ? int(u) : -1) : (got_b >= 0) == loss;
                                 if (!w_ok && bad_w++ < 3) std::cerr << "W " << fen_of(pw) << " got " << got << " oracle " << show(v) << std::endl;
                                 if (!b_ok && bad_b++ < 3) std::cerr << "B " << fen_of(pb) << " got " << got_b << " oracle " << show(u) << std::endl;
                                 if (g_metric != Metric::dtm) {
-                                        int const s = wtm_from_successors(c, pw);
-                                        if (s != got && bad_s++ < 3) std::cerr << "S " << fen_of(pw) << " stored " << got << " from successors " << s << std::endl;
+                                        int const sv = wtm_from_successors(pw);
+                                        if (sv != got && bad_s++ < 3) std::cerr << "S " << fen_of(pw) << " stored " << got << " from successors " << sv << std::endl;
                                 }
                                 checked += 2;
                         }
+                total += checked;
                 std::cout << "check " << c.name() << " " << metric_name() << ": " << checked << " positions, " << bad_w << " / "
                           << bad_b << " differences from egdb_6x6 (White / Black to move), " << bad_s
                           << " differences from the successors" << std::endl;
                 ok = ok && bad_w == 0 && bad_b == 0 && bad_s == 0;
         }
-        std::cout << (ok ? "all runs check out" : "DIFFERENCES") << std::endl;
+        std::cout << total << " positions; " << (ok ? "all materials check out" : "DIFFERENCES") << std::endl;
         return ok;
 }
 
@@ -545,11 +510,11 @@ bool check_all(std::string const& dir, int n, int threads)
 bool check_order(std::string const& dz, std::string const& dc, std::string const& dm, int n)
 {
         std::uint64_t wins = 0, bad = 0, equal_zc = 0, equal_cm = 0;
-        for (Caps const c : runs_of(n)) {
-                std::size_t const size = run_index(c).size;
-                g_metric = Metric::dtz; auto const z = map_run(run_path(dz, c), size);
-                g_metric = Metric::dtc; auto const x = map_run(run_path(dc, c), size);
-                g_metric = Metric::dtm; auto const m = map_run(run_path(dm, c), size);
+        for (Material const c : materials_up_to(n)) {
+                std::size_t const size = mat_index(c).size;
+                g_metric = Metric::dtz; auto const z = map_file(mat_path(dz, c), size);
+                g_metric = Metric::dtc; auto const x = map_file(mat_path(dc, c), size);
+                g_metric = Metric::dtm; auto const m = map_file(mat_path(dm, c), size);
                 for (std::size_t i = 0; i < size; ++i) {
                         if ((z[i] == 0) != (m[i] == 0) || (x[i] == 0) != (m[i] == 0)) { ++bad; continue; }
                         if (m[i] == 0) continue;
@@ -571,15 +536,15 @@ int main(int argc, char* argv[])
         init_tables();
         init_cc();
         std::vector<std::string> const a(argv + 1, argv + argc);
-        auto caps_at = [&](std::size_t i) { return Caps{ std::stoi(a[i]), std::stoi(a[i + 1]), std::stoi(a[i + 2]), std::stoi(a[i + 3]) }; };
+        auto mat_at = [&](std::size_t i) { return Material{ std::stoi(a[i]), std::stoi(a[i + 1]), std::stoi(a[i + 2]), std::stoi(a[i + 3]) }; };
         if (a.size() == 8 && a[0] == "build" && parse_metric(a[6]) && (a[7] == "86" || a[7] == "96")) {
                 g_waves = a[7] == "96";
-                return build_run(a[1], caps_at(2)) ? 0 : 1;
+                return build_material(a[1], mat_at(2)) ? 0 : 1;
         }
         if ((a.size() == 4 || a.size() == 5) && a[0] == "checkall" && parse_metric(a[3]))
                 return check_all(a[1], std::stoi(a[2]), a.size() == 5 ? std::stoi(a[4]) : 4) ? 0 : 1;
         if (a.size() == 5 && a[0] == "order") return check_order(a[1], a[2], a[3], std::stoi(a[4])) ? 0 : 1;
-        if (a.size() == 5 && a[0] == "size") { std::cout << RunIndex(caps_at(1)).size << std::endl; return 0; }
+        if (a.size() == 5 && a[0] == "size") { std::cout << MatIndex(mat_at(1)).size << std::endl; return 0; }
         std::cerr << "usage: thompson86 build <dir> WM WK BM BK dtm|dtc|dtz 86|96 | checkall <dir> n dtm|dtc|dtz [threads]"
                      " | order <dir_dtz> <dir_dtc> <dir_dtm> n | size WM WK BM BK" << std::endl;
         return 2;

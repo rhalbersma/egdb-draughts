@@ -356,6 +356,45 @@ inside slices with men (2× by the mirror, at storage, as now); fold the kings-o
    check (compare instead of write). The general form: when an output would be scattered, gather it instead (for
    each output slot in order, compute where its value comes from), whenever that inverse map is cheap.
 
+### 7.1 When the build outgrows RAM: what each iteration writes
+
+Rule 6 settles where random writes may go; this settles what a round must write to disk when a material no longer
+fits in RAM. The state of a round splits in two (notation of §9.6, for a one-sided build; the same holds per side
+to move for a two-sided one):
+
+* **bit planes**, a few bits per position: the cumulative `wtm.bit-W` and `btm.bit-L` of the material being built
+  (Thompson's W and B), the frontiers of the previous level (W_n, B_n) and the loss candidates (Thompson's J).
+  Verification reads W and B at random; the pushes write the next frontiers and the candidates at random.
+* **depth bytes**, 8 bits per position: `wtm.dtm-W` and `btm.dtm-L`. During the build of their own material they
+  are only written, never read: a position's depth is the level at which it entered W or B. Only the builds of other
+  materials read them, later, through memory maps.
+
+So the depth files can be write-once, and the regime is decided by the bit planes:
+
+| regime | bit planes | depth bytes | written per iteration |
+|---|---|---|---|
+| all in RAM (the 6×6 builds today) | RAM | RAM, one sequential write per file at the end | nothing |
+| depths outgrow RAM | RAM | on disk, assembled at the end | the newly resolved positions only |
+| bit planes outgrow RAM too (Thompson's regime) | on disk, random reads through a cache | on disk | the new positions, plus `W \|= W_n`, `B \|= B_n` as full sequential passes (2 × T/8 bytes) |
+
+Every iteration produces new depth information, so once the depths are on disk every iteration must persist
+something. Three ways to persist level n, with T positions and L levels:
+
+| way | each iteration writes | over the build | at the end |
+|---|---|---|---|
+| merge pass (Thompson 1996's record step, `BTM \|= B; RES = res(B, n)`) | the whole byte file: read the old file and the frontier, write the new file | L × T bytes, plus as much read | nothing |
+| dense frontier bitmaps | W_n and B_n as sequential files of T/8 bytes each, even when the frontier is nearly empty (the late levels) | L × T / 8 bytes per side to move | one pass reads the L bitmaps side by side, all sequentially, and writes each depth file once |
+| frontier index lists | the sorted indices of the newly resolved positions, delta-coded, appended sequentially | about one small entry per resolved position: every position is resolved exactly once | an L-way merge of the lists writes each depth file once |
+
+For scale, the 6-piece `thompson86` dtm build as if each material were one group (2 × 97.8 M slots, 32.4 M
+resolved positions, up to 69 levels): merge passes 69 × 196 MB ≈ 13.5 GB written, plus as much read; dense frontier
+bitmaps 69 × 2 × 12.2 MB ≈ 1.7 GB; index lists 32.4 M × about 2 bytes ≈ 65 MB; the final depth files 196 MB. With
+lists the per-iteration writes cost less than the final files themselves, nothing written is ever rewritten, and the
+depth files are assembled in one sequential pass. **Aim for the middle regime**: bit planes in RAM, frontier lists
+appended to disk, one merge at the end. Only when the bit planes themselves do not fit does Thompson's machinery come
+back: the cumulative bitmaps rewritten every level, and their random reads served from disk through a cache (or
+batched as in rule 6).
+
 ## 8. Best of breed for draughts
 
 Take from syzygy: the metric split (WDL + DTZ), one value cell with codes, the fused round, level synchrony.

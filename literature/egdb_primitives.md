@@ -246,6 +246,13 @@ derived (Thompson 1986 records White-to-move win distances). Over a mirror-close
 exactly as many one-ply lookups (117,563,826 White exits against as many Black exits on the 6-piece runs); what
 differs is which of them can stop early.
 
+So a builder has **sidedness** as a parameter of its own, next to the metric: the metric decides which moves end
+the count and what an exit contributes; sidedness decides which outcomes are tracked, and with them the value
+encoding, the rounds (one colour's wins and the other's losses, or both), the dependency store it reads (one-sided W,
+or full WDL), the symmetry (one-sided needs the run of a material and of its mirror; two-sided builds one of each
+pair), and what is stored. `thompson86/` is one-sided × {DTM, DTC, DTZ} × {slice, wave}; the design of §8 is
+two-sided × {DTZ, DTM} × slice.
+
 This is also why Thompson 1986 needs one pass for DTM and two for DTC. In his single array the materials are solved
 in one interleaved loop with uncaptures, and a position lost at depth j becomes known in round j. For DTM a capture
 into it is worth j + 1 and is needed in exactly that round; for DTC it is worth 1 and is needed in round 1, but known

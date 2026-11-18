@@ -11,6 +11,9 @@
 
 #pragma once
 
+#include <algorithm>
+#include <atomic>
+#include <execution>
 #include <map>
 #include <string>
 #include <unordered_map>
@@ -142,11 +145,45 @@ std::uint8_t const* map_file(std::string const& path, std::size_t size)
 
 // ---------------------------------------------------------------- bit planes
 
+// ---------------------------------------------------------------- seq or par, over blocks of positions
+//
+// Every pass is one std::for_each over blocks of 4096 indices (a whole number of 64-bit words, so a block owns the
+// words of its positions in every bit plane), sequential or parallel.
+bool g_par = false;
+
+template<class F>
+void for_blocks(std::uint64_t n, F&& f)
+{
+        constexpr std::uint64_t B = 4096;
+        std::vector<std::uint64_t> starts;
+        for (std::uint64_t s = 0; s < n; s += B) starts.push_back(s);
+        auto const run = [&](std::uint64_t s) { f(s, std::min(n, s + B)); };
+        if (g_par) std::for_each(std::execution::par, starts.begin(), starts.end(), run);
+        else std::for_each(std::execution::seq, starts.begin(), starts.end(), run);
+}
+
 struct Plane {
         std::vector<std::uint64_t> w;
         explicit Plane(std::uint64_t n = 0) : w((n + 63) / 64, 0) {}
         bool test(std::uint64_t i) const { return w[i >> 6] >> (i & 63) & 1; }
         void set(std::uint64_t i) { w[i >> 6] |= std::uint64_t(1) << (i & 63); }
+        void set_atomic(std::uint64_t i)                // a scatter from several threads (idempotent)
+        {
+                std::atomic_ref<std::uint64_t>(w[i >> 6]).fetch_or(std::uint64_t(1) << (i & 63), std::memory_order_relaxed);
+        }
+        template<class F> void for_each_par(F&& f) const        // over the set bits, one std::for_each over words
+        {
+                for_blocks(w.size(), [&](std::uint64_t lo, std::uint64_t hi) {
+                        for (std::uint64_t k = lo; k < hi; ++k)
+                                for (std::uint64_t b = w[k]; b; b &= b - 1) f(k * 64 + std::uint64_t(std::countr_zero(b)));
+                });
+        }
+        void mask_par(Plane const& keep, bool complement)       // this &= keep (or ~keep), one std::for_each over words
+        {
+                for_blocks(w.size(), [&](std::uint64_t lo, std::uint64_t hi) {
+                        for (std::uint64_t k = lo; k < hi; ++k) w[k] &= complement ? ~keep.w[k] : keep.w[k];
+                });
+        }
         void clear() { std::ranges::fill(w, 0); }
         bool empty() const { return std::ranges::all_of(w, [](std::uint64_t x) { return x == 0; }); }
         void mask(Plane const& keep, bool complement)   // this &= keep (or ~keep): one sequential pass
@@ -240,6 +277,28 @@ std::vector<Group> groups_of(Material c)
         for (std::size_t i = 0; i < units.size(); ++i) {
                 if (out.empty() || !g_waves || wave(units[i].first) != wave(units[i - 1].first)) out.emplace_back();
                 out.back().add(units[i].second);
+        }
+        return out;
+}
+
+// the materials that one move can lead into: a promotion, or a capture of at least one piece and not the last (the
+// capturing man possibly promoted), by either side (as deps in the Snakefiles)
+inline Material mirror_of(Material m) { return { m.bm, m.bk, m.wm, m.wk }; }
+
+std::vector<Material> successor_materials(Material c)
+{
+        std::vector<Material> out;
+        auto const add = [&](Material m) { if (m != c && std::ranges::find(out, m) == out.end()) out.push_back(m); };
+        for (int side : { 0, 1 }) {
+                Material const s = side == 0 ? c : mirror_of(c);               // the mover as White
+                auto const back = [&](Material m) { return side == 0 ? m : mirror_of(m); };
+                if (s.wm > 0) add(back({ s.wm - 1, s.wk + 1, s.bm, s.bk }));
+                for (int i = 0; i <= s.bm; ++i)
+                        for (int j = 0; j <= s.bk; ++j) {
+                                if (i + j == 0 || i + j == s.bm + s.bk) continue;
+                                add(back({ s.wm, s.wk, s.bm - i, s.bk - j }));
+                                if (s.wm > 0) add(back({ s.wm - 1, s.wk + 1, s.bm - i, s.bk - j }));
+                        }
         }
         return out;
 }

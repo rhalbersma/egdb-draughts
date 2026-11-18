@@ -52,9 +52,10 @@
 //
 // build: g++-14 -std=c++23 -O2 -march=native -fopenmp -I<xstd-bits>/include -I<xstd-ints>/include
 //        -I<xstd-misc>/include thompson86/thompson86.cpp -lzstd -ltbb -o thompson86
-// usage: thompson86 build <dir> wp bp wm bm <metric> <style> [groups|array]
+// usage: thompson86 build <dir> wp bp wm bm <metric> <style> [groups|array] [seq|par]
 //                                                               build one material (its captures and promotions must exist);
-//                                                               the depth sink: per-group files (default) or the array
+//                                                               the depth sink: per-group files (default) or the array;
+//                                                               every pass a std::for_each, seq (default) or par
 //        thompson86 checkall <dir> n <metric> [threads]         every material of at most n pieces against egdb_6x6 (built in
 //                                                               memory): dtm exactly, dtc / dtz their wins and losses,
 //                                                               and every value of both files recomputed from its
@@ -93,10 +94,13 @@ std::string g_dir;
 Material g_current{ -1, -1, -1, -1 };
 std::map<std::pair<Material, int>, std::uint8_t const*> g_files;    // finished materials, memory-mapped read-only
 
+bool g_frozen = false;                                  // during the passes of a build: the maps are only read
+
 std::uint8_t const* mat_file(Material m, int kind)
 {
         auto it = g_files.find({ m, kind });
         if (it != g_files.end()) return it->second;
+        if (g_frozen) { std::cerr << "not opened before the passes: " << mat_path(g_dir, m, kind) << std::endl; std::abort(); }
         return g_files[{ m, kind }] = map_file(mat_path(g_dir, m, kind), file_size(m, kind));
 }
 
@@ -173,8 +177,6 @@ class GroupSink final : public DepthSink
         std::vector<Group> const& groups_;
         std::vector<std::uint64_t> gbase_;                              // offset of each group in the group-order files
         std::unordered_map<std::uint64_t, Slice> slice_;                // slice key -> where its positions are
-        mutable std::uint64_t last_key_ = ~std::uint64_t(0);
-        mutable Slice const* last_ = nullptr;
         std::vector<char> done_;                                        // finished groups
         std::array<std::string, 2> path_;
         std::array<int, 2> fd_{ -1, -1 };
@@ -183,15 +185,19 @@ class GroupSink final : public DepthSink
         std::size_t k_ = 0;
         std::array<std::vector<std::uint8_t>, 2> buf_;                  // the current group, both sides to move
 
-        Slice const* find(Pos const& p) const
+        Slice const* find(Pos const& p) const           // with the last slice cached per thread
         {
+                thread_local GroupSink const* owner = nullptr;
+                thread_local std::uint64_t last_key = 0;
+                thread_local Slice const* last = nullptr;
                 std::uint64_t const key = key_of(p).pack();
-                if (key != last_key_) {
+                if (owner != this || key != last_key) {
                         auto const it = slice_.find(key);
-                        last_ = it == slice_.end() ? nullptr : &it->second;
-                        last_key_ = key;
+                        last = it == slice_.end() ? nullptr : &it->second;
+                        owner = this;
+                        last_key = key;
                 }
-                return last_;
+                return last;
         }
 
 public:
@@ -366,107 +372,130 @@ int wtm_from_successors(Pos const& p)
 
 struct Seed { int level; std::uint32_t idx; };
 
+// Every pass is one std::for_each over blocks (for_blocks, seq or par). Writes are race-free: in pass 0 a block owns
+// the words of its positions; the pushes (P2, P3) and the seeds set bits with an atomic OR (idempotent); verification
+// (P4) and the commit iterate whole words of the planes they write; the sink is written at distinct positions.
 void solve_group(Group const& g, DepthSink& sink)
 {
         std::uint64_t const P = g.P;
         Plane open_w(P), open_b(P), lossable(P), exits_done(P), won(P), lost(P);
-        std::vector<Seed> win_seeds, loss_decided, exit_seeds;
+        std::uint64_t const nblocks = (P + 4095) / 4096;
+        std::vector<std::vector<Seed>> win_b(nblocks), loss_b(nblocks), exit_b(nblocks);    // per block, merged after
 
         // pass 0: forward over every position, both sides to move; exits are looked up in finished groups and materials
-        for (std::uint64_t i = 0; i < P; ++i) {
-                Pos const p = g.pos(i, 0);
-                bool in = false;
-                int best = INF;
-                for (auto const& mv : moves(p)) {
-                        if (inside(p, mv)) { in = true; continue; }
-                        int const j = white_move(p, mv);
-                        if (j >= 0) best = std::min(best, j);
+        for_blocks(P, [&](std::uint64_t lo, std::uint64_t hi) {
+                std::uint64_t const blk = lo / 4096;
+                for (std::uint64_t i = lo; i < hi; ++i) {
+                        Pos const p = g.pos(i, 0);
+                        bool in = false;
+                        int best = INF;
+                        for (auto const& mv : moves(p)) {
+                                if (inside(p, mv)) { in = true; continue; }
+                                int const j = white_move(p, mv);
+                                if (j >= 0) best = std::min(best, j);
+                        }
+                        if (in) open_w.set(i);
+                        if (best < INF) win_b[blk].push_back({ best, std::uint32_t(i) });
                 }
-                if (in) open_w.set(i);
-                if (best < INF) win_seeds.push_back({ best, std::uint32_t(i) });
-        }
-        for (std::uint64_t i = 0; i < P; ++i) {
-                Pos const p = g.pos(i, 1);
-                auto const ml = moves(p);
-                if (ml.empty()) { loss_decided.push_back({ 0, std::uint32_t(i) }); continue; }
-                bool in = false, all_lose = true;
-                int slowest = 0;
-                for (auto const& mv : ml) {
-                        if (inside(p, mv)) { in = true; continue; }
-                        int const v = black_move(p, mv);
-                        if (v == 0) all_lose = false;
-                        else slowest = std::max(slowest, v);
+                for (std::uint64_t i = lo; i < hi; ++i) {
+                        Pos const p = g.pos(i, 1);
+                        auto const ml = moves(p);
+                        if (ml.empty()) { loss_b[blk].push_back({ 0, std::uint32_t(i) }); continue; }
+                        bool in = false, all_lose = true;
+                        int slowest = 0;
+                        for (auto const& mv : ml) {
+                                if (inside(p, mv)) { in = true; continue; }
+                                int const v = black_move(p, mv);
+                                if (v == 0) all_lose = false;
+                                else slowest = std::max(slowest, v);
+                        }
+                        if (!in) {                                      // every move leaves the group: decided
+                                if (all_lose) loss_b[blk].push_back({ slowest, std::uint32_t(i) });
+                                continue;
+                        }
+                        open_b.set(i);
+                        if (!all_lose) continue;
+                        lossable.set(i);
+                        if (slowest == 0) exits_done.set(i);            // no exits
+                        else exit_b[blk].push_back({ slowest, std::uint32_t(i) });
                 }
-                if (!in) {                                              // every move leaves the group: decided
-                        if (all_lose) loss_decided.push_back({ slowest, std::uint32_t(i) });
-                        continue;
-                }
-                open_b.set(i);
-                if (!all_lose) continue;
-                lossable.set(i);
-                if (slowest == 0) exits_done.set(i);                    // no exits
-                else exit_seeds.push_back({ slowest, std::uint32_t(i) });
-        }
-        auto by_level = [](Seed const& a, Seed const& b) { return a.level < b.level; };
-        std::ranges::sort(win_seeds, by_level);
-        std::ranges::sort(loss_decided, by_level);
-        std::ranges::sort(exit_seeds, by_level);
+        });
+        auto const merge = [](std::vector<std::vector<Seed>>& parts) {  // in block order, then stably by level
+                std::vector<Seed> out;
+                for (auto& v : parts) out.insert(out.end(), v.begin(), v.end());
+                std::ranges::stable_sort(out, {}, &Seed::level);
+                return out;
+        };
+        std::vector<Seed> const win_seeds = merge(win_b), loss_decided = merge(loss_b), exit_seeds = merge(exit_b);
         int max_seed = 0;
         for (auto const* v : { &win_seeds, &loss_decided, &exit_seeds })
                 if (!v->empty()) max_seed = std::max(max_seed, v->back().level);
 
+        // the seeds of one level, as a std::for_each over their range
+        auto const level_range = [](std::vector<Seed> const& v, std::size_t& pos, int level) {
+                std::size_t const lo = pos;
+                while (pos < v.size() && v[pos].level == level) ++pos;
+                return std::pair{ lo, pos };
+        };
+        auto const for_seeds = [](std::vector<Seed> const& v, std::pair<std::size_t, std::size_t> r, auto&& f) {
+                for_blocks(r.second - r.first, [&](std::uint64_t lo, std::uint64_t hi) {
+                        for (std::uint64_t j = lo; j < hi; ++j) f(v[r.first + j].idx);
+                });
+        };
+
         // rounds, level d in plies: W_d from B_{d-1}, B_d from W_{d-1}
         std::size_t ws = 0, ld = 0, xs = 0;
         Plane w_last(P), b_last(P), w_new(P), b_new(P), cand(P);
-        for (; ld < loss_decided.size() && loss_decided[ld].level == 0; ++ld) {
-                std::uint32_t const q = loss_decided[ld].idx;
-                b_last.set(q);
-                lost.set(q);
+        for_seeds(loss_decided, level_range(loss_decided, ld, 0), [&](std::uint32_t q) {
+                b_last.set_atomic(q);
+                lost.set_atomic(q);
                 sink.put(1, q, g.pos(q, 1), store_byte(1, 0));          // lost in 0 plies: no move
-        }
+        });
         for (int d = 1;; ++d) {
                 // P2: White wins in d
                 w_new.clear();
-                b_last.for_each([&](std::uint64_t q) {
+                b_last.for_each_par([&](std::uint64_t q) {
                         for_each_inside_predecessor(g, g.pos(q, 1), [&](std::uint64_t id) {
-                                if (!g_waves) { if (open_w.test(id) && !won.test(id)) w_new.set(id); }
-                                else w_new.set(id);                                     // 1996: mask later
+                                if (!g_waves) { if (open_w.test(id) && !won.test(id)) w_new.set_atomic(id); }
+                                else w_new.set_atomic(id);                              // 1996: mask later
                         });
                 });
-                if (g_waves) w_new.mask(open_w, false);                         // unmoves only reach open positions
-                for (; ws < win_seeds.size() && win_seeds[ws].level == d; ++ws) w_new.set(win_seeds[ws].idx);
-                w_new.mask(won, true);
+                if (g_waves) w_new.mask_par(open_w, false);                     // unmoves only reach open positions
+                for_seeds(win_seeds, level_range(win_seeds, ws, d), [&](std::uint32_t q) { w_new.set_atomic(q); });
+                w_new.mask_par(won, true);
 
                 // P3: candidates for Black losses in d
                 cand.clear();
-                for (; xs < exit_seeds.size() && exit_seeds[xs].level == d; ++xs) {
-                        exits_done.set(exit_seeds[xs].idx);
-                        cand.set(exit_seeds[xs].idx);
-                }
-                w_last.for_each([&](std::uint64_t q) {
+                for_seeds(exit_seeds, level_range(exit_seeds, xs, d), [&](std::uint32_t q) {
+                        exits_done.set_atomic(q);
+                        cand.set_atomic(q);
+                });
+                w_last.for_each_par([&](std::uint64_t q) {
                         for_each_inside_predecessor(g, g.pos(q, 0), [&](std::uint64_t id) {
-                                if (!g_waves) { if (open_b.test(id) && lossable.test(id) && !lost.test(id)) cand.set(id); }
-                                else cand.set(id);                                      // 1996: mask later
+                                if (!g_waves) { if (open_b.test(id) && lossable.test(id) && !lost.test(id)) cand.set_atomic(id); }
+                                else cand.set_atomic(id);                               // 1996: mask later
                         });
                 });
-                if (g_waves) { cand.mask(open_b, false); cand.mask(lossable, false); cand.mask(lost, true); }
+                if (g_waves) { cand.mask_par(open_b, false); cand.mask_par(lossable, false); cand.mask_par(lost, true); }
 
-                // P4: lost in d iff the exits are lost by d and every move inside leads into W (levels below d)
+                // P4: lost in d iff the exits are lost by d and every move inside leads into W (levels below d); each
+                // candidate writes only its own bit, in a word its block owns
                 b_new.clear();
-                cand.for_each([&](std::uint64_t q) {
+                cand.for_each_par([&](std::uint64_t q) {
                         if (!exits_done.test(q) || lost.test(q)) return;
                         Pos const p = g.pos(q, 1);
                         for (auto const& mv : moves(p))
                                 if (inside(p, mv) && !won.test(g.index(mv.next))) return;
                         b_new.set(q);
                 });
-                for (; ld < loss_decided.size() && loss_decided[ld].level == d; ++ld) b_new.set(loss_decided[ld].idx);
+                for_seeds(loss_decided, level_range(loss_decided, ld, d), [&](std::uint32_t q) { b_new.set_atomic(q); });
 
-                w_new.for_each([&](std::uint64_t q) {
+                // commit: whole words of won and lost, the sink at distinct positions
+                w_new.for_each_par([&](std::uint64_t q) {
                         won.set(q);
                         sink.put(0, q, g.pos(q, 0), store_byte(0, d));
                 });
-                b_new.for_each([&](std::uint64_t q) {
+                b_new.for_each_par([&](std::uint64_t q) {
                         lost.set(q);
                         sink.put(1, q, g.pos(q, 1), store_byte(1, d));
                 });
@@ -478,12 +507,26 @@ void solve_group(Group const& g, DepthSink& sink)
 
 bool g_group_files = true;                                      // the depth sink: per-group files (false: the material array)
 
+// open every file a build of c can read, and fill the index memo, so that the parallel passes only read the maps: the
+// bytes for dtm, the bits for dtc and dtz (every move out of a material is a goal move there)
+void open_successors(Material c)
+{
+        mat_index(c);
+        for (Material const m : successor_materials(c)) {
+                if (m.wm + m.wk == 0 || m.bm + m.bk == 0) continue;    // a side without pieces: no file
+                mat_index(m);
+                for (int side : { 0, 1 }) mat_file(m, (g_metric == Metric::dtm ? BYTES : BITS) + side);
+        }
+}
+
 bool build_material(std::string const& dir, Material c)
 {
         g_dir = dir;
         g_current = c;
         MatIndex const& mi = mat_index(c);
         auto const groups = groups_of(c);
+        open_successors(c);
+        g_frozen = true;
         std::unique_ptr<DepthSink> sink;
         if (g_group_files) sink = std::make_unique<GroupSink>(dir, c, mi, groups);
         else sink = std::make_unique<ArraySink>(mi);
@@ -529,6 +572,7 @@ bool build_material(std::string const& dir, Material c)
                 std::filesystem::rename(pt + ".tmp", pt);
         }
         g_sink = nullptr;
+        g_frozen = false;
         double const sec = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
         std::cout << "material " << c.name() << " " << metric_name() << (g_waves ? " 1996" : " 1986")
                   << (g_group_files ? " group files" : " array") << ": " << groups.size() << " groups, " << positions
@@ -623,11 +667,12 @@ int main(int argc, char* argv[])
                 if (wm < 0 || bm < 0 || wm > wp || bm > bp) { std::cerr << "not a material: wp bp wm bm" << std::endl; std::exit(2); }
                 return Material{ wm, wp - wm, bm, bp - bm };
         };
-        if ((a.size() == 8 || a.size() == 9) && a[0] == "build" && parse_metric(a[6]) && (a[7] == "86" || a[7] == "96")) {
+        if (a.size() >= 8 && a.size() <= 10 && a[0] == "build" && parse_metric(a[6]) && (a[7] == "86" || a[7] == "96")) {
                 g_waves = a[7] == "96";
-                if (a.size() == 9) {
-                        if (a[8] != "groups" && a[8] != "array") { std::cerr << "sink: groups or array" << std::endl; return 2; }
-                        g_group_files = a[8] == "groups";
+                for (std::size_t i = 8; i < a.size(); ++i) {
+                        if (a[i] == "groups" || a[i] == "array") g_group_files = a[i] == "groups";
+                        else if (a[i] == "seq" || a[i] == "par") g_par = a[i] == "par";
+                        else { std::cerr << "unknown option " << a[i] << std::endl; return 2; }
                 }
                 return build_material(a[1], mat_at(2)) ? 0 : 1;
         }
@@ -635,7 +680,7 @@ int main(int argc, char* argv[])
                 return check_all(a[1], std::stoi(a[2]), a.size() == 5 ? std::stoi(a[4]) : 4) ? 0 : 1;
         if (a.size() == 5 && a[0] == "order") return check_order(a[1], a[2], a[3], std::stoi(a[4])) ? 0 : 1;
         if (a.size() == 5 && a[0] == "size") { std::cout << MatIndex(mat_at(1)).size << std::endl; return 0; }
-        std::cerr << "usage: thompson86 build <dir> wp bp wm bm dtm|dtc|dtz 86|96 [groups|array] | checkall <dir> n dtm|dtc|dtz [threads]"
+        std::cerr << "usage: thompson86 build <dir> wp bp wm bm dtm|dtc|dtz 86|96 [groups|array] [seq|par] | checkall <dir> n dtm|dtc|dtz [threads]"
                      " | order <dir_dtz> <dir_dtc> <dir_dtm> n | size wp bp wm bm" << std::endl;
         return 2;
 }

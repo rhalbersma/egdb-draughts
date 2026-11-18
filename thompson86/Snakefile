@@ -26,6 +26,7 @@ METRIC = config.get('metric', 'dtm')
 D = f'{BASE}/{METRIC}'
 STYLE = str(config.get('style', '86'))
 SINK = config.get('sink', 'groups')        # the depth sink: per-group files, or the whole material's array in RAM
+POLICY = config.get('policy', 'seq')       # every pass a std::for_each: seq, or par within each build
 THREADS = int(config.get('threads', 4))
 
 MATERIALS = [(wm, wk, bm, bk)
@@ -84,7 +85,7 @@ rule build:
     output: files('{mat}')
     log: f'{D}/6x6-{{mat}}.{METRIC}.log'
     params: m=lambda w: w.mat.replace('-', ' ')
-    shell: '{ENGINE} build {D} {params.m} {METRIC} {STYLE} {SINK} > {log} 2>&1'
+    shell: '{ENGINE} build {D} {params.m} {METRIC} {STYLE} {SINK} {POLICY} > {log} 2>&1'
 
 
 rule check:

@@ -85,6 +85,19 @@ and the gathering pass, and the largest material (03-03-01-01, 5.27 M slots per 
 24.9 MB of RSS (13.2 MB of it the program's own tables). This is rung 1 of the memory ladder in
 [`literature/egdb_primitives.md`](../literature/egdb_primitives.md) §7.2.
 
+**Every pass is one `std::for_each`** over blocks of 4096 positions (`for_blocks`, shared with `syzygy`), sequential
+or parallel (`policy=seq|par`, the last argument of `build`). Pass 0 gives each block the words of its positions in
+every bit plane and its own seed lists, merged afterwards; the pushes (P2, P3) and the seeds set bits with an atomic
+OR; verification (P4) and the commit iterate whole words of the planes they write; the sink is written at distinct
+positions. A build opens every file it can read before the passes, so the parallel passes only read the shared maps.
+Both policies give byte-identical files (4 pieces: both styles, both sinks, all metrics; 6 pieces: 1986 style).
+
+Where `par` pays depends on the group: a 1996-style dtm material is one group, and one build at a time takes 21.1 s
+with `par` against 43.0 s with `seq` on 4 cores. A 1986-style group is a single slice, mostly smaller than one block,
+so `par` has nothing to split and only adds the thread pool's overhead (41.8 s against 38 s of `seq` CPU); there the
+parallelism is across materials, four `seq` builds at a time in Snakemake (12.6 s wall for dtm), or would be across
+the independent slices of a group of the same distance.
+
 ## Build and run
 
 ```bash

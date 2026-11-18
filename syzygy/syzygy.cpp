@@ -97,22 +97,9 @@ std::uint16_t better(std::uint16_t a, std::uint16_t b)
         return key(a) >= key(b) ? a : b;
 }
 
-// ---------------------------------------------------------------- seq or par, over blocks of positions
-
-bool g_par = false;
 bool g_frontier = true;                                 // rounds from frontier bit planes (false: rtbgen's full scans)
 
-template<class F>
-void for_blocks(std::uint64_t n, F&& f)
-{
-        constexpr std::uint64_t B = 4096;
-        std::vector<std::uint64_t> starts;
-        for (std::uint64_t s = 0; s < n; s += B) starts.push_back(s);
-        auto const run = [&](std::uint64_t s) { f(s, std::min(n, s + B)); };
-        if (g_par) std::for_each(std::execution::par, starts.begin(), starts.end(), run);
-        else std::for_each(std::execution::seq, starts.begin(), starts.end(), run);
-}
-
+// relaxed atomic access to the value array during the parallel passes
 std::uint16_t load(std::uint16_t& x) { return std::atomic_ref<std::uint16_t>(x).load(std::memory_order_relaxed); }
 void store(std::uint16_t& x, std::uint16_t v) { std::atomic_ref<std::uint16_t>(x).store(v, std::memory_order_relaxed); }
 
@@ -147,28 +134,15 @@ std::uint8_t const* mat_file(Material m, int kind)
         return g_files[{ m, kind }] = map_file(mat_path(g_dir, m, kind), file_size(m, kind));
 }
 
-Material mirror_of(Material m) { return { m.bm, m.bk, m.wm, m.wk }; }
 Material canonical(Material m) { return stored(m) ? m : mirror_of(m); }
 
-// the stored materials that one move can lead into: a promotion, or a capture of at least one piece and not the last
-// (the capturing man possibly promoted), by either side (as deps in syzygy/Snakefile)
+// the stored materials that one move can lead into
 std::vector<Material> successors_of(Material c)
 {
         std::vector<Material> out;
-        auto const add = [&](Material m) {
+        for (Material const m : successor_materials(c)) {
                 Material const k = canonical(m);
                 if (k != c && std::ranges::find(out, k) == out.end()) out.push_back(k);
-        };
-        for (int side : { 0, 1 }) {
-                Material const s = side == 0 ? c : mirror_of(c);               // the mover as White
-                if (s.wm > 0) add(side == 0 ? Material{ s.wm - 1, s.wk + 1, s.bm, s.bk } : mirror_of({ s.wm - 1, s.wk + 1, s.bm, s.bk }));
-                for (int i = 0; i <= s.bm; ++i)
-                        for (int j = 0; j <= s.bk; ++j) {
-                                if (i + j == 0 || i + j == s.bm + s.bk) continue;
-                                Material const t{ s.wm, s.wk, s.bm - i, s.bk - j }, u{ s.wm - 1, s.wk + 1, s.bm - i, s.bk - j };
-                                add(side == 0 ? t : mirror_of(t));
-                                if (s.wm > 0) add(side == 0 ? u : mirror_of(u));
-                        }
         }
         return out;
 }

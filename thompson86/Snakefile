@@ -7,7 +7,8 @@
 # of the DAG of captures and promotions: a material (WM white men, WK white kings, BM black men, BK black kings) needs
 # every material one move can lead into: a promotion (a man of either side becomes a king), a capture of one or more
 # pieces of either side (the capturing man possibly promoting). A capture of a side's last piece ends the game and
-# needs no file. Every material with at most n pieces and a piece on each side is built.
+# needs no file. Every material with at most n pieces and a piece on each side is built, into two files: .w (White to
+# move, plies to a White win) and .l (Black to move, 1 + plies to Black's loss).
 #
 # usage (from the root of the repo):
 #   snakemake -s thompson86/Snakefile --cores 4 --config engine=build/thompson86 dir=data/thompson86 pieces=6 \
@@ -57,16 +58,20 @@ rule all:
     input: f'{D}/check-{N}.{METRIC}.ok'
 
 
+def files(m):
+    return [f'{D}/mat-{m}.{METRIC}.w', f'{D}/mat-{m}.{METRIC}.l']
+
+
 rule build:
-    input: lambda w: [f'{D}/mat-{name(d)}.{METRIC}' for d in deps(tuple(map(int, w.mat.split('-'))))]
-    output: f'{D}/mat-{{mat}}.{METRIC}'
+    input: lambda w: [f for d in deps(tuple(map(int, w.mat.split('-')))) for f in files(name(d))]
+    output: files('{mat}')
     log: f'{D}/mat-{{mat}}.{METRIC}.log'
     params: m=lambda w: w.mat.replace('-', ' ')
     shell: '{ENGINE} build {D} {params.m} {METRIC} {STYLE} > {log} 2>&1'
 
 
 rule check:
-    input: [f'{D}/mat-{name(m)}.{METRIC}' for m in MATERIALS]
+    input: [f for m in MATERIALS for f in files(name(m))]
     output: f'{D}/check-{N}.{METRIC}.ok'
     log: f'{D}/check-{N}.{METRIC}.log'
     threads: THREADS

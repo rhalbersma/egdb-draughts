@@ -265,6 +265,20 @@ Two facts that keep counters correct, from Thompson 1996 and Herik 1985:
 5. **Nesting.** Slices of one (pieces, men, distance) group are independent: outer `for_each(par)` over small slices
    with `seq` inside; a big slice alone with `par` inside. The policy is a type, so the slice solver is a template on
    it and the scheduler dispatches per slice.
+6. **Random reads anywhere, random writes only in RAM.** Every pass declares its read-only inputs and its outputs
+   with their access pattern. Inputs may be read sequentially or randomly, from RAM or from disk: random disk reads go
+   through the page cache or a block cache, and cost little with a slice's locality (measured on a memory-mapped 6×6
+   layer: 3–8 µs per cold lookup, `compression_mmap_10.txt`). Outputs on disk are written sequentially, or densely
+   within a window that fits in RAM, which the page cache turns into one write per page. Sparse random writes go to
+   RAM only, to avoid thrashing the SSD: every scattered write dirties a whole 4 KiB page (the drive writes 4096
+   bytes for one), pages may be flushed and rewritten repeatedly, the drive wears, and after an interruption nobody
+   knows which scattered writes reached the disk. In the passes of §8 the only scattered writes are the rounds'
+   pushes into predecessors and next-frontier bits, into the slice's arrays in RAM. When a slice no longer fits in
+   RAM (all-king slices on 10×10), the remedies are finer slices or Wu-Liu-Hsu's batching: collect the updates, sort
+   them by index, apply them in one sequential pass. In the current code the one write to a mapped file that is not
+   in index order is the mirrored half of a symmetric material in `unit_build` / `mat_build`
+   (`u.p[stored_offset(r, mirror(pos))] = b`); it fills the mirrored slice's range densely (at most about 17 MB on
+   6×6), so it is harmless, and it becomes strictly sequential by mirroring into the slice's RAM buffer first.
 
 ## 8. Best of breed for draughts
 

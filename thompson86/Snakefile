@@ -8,10 +8,11 @@
 # men, two digits each, as in egdb_6x6's material mode); inside, a tuple (wm, wk, bm, bk) with kings. A material needs
 # every material one move can lead into: a promotion (a man of either side becomes a king), a capture of one or more
 # pieces of either side (the capturing man possibly promoting). A capture of a side's last piece ends the game and
-# needs no file. Every material with at most n pieces and a piece on each side is built, into four files: .w (White to
-# move, plies to a White win) and .l (Black to move, 1 + plies to Black's loss), one byte per slot, and .w.bit, .l.bit
-# (won, lost), one bit per slot. A dtm build reads the bytes of the materials it leads into, a dtc or dtz build only
-# their bits (every move out of a material is a goal move there).
+# needs no file. Every material with at most n pieces and a piece on each side is built, into four files of half
+# results, 6x6-wp-bp-wm-bm.<side to move>.<kind>: wtm.<metric>-W (plies to a White win) and btm.<metric>-L (1 + plies
+# to Black's loss), one byte per slot, and wtm.bit-W, btm.bit-L (won, lost), one bit per slot. A dtm build reads the
+# bytes of the materials it leads into, a dtc or dtz build only their bits (every move out of a material is a goal move
+# there). The files of a metric go into <dir>/<metric>: the bit files are the same for all three.
 #
 # usage (from the root of the repo):
 #   snakemake -s thompson86/Snakefile --cores 4 --config engine=build/thompson86 dir=data/thompson86 pieces=6 \
@@ -19,9 +20,10 @@
 # metric: dtm, dtc or dtz; style: 86 (one slice at a time) or 96 (waves, masked passes)
 
 ENGINE = config.get('engine', 'build/thompson86')
-D = config.get('dir', 'data/thompson86')
+BASE = config.get('dir', 'data/thompson86')
 N = int(config.get('pieces', 6))
 METRIC = config.get('metric', 'dtm')
+D = f'{BASE}/{METRIC}'
 STYLE = str(config.get('style', '86'))
 THREADS = int(config.get('threads', 4))
 
@@ -68,12 +70,12 @@ rule all:
 
 
 def files(m):
-    return [f'{D}/6x6-{m}.{METRIC}.{k}' for k in ('w', 'l', 'w.bit', 'l.bit')]
+    return [f'{D}/6x6-{m}.{k}' for k in (f'wtm.{METRIC}-W', f'btm.{METRIC}-L', 'wtm.bit-W', 'btm.bit-L')]
 
 
 def inputs(m):
-    kinds = ('w', 'l') if METRIC == 'dtm' else ('w.bit', 'l.bit')
-    return [f'{D}/6x6-{name(d)}.{METRIC}.{k}' for d in deps(m) for k in kinds]
+    kinds = (f'wtm.{METRIC}-W', f'btm.{METRIC}-L') if METRIC == 'dtm' else ('wtm.bit-W', 'btm.bit-L')
+    return [f'{D}/6x6-{name(d)}.{k}' for d in deps(m) for k in kinds]
 
 
 rule build:

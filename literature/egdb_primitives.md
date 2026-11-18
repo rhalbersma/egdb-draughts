@@ -659,6 +659,34 @@ a block-level operation for depths beyond the escape base; a packed 2-bit WDL ar
 so writes go per owned word (§7, rule 2) or through `fetch_and` / `fetch_or`. Neither matters to the build, which
 uses neither.
 
+### 9.6 Notation for what is stored: full and half results
+
+A stored file is one **side to move** (`wtm`, `btm`) times one **kind**:
+
+| | full result: win, draw and loss | half result: wins only | half result: losses only |
+|---|---|---|---|
+| depth (one byte) | `dtm` | `dtm-W` | `dtm-L` |
+| outcome only | `wdl` (2 bits) | `bit-W` (1 bit) | `bit-L` (1 bit) |
+
+The same for `dtc` and `dtz`; the outcome files carry no metric, since all metrics have the same wins, draws and
+losses. A two-sided build stores full results (`wtm.dtm`, `btm.dtm`, `wtm.wdl`, `btm.wdl`). A one-sided build stores
+half results: White's wins with White to move and Black's losses with Black to move (`wtm.dtm-W`, `btm.dtm-L`,
+`wtm.bit-W`, `btm.bit-L`); the other halves, `wtm.dtm-L` and `btm.dtm-W`, are the colour mirror's `btm.dtm-L` and
+`wtm.dtm-W`. Thompson 1986 kept `wtm.dtm-W` only; Thompson 1996 (dtc) kept `btm.dtc-L` (RES) with `wtm.bit-W` and
+`btm.bit-L` (the summation bitmaps).
+
+What a build reads from the materials that its moves lead into (a White move lands with Black to move, and vice
+versa):
+
+| build | after a White move out | after a Black move out |
+|---|---|---|
+| one-sided dtm | `btm.dtm-L` | `wtm.dtm-W` |
+| one-sided dtc, dtz | `btm.bit-L` | `wtm.bit-W` |
+| two-sided dtm | `btm.dtm` | `wtm.dtm` |
+| two-sided dtc, dtz | `btm.wdl` | `wtm.wdl` |
+
+Any cell that is not stored costs a ply of search per lookup (the half result from the other side to move's file).
+
 ## 10. Storage
 
 Keep what is there: blocks of 4096 positions with zstd per block, capture positions filled with the previous value

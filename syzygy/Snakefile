@@ -6,9 +6,11 @@
 # Syzygy style builds for 6x6 international draughts (syzygy.cpp), two-sided: one of each pair of a material and its
 # colour mirror (the 82 materials up to 6 pieces of strongly_solving_6x6/materials), built in the order of the DAG of
 # captures and promotions. A material is named wp-bp-wm-bm (white pieces, black pieces, white men, black men, two
-# digits each); inside, a tuple (wm, wk, bm, bk) with kings. Per material four files: .wtm, .btm (one byte per slot)
-# and .wtm.wdl, .btm.wdl (two bits per slot). A dtm build reads the .wtm and .btm files of the materials it leads
-# into; a dtc or dtz build only their .wdl files (every move out of a material is a goal move there).
+# digits each); inside, a tuple (wm, wk, bm, bk) with kings. Per material four files of full results,
+# 6x6-wp-bp-wm-bm.<side to move>.<kind>: wtm.<metric>, btm.<metric> (one byte per slot) and wtm.wdl, btm.wdl (two bits
+# per slot). A dtm build reads wtm.dtm and btm.dtm of the materials it leads into; a dtc or dtz build only their wdl
+# files (every move out of a material is a goal move there). The files of a metric go into <dir>/<metric>: the wdl
+# files are the same for all three.
 #
 # usage (from the root of the repo):
 #   snakemake -s syzygy/Snakefile --cores 4 --config engine=build/syzygy dir=data/syzygy pieces=6 metric=dtz
@@ -16,9 +18,10 @@
 # by full scans as rtbgen (default: frontier bit planes)
 
 ENGINE = config.get('engine', 'build/syzygy')
-D = config.get('dir', 'data/syzygy')
+BASE = config.get('dir', 'data/syzygy')
 N = int(config.get('pieces', 6))
 METRIC = config.get('metric', 'dtm')
+D = f'{BASE}/{METRIC}'
 POLICY = config.get('policy', 'seq')
 ROUNDS = config.get('rounds', 'frontier')
 THREADS = int(config.get('threads', 4))
@@ -69,12 +72,12 @@ def deps(m):
 
 
 def files(m):
-    return [f'{D}/6x6-{m}.{METRIC}.{k}' for k in ('wtm', 'btm', 'wtm.wdl', 'btm.wdl')]
+    return [f'{D}/6x6-{m}.{k}' for k in (f'wtm.{METRIC}', f'btm.{METRIC}', 'wtm.wdl', 'btm.wdl')]
 
 
 def inputs(m):
-    kinds = ('wtm', 'btm') if METRIC == 'dtm' else ('wtm.wdl', 'btm.wdl')
-    return [f'{D}/6x6-{name(d)}.{METRIC}.{k}' for d in deps(m) for k in kinds]
+    kinds = ('wtm.dtm', 'btm.dtm') if METRIC == 'dtm' else ('wtm.wdl', 'btm.wdl')
+    return [f'{D}/6x6-{name(d)}.{k}' for d in deps(m) for k in kinds]
 
 
 wildcard_constraints:

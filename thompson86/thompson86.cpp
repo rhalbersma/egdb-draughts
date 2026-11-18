@@ -3,15 +3,17 @@
 //    (See accompanying file LICENSE_1_0.txt or copy at
 //          http://www.boost.org/LICENSE_1_0.txt)
 
-// Thompson style builds (1986 and 1996) for 6x6 international draughts, for three metrics. Per material two files,
-// one byte per position:
-//   .w   White to move: the number of plies to the goal of a White win, 0 for "not a win" (draw, loss, illegal slot)
-//   .l   Black to move: 1 + the number of plies to the goal of Black's loss, 0 for "not lost" (a loss can take 0 plies:
-//        Black has no move), as Thompson 1996 kept the Black-to-move loss distances (RES)
-// and as a by-product their outcomes, one bit per position (the one-sided WDL: won or not, lost or not):
-//   .w.bit   White to move wins        .l.bit   Black to move is lost
-// After a goal move only the outcome counts, so a dtc or dtz build reads only the bit files of the materials that its
-// moves out lead into (every move out of a material is a goal move there); dtm reads the bytes.
+// Thompson style builds (1986 and 1996) for 6x6 international draughts, for three metrics. One-sided: half results,
+// White's wins and Black's losses. Per material four files, 6x6-wp-bp-wm-bm.<side to move>.<kind> (for dtm; dtc and dtz
+// alike):
+//   wtm.dtm-W   one byte: the number of plies to the goal of a White win, 0 for "not a win" (draw, loss, illegal slot)
+//   btm.dtm-L   one byte: 1 + the number of plies to the goal of Black's loss, 0 for "not lost" (a loss can take 0
+//               plies: Black has no move), as Thompson 1996 kept the Black-to-move loss distances (RES)
+//   wtm.bit-W   one bit: White wins (a by-product, the half-result outcome)
+//   btm.bit-L   one bit: Black is lost
+// The bit files are the same for all three metrics. After a goal move only the outcome counts, so a dtc or dtz build
+// reads only the bit files of the materials that its moves out lead into (every move out of a material is a goal move
+// there); dtm reads dtm-W and dtm-L.
 // The goal:
 //   dtm   the goal is the end of the game (Black has no move)
 //   dtc   the end, or a capture or promotion (a conversion: another material) that keeps the win
@@ -20,12 +22,12 @@
 //
 // Materials. A material is named wp-bp-wm-bm (white pieces, black pieces, white men, black men, two digits each, as
 // in egdb_6x6's material mode); every material with a piece on each side is built once, into files of its own,
-// 6x6-wp-bp-wm-bm.<metric>.w and .l. Its index: per colour and type the colex rank over the squares where such a
+// 6x6-wp-bp-wm-bm.wtm.<metric>-W and so on. Its index: per colour and type the colex rank over the squares where such a
 // piece may stand (15 for men, 18 for kings),
 //   index = ((rank_wm * C(15, bm) + rank_bm) * C(18, wp - wm) + rank_wk) * C(18, bp - bm) + rank_bk
 // Slots where pieces of different colours or types share a square are never written (0). A move into another
-// material (a capture, a promotion) is a lookup in that material's files at its own index: after a White move in .l,
-// after a Black move in .w; the smaller
+// material (a capture, a promotion) is a lookup in that material's files at its own index: after a White move in btm.<metric>-L
+// (or btm.bit-L), after a Black move in wtm.<metric>-W (or wtm.bit-W); the smaller
 // materials are not copied or recomputed, the address of a position follows from its own pieces. The materials form
 // a DAG through captures and promotions, which Snakemake builds in order (thompson86/Snakefile).
 //
@@ -42,7 +44,7 @@
 //   W_d = unmoves of B_{d-1} into open White-to-move positions, plus exits that win in d
 //   B_d = unmoves of W_{d-1} into open Black-to-move positions whose exits all lose by d, verified: every move inside
 //         the group leads into W (levels < d); plus positions decided in pass 0 at d
-// W_d goes into .w, B_d into .l: both are one-sided (White's wins, Black's losses), and every lookup is one read.
+// W_d goes into wtm.<metric>-W, B_d into btm.<metric>-L: both are one-sided (White's wins, Black's losses), and every lookup is one read.
 //
 // Memory: the material's two result arrays (each written to disk once, sequentially, at the end) and bit planes per
 // group. Disk: other materials are read through read-only memory maps (random reads); the only writes are sequential.
@@ -70,13 +72,14 @@
 
 namespace {
 
-// kind 0: .w (White to move, wins), 1: .l (Black to move, losses), one byte per slot; 2: .w.bit, 3: .l.bit, one bit per
-// slot (won, lost); kind = side + 2 * bit
+// kind 0: wtm.<metric>-W, 1: btm.<metric>-L, one byte per slot; 2: wtm.bit-W, 3: btm.bit-L, one bit per slot (won,
+// lost); kind = side to move + 2 * bit. The bit files carry no metric: they are the same for all three
 enum : int { BYTES = 0, BITS = 2 };
 
 std::string mat_path(std::string const& dir, Material m, int kind)
 {
-        return dir + "/6x6-" + m.name() + "." + metric_name() + (kind % 2 == 0 ? ".w" : ".l") + (kind >= BITS ? ".bit" : "");
+        std::string const stm = kind % 2 == 0 ? ".wtm." : ".btm.", half = kind % 2 == 0 ? "-W" : "-L";
+        return dir + "/6x6-" + m.name() + stm + (kind >= BITS ? std::string("bit") : std::string(metric_name())) + half;
 }
 
 std::uint64_t file_size(Material m, int kind) { return kind < BITS ? mat_index(m).size : (mat_index(m).size + 7) / 8; }
@@ -85,7 +88,7 @@ std::uint64_t file_size(Material m, int kind) { return kind < BITS ? mat_index(m
 
 std::string g_dir;
 Material g_current{ -1, -1, -1, -1 };
-std::array<std::vector<std::uint8_t>, 2> g_res;     // the material being built, .w and .l (written to disk at the end)
+std::array<std::vector<std::uint8_t>, 2> g_res;     // the material being built, dtm-W and dtm-L (written to disk at the end)
 std::map<std::pair<Material, int>, std::uint8_t const*> g_files;    // finished materials, memory-mapped read-only
 
 std::uint8_t const* mat_file(Material m, int kind)
@@ -317,7 +320,7 @@ bool build_material(std::string const& dir, Material c)
         };
         for (int side : { 0, 1 }) {
                 auto const& r = g_res[std::size_t(side)];
-                std::vector<std::uint8_t> bits((mi.size + 7) / 8, 0);       // the by-product: won (.w.bit), lost (.l.bit)
+                std::vector<std::uint8_t> bits((mi.size + 7) / 8, 0);       // the by-product: bit-W (won), bit-L (lost)
                 for (std::uint64_t i = 0; i < mi.size; ++i) bits[i >> 3] |= std::uint8_t((r[i] != 0) << (i & 7));
                 if (!write(BYTES + side, r) || !write(BITS + side, bits)) return false;
         }

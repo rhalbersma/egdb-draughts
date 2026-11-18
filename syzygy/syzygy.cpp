@@ -16,14 +16,15 @@
 //
 // Materials. Two-sided: both sides to move, wins and losses, so only one of each pair of a material and its colour
 // mirror is built (the same 82 materials up to 6 pieces as strongly_solving_6x6/materials); a position in the other
-// one is looked up as its mirror image. Per material four files, named wp-bp-wm-bm as in egdb_6x6:
-//   6x6-wp-bp-wm-bm.<metric>.wtm       one byte per slot, White to move
-//   6x6-wp-bp-wm-bm.<metric>.btm       one byte per slot, Black to move
-//   6x6-wp-bp-wm-bm.<metric>.wtm.wdl   two bits per slot (0 draw, 1 loss, 2 win), White to move
-//   6x6-wp-bp-wm-bm.<metric>.btm.wdl   two bits per slot, Black to move
-// The WDL files are a by-product: the sign of every value. They are all that dtc and dtz need from the materials that
-// a move leads into (every move out of a material is a goal move there), so their builds read only the .wdl files of
-// their captures and promotions; dtm needs the depths and reads .wtm and .btm.
+// one is looked up as its mirror image. Full results; per material four files, 6x6-wp-bp-wm-bm.<side to move>.<kind>
+// (for dtm; dtc and dtz alike):
+//   wtm.dtm   one byte per slot, White to move
+//   btm.dtm   one byte per slot, Black to move
+//   wtm.wdl   two bits per slot (0 draw, 1 loss, 2 win), White to move
+//   btm.wdl   two bits per slot, Black to move
+// The wdl files are a by-product: the sign of every value, the same for all three metrics. They are all that dtc and
+// dtz need from the materials that a move leads into (every move out of a material is a goal move there), so their
+// builds read only the wdl files of their captures and promotions; dtm needs the depths and reads wtm.dtm, btm.dtm.
 //
 // Groups. Captures and promotions (and in dtz man moves, which end the count) are looked up forward in pass 0, in
 // finished files: no uncaptures. A dtm or dtc material is one group, with king moves and man moves inside; a dtz
@@ -53,9 +54,9 @@
 //                                                            build one material (its captures and promotions must exist)
 //        syzygy checkall <dir> n <metric> [threads]          every material of at most n pieces against egdb_6x6
 //                                                            (built in memory): dtm exactly, dtc / dtz their wins and
-//                                                            losses; every value against its successors; the .wdl files
+//                                                            losses; every value against its successors; the wdl files
 //                                                            against the values
-//        syzygy cmp86 <dir> <dir_thompson86> n <metric>      the same wins (.w) and losses (.l) as thompson86, for every
+//        syzygy cmp86 <dir> <dir_thompson86> n <metric>      the same half results (dtm-W, dtm-L) as thompson86, for every
 //                                                            material of at most n pieces, both colours
 //        syzygy order <dir_dtz> <dir_dtc> <dir_dtm> n         dtz <= dtc <= dtm for every win and loss, the same WDL
 // metric: dtm, dtc, dtz
@@ -118,12 +119,13 @@ void store(std::uint16_t& x, std::uint16_t v) { std::atomic_ref<std::uint16_t>(x
 // one of each pair of a material and its colour mirror, as in egdb_6x6 and strongly_solving_6x6/materials
 bool stored(Material m) { return !(std::tuple(m.bm, m.wm, m.bk, m.wk) < std::tuple(m.wm, m.bm, m.wk, m.bk)); }
 
-// kind 0: .wtm, 1: .btm (one byte per slot); 2: .wtm.wdl, 3: .btm.wdl (two bits per slot); kind = stm + 2 * wdl
+// kind 0: wtm.<metric>, 1: btm.<metric> (one byte per slot); 2: wtm.wdl, 3: btm.wdl (two bits per slot); kind = side to
+// move + 2 * wdl. The wdl files carry no metric: they are the same for all three
 enum : int { BYTES = 0, WDL = 2 };
 
 std::string mat_path(std::string const& dir, Material m, int kind)
 {
-        return dir + "/6x6-" + m.name() + "." + metric_name() + (kind % 2 == 0 ? ".wtm" : ".btm") + (kind >= WDL ? ".wdl" : "");
+        return dir + "/6x6-" + m.name() + (kind % 2 == 0 ? ".wtm." : ".btm.") + (kind >= WDL ? std::string("wdl") : std::string(metric_name()));
 }
 
 std::uint64_t file_size(Material m, int kind) { return kind < WDL ? mat_index(m).size : (mat_index(m).size + 3) / 4; }
@@ -433,7 +435,7 @@ std::vector<Material> stored_materials_up_to(int n)
 }
 
 // dtm: every value equals egdb_6x6's DTM; dtc, dtz: the same wins and losses as egdb_6x6; all: every value equals its
-// recomputation from the successors, and the .wdl files the sign of the value
+// recomputation from the successors, and the wdl files the sign of the value
 bool check_all(std::string const& dir, int n, int threads)
 {
         g_dir = dir;
@@ -466,8 +468,8 @@ bool check_all(std::string const& dir, int n, int threads)
         return ok;
 }
 
-// thompson86 (one-sided, every material): .w = the plies of a White-to-move win, .l = 1 + the plies of a Black-to-move
-// loss; here both from the two-sided values, a material's mirror read as its mirror image
+// thompson86 (one-sided, every material): wtm.<metric>-W = the plies of a White-to-move win, btm.<metric>-L = 1 + the
+// plies of a Black-to-move loss; here both from the two-sided values, a material's mirror read as its mirror image
 bool compare_thompson86(std::string const& dir, std::string const& dir86, int n)
 {
         g_dir = dir;
@@ -475,9 +477,9 @@ bool compare_thompson86(std::string const& dir, std::string const& dir86, int n)
         std::uint64_t checked = 0, bad = 0;
         for (Material const c : materials_up_to(n)) {
                 MatIndex const& mi = mat_index(c);
-                std::string const base = dir86 + "/6x6-" + c.name() + "." + metric_name();
-                std::uint8_t const* w = map_file(base + ".w", mi.size);
-                std::uint8_t const* l = map_file(base + ".l", mi.size);
+                std::string const base = dir86 + "/6x6-" + c.name();
+                std::uint8_t const* w = map_file(base + ".wtm." + metric_name() + "-W", mi.size);
+                std::uint8_t const* l = map_file(base + ".btm." + metric_name() + "-L", mi.size);
                 for (auto const& g : groups_of(c))
                         for (std::uint64_t i = 0; i < g.P; ++i) {
                                 Pos const pw = g.pos(i, 0), pb = g.pos(i, 1);
@@ -493,7 +495,7 @@ bool compare_thompson86(std::string const& dir, std::string const& dir86, int n)
         return bad == 0;
 }
 
-// dtz <= dtc <= dtm for every win and every loss, with the same WDL in all three, and the same .wdl files
+// dtz <= dtc <= dtm for every win and every loss, with the same WDL in all three, and the same wdl files
 bool check_order(std::string const& dz, std::string const& dc, std::string const& dm, int n)
 {
         std::uint64_t wins = 0, losses = 0, bad = 0, bad_wdl = 0;
@@ -519,7 +521,7 @@ bool check_order(std::string const& dz, std::string const& dc, std::string const
                 }
         }
         std::cout << "order: " << wins << " wins, " << losses << " losses, " << bad
-                  << " violations of dtz <= dtc <= dtm (or of the same WDL); " << bad_wdl << " .wdl files that differ"
+                  << " violations of dtz <= dtc <= dtm (or of the same WDL); " << bad_wdl << " wdl files that differ"
                   << std::endl;
         return bad == 0 && bad_wdl == 0;
 }

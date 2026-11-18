@@ -51,6 +51,37 @@ Wu-Liu-Hsu (2004) classify retrograde algorithms in four categories, a useful sh
 **I** forward scan to a fixpoint (Chinook, Nalimov); **II** layered push plus verification (Thompson, Wu-Beal,
 syzygy); **III** queue plus counting (Gasser 1996, Fang 2000); **IV** layered plus counting (Bal-Allis, Wirth).
 
+### 1.1 Units of a build: material, slice, group, job
+
+Four levels, each inside the one before:
+
+| level | fixed | varies inside it | example | role |
+|---|---|---|---|---|
+| **material** | the number of pieces of each kind: wp-bp-wm-bm (white pieces, black pieces, white men, black men) | where they stand, and the side to move | 03-02-02-01: White 2 men and 1 king, Black 1 man and 1 king | the unit of the files: `6x6-wp-bp-wm-bm.*`, every position at its index (four colex ranks); captures and promotions lead from one material to another, so the materials form a DAG |
+| **slice** | in addition, the squares of all the men | where the kings stand, and the side to move | White men on 13 and 17, the black man on 4, one king each, anywhere free | `egdb_6x6`'s unit. A king move never leaves its slice; a man move stays in the material but leads to a slice with that man further advanced (smaller distance to promotion), so the slices of a material are ordered too. A kings-only material is one slice |
+| **group** | a set of slices of one material that a build solves together | | depends on the builder (below) | the unit of one solve: its rounds share bit planes and frontiers |
+| **job** | one material | | `thompson86 build <dir> wp bp wm bm ...` | the unit of Snakemake |
+
+**A group** must be closed under the moves the rounds treat as inside; every other move is an exit into a group or
+material already finished, looked up in pass 0. King moves never leave a slice, man moves connect the slices of a
+material, so the grouping follows from whether man moves count as inside:
+
+| builder and style | moves inside | so a group is |
+|---|---|---|
+| `thompson86` 1986 style, `egdb_6x6` | king moves | one slice |
+| `thompson86` 1996 style dtm and dtc; `syzygy` dtm and dtc | king and man moves | the whole material |
+| `thompson86` 1996 style dtz; `syzygy` dtz | king moves (a man move ends the count, so it is an exit) | all slices of one distance (one wave) |
+
+A build solves the groups of its material one after another in dependency order, later groups looking up earlier
+ones (through the depth sink in `thompson86`, through its value array in `syzygy`).
+
+**The job is one material**: one command lists the material's groups, solves them in order and writes its files;
+Snakemake runs materials in parallel when none needs another, in the order of the DAG. Jobs are not smaller because
+the groups of a material depend on each other densely and most are tiny (a 1986-style material can have tens of
+thousands of slice groups): a job per group would be far too fine-grained, and every job would open the same files
+again. The memory ladder (§7.2) follows the same split: the job's memory claim is per material, the rung is chosen
+per group inside it.
+
 ## 2. The two lineages
 
 ### Chinook → Gilbert (checkers, draughts)

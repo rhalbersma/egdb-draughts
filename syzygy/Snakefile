@@ -1,0 +1,99 @@
+#          Copyright Rein Halbersma 2026.
+# Distributed under the Boost Software License, Version 1.0.
+#    (See accompanying file LICENSE_1_0.txt or copy at
+#          http://www.boost.org/LICENSE_1_0.txt)
+
+# Syzygy style builds for 6x6 international draughts (syzygy.cpp), two-sided: one of each pair of a material and its
+# colour mirror (the 82 materials up to 6 pieces of strongly_solving_6x6/materials), built in the order of the DAG of
+# captures and promotions. A material is named wp-bp-wm-bm (white pieces, black pieces, white men, black men, two
+# digits each); inside, a tuple (wm, wk, bm, bk) with kings. Per material three files: .wtm, .btm (one byte per slot)
+# and .wdl (two bits per slot and side to move). A dtm build reads the .wtm and .btm files of the materials it leads
+# into; a dtc or dtz build only their .wdl files (every move out of a material is a goal move there).
+#
+# usage (from the root of the repo):
+#   snakemake -s syzygy/Snakefile --cores 4 --config engine=build/syzygy dir=data/syzygy pieces=6 metric=dtz
+# metric: dtm, dtc or dtz; policy=par runs each build in parallel (std::execution::par)
+
+ENGINE = config.get('engine', 'build/syzygy')
+D = config.get('dir', 'data/syzygy')
+N = int(config.get('pieces', 6))
+METRIC = config.get('metric', 'dtm')
+POLICY = config.get('policy', 'seq')
+THREADS = int(config.get('threads', 4))
+
+
+def stored(m):
+    wm, wk, bm, bk = m
+    return not (bm, wm, bk, wk) < (wm, bm, wk, bk)
+
+
+def canonical(m):
+    wm, wk, bm, bk = m
+    return m if stored(m) else (bm, bk, wm, wk)
+
+
+MATERIALS = [(wm, wk, bm, bk)
+             for wm in range(N + 1) for wk in range(N + 1 - wm) for bm in range(N + 1 - wm - wk)
+             for bk in range(N + 1 - wm - wk - bm)
+             if wm + wk > 0 and bm + bk > 0 and stored((wm, wk, bm, bk))]
+
+
+def name(m):                                                           # (wm, wk, bm, bk) -> wp-bp-wm-bm
+    wm, wk, bm, bk = m
+    return f'{wm + wk:02}-{bm + bk:02}-{wm:02}-{bm:02}'
+
+
+def parse(n):                                                          # wp-bp-wm-bm -> (wm, wk, bm, bk)
+    wp, bp, wm, bm = map(int, n.split('-'))
+    return (wm, wp - wm, bm, bp - bm)
+
+
+def deps(m):
+    wm, wk, bm, bk = m
+    out = set()
+    if wm > 0: out.add((wm - 1, wk + 1, bm, bk))                       # promotions
+    if bm > 0: out.add((wm, wk, bm - 1, bk + 1))
+    for i in range(bm + 1):                                            # White captures i men and j kings
+        for j in range(bk + 1):
+            if 0 < i + j < bm + bk:
+                out.add((wm, wk, bm - i, bk - j))
+                if wm > 0: out.add((wm - 1, wk + 1, bm - i, bk - j))
+    for i in range(wm + 1):                                            # Black captures i men and j kings
+        for j in range(wk + 1):
+            if 0 < i + j < wm + wk:
+                out.add((wm - i, wk - j, bm, bk))
+                if bm > 0: out.add((wm - i, wk - j, bm - 1, bk + 1))
+    return sorted({canonical(d) for d in out} - {m})
+
+
+def files(m):
+    return [f'{D}/6x6-{m}.{METRIC}.{k}' for k in ('wtm', 'btm', 'wdl')]
+
+
+def inputs(m):
+    kinds = ('wtm', 'btm') if METRIC == 'dtm' else ('wdl',)
+    return [f'{D}/6x6-{name(d)}.{METRIC}.{k}' for d in deps(m) for k in kinds]
+
+
+wildcard_constraints:
+    mat=r'\d\d-\d\d-\d\d-\d\d'
+
+
+rule all:
+    input: f'{D}/check-{N}.{METRIC}.ok'
+
+
+rule build:
+    input: lambda w: inputs(parse(w.mat))
+    output: files('{mat}')
+    log: f'{D}/6x6-{{mat}}.{METRIC}.log'
+    params: m=lambda w: w.mat.replace('-', ' ')
+    shell: '{ENGINE} build {D} {params.m} {METRIC} {POLICY} > {log} 2>&1'
+
+
+rule check:
+    input: [f for m in MATERIALS for f in files(name(m))]
+    output: f'{D}/check-{N}.{METRIC}.ok'
+    log: f'{D}/check-{N}.{METRIC}.log'
+    threads: THREADS
+    shell: '{ENGINE} checkall {D} {N} {METRIC} {threads} > {log} 2>&1 && touch {output}'

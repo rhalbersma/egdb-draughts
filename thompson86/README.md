@@ -2,7 +2,8 @@
 
 `thompson86.cpp` builds endgame databases in the manner of K. Thompson, "Retrograde analysis of certain endgames",
 ICCA Journal 9(3), 1986, and "6-piece endgames", ICCA Journal 19(4), 1996, adapted to draughts and to the design
-notes in [`literature/egdb_primitives.md`](../literature/egdb_primitives.md).
+notes in [`literature/egdb_primitives.md`](../literature/egdb_primitives.md). Its metrics, materials, index, groups and unmoves are in
+`src/materials_6x6.hpp`, shared with the two-sided [`syzygy`](../syzygy/) builder.
 
 **Two files per material, one byte per position**, both one-sided (White's wins and Black's losses):
 

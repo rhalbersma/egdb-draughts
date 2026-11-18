@@ -470,22 +470,52 @@ build cell stores decided values shifted (as Thompson's i = n + 1). `unit_build`
 `UNKNOWN8 = 254`; with unknown = 0 that pass goes, and the resume check that counts unknown bytes counts zeros instead
 (or relies on the `.progress` checkpoint alone).
 
-### 9.4 WDL is an enum
+### 9.4 WDL as a signed interval chain
+
+While a database is being built, a position's value is not one of L, D, W but the set of values still possible: an
+interval over L < D < W. There are six (Björnsson-Schaeffer-Sturtevant 2005 name them LL, TT, WW, LT, LW, TW):
+
+| interval | meaning | code |
+|---|---|---|
+| [L, L] | lost | −2 |
+| [L, D] | cannot win | −1 |
+| [L, W] | unknown | 0 |
+| [D, W] | cannot lose (a drawing exit: `NOLOSE` in §8.1) | +1 |
+| [W, W] | won | +2 |
+| [D, D] | drawn | (outside the chain) |
+
+The backup is exact on intervals: the parent's view of a child is −[lo, hi] = [−hi, −lo], and the best over the
+moves is the componentwise maximum [max lo, max hi]. The five coded intervals form a chain, closed under both
+operations, and with these signed codes both are plain arithmetic:
 
 ```cpp
-enum class wdl : std::uint8_t { U, L, D, W };      // U = 0: unknown, free on a fresh file; L < D < W: the preference order
+enum class wdl : std::int8_t { L = -2, LD = -1, U = 0, DW = 1, W = 2 };
 
-constexpr wdl operator-(wdl v) noexcept { return wdl(-std::to_underlying(v) & 3); }   // the parent's view of a child
+constexpr wdl operator-(wdl v) noexcept { return wdl(-std::to_underlying(v)); }   // W <-> L, DW <-> LD, U fixed
 
-static_assert(-wdl::L == wdl::W && -wdl::W == wdl::L && -wdl::D == wdl::D && -wdl::U == wdl::U);
+wdl best = wdl::L;                                    // negamax: exact on the chain
+for (auto c : children) { best = std::max(best, -c); }
 ```
 
-Two's-complement negation modulo 4 swaps L and W and leaves D and U alone, so "best over successors" is
-`std::max(best, -child)`, negamax in two bits. Because U is the smallest, `max` passes over unknown children, so
-`best` is only a lower bound while any child is unknown: a W decides at once, a D or L only when no child is unknown
-(Chinook's lattice in two bits). U exists only during a build; in storage the fourth code is free for "don't care"
-(capture positions, illegal slots). `E::W` is spelled the same for an enumerator and a static member, so a template
-written for the enum also accepts the depth encodings that add `W(plies)`, `L(plies)` and `plies`.
+The sign answers the questions the passes ask: `v < 0` cannot win, `v == 0` unknown, `v > 0` cannot lose, ±2 decided.
+Pass 0 is the same `max`: each exit contributes W, DW or L from the exact value of its target, the internal king
+moves together contribute U, so a winning exit gives W, else a drawing exit DW, else open internal moves U, else L.
+
+The exact draw [D, D] is incomparable with U and falls outside the chain; a move into an exact draw counts as DW (or,
+seen from the other side, LD). That only loosens a bound, never makes a value wrong. Draws become exact at the end:
+the final pass maps U, LD and DW to D = 0. So 0 means *unknown* during the build, where it is the free background of
+§9.3, and *drawn* afterwards; the stored codes are L = −2, D = 0, W = +2, and negation stays `−x`.
+
+No two-bit total order can be exact, because D ∨ U = [D, W] is neither D nor U; every 2-bit layout rounds. A packed
+2-bit WDL build (Chinook's) keeps the four codes L, U, DW, W and stores LD as U: LD only arises inside a backup, as the
+parent's view of a DW child, and storing it as U changes no decision (a position is lost only when all its moves lead
+to wins), it only gives up marking that child's parent "cannot lose" early. The 16-bit build cell and an `int8_t`
+hold the full chain anyway.
+
+Depth fits the same scale: wins large and positive, faster ones larger, W(p) = WMAX − p; losses mirrored,
+L(p) = −(WMAX − p); the small magnitudes reserved for the bounds and for draw/unknown. The backup becomes "negate and
+step one ply toward zero", the `up()` that the forward search in `egdb_6x6.cpp` already applies to its `to_score`
+values, so the build cell, the stored values and the search can share one signed scale.
 
 ### 9.5 The vocabulary of the two-sided build
 
@@ -493,12 +523,14 @@ written for the enum also accepts the depth encodings that add `W(plies)`, `L(pl
 |---|---|
 | `W(p)`, `L(p)`, `D` (WDL: constants) | pass 0, the round |
 | `U`, `nolose`, `count(c)` | the build cell only: undecided codes and Gasser's counter |
-| negation / `backup`: child W(p) → parent L(p + 1), child L(p) → parent W(p + 1) | the round, verification |
+| negation / `backup` (§9.4): child W(p) → parent L(p + 1), child L(p) → parent W(p + 1), bounds swap | the round, verification |
 | `better(a, b)` for the side to move: fastest win, then draw, then slowest loss | pass 0, verification |
 | `plies(s)` → `std::optional<std::size_t>` | probing, statistics, the store pass |
 
 The 16-bit build cell (§8.1) and the 8-bit store both model it, so the store pass is the generic
-`out = Store::from(Build::decode(v))`, and the rounds are written once for DTZ, DTM and WDL.
+`out = Store::from(Build::decode(v))`, and the rounds are written once for DTZ, DTM and WDL. `E::W` is spelled the same
+for an enumerator and for a static member or function of a struct, so a template written against the WDL enum also
+accepts the depth encodings.
 
 Where per-byte access ends: the escaped store (cdb v2) keeps the extra byte in the block's appendix, so its `W(p)` is
 a block-level operation for depths beyond the escape base; a packed 2-bit WDL array holds four positions per byte,

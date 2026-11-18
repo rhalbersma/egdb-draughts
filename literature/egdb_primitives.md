@@ -213,7 +213,44 @@ Consequences:
    known, so they are never visited; every lost position is known to be lost, so its counter is exact from the start
    and no candidate is ever wrong.
 5. Invariants between the products, for verification: WDL(DTZ) = WDL(DTM); for a win DTZ ≤ DTM (the fastest end
-   passes the first zeroing move or the end itself).
+   passes the first zeroing move or the end itself). With DTC in between: DTZ ≤ DTC ≤ DTM for every win, with the
+   same wins in all three (checked on all 6-piece runs of `thompson86/`).
+
+### What each metric needs from the endgames it leads into
+
+DTC counts to a conversion (a capture or promotion: another material), DTZ to a zeroing move (a capture or man move:
+the moves the 25-move rule resets on); both coincide when no men are left. A move that ends the count contributes one
+ply whatever the depth of its target, so for such moves only the target's outcome matters, never its distance:
+
+| build | needs from its targets | gives as a by-product |
+|---|---|---|
+| DTM | win / loss **with depth**, for every exit | its own depths |
+| DTC | outcome for captures and promotions; for man moves (same material, another slice) the DTC depth when slices are built one by one, nothing when they share a wave | outcome of its own material |
+| DTZ | outcome for every exit, man moves included | outcome of its own material |
+
+The outcome comes in two strengths:
+
+| | needs from the smaller endgames | gives as a by-product |
+|---|---|---|
+| one-sided DTC / DTZ (Thompson: White's wins and Black's losses only) | one-sided W: "does White win?", for both sides to move. A draw and a Black win are the same escape | one-sided W of its own material (the W and B planes) |
+| two-sided DTC / DTZ (`egdb_6x6`, §8) | full WDL for both sides to move: negamax over the chain of §9.4 must tell a drawing exit (the position cannot lose: ≥D) from a losing one, and the loser's delay needs the losses | full WDL of its own material (the sign of DTZ) |
+
+The total information is the same: full WDL of a material is the one-sided W of the material plus the one-sided W of
+its mirror (colours swapped), Black's wins in X being White's wins in mirror(X). The difference is whether one build
+covers both outcomes, or two mirrored one-sided builds each supply half and meet only in the WDL file. The store a
+DTC or DTZ build reads should therefore be a two-bit WDL file, not a depth file: every exit lookup is then direct.
+A one-sided depth byte holds depths that are never used, and its missing outcome costs one ply of search: a cut node
+(∃, it stops at the first good successor) when the losses are stored and the wins are derived (Thompson 1996 records
+Black-to-move loss distances), an all node (∀, a yes needs every successor) when the wins are stored and the losses
+derived (Thompson 1986 records White-to-move win distances). Over a mirror-closed collection the two layouts make
+exactly as many one-ply lookups (117,563,826 White exits against as many Black exits on the 6-piece runs); what
+differs is which of them can stop early.
+
+This is also why Thompson 1986 needs one pass for DTM and two for DTC. In his single array the materials are solved
+in one interleaved loop with uncaptures, and a position lost at depth j becomes known in round j. For DTM a capture
+into it is worth j + 1 and is needed in exactly that round; for DTC it is worth 1 and is needed in round 1, but known
+only in round j. So DTC needs the smaller endgames' outcomes complete first: his pass 1, the 1996 waves, or the
+dependency order with forward lookups of §8 (where all three metrics need the order, because nothing is uncaptured).
 
 ## 6. Data per position
 

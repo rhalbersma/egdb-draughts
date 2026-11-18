@@ -12,7 +12,7 @@ passes.
 | materials (≤ 6 pieces) | 155: every material and its colour mirror | 82: one of each mirror pair, the other looked up as its mirror image |
 | per round | bit planes: the new wins and losses as frontiers | byte arrays scanned in full for the values of the previous ply, as `rtbgen` |
 | losses | candidates verified forward (1996 style: masked late) | `rtbgen`'s `check_loss` on every predecessor of a new win |
-| WDL | not stored (one-sided) | a by-product: `.wdl`, two bits per position |
+| WDL | not stored (one-sided) | a by-product: `.wtm.wdl` and `.btm.wdl`, two bits per position |
 
 ## What is stored
 
@@ -22,7 +22,8 @@ Per material, named wp-bp-wm-bm (white pieces, black pieces, white men, black me
 |---|---|
 | `6x6-wp-bp-wm-bm.<metric>.wtm` | one byte per slot, White to move |
 | `6x6-wp-bp-wm-bm.<metric>.btm` | one byte per slot, Black to move |
-| `6x6-wp-bp-wm-bm.<metric>.wdl` | two bits per slot (0 draw, 1 loss, 2 win), White to move, then Black to move |
+| `6x6-wp-bp-wm-bm.<metric>.wtm.wdl` | two bits per slot (0 draw, 1 loss, 2 win), White to move |
+| `6x6-wp-bp-wm-bm.<metric>.btm.wdl` | two bits per slot, Black to move |
 
 The value for the side to move: 0 a draw (or an illegal slot), 2n a win in n plies, 2n + 1 a loss in n plies (n = 0:
 no move). Exact plies, 16 bits during the build, one byte stored (up to 127 plies). The three metrics are those of
@@ -34,11 +35,11 @@ no move). Exact plies, 16 bits during the build, one byte stored (up to 127 plie
 | `dtc` | the end, or a capture or promotion |
 | `dtz` | the end, or a capture or man move |
 
-**WDL as a by-product.** The `.wdl` file is the sign of every value, the same for all three metrics. It is all that
-dtc and dtz need from the materials that a move leads into: every move out of a material is a goal move there, after
-which only the outcome counts. So their Snakemake rules read only the `.wdl` files of the captures and promotions;
-dtm reads `.wtm` and `.btm`, because it needs the depths. A dtz build gives WDL and DTZ together, as the Syzygy
-tablebases do.
+**WDL as a by-product.** The `.wdl` files are the sign of every value, the same for all three metrics, next to the
+byte files of the same side to move (slot i in bits 2(i mod 4) of byte ⌊i / 4⌋). They are all that dtc and dtz need
+from the materials that a move leads into: every move out of a material is a goal move there, after which only the
+outcome counts. So their Snakemake rules read only the `.wdl` files of the captures and promotions; dtm reads `.wtm`
+and `.btm`, because it needs the depths. A dtz build gives WDL and DTZ together, as the Syzygy tablebases do.
 
 ## Passes
 
@@ -76,7 +77,7 @@ snakemake -s syzygy/Snakefile --cores 4 --config engine=build/syzygy dir=data/sy
 or with CMake, target `syzygy`. `policy=par` runs each build with `std::execution::par`. The last Snakemake job
 (`checkall`) builds `egdb_6x6`'s databases in memory and compares every position of every material, both sides to
 move: dtm exactly, dtc and dtz their wins and losses; every value against its recomputation from the successors; the
-`.wdl` file against the values. Further checks:
+`.wdl` files against the values. Further checks:
 
 * `syzygy cmp86 <dir> <dir_thompson86> n <metric>`: for every material with at most n pieces, both colours, the
   `thompson86` files (`.w` the White-to-move wins, `.l` the Black-to-move losses) against the two-sided values;
@@ -85,7 +86,7 @@ move: dtm exactly, dtc and dtz their wins and losses; every value against its re
 
 ## Results (6 pieces, 4 cores)
 
-82 materials, 53,366,312 positions (both sides to move), 2 × 53.8 MB of bytes and 26.9 MB of `.wdl` per metric;
+82 materials, 53,366,312 positions (both sides to move), 2 × 53.8 MB of bytes and 2 × 13.5 MB of `.wdl` per metric;
 21,650,623 wins and 11,988,249 losses (both sides to move).
 
 | metric | wall time, builds (4 jobs, `seq`) | CPU summed | wall time, one job at a time, `par` | longest win | longest loss |

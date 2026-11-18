@@ -16,12 +16,13 @@
 //
 // Materials. Two-sided: both sides to move, wins and losses, so only one of each pair of a material and its colour
 // mirror is built (the same 82 materials up to 6 pieces as strongly_solving_6x6/materials); a position in the other
-// one is looked up as its mirror image. Per material three files, named wp-bp-wm-bm as in egdb_6x6:
-//   6x6-wp-bp-wm-bm.<metric>.wtm   one byte per slot, White to move
-//   6x6-wp-bp-wm-bm.<metric>.btm   one byte per slot, Black to move
-//   6x6-wp-bp-wm-bm.<metric>.wdl   two bits per slot (0 draw, 1 loss, 2 win), first White to move, then Black to move
-// The WDL file is a by-product: the sign of every value. It is all that dtc and dtz need from the materials that a
-// move leads into (every move out of a material is a goal move there), so their builds read only the .wdl files of
+// one is looked up as its mirror image. Per material four files, named wp-bp-wm-bm as in egdb_6x6:
+//   6x6-wp-bp-wm-bm.<metric>.wtm       one byte per slot, White to move
+//   6x6-wp-bp-wm-bm.<metric>.btm       one byte per slot, Black to move
+//   6x6-wp-bp-wm-bm.<metric>.wtm.wdl   two bits per slot (0 draw, 1 loss, 2 win), White to move
+//   6x6-wp-bp-wm-bm.<metric>.btm.wdl   two bits per slot, Black to move
+// The WDL files are a by-product: the sign of every value. They are all that dtc and dtz need from the materials that
+// a move leads into (every move out of a material is a goal move there), so their builds read only the .wdl files of
 // their captures and promotions; dtm needs the depths and reads .wtm and .btm.
 //
 // Groups. Captures and promotions (and in dtz man moves, which end the count) are looked up forward in pass 0, in
@@ -47,7 +48,7 @@
 // usage: syzygy build <dir> wp bp wm bm <metric> [seq|par]   build one material (its captures and promotions must exist)
 //        syzygy checkall <dir> n <metric> [threads]          every material of at most n pieces against egdb_6x6
 //                                                            (built in memory): dtm exactly, dtc / dtz their wins and
-//                                                            losses; every value against its successors; the .wdl file
+//                                                            losses; every value against its successors; the .wdl files
 //                                                            against the values
 //        syzygy cmp86 <dir> <dir_thompson86> n <metric>      the same wins (.w) and losses (.l) as thompson86, for every
 //                                                            material of at most n pieces, both colours
@@ -111,13 +112,15 @@ void store(std::uint16_t& x, std::uint16_t v) { std::atomic_ref<std::uint16_t>(x
 // one of each pair of a material and its colour mirror, as in egdb_6x6 and strongly_solving_6x6/materials
 bool stored(Material m) { return !(std::tuple(m.bm, m.wm, m.bk, m.wk) < std::tuple(m.wm, m.bm, m.wk, m.bk)); }
 
-// kind 0: .wtm, 1: .btm (one byte per slot), 2: .wdl (two bits per slot and side to move)
+// kind 0: .wtm, 1: .btm (one byte per slot); 2: .wtm.wdl, 3: .btm.wdl (two bits per slot); kind = stm + 2 * wdl
+enum : int { BYTES = 0, WDL = 2 };
+
 std::string mat_path(std::string const& dir, Material m, int kind)
 {
-        return dir + "/6x6-" + m.name() + "." + metric_name() + (kind == 0 ? ".wtm" : kind == 1 ? ".btm" : ".wdl");
+        return dir + "/6x6-" + m.name() + "." + metric_name() + (kind % 2 == 0 ? ".wtm" : ".btm") + (kind >= WDL ? ".wdl" : "");
 }
 
-std::uint64_t file_size(Material m, int kind) { return kind < 2 ? mat_index(m).size : (2 * mat_index(m).size + 3) / 4; }
+std::uint64_t file_size(Material m, int kind) { return kind < WDL ? mat_index(m).size : (mat_index(m).size + 3) / 4; }
 
 std::string g_dir;
 Material g_current{ -1, -1, -1, -1 };
@@ -152,8 +155,7 @@ std::uint8_t probe_wdl(Pos const& p0)
         Material const m = material_of(p);
         std::uint64_t const i = mat_index(m).index(p);
         if (m == g_current) return wdl_of(g_val[std::size_t(p.stm)][i]);
-        std::uint64_t const bit = 2 * (std::uint64_t(p.stm) * mat_index(m).size + i);
-        return std::uint8_t(mat_file(m, 2)[bit >> 3] >> (bit & 7) & 3);
+        return std::uint8_t(mat_file(m, WDL + p.stm)[i >> 2] >> (2 * (i & 3)) & 3);
 }
 
 // the value of a move for the side making it: after a goal move only the outcome counts
@@ -302,22 +304,19 @@ bool build_material(std::string const& dir, Material c)
 
         std::uint64_t wins[2]{}, losses[2]{};
         int longest = 0;
-        std::vector<std::uint8_t> wdl((2 * mi.size + 3) / 4, 0);
         for (int s : { 0, 1 }) {
-                std::vector<std::uint8_t> bytes(mi.size);
+                std::vector<std::uint8_t> bytes(mi.size), wdl((mi.size + 3) / 4, 0);
                 for (std::uint64_t i = 0; i < mi.size; ++i) {
                         std::uint16_t const v = g_val[std::size_t(s)][i];
                         if (v > 255) { std::cerr << "value beyond one byte" << std::endl; return false; }
                         bytes[i] = std::uint8_t(v);
-                        std::uint64_t const bit = 2 * (std::uint64_t(s) * mi.size + i);
-                        wdl[bit >> 3] |= std::uint8_t(wdl_of(v) << (bit & 7));
+                        wdl[i >> 2] |= std::uint8_t(wdl_of(v) << (2 * (i & 3)));
                         wins[s] += is_win(v);
                         losses[s] += is_loss(v);
                         longest = std::max(longest, plies(v));
                 }
-                if (!write_file(mat_path(dir, c, s), bytes)) return false;
+                if (!write_file(mat_path(dir, c, BYTES + s), bytes) || !write_file(mat_path(dir, c, WDL + s), wdl)) return false;
         }
-        if (!write_file(mat_path(dir, c, 2), wdl)) return false;
         double const sec = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
         std::cout << "material " << c.name() << " " << metric_name() << ": " << groups.size() << " groups, " << positions
                   << " positions, " << mi.size << " slots, wins " << wins[0] << " / " << wins[1] << ", losses " << losses[0]
@@ -337,7 +336,7 @@ std::vector<Material> stored_materials_up_to(int n)
 }
 
 // dtm: every value equals egdb_6x6's DTM; dtc, dtz: the same wins and losses as egdb_6x6; all: every value equals its
-// recomputation from the successors, and the .wdl file the sign of the value
+// recomputation from the successors, and the .wdl files the sign of the value
 bool check_all(std::string const& dir, int n, int threads)
 {
         g_dir = dir;
@@ -362,7 +361,7 @@ bool check_all(std::string const& dir, int n, int threads)
                                 }
                 total += checked;
                 std::cout << "check " << c.name() << " " << metric_name() << ": " << checked << " positions, " << bad_o
-                          << " differences from egdb_6x6, " << bad_s << " from the successors, " << bad_w << " in the wdl file"
+                          << " differences from egdb_6x6, " << bad_s << " from the successors, " << bad_w << " in the wdl files"
                           << std::endl;
                 ok = ok && bad_o == 0 && bad_s == 0 && bad_w == 0;
         }
@@ -414,14 +413,16 @@ bool check_order(std::string const& dz, std::string const& dc, std::string const
                                 if (!(plies(z[i]) <= plies(x[i]) && plies(x[i]) <= plies(m[i]))) ++bad;
                         }
                 }
-                std::uint64_t const ws = file_size(c, 2);
-                g_metric = Metric::dtz; auto const z = map_file(mat_path(dz, c, 2), ws);
-                g_metric = Metric::dtc; auto const x = map_file(mat_path(dc, c, 2), ws);
-                g_metric = Metric::dtm; auto const m = map_file(mat_path(dm, c, 2), ws);
-                bad_wdl += !std::equal(z, z + ws, m) || !std::equal(x, x + ws, m);
+                for (int s : { 0, 1 }) {
+                        std::uint64_t const ws = file_size(c, WDL + s);
+                        g_metric = Metric::dtz; auto const z = map_file(mat_path(dz, c, WDL + s), ws);
+                        g_metric = Metric::dtc; auto const x = map_file(mat_path(dc, c, WDL + s), ws);
+                        g_metric = Metric::dtm; auto const m = map_file(mat_path(dm, c, WDL + s), ws);
+                        bad_wdl += !std::equal(z, z + ws, m) || !std::equal(x, x + ws, m);
+                }
         }
         std::cout << "order: " << wins << " wins, " << losses << " losses, " << bad
-                  << " violations of dtz <= dtc <= dtm (or of the same WDL); " << bad_wdl << " materials with different .wdl files"
+                  << " violations of dtz <= dtc <= dtm (or of the same WDL); " << bad_wdl << " .wdl files that differ"
                   << std::endl;
         return bad == 0 && bad_wdl == 0;
 }

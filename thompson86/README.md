@@ -57,25 +57,33 @@ compares every position of every run, both sides to move: dtm exactly; dtc and d
 White-to-move value against the value recomputed from its successors. `thompson86 order <dtz> <dtc> <dtm> n` checks
 dtz ≤ dtc ≤ dtm for every White win.
 
-## Results of the first version (dtm, 1986 style, 4 cores)
+## Results (6 pieces, 4 cores)
 
-| pieces | runs | positions (both sides to move) | slots | wall time, build and check | differences from `egdb_6x6` |
+70 runs, 139,310,092 positions (both sides to move) in 193,682,790 slots, 28,928,639 White-to-move wins.
+
+| style | metric | wall time, builds | run times summed | longest win | checks |
 |---|---|---|---|---|---|
-| 2 / 3 / 4 | 4 / 12 / 25 | | | < 1 s each | 0 |
-| 5 | 44 | | | 5.6 s | 0 |
-| 6 | 70 | 139,310,092 | 193,682,790 | 44 s (the builds alone: 18.7 s) | **0** |
+| 1986 | dtm | 21.6 s | 68.1 s | 69 plies | every value equals `egdb_6x6`'s DTM |
+| 1986 | dtc | 19.2 s | 62.3 s | 43 plies | wins and losses equal `egdb_6x6`'s; every value equals its recomputation from the successors |
+| 1986 | dtz | 18.5 s | 61.6 s | 27 plies | the same |
+| 1996 | dtm | 17.6 s | 60.5 s | 69 plies | every value equals `egdb_6x6`'s DTM |
+| 1996 | dtc | 16.1 s | 55.5 s | 43 plies | as for 1986 |
+| 1996 | dtz | 17.6 s | 62.9 s | 27 plies | as for 1986 |
 
-At 6 pieces the runs hold 1,618,608 units and 28,928,639 White-to-move wins; the files take 186 MB. The longest win is
-35 moves (69 plies), in the run 4-0-0-2 (four white men against two black kings, with its smaller materials).
-Every position of every run, White to move (the stored byte) and Black to move (one ply of search over the stored
-bytes), equals `egdb_6x6`'s DTM.
+* the two styles give **byte-identical files** for every run and every metric;
+* **dtz ≤ dtc ≤ dtm** holds for every one of the 28,928,639 White wins, with the same wins in all three; dtz = dtc
+  in 23,154,843 of them, dtc = dtm in 6,112,795;
+* the 1996 waves are 10–15 % faster for dtm and dtc, where man moves are handled inside the rounds instead of being
+  looked up in pass 0, and no faster for dtz, where man moves end the count and the waves are only groups of slices;
+* the longest dtm win, 69 plies, is in the run 4-0-0-2 (four white men against two black kings, with its smaller
+  materials); runs of 2 to 5 pieces check out the same way.
 
 ## Against `egdb_6x6` (6 pieces, 4 cores)
 
 | | positions computed | CPU | per position | wall time | stored |
 |---|---|---|---|---|---|
 | `egdb_6x6 build 6` | 51,237,726 (one of each mirror pair, both sides to move) | 22.6 s | 0.44 µs | 6.6 s (4 threads) | DTM for both sides to move, 51 MB |
-| `thompson86`, 6 pieces | 139,310,092 | 67.2 s | 0.48 µs | 18.7 s (4 Snakemake jobs) | DTM for White to move, 186 MB of slots |
+| `thompson86`, 6 pieces, dtm, 1986 style | 139,310,092 | 67.2 s | 0.48 µs | 18.7 s (4 Snakemake jobs) | DTM for White to move, 186 MB of slots |
 
 Per position the two cost the same; the Thompson build is about 3× slower because it computes 2.7× as many
 positions:

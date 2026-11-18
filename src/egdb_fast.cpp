@@ -1043,6 +1043,7 @@ void usage()
                 "  --board NAME        preset: international (default), spantsiretti, mertens_cut_j10,\n"
                 "                      mertens_add_k9, canadian, checkers\n"
                 "  --width W --height H --parity P   custom chequer board (tabula convention), up to 512 squares\n"
+                "  --corners playable|unplayable     the corner squares playable or not (tabula parity 1 / 0)\n"
                 "  --lake SQ           remove a square, algebraic (e.g. j10); repeatable\n"
                 "  --white N --black M material of the target database (default 3 1, at most 4 each)\n"
                 "  --rules R           international (default) or checkers (short kings, free capture choice)\n"
@@ -1080,6 +1081,12 @@ try {
                 else if (arg == "--width")     { width  = std::stoi(next()); }
                 else if (arg == "--height")    { height = std::stoi(next()); }
                 else if (arg == "--parity")    { parity = std::stoi(next()); }
+                else if (arg == "--corners")   {     // the colouring of the corner squares: playable = tabula parity 1
+                        auto const c = next();
+                        if (c == "playable")        { parity = 1; }
+                        else if (c == "unplayable") { parity = 0; }
+                        else { throw std::invalid_argument("--corners: playable or unplayable, not " + c); }
+                }
                 else if (arg == "--lake")      { lake_args.push_back(next()); }
                 else if (arg == "--white")     { opt.target_w = std::stoi(next()); }
                 else if (arg == "--black")     { opt.target_b = std::stoi(next()); }

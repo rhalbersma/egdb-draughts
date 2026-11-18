@@ -89,7 +89,7 @@ class FastEngine:
         # draughts), algebraic on all others
         checkers = 'checkers' in self.args
         standard = (w, h) == ((8, 8) if checkers else (10, 10))
-        return {'w': w, 'h': h, 'parity': parity, 'sq': sq, 'lake': lake, 'pref': 'num' if standard else 'alg'}
+        return {'w': w, 'h': h, 'corners': 'playable' if parity else 'unplayable', 'sq': sq, 'lake': lake, 'pref': 'num' if standard else 'alg'}
 
     def analyse(self, fen):
         if fen not in self.cache:
@@ -157,7 +157,9 @@ class Page:
 
     # single squares: algebraic names (h10) in algebraic texts; in numeric texts numbers after "op", "veld(en)",
     # "on", "square(s)" (dam op 9, schijven op 14 en 18)
-    SQ_ALG_RE = re.compile(r'(?<![\w.,/×-])([a-z]\d{1,2})(?![\w/×-]|\.\d)')
+    # a square on its own; a '/' next to it only between two squares (double corners written as b1/a2)
+    SQ_ALG_RE = re.compile(r'(?<![\w.,×-])(?:(?<!/)|(?<=[a-z]\d/)|(?<=[a-z]\d\d/))([a-z]\d{1,2})'
+                           r'(?![\w×-]|/(?![a-z]\d)|\.\d)')
     SQ_NUM_RE = re.compile(r'\b(op|veld|velden|on|square|squares) (\d{1,2}(?:(?:, | en | and )\d{1,2})*)(?![\d×x-]|\.\d)'
                            r'(?!\s*(?:ply|plies|stuk|piece|zet|move|dam|schijf|king|man\b|men\b|keer|time|tegen|against))')
 
@@ -170,7 +172,7 @@ class Page:
                 return None
             n, a = n_or_name, name[n_or_name]
         else:
-            if n_or_name not in num_of or n_or_name in ('p0', 'p1'):      # p0 / p1: the colourings, not squares
+            if n_or_name not in num_of:
                 return None
             n, a = num_of[n_or_name], n_or_name
         pref = self.geoms[gid].get('pref', 'num')

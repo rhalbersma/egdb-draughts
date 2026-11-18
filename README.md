@@ -89,7 +89,7 @@ Requires a C++23 compiler (GCC 14 or later), CMake 3.30 or later, OpenMP and the
 ```
 cmake -B build && cmake --build build
 ./build/egdb_fast --board international --out data/international --query W:WK2,K10,K45:BK50
-./build/egdb_fast --width 15 --height 8 --parity 1                    # 3-1 on 8×15
+./build/egdb_fast --width 15 --height 8 --corners playable           # 3-1 on 8×15
 ./build/egdb_fast --board international --lake g7                    # 10×10 without g7
 ./build/egdb_fast --width 9 --height 8 --rules checkers --white 3 --black 2
 ```
@@ -101,14 +101,15 @@ cmake -B build && cmake --build build
 ## Conventions
 
 * **Board** `W × H`: `W` is the shorter side, `H` the longer one. In the diagrams the long side is horizontal.
-* **Parity** (tabula): **p1** = the corner squares are playable (a1 is a dark square), **p0** = they are not.
+* **Corner squares** (tabula's `parity`): **playable** (parity 1) = the corner squares are playable
+  (a1 is a dark square), **unplayable** (parity 0) = they are not. It only matters on boards with two odd sides.
   This only matters for odd × odd boards; otherwise both parities are mirror images.
 * **Squares**: numbered 1..N in PDN order (square 1 top left) in FEN and in the text files; algebraic (a1 bottom left) in move sequences.
 * **DTM** in plies for the side to move: `+n` win in n plies, `-n` loss in n plies (`-0`: no moves left), `D` draw.
   Purely game-theoretic: no move-count rules.
 * **"Won"** for a board means: every position in which neither side can capture is won for the side with more kings to move.
 * In the tables: `21` = won, longest win 21 plies · `21*` = won provided the stronger side occupies the long
-  diagonal(s) · `(21)` = drawn (the number is the longest win among the positions that are won) · `13/15` = p0/p1.
+  diagonal(s) · `(21)` = drawn (the number is the longest win among the positions that are won) · `13/15` = unplayable/playable corner squares.
 
 ---
 
@@ -129,7 +130,7 @@ cmake -B build && cmake --build build
 ```
 
 * For `W ≤ 4` (degenerate boards) two kings always win, on the square boards provided they hold the long diagonal(s).
-* For `W ≥ 5` only two boards are won: **5×6** (new) and **5×7 p1** (known). From `W = 6` on everything is drawn,
+* For `W ≥ 5` only two boards are won: **5×6** (new) and **5×7 playable corners** (known). From `W = 6` on everything is drawn,
   and the remaining wins are short combinations whose length does not depend on the board size.
 * With the single king to move there are a few exceptions on 5×6 (8) and 5×7 (16): double attacks (forks).
 
@@ -148,7 +149,7 @@ cmake -B build && cmake --build build
 8. f4-c1 c3-e5 9. c5-e3 e5-c3 10. c1-a3 c3-e5 11. e3-f4 e5-d4 12. **a3-b2** d4xa1 13. f4-e5 a1-b2 14. e5xa1
 
 The long tempo play serves one purpose: sacrifice so that black captures *into the corner*, then place the
-second king behind it on the corner diagonal. On 5×7 p1 the same final motif appears after 15 plies:
+second king behind it on the corner diagonal. On 5×7 playable corners the same final motif appears after 15 plies:
 `W:WK1,K9:BK2` 1. c3-e5 c5-a3 2. a5-d2 a3-c5 3. d2-c1 c5-f2 4. e5-g3 f2-c5 5. c1-a3 c5-d4 6. **a3-b2** d4xa1 7. g3-e5 a1-b2 8. e5xa1.
 More than 80% of all quiet wins on these two boards end with black capturing into a corner.
 
@@ -180,17 +181,17 @@ with the single king to move 16,812 wins, 863,802 draws and 40,586 losses.
 | Family | Result (W = 3 … 12) |
 |---|---|
 | **H = W + 1** | won on every board |
-| **H = W + 2** | won, except the "wrong" colouring p0 for W = 9 and 11 |
-| **H = 2W − 1** | won, except p0 for W = 9 and 11 (10×19: 27 plies, 11×21 p1: 25 plies, 12×23: 27 plies) |
+| **H = W + 2** | won, except the "wrong" colouring, unplayable corner squares, for W = 9 and 11 |
+| **H = 2W − 1** | won, except unplayable for W = 9 and 11 (10×19: 27 plies, 11×21 playable corners: 25 plies, 12×23: 27 plies) |
 
-The colouring rule of the book is confirmed: from W = 9 on, for odd W only the colouring with playable corners (p1) wins.
-On W = 7 the wrong colouring still wins (5×9 p0, 7×13 p0) because the general method still reaches that far.
+The colouring rule of the book is confirmed: from W = 9 on, for odd W only the colouring with playable corner squares wins.
+On W = 7 the wrong colouring still wins (5×9 and 7×13 unplayable corners) because the general method still reaches that far.
 
 ### The general method on narrow boards
 
 * **W = 5, 6**: every non-square board is won (checked up to 5×13 and 6×15). Three kings in a column
   close off the full width and can be pushed along the board; the longest win grows by about 2 plies per extra column.
-* **W = 7**: won up to **7×14** and **7×15 p1** (book: up to 7×11). From H = 16 on it is drawn.
+* **W = 7**: won up to **7×14** and **7×15 playable corners** (book: up to 7×11). From H = 16 on it is drawn.
   The longest wins jump from 25 to 35, 49, 53 and 67–73 plies: the space becomes tight.
 * **W = 8**: won at H = 9, 10, 11 and 15 (= 2W − 1), drawn at H = 12–14 and 16–19.
 * **W ≥ 9**: only the families remain.
@@ -204,9 +205,9 @@ three kings to move by who occupies the long diagonal(s) (draws / positions):
 |---|---|---|---|
 | 6×6 | 0 / 3,154 | 0 / 816 | 784 / 812 |
 | 8×8 | 0 / 33,364 (40 forks with black to move) | 0 / 17,184 | 10,696 / 11,084 |
-| 5×5 p1 (two diagonals, white on both) | 0 / 540 | | |
-| 7×7 p1 (white on both) | 0 / 6,032 | | |
-| 9×9 p1 (white on both) | 32,492 / 39,328 | | |
+| 5×5 playable corners (two diagonals, white on both) | 0 / 540 | | |
+| 7×7 playable corners (white on both) | 0 / 6,032 | | |
+| 9×9 playable corners (white on both) | 32,492 / 39,328 | | |
 | 10×10 | 177,548 / 206,466 | | |
 
 Up to W = 8 the long line decides; from W = 9 on three kings cannot win even when they hold it.
@@ -244,7 +245,7 @@ On 6×11:
     +-----------------------+
       a b c d e f g h i j k
 ```
-Even W always has the two corners; odd W has them only with colouring p1. The trapping map is exactly symmetric about the apex file.
+Even W always has the two corners; odd W has them only with playable corner squares. The trapping map is exactly symmetric about the apex file.
 
 **W + 1 and W + 2**: the king at b2 stands on the long diagonal, whose other end is an entrance at the top right;
 the two kings at the top right form a half trap with it and the upper one can close the long line.
@@ -301,8 +302,8 @@ One square per symmetry class (the 4 symmetries of the board give 15 classes):
 
 ## Comparison with the 1988 book
 
-**Confirmed**: everything the book states firmly — 2-1 for W ≤ 4 (with the long-line condition on 3×3 and 4×4) and on 5×7 p1;
-3-1 on W = 5, 6 for every H > W (square boards with the long-line condition, explicit on 5×5 p1);
+**Confirmed**: everything the book states firmly — 2-1 for W ≤ 4 (with the long-line condition on 3×3 and 4×4) and on 5×7 playable corners;
+3-1 on W = 5, 6 for every H > W (square boards with the long-line condition, explicit on 5×5 playable corners);
 W = 7 for H = 7–11; W = 8 for H = 9, 10, 11, 15; the families W + 1, W + 2 and 2W − 1 with the colouring rule;
 the lake boards 1, 2, 4, 5, 7, 8, 9, 18, 23.
 
@@ -311,8 +312,8 @@ the lake boards 1, 2, 4, 5, 7, 8, 9, 18, 23.
 | Material | Board | Result | Longest win |
 |---|---|---|---|
 | 2-1 | 5×6 | won | 27 plies |
-| 3-1 | 7×12, 7×13 p0, 7×14, 7×15 p1 | won (general method) | 35, 49, 53, 67 |
-| 3-1 | 7×15 p0, 7×16, 7×17 | drawn: the limit of W = 7 | |
+| 3-1 | 7×12, 7×13 unplayable corners, 7×14, 7×15 playable corners | won (general method) | 35, 49, 53, 67 |
+| 3-1 | 7×15 unplayable corners, 7×16, 7×17 | drawn: the limit of W = 7 | |
 | 3-1 | 10×10 without g7 (19) | won | 33 |
 | 3-1 | 10×10 without f10, d8, f8 (3, 12, 13) | drawn | |
 
@@ -323,32 +324,34 @@ the lake boards 1, 2, 4, 5, 7, 8, 9, 18, 23.
 
 ## English checkers
 
+Boards are named width × height, as drawn (columns × rows).
+
 ### 2 kings vs 1
 
 Drawn on 4×4. On every larger board it is won, except for a fixed handful of positions (8 or 10, independent of the board size)
 in which the two white kings are locked in the single corner and the black king keeps them there by opposition.
 On odd × odd boards with playable corners there are no exceptions at all. The longest win grows steadily:
-33 plies on 8×8, 41 on 10×10, 49 on 12×12, 61 on 12×15.
+33 plies on 8×8, 41 on 10×10, 49 on 12×12, 61 on 15×12.
 
 ### 3 kings vs 2
 
 | Board | Quiet draws (3 kings to move) | Longest win | Black in both double corners: draws |
 |---|---|---|---|
-| 6×7 | 273 | 63 | 0% |
-| 7×8 | 792 (0.16%) | 75 | 0% |
+| 7×6 | 273 | 63 | 0% |
+| 8×7 | 792 (0.16%) | 75 | 0% |
 | 8×8 | 1,252 (0.11%) | 67 | 0% |
-| 8×9 | 87,670 (4.0%) | 79 | 50% (opposition) |
-| 9×10 | 344,907 (4.4%) | 93 | 50% (opposition) |
-| 8×10 | 288,748 | 97 | ~100% |
+| 9×8 | 87,670 (4.0%) | 79 | 50% (opposition) |
+| 10×9 | 344,907 (4.4%) | 93 | 50% (opposition) |
+| 10×8 | 288,748 | 97 | ~100% |
 | 10×10 | 1,012,242 (7.1%) | 115 | ~100% |
-| 10×11 | 1,810,258 (7.5%) | 109 | ~100% |
-| 10×12 | 2,744,990 | 127 | ~100% |
-| 7×9 p0 (four double corners) | 124,148 (13.2%) | 93 | see below |
-| 9×9 p0 (four double corners) | 1,201,460 (29.5%) | 99 | see below |
+| 11×10 | 1,810,258 (7.5%) | 109 | ~100% |
+| 12×10 | 2,744,990 | 127 | ~100% |
+| 9×7 unplayable corners (four double corners) | 124,148 (13.2%) | 93 | see below |
+| 9×9 unplayable corners (four double corners) | 1,201,460 (29.5%) | 99 | see below |
 
-**Small boards: blockades.** On 7×8 and 8×8 3-2 is won generically. The few draws occur almost only when white is pushed
+**Small boards: blockades.** On 8×7 and 8×8 3-2 is won generically. The few draws occur almost only when white is pushed
 against the edge (draw rate 0.0% with no white king on the edge, 0.5% with three), and black holding both double corners
-never draws. Example on 7×8, `W:WK1,K2,K3:BK10,K11`:
+never draws. Example on 8×7, `W:WK1,K2,K3:BK10,K11`:
 ```
     +-----------------+
   7 | W   W   W   .   |
@@ -366,17 +369,19 @@ black has to find the only drawing move 1... e5-d4 (everything else loses in 6�
 kings forever but never breaks out: black cannot force a capture in any of the 901,577 positions reachable without captures.
 
 **Larger boards: the double-corner fortress.** A king on the two edge squares of a double corner can never be captured
-and always has a waiting move. On 8×9 and 9×10 a black king in each double corner draws in exactly half of the positions,
-and that half is decided by **opposition**: the parity of the sum of the ranks of all pieces flips with every move, and kings
-cannot lose a tempo, so who has the opposition is fixed from the start.
+and always has a waiting move. On 9×8 and 10×9 a black king in each double corner draws in half of the positions,
+and that half is decided by **opposition**: the parity (even or odd) of the sum of the rank numbers of all pieces flips
+with every move, and kings cannot lose a tempo, so with black to move the parity is fixed from the start.
 
-| Black in both double corners | Parity 0 | Parity 1 |
+| Black in both double corners, black to move | Even parity | Odd parity |
 |---|---|---|
-| 8×9 | 99.5% draws | 0.0% draws |
-| 9×10 | 99.8% | 0.0% |
-| 10×11 | 99.9% | 99.9% |
+| 9×8 | 100% draws | 0% draws |
+| 10×9 | 100% | 0% |
+| 11×10 | 100% | 100% |
 
-8×9, black on a7 and i7 (shuttling with b8 and h8), white c7, e7, g7:
+Counted are the quiet positions (nobody can capture) with the black kings on the edge squares of two double corners.
+
+9×8, black on a7 and i7 (shuttling with b8 and h8), white c7, e7, g7:
 ```
     +-------------------+
   8 |   .   .   .   .   |
@@ -399,30 +404,20 @@ With white to move every move draws: black just shuttles a7-b8-a7. With black to
 
 | Boards | D × d | Fortress |
 |---|---|---|
-| 6×7, 7×8, 7×9 p0 (vertical pair) | 6 × 0 | falls |
+| 7×6, 8×7, 9×7 unplayable corners (vertical pair) | 6 × 0 | falls |
 | 8×8 | 7 × 7 | falls |
-| 8×9, 9×10, 9×9 p0 (same side), 7×9 p0 (horizontal) | 8 × 0 | opposition decides |
-| 7×9 p0 (diagonal pair) | 8 × 6 | opposition decides |
-| 9×9 p0 (diagonal pair) | 8 × 8 | holds |
-| 8×10, 10×10, 10×11, 10×12 | ≥ 9 | holds |
+| 9×8, 10×9, 9×9 unplayable corners (same side), 9×7 unplayable corners (horizontal) | 8 × 0 | opposition decides |
+| 9×7 unplayable corners (diagonal pair) | 8 × 6 | opposition decides |
+| 9×9 unplayable corners (diagonal pair) | 8 × 8 | holds |
+| 10×8, 10×10, 11×10, 12×10 | ≥ 9 | holds |
 
 `D ≤ 7`: the fortress falls · `D = 8`: opposition decides, unless also `d = 8` · `D ≥ 9`: the fortress holds.
-On 9×9 p0, freezing one corner already takes all three white kings (one on the shuttle square, one blocking the exit,
-one guarding the blocker), so the other black king simply shuttles:
-```
-    +-------------------+
-  9 |   .   .   .   .   |
-  8 | .   .   .   .   B |
-  7 |   .   .   .   .   |
-  6 | .   .   .   .   . |
-  5 |   .   .   .   .   |
-  4 | .   .   .   .   . |
-  3 |   .   W   .   .   |
-  2 | W   W   .   .   . |
-  1 |   B   .   .   .   |
-    +-------------------+
-      a b c d e f g h i
-```
+On 9×9 unplayable corners the trap decides again. With two double corners on the same side (e.g. black on h1 and h9, white
+on h3, h5, h7, black to move: L28) every shuttle move allows a forced exchange, at one of the two parities (2 traps per
+pair, none at the other parity): the opposition decides. With the diagonal pair (black on b1 and i8) there is no trap
+at either parity: the 8×8 trap, three white kings in a row in the middle of the connecting diagonal, punishes only one
+shuttle move here (white on d3, e4, f5: i8-h9 is punished, b1-a2 is not; on e4, f5, g6 the other way round). On 8×8
+there are 5 squares between the black kings, on 9×9 there are 6: that distance is too long.
 
 ---
 
@@ -438,6 +433,136 @@ scripts/run_all.sh                 # all databases, a few minutes; writes data/ 
 * [`checkers/edge_corner.py`](checkers/edge_corner.py): checkers 3-2 draws by white kings on the edge × black kings in double corners.
 * [`checkers/checkers_draws.py`](checkers/checkers_draws.py): classifies checkers draws (immediate shots versus blockades).
 * [`checkers/force_capture.py`](checkers/force_capture.py): can black force the win of a white king, and how fast.
+
+### 6×6 databases up to 12 pieces on your own machine
+
+The 6×6 databases (men and kings, at most 6 pieces per side) are built unit by unit, a unit being all positions with
+n pieces of which m are men, by [`units_6x6.py`](strongly_solving_6x6/international/units_6x6.py). Each unit is built,
+verified position by position, compressed (zstd -19, blocks of 4 KiB), compared block by block with the raw values
+and checksummed. A run that is interrupted continues where it stopped, so it can be stopped and started at will.
+
+Requirements: the C++ toolchain above, the zstd library (`libzstd-dev` on Debian/Ubuntu), Python 3, 16 GB of memory
+and about 30 GB of free disk space (the compressed store, plus one raw unit of up to some 6 GB at a time).
+
+```bash
+cmake -B build && cmake --build build --target egdb_6x6
+```
+
+`egdb_6x6` keeps its bitboards in `xstd::bit_fixed_set` and indexes the kings with `xstd::bit_compress` /
+`xstd::bit_expand` (PEXT / PDEP where the processor has fast BMI2), so it needs C++23 (GCC 14 or later) and the
+xstd-bits headers, which CMake fetches (with xstd-ints and xstd-misc). Build it with CMake, as above.
+
+```bash
+mkdir -p data
+```
+
+```bash
+nohup python3 strongly_solving_6x6/international/units_6x6.py build/egdb_6x6 --dir data/units --nmax 12 --threads 4 > data/units.out 2>&1 &
+```
+
+Instead of the driver, [Snakemake](https://snakemake.readthedocs.io) can run the same steps from the
+[`Snakefile`](strongly_solving_6x6/international/Snakefile): every step is a job whose result is a file next to the
+unit (`6x6-nn-mm.built`, `.verified`, `.cdb`, `.compared`, `.crc`, `.done`), so Snakemake sees where a run stopped and
+continues there (a store begun with the driver gets those files with
+[`units_markers.py`](strongly_solving_6x6/international/units_markers.py)):
+
+```bash
+python3 -m venv ~/smk && ~/smk/bin/pip install snakemake
+```
+
+(On Debian and Ubuntu `venv` is a separate package: `sudo apt-get install python3-venv`.)
+
+```bash
+nohup ~/smk/bin/snakemake -s strongly_solving_6x6/international/Snakefile --cores 4 --config engine=build/egdb_6x6 > data/units.out 2>&1 &
+```
+
+English checkers on the same board (short kings, men capture forwards only, free choice of capture) is the same
+engine built as `egdb_6x6_checkers`; its store goes in a directory of its own:
+
+```bash
+cmake --build build --target egdb_6x6_checkers
+```
+
+```bash
+nohup ~/smk/bin/snakemake -s strongly_solving_6x6/international/Snakefile --cores 4 --config engine=build/egdb_6x6_checkers dir=data/units_checkers > data/units_checkers.out 2>&1 &
+```
+
+Both engines reproduce the perft numbers of the forum thread [*Perft for arbitrary board sizes*](https://damforum.nl/viewtopic.php?p=76677#p76677)
+(and of dctl) to depth 17: `echo "perft 17" | build/egdb_6x6` and, counting every capture sequence as the checkers
+numbers do, `echo "perft 17 dups" | build/egdb_6x6_checkers`.
+
+#### Per material: Snakemake manages all dependencies and all parallelism
+
+The [`materials`](strongly_solving_6x6/materials/) workflow builds the same databases one material at a time, a
+material being named wp-bp-wm-bm (white pieces, black pieces, white men, black men; `6x6-06-06-00-00` is 6 kings
+against 6 kings). [`materials.py`](strongly_solving_6x6/materials/materials.py) plans the 378 materials: their exact
+dependencies (promotions and captures), sizes and critical-path priorities. The engine needs Intel TBB for
+`std::execution::par` (`sudo apt-get install libtbb-dev`).
+
+* Every material is a chain of jobs (build, verify, compress, compare, crc, delete raw), started as soon as the
+  materials it depends on are done, not after a whole unit.
+* An ordinary material runs on one thread, under `nice`. A big one (all kings or one man, at least 4 M positions, such
+  as 6 kings against 6 kings) runs with all cores: Snakemake counts it as 2 threads and keeps starting other jobs next
+  to it, so the OS shares the cores while they run and gives all of them to the big job when it runs alone.
+* Jobs on the longest chains (all kings, few men) get the highest priority and start first.
+
+```bash
+nohup ~/smk/bin/snakemake -s strongly_solving_6x6/materials/Snakefile --cores 10 --config engine=build/egdb_6x6_checkers dir=data/materials_checkers > data/materials_checkers.out 2>&1 &
+```
+
+* Files: `data/materials_checkers/6x6-wp-bp-wm-bm.cdb`; results of every step in `materials.log`; `crc32c.txt`
+  is written when the run ends.
+* Check: the lines of `crc32c.txt` must equal
+  [`crc32c_6x6_checkers_materials.txt`](strongly_solving_6x6/materials/crc32c_6x6_checkers_materials.txt) (194
+  materials through 8 pieces: built in 20 minutes on 4 cores, all equal to the unit store, longest win at 8 pieces 147
+  plies as in Van Horssen's paper).
+* Plan: `python3 strongly_solving_6x6/materials/materials.py --nmax 12 --cores 10` lists every material with its
+  positions, dependencies and priority; `snakemake ... --dag | dot -Tsvg > dag.svg` draws the jobs.
+* Check against a unit store of the same game (a hash of the values per material, keyed by position):
+  `python3 strongly_solving_6x6/materials/crosscheck.py build/egdb_6x6_checkers --units data/units_checkers --materials data/materials_checkers --nmax 12`.
+
+* `--threads` (driver) or `--cores` (Snakemake): the number of cores to use for every step of `egdb_6x6`.
+* Progress: `tail data/units.out`, one line per step and unit; the results of every step are in `data/units/units.log`.
+* Files: `data/units/6x6-nn-mm.cdb` for the unit with nn pieces of which mm are men; with the leading zeros the
+  names sort in build order.
+* Resume: run the same command again. The state is kept in `data/units/state.json`, and an interrupted build continues
+  from its last checkpoint (`*.raw.progress`).
+* Time on 4 cores: up to 10 pieces about 10 hours (of which 10 pieces 7 hours); 11 and 12 pieces together roughly
+  30 to 40 hours more. Building and verifying take most of it; the time scales about inversely with the number of cores.
+  The complete store through 12 pieces (88 units, 63.8 billion positions) took 26 h 37 min on 10 cores (Xeon E5-1650 v4,
+  virtual machine).
+* Check: every finished unit appends its CRC32C to `data/units/crc32c.txt`. It must equal the line for that unit in
+  [`crc32c_6x6.txt`](strongly_solving_6x6/international/crc32c_6x6.txt) (the checksum is of the stored bytes and does
+  not depend on the zstd version):
+
+```bash
+diff <(grep -v '^#' strongly_solving_6x6/international/crc32c_6x6.txt) <(head -n "$(grep -vc '^#' strongly_solving_6x6/international/crc32c_6x6.txt)" data/units/crc32c.txt)
+```
+
+* Format: the engine writes `.cdb` version 2 (one byte per position: 255 a draw, 0 .. E - 1 the DTM, E .. 254 escape
+  codes with an extra byte for a DTM above 254 plies; E per unit, 255 when no unit needs escapes). Version 1 (draw
+  byte 253, written by earlier engines) is still read. The values are the same, but the stored bytes and so the CRCs
+  differ: `crc32c_6x6.txt` still lists version 1 checksums until it is regenerated from a recoded complete store
+  (`crc32c_6x6_checkers.txt` lists version 2). A finished version 1 store is converted in place, with its
+  `crc32c.txt` and `.crc` files rewritten (`--values` also compares a hash of all values before and after):
+
+```bash
+python3 strongly_solving_6x6/international/recode_store.py build/egdb_6x6 --dir data/units --threads 10 --values
+```
+
+With the store complete, the claims of the book and the sites are checked and regenerated from it:
+
+```bash
+python3 strategie_der_36_velden/check.py build/egdb_6x6 --store data/units
+```
+
+```bash
+python3 strategie_der_36_velden/site.py build/egdb_6x6 --store data/units
+```
+
+```bash
+python3 strongly_solving_6x6/site.py build/egdb_6x6 --store data/units
+```
 
 ---
 

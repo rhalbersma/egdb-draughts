@@ -3,12 +3,17 @@
 //    (See accompanying file LICENSE_1_0.txt or copy at
 //          http://www.boost.org/LICENSE_1_0.txt)
 
-// Exact endgame databases for international draughts on the 6x6 board, with men and kings.
+// Exact endgame databases for international draughts on the 6x6 board, with men and kings, or (built with
+// -DEGDB_6X6_CHECKERS=1, as egdb_6x6_checkers) for English checkers on the same board.
 //
 // Rules: international draughts on 6x6: men move one square diagonally forward and capture forwards
 // and backwards, flying kings, mandatory capture, majority capture (kings and men count the same),
 // Turkish strike (captured pieces are removed after the capture and cannot be jumped twice), a man
 // only promotes when it ends its move on the last row. The side to move without a legal move loses.
+// Checkers: kings move and capture one square at a time, men capture forwards only, capture is mandatory
+// but any capture may be chosen (no majority rule), a capture is completed; a man that reaches the last row
+// ends there and is crowned (it cannot capture backwards, so this needs no rule of its own). The board, the
+// numbering and the start position are the same (tabula's draughts::micro, dctl's rectangular<6, 6>).
 //
 // Squares 1..18 as in "Strategie der 36 velden" (H.J. Brascamp): square 1 = b6 (top left),
 // 16 = a1 (bottom left, a dark square), the long diagonal is 16-13-11-8-6-3. White starts on 13-18
@@ -47,15 +52,36 @@
 //   stats           number of slices and positions computed so far
 //   store <dir>     use the compressed units in dir (all positions with at most 12 pieces, at most 6 per side;
 //                   units that are not there answer "error not in database")
-//   unitbuild <dir> <n> <m> [t]          build unit (n pieces, m men) as a raw file (continues an interrupted build)
+//   unitbuild <dir> <n> <m> [t] [GB]     build unit (n pieces, m men) as a raw file (continues an interrupted build);
+//                                        t threads, at most GB of memory for the threads (0 = no limit)
 //   unitverify <dir> <n> <m> raw|cdb [t] recompute the values of the unit from their successors
 //   unitcompress <dir> <n> <m> [t]       compress the raw file of the unit
 //   unitcompare <dir> <n> <m> [t]        compare every block of the compressed unit with the raw file
+//   unitcrc <dir> <n> <m>                CRC32C of the stored bytes of the compressed unit (independent of zstd)
+//   unitmax <dir> <n> <m> [t]            per material the longest win and the longest loss, with a position for each
+//   unitvalues <dir> <n> <m> [t]         a checksum of the values of the positions without capture (independent of how
+//                                        the values are encoded: compares a store built with EGDB_DTM8_MAX to a normal one)
+//   perft <depth> [FEN] [dups]           leaf counts to each depth from the position (default: the start position);
+//                                        with "dups" every capture sequence counts, also when two give the same
+//                                        position (as the checkers perft of dctl and the forum thread)
 // FEN: W:W17,K16:B2,K15 (side to move, white pieces, black pieces; K = king).
 // Values: "W<n>" win in n plies, "L<n>" loss in n plies, "D" draw (for the side to move).
 
+#include <xstd/bits/bit/bit_compress.hpp>          // bit_compress
+#include <xstd/bits/bit/bit_convert.hpp>           // bit_convert
+#include <xstd/bits/bit/bit_expand.hpp>            // bit_expand
+#include <xstd/bits/bit_set/bit_fixed_set.hpp>     // bit_fixed_set
+#include <xstd/bits/bit_type_traits/bit_align.hpp> // bit_align
+#include <xstd/bits/bit_type_traits/bit_least.hpp> // bit_least
+#include <xstd/ints/bit/bit_reverse.hpp>           // bit_reverse
 #include <algorithm>
 #include <array>
+#include <barrier>
+#include <condition_variable>
+#include <functional>
+#include <mutex>
+#include <numeric>
+#include <thread>
 #include <atomic>
 #include <chrono>
 #include <cstdint>
@@ -74,14 +100,34 @@
 #include <unistd.h>
 #include <unordered_map>
 #include <vector>
+#include <nmmintrin.h>
 #include <omp.h>
 #define ZSTD_STATIC_LINKING_ONLY
 #include <zstd.h>
+#include <execution>
+#include "durable_file.hpp"
 
 namespace {
 
 constexpr int N = 18;
-constexpr std::uint32_t FULL = (1u << N) - 1;
+
+// the rules (see the top of the file)
+#ifndef EGDB_6X6_CHECKERS
+#define EGDB_6X6_CHECKERS 0
+#endif
+constexpr bool CHECKERS = EGDB_6X6_CHECKERS != 0;
+constexpr bool LONG_KINGS = !CHECKERS;            // kings move and capture over any distance
+constexpr bool MEN_CAPTURE_BACK = !CHECKERS;      // men capture backwards too
+constexpr bool MAJORITY = !CHECKERS;              // the capture of the most pieces is compulsory
+bool keep_duplicates = false;                     // perft only: keep moves that give the same position
+
+// bitboards: the 18 squares in one std::uint32_t block (bit_least), widened to its 32 bits (bit_align); the full
+// board is FULL, so a complement is FULL - x
+using bitboard = xstd::bit_align<xstd::bit_least<xstd::bit_fixed_set<N>>>;
+constexpr bitboard bb_of(std::uint32_t x) { return xstd::bit_convert<bitboard>(x); }
+constexpr std::uint32_t u32(bitboard const& x) { return xstd::bit_convert<std::uint32_t>(x); }
+bitboard square_bb(int s) { return bitboard{ std::size_t(s) }; }
+constexpr bitboard FULL = bb_of((1u << N) - 1);
 
 int row_of(int s) { return s / 3; }                                    // 0 = top row (squares 1-3)
 int col_of(int s) { return 2 * (s % 3) + (row_of(s) % 2 == 0 ? 1 : 0); } // 0 = file a
@@ -98,6 +144,12 @@ constexpr int DC[4] = { -1, 1, -1, 1 };
 std::array<std::array<std::vector<int>, 4>, N> rays;
 std::array<std::array<std::uint64_t, N + 1>, N + 1> binom{};
 
+// colex ranks of the kings packed onto consecutive bits (xstd::bit_compress / bit_expand): the rank of a packed subset
+// does not depend on the mask it was packed from, so one table of 2^18 ranks serves every mask, and per number of
+// kings k one table of the packed subsets in rank order (2^18 entries over all k)
+std::vector<std::uint32_t> rank_table, unrank_table;
+std::array<std::uint32_t, N + 2> unrank_offset{};
+
 void init_tables()
 {
         for (int s = 0; s < N; ++s)
@@ -108,26 +160,34 @@ void init_tables()
                 binom[n][0] = 1;
                 for (int k = 1; k <= n; ++k) binom[n][k] = binom[n - 1][k - 1] + (k <= n - 1 ? binom[n - 1][k] : 0);
         }
+        rank_table.assign(std::size_t(1) << N, 0);
+        unrank_table.assign(std::size_t(1) << N, 0);
+        for (std::uint32_t c = 0; c < (1u << N); ++c) {
+                std::uint64_t r = 0;
+                int i = 0;
+                for (auto const sq : bb_of(c)) r += binom[std::size_t(sq)][std::size_t(++i)];
+                rank_table[c] = std::uint32_t(r);
+        }
+        for (int k = 0; k <= N; ++k) unrank_offset[std::size_t(k) + 1] = unrank_offset[std::size_t(k)] + std::uint32_t(binom[N][std::size_t(k)]);
+        for (std::uint32_t c = 0; c < (1u << N); ++c) unrank_table[unrank_offset[bb_of(c).size()] + rank_table[c]] = c;
 }
 
-constexpr std::uint32_t PROMO_WHITE = 0b111;                 // squares 1-3
-constexpr std::uint32_t PROMO_BLACK = 0b111u << 15;          // squares 16-18
+constexpr bitboard PROMO_WHITE = bb_of(0b111);                // squares 1-3
+constexpr bitboard PROMO_BLACK = bb_of(0b111u << 15);         // squares 16-18
 
 struct Pos {
-        std::uint32_t m[2]{};   // men   [0] = white, [1] = black
-        std::uint32_t k[2]{};   // kings
+        bitboard m[2]{};        // men   [0] = white, [1] = black
+        bitboard k[2]{};        // kings
         int stm = 0;            // 0 = white to move, 1 = black to move
 
-        std::uint32_t occ() const { return m[0] | m[1] | k[0] | k[1]; }
+        bitboard occ() const { return m[0] | m[1] | k[0] | k[1]; }
         bool operator==(Pos const&) const = default;
 };
 
-// 180 degree rotation with colours swapped: square n <-> 19 - n, white <-> black
-std::uint32_t flip(std::uint32_t x)
+// 180 degree rotation with colours swapped: square n <-> 19 - n, white <-> black (the 32 bits reversed, shifted down)
+bitboard flip(bitboard const& x)
 {
-        std::uint32_t y = 0;
-        for (; x; x &= x - 1) y |= 1u << (N - 1 - __builtin_ctz(x));
-        return y;
+        return bb_of(xstd::bit_reverse(u32(x)) >> (32 - N));
 }
 
 Pos mirror(Pos const& p)
@@ -143,7 +203,7 @@ Pos mirror(Pos const& p)
 
 struct Move {
         int from, to;
-        std::uint32_t captured;
+        bitboard captured;
         Pos next;
 };
 
@@ -174,7 +234,7 @@ struct MoveList {
 struct Gen {
         Pos const& p;
         int us, them;
-        std::uint32_t enemy, empty0;
+        bitboard enemy, empty0;
         int best = 0;
         MoveList* out;
         int from = 0;
@@ -185,39 +245,42 @@ struct Gen {
                 enemy = p.m[them] | p.k[them];
         }
 
-        void emit(int to, std::uint32_t cap, int n)
+        void emit(int to, bitboard const& cap, int n)
         {
+                if constexpr (!MAJORITY) n = n > 0 ? 1 : 0;     // every capture counts the same, but a capture is compulsory
                 if (n < best) return;
                 if (n > best) { best = n; out->clear(); }
                 Pos q = p;
-                std::uint32_t fb = 1u << from, tb = 1u << to;
-                bool promote = !is_king && ((us == 0 ? PROMO_WHITE : PROMO_BLACK) & tb);
-                if (is_king) { q.k[us] = (q.k[us] & ~fb) | tb; }
-                else if (promote) { q.m[us] &= ~fb; q.k[us] |= tb; }
-                else { q.m[us] = (q.m[us] & ~fb) | tb; }
-                q.m[them] &= ~cap; q.k[them] &= ~cap;
+                std::size_t const fb = std::size_t(from), tb = std::size_t(to);
+                bool promote = !is_king && (us == 0 ? PROMO_WHITE : PROMO_BLACK).contains(tb);
+                if (is_king) { q.k[us].erase(fb); q.k[us].insert(tb); }
+                else if (promote) { q.m[us].erase(fb); q.k[us].insert(tb); }
+                else { q.m[us].erase(fb); q.m[us].insert(tb); }
+                q.m[them] -= cap; q.k[them] -= cap;
                 q.stm = them;
-                for (auto const& mv : *out) if (mv.next == q) return;  // same resulting position
+                if (!keep_duplicates)
+                        for (auto const& mv : *out) if (mv.next == q) return;  // same resulting position
                 out->push_back({ from, to, cap, q });
         }
 
         // empty: squares that are empty during this capture (origin is vacated; captured pieces stay)
-        void capture(int s, std::uint32_t empty, std::uint32_t cap, int n)
+        void capture(int s, bitboard const& empty, bitboard const& cap, int n)
         {
                 bool any = false;
                 for (int d = 0; d < 4; ++d) {
+                        if (!MEN_CAPTURE_BACK && !is_king && (us == 0 ? d >= 2 : d < 2)) continue;
                         auto const& ray = rays[s][d];
                         std::size_t i = 0;
-                        if (is_king) while (i < ray.size() && (empty >> ray[i] & 1)) ++i;
+                        if (LONG_KINGS && is_king) while (i < ray.size() && empty.contains(std::size_t(ray[i]))) ++i;
                         if (i >= ray.size()) continue;
                         int v = ray[i];
-                        if (!(enemy >> v & 1) || (cap >> v & 1)) continue;
+                        if (!enemy.contains(std::size_t(v)) || cap.contains(std::size_t(v))) continue;
                         std::size_t j = i + 1;
-                        if (j >= ray.size() || !(empty >> ray[j] & 1)) continue;
-                        for (; j < ray.size() && (empty >> ray[j] & 1); ++j) {
+                        if (j >= ray.size() || !empty.contains(std::size_t(ray[j]))) continue;
+                        for (; j < ray.size() && empty.contains(std::size_t(ray[j])); ++j) {
                                 any = true;
-                                capture(ray[j], empty, cap | (1u << v), n + 1);
-                                if (!is_king) break;
+                                capture(ray[j], empty, cap | square_bb(v), n + 1);
+                                if (!LONG_KINGS || !is_king) break;
                         }
                 }
                 if (!any && n > 0) emit(s, cap, n);
@@ -225,25 +288,25 @@ struct Gen {
 
         void run()
         {
-                std::uint32_t occ = p.occ();
-                std::uint32_t pieces = p.m[us] | p.k[us];
+                bitboard const occ = p.occ();
+                bitboard const pieces = p.m[us] | p.k[us];
                 // captures
-                for (std::uint32_t b = pieces; b; b &= b - 1) {
-                        from = __builtin_ctz(b);
-                        is_king = p.k[us] >> from & 1;
-                        capture(from, (~occ & FULL) | (1u << from), 0, 0);
+                for (auto const sq : pieces) {
+                        from = int(sq);
+                        is_king = p.k[us].contains(sq);
+                        capture(from, (FULL - occ) | square_bb(from), bitboard{}, 0);
                 }
                 if (best > 0) return;
                 // quiet moves
-                for (std::uint32_t b = pieces; b; b &= b - 1) {
-                        from = __builtin_ctz(b);
-                        is_king = p.k[us] >> from & 1;
+                for (auto const sq : pieces) {
+                        from = int(sq);
+                        is_king = p.k[us].contains(sq);
                         for (int d = 0; d < 4; ++d) {
                                 if (!is_king && (us == 0 ? d >= 2 : d < 2)) continue;
                                 for (int t : rays[from][d]) {
-                                        if (occ >> t & 1) break;
-                                        emit(t, 0, 0);
-                                        if (!is_king) break;
+                                        if (occ.contains(std::size_t(t))) break;
+                                        emit(t, bitboard{}, 0);
+                                        if (!LONG_KINGS || !is_king) break;
                                 }
                         }
                 }
@@ -261,22 +324,21 @@ MoveList moves(Pos const& p)
 bool has_capture(Pos const& p)
 {
         int us = p.stm, them = 1 - us;
-        std::uint32_t enemy = p.m[them] | p.k[them];
-        std::uint32_t empty = ~p.occ() & FULL;
-        for (std::uint32_t b = p.m[us]; b; b &= b - 1) {
-                int s = __builtin_ctz(b);
+        bitboard const enemy = p.m[them] | p.k[them];
+        bitboard const empty = FULL - p.occ();
+        for (auto const sq : p.m[us]) {
                 for (int d = 0; d < 4; ++d) {
-                        auto const& r = rays[s][d];
-                        if (r.size() >= 2 && (enemy >> r[0] & 1) && (empty >> r[1] & 1)) return true;
+                        if (!MEN_CAPTURE_BACK && (us == 0 ? d >= 2 : d < 2)) continue;
+                        auto const& r = rays[std::size_t(sq)][std::size_t(d)];
+                        if (r.size() >= 2 && enemy.contains(std::size_t(r[0])) && empty.contains(std::size_t(r[1]))) return true;
                 }
         }
-        for (std::uint32_t b = p.k[us]; b; b &= b - 1) {
-                int s = __builtin_ctz(b);
+        for (auto const sq : p.k[us]) {
                 for (int d = 0; d < 4; ++d) {
-                        auto const& r = rays[s][d];
+                        auto const& r = rays[std::size_t(sq)][std::size_t(d)];
                         std::size_t i = 0;
-                        while (i < r.size() && (empty >> r[i] & 1)) ++i;
-                        if (i + 1 < r.size() && (enemy >> r[i] & 1) && (empty >> r[i + 1] & 1)) return true;
+                        if constexpr (LONG_KINGS) while (i < r.size() && empty.contains(std::size_t(r[i]))) ++i;
+                        if (i + 1 < r.size() && enemy.contains(std::size_t(r[i])) && empty.contains(std::size_t(r[i + 1]))) return true;
                 }
         }
         return false;
@@ -305,21 +367,22 @@ std::string show(std::uint16_t v)
 // ---------------------------------------------------------------- slices
 
 struct Key {
-        std::uint32_t wm, bm;
+        bitboard wm, bm;
         int nwk, nbk;
-        std::uint64_t pack() const { return std::uint64_t(wm) | std::uint64_t(bm) << 18 | std::uint64_t(nwk) << 36 | std::uint64_t(nbk) << 40; }
+        std::uint64_t pack() const { return std::uint64_t(u32(wm)) | std::uint64_t(u32(bm)) << 18 | std::uint64_t(nwk) << 36 | std::uint64_t(nbk) << 40; }
         static Key unpack(std::uint64_t x)
         {
-                return { std::uint32_t(x) & FULL, std::uint32_t(x >> 18) & FULL, int(x >> 36 & 15), int(x >> 40 & 15) };
+                constexpr std::uint32_t low = (1u << N) - 1;
+                return { bb_of(std::uint32_t(x) & low), bb_of(std::uint32_t(x >> 18) & low), int(x >> 36 & 15), int(x >> 40 & 15) };
         }
 };
 
 Key key_of(Pos const& p)
 {
-        return { p.m[0], p.m[1], __builtin_popcount(p.k[0]), __builtin_popcount(p.k[1]) };
+        return { p.m[0], p.m[1], int(p.k[0].size()), int(p.k[1].size()) };
 }
 
-int pieces(Key const& k) { return __builtin_popcount(k.wm) + __builtin_popcount(k.bm) + k.nwk + k.nbk; }
+int pieces(Key const& k) { return int(k.wm.size() + k.bm.size()) + k.nwk + k.nbk; }
 
 // slices are stored for one of each pair (slice, mirror(slice)) only
 bool canonical_key(Key const& k)
@@ -330,7 +393,7 @@ bool canonical_key(Key const& k)
 
 struct Meta {
         Key key;
-        std::uint32_t free;
+        bitboard free;
         std::uint64_t nb;        // C(F - nwk, nbk)
         std::uint64_t P;         // positions per side to move
 };
@@ -339,44 +402,29 @@ Meta meta_of(Key const& key)
 {
         Meta s;
         s.key = key;
-        s.free = ~(key.wm | key.bm) & FULL;
-        int F = __builtin_popcount(s.free);
+        s.free = FULL - (key.wm | key.bm);
+        int F = int(s.free.size());
         s.nb = key.nwk <= F ? binom[F - key.nwk][key.nbk] : 0;
         s.P = key.nwk <= F ? binom[F][key.nwk] * s.nb : 0;
         return s;
 }
 
-// colex rank of the bits of x within mask (x subset of mask)
-std::uint64_t rank_in(std::uint32_t x, std::uint32_t mask)
+// colex rank of x within mask (x subset of mask): x packed onto the low bits (PEXT), then one table entry
+std::uint64_t rank_in(bitboard const& x, bitboard const& mask)
 {
-        std::uint64_t r = 0;
-        int pos = 0, i = 0;
-        for (std::uint32_t b = mask; b; b &= b - 1, ++pos) {
-                int sq = __builtin_ctz(b);
-                if (x >> sq & 1) { ++i; r += binom[pos][i]; }
-        }
-        return r;
+        return rank_table[xstd::bit_compress<std::uint32_t>(x, mask)];
 }
 
-std::uint32_t unrank_in(std::uint64_t r, int k, std::uint32_t mask)
+// the k-subset of mask with colex rank r: one table entry, spread over the mask (PDEP)
+bitboard unrank_in(std::uint64_t r, int k, bitboard const& mask)
 {
-        int sq[N]; int n = 0;
-        for (std::uint32_t b = mask; b; b &= b - 1) sq[n++] = __builtin_ctz(b);
-        std::uint32_t x = 0;
-        for (int i = k; i >= 1; --i) {
-                int pos = i - 1;
-                while (pos + 1 < n && binom[pos + 1][i] <= r) ++pos;
-                r -= binom[pos][i];
-                x |= 1u << sq[pos];
-                n = pos;
-        }
-        return x;
+        return xstd::bit_expand(unrank_table[unrank_offset[std::size_t(k)] + r], mask);
 }
 
 std::uint64_t index_of(Meta const& s, Pos const& p)
 {
         std::uint64_t rw = rank_in(p.k[0], s.free);
-        std::uint64_t rb = rank_in(p.k[1], s.free & ~p.k[0]);
+        std::uint64_t rb = rank_in(p.k[1], s.free - p.k[0]);
         return rw * s.nb + rb;
 }
 
@@ -385,7 +433,7 @@ Pos pos_of(Meta const& s, std::uint64_t idx, int stm)
         Pos p;
         p.m[0] = s.key.wm; p.m[1] = s.key.bm;
         p.k[0] = unrank_in(idx / s.nb, s.key.nwk, s.free);
-        p.k[1] = unrank_in(idx % s.nb, s.key.nbk, s.free & ~p.k[0]);
+        p.k[1] = unrank_in(idx % s.nb, s.key.nbk, s.free - p.k[0]);
         p.stm = stm;
         return p;
 }
@@ -484,7 +532,7 @@ SliceRef slice_values(Key const& key)
 using PosKey = unsigned __int128;
 PosKey pack(Pos const& p)
 {
-        return PosKey(p.m[0]) | PosKey(p.m[1]) << 18 | PosKey(p.k[0]) << 36 | PosKey(p.k[1]) << 54 | PosKey(p.stm) << 72;
+        return PosKey(u32(p.m[0])) | PosKey(u32(p.m[1])) << 18 | PosKey(u32(p.k[0])) << 36 | PosKey(u32(p.k[1])) << 54 | PosKey(p.stm) << 72;
 }
 struct PosKeyHash {
         std::size_t operator()(PosKey x) const
@@ -519,7 +567,7 @@ std::uint64_t ab_nodes = 0;
 
 bool in_slices(Pos const& p)
 {
-        return __builtin_popcount(p.occ()) <= slice_max || (p.k[0] && p.k[1]);
+        return int(p.occ().size()) <= slice_max || (!p.k[0].empty() && !p.k[1].empty());
 }
 
 std::uint16_t from_successors(Pos const& p);
@@ -559,7 +607,7 @@ int alphabeta(Pos const& p, int alpha, int beta)
         for (std::size_t i = 0; i < ms.size(); ++i) {
                 int pri;
                 if (in_slices(ms[i].next)) { exact[i] = up(to_score((lookup_slice(ms[i].next)))); pri = exact[i]; }
-                else pri = ms[i].captured ? -WSC + 1000 : -WSC + 500;
+                else pri = !ms[i].captured.empty() ? -WSC + 1000 : -WSC + 500;
                 order.push_back({ -pri, i });
         }
         std::sort(order.begin(), order.end());
@@ -622,24 +670,26 @@ std::uint16_t from_successors(Pos const& p)
 
 bool internal_move(Pos const& p, Move const& mv)
 {
-        return mv.captured == 0 && (p.k[p.stm] >> mv.from & 1);
+        return mv.captured.empty() && p.k[p.stm].contains(std::size_t(mv.from));
 }
 
 template<class F>
 void for_each_predecessor(Meta const& s, Pos const& q, F&& f)
 {
         int mover = 1 - q.stm;
-        std::uint32_t occ = q.occ();
-        for (std::uint32_t b = q.k[mover]; b; b &= b - 1) {
-                int t = __builtin_ctz(b);
+        bitboard const occ = q.occ();
+        for (auto const t : q.k[mover]) {
                 for (int d = 0; d < 4; ++d)
-                        for (int fr : rays[t][d]) {
-                                if (occ >> fr & 1) break;
+                        for (int fr : rays[std::size_t(t)][std::size_t(d)]) {
+                                if (occ.contains(std::size_t(fr))) break;
                                 Pos pr = q;
-                                pr.k[mover] = (pr.k[mover] & ~(1u << t)) | (1u << fr);
+                                pr.k[mover].erase(t);
+                                pr.k[mover].insert(std::size_t(fr));
                                 pr.stm = mover;
-                                if (has_capture(pr)) continue;   // captures are compulsory: no quiet move from pr
+                                // a predecessor with a capture has no king move (captures are compulsory), but needs no test:
+                                // it was decided in pass 0, and every caller skips decided positions
                                 f(std::uint64_t(mover) * s.P + index_of(s, pr));
+                                if (!LONG_KINGS) break;
                         }
         }
 }
@@ -717,6 +767,571 @@ void solve_slice(Meta const& s, std::uint16_t* out)
                 if (out[i] == UNKNOWN16) out[i] = DRAW;
 }
 
+// ---------------------------------------------------------------- one slice by pull passes, in parallel
+//
+// The same values as solve_slice, for one big slice with all cores (std::execution::par, no other synchronisation).
+// Every round reads the values of the previous round and writes a new array, each position only its own entry:
+//   pass 0   as in solve_slice; besides the fastest exit win (ewin) also eloss, for a position whose exits all lose
+//            for the side to move (all lead to a win of the opponent): one more than the slowest of those wins
+//   n odd    an undecided position is won in n if its fastest exit wins in n or a king move reaches a position lost
+//            in n - 1
+//   n even   an undecided position whose exits all lose is lost if every king move reaches a won position; its DTM is
+//            the larger of eloss and one more than the slowest of those wins (it can exceed n, as in solve_slice)
+// Each round scans every undecided position (more work than the frontier of solve_slice), in chunks of 4096.
+
+void solve_slice_pull(Meta const& s, std::uint16_t* out)
+{
+        std::uint64_t const T = 2 * s.P;
+        std::vector<std::uint64_t> chunks;
+        for (std::uint64_t c = 0; c < T; c += 4096) chunks.push_back(c);
+        std::vector<std::uint16_t> cur(T), nxt(T), ewin(T, NONE16), eloss(T, NONE16);
+        auto const top = [](int a, int b) { return std::max(a, b); };
+        int maxd = std::transform_reduce(std::execution::par, chunks.begin(), chunks.end(), 0, top, [&](std::uint64_t c0) {
+                int md = 0;
+                for (std::uint64_t i = c0; i < std::min(T, c0 + 4096); ++i) {
+                        Pos const p = pos_of(s, i % s.P, int(i / s.P));
+                        int c = 0, ew = INF, el = 0;
+                        bool ed = false;
+                        for (auto const& mv : moves(p)) {
+                                if (internal_move(p, mv)) { ++c; continue; }
+                                std::uint16_t const v = lookup(mv.next);
+                                if (v == DRAW) ed = true;
+                                else if (v & 1) el = std::max(el, v + 1);
+                                else ew = std::min(ew, v + 1);
+                        }
+                        if (c == 0) {
+                                cur[i] = ew < INF ? std::uint16_t(ew) : ed ? DRAW : std::uint16_t(el);
+                                if (cur[i] != DRAW) md = std::max(md, int(cur[i]));
+                        } else {
+                                cur[i] = UNKNOWN16;
+                                if (ew < INF) { ewin[i] = std::uint16_t(ew); md = std::max(md, ew); }
+                                else if (!ed) eloss[i] = std::uint16_t(el);
+                        }
+                }
+                return md;
+        });
+        if (maxd >= 0xFF00) { std::cerr << "DTM overflow" << std::endl; std::abort(); }
+        for (int n = 1; n <= maxd + 1; ++n) {
+                bool const wins = n & 1;
+                std::uint16_t const prev = std::uint16_t(n - 1);
+                int const md = std::transform_reduce(std::execution::par, chunks.begin(), chunks.end(), 0, top, [&](std::uint64_t c0) {
+                        int md = 0;
+                        for (std::uint64_t i = c0; i < std::min(T, c0 + 4096); ++i) {
+                                std::uint16_t v = cur[i];
+                                if (v == UNKNOWN16 && (wins || eloss[i] != NONE16)) {
+                                        Pos const p = pos_of(s, i % s.P, int(i / s.P));
+                                        std::uint64_t const other = std::uint64_t(1 - p.stm) * s.P;
+                                        if (wins) {
+                                                bool won = ewin[i] == n;
+                                                for (auto const& mv : moves(p)) {
+                                                        if (won) break;
+                                                        if (internal_move(p, mv) && cur[other + index_of(s, mv.next)] == prev) won = true;
+                                                }
+                                                if (won) { v = std::uint16_t(n); md = std::max(md, n); }
+                                        } else {
+                                                int d = eloss[i];
+                                                bool lost = true;
+                                                for (auto const& mv : moves(p)) {
+                                                        if (!internal_move(p, mv)) continue;
+                                                        std::uint16_t const w = cur[other + index_of(s, mv.next)];
+                                                        if (w >= UNKNOWN16 || !(w & 1)) { lost = false; break; }
+                                                        d = std::max(d, int(w) + 1);
+                                                }
+                                                if (lost) { v = std::uint16_t(d); md = std::max(md, d); }
+                                        }
+                                }
+                                nxt[i] = v;
+                        }
+                        return md;
+                });
+                maxd = std::max(maxd, md);
+                if (maxd >= 0xFF00) { std::cerr << "DTM overflow" << std::endl; std::abort(); }
+                cur.swap(nxt);
+        }
+        for (std::uint64_t i = 0; i < T; ++i) out[i] = cur[i] == UNKNOWN16 ? DRAW : cur[i];
+}
+
+// ---------------------------------------------------------------- one slice: each round forward or retrograde, on work lists
+//
+// The same values as solve_slice. Pass 0 looks up every move that leaves the slice (man moves, captures, promotions):
+// a position without a king move inside the slice (every position with a capture, as captures are compulsory) is
+// decided at once and is final. After pass 0 only two kinds of positions take part, both kept in work lists, so that
+// no round scans the slice:
+//   the frontier of round n, the positions with value n - 1 (lists by value; every position is a frontier once);
+//   the undecided positions (two lists: those whose exits all lose, which can still be lost, and the others).
+// Per undecided position: ex, the value through its best exit (odd: won in ex through an exit; even: its exits all
+// lose, the slowest in ex; NONE16: an exit draws), and cnt, its king moves not known to reach a win of value at most
+// n - 1. Round n (odd n: wins in n; even n: losses) goes either way, with exactly the same result:
+//   forward     every undecided position (even n: whose exits all lose) looks at its own king moves. Odd n: won if
+//               ex = n or a king move reaches a loss in n - 1. Even n: lost in max(ex, slowest win + 1) if every king
+//               move reaches a win of value at most n - 1; otherwise its count is set to the king moves that do not.
+//   retrograde  the frontier generates its predecessors (king unmoves). Odd n: an undecided predecessor is won in n,
+//               and so is every undecided position with ex = n. Even n: the count of an undecided predecessor whose
+//               exits all lose goes down by one; at zero it is lost in max(ex, n) (counts as in Gasser 1996; the wins
+//               are counted in increasing value, so the last one has value n - 1).
+// Before each round the cheaper way is estimated from exact counts, U the undecided positions a forward round examines
+// and F the frontier, in units of one examined forward position (decode, generate moves, look up the king moves):
+//      forward k_f + U,  retrograde k_r + r_w F (odd n) or k_r + r_l F (even n)
+// The constants are measured with EGDB_PROFILE (strongly_solving_6x6/materials/switch.py); EGDB_COSTS="k_f k_r r_w r_l"
+// overrides them. EGDB_SWITCH: "forward" or "retrograde" in every round (tests). With par, every round is a parallel
+// algorithm (std::execution::par): concurrent writers of a position write the same value (relaxed std::atomic_ref
+// compare-exchange, and only the winner lists it); a count reaches zero for exactly one decrement (relaxed fetch_sub).
+// EGDB_PROFILE=file: every round is done both ways from the same state, timed, checked equal (values and counts), and
+// the retrograde way is followed; one line per round:
+//      wp bp wm bm slice T n U F edges 0 forward_ns retrograde_ns
+
+struct Tally {
+        int maxd = 0;
+        std::uint64_t decided = 0, lossable = 0, edges = 0;    // positions decided, of which with all exits lost
+        friend Tally operator+(Tally a, Tally const& b)
+        {
+                a.maxd = std::max(a.maxd, b.maxd); a.decided += b.decided; a.lossable += b.lossable; a.edges += b.edges;
+                return a;
+        }
+};
+
+template<class F>
+Tally over(bool par, std::size_t n, F&& f)              // f(k) for every k in [0, n), summed
+{
+        std::vector<std::size_t> ids(n);
+        std::iota(ids.begin(), ids.end(), std::size_t(0));
+        return par ? std::transform_reduce(std::execution::par, ids.begin(), ids.end(), Tally{}, std::plus<>{}, f)
+                   : std::transform_reduce(ids.begin(), ids.end(), Tally{}, std::plus<>{}, f);
+}
+
+// A round is done retrograde if k_r + r_w F + r_x X (odd n) or k_r + r_l F (even n) < k_f + U + r_s (L - U), in units of
+// the cost of examining one position forward (F the frontier, X the wins through an exit, U the undecided positions a
+// forward round examines, L the length of the lists it walks). The constants are fitted per game to the least total time
+// of the rounds chosen, on the profile of every round up to 8 pieces (strongly_solving_6x6/materials/switch.py); within
+// about half a percent of choosing with the times of an identical earlier run. EGDB_COSTS="k_f k_r r_w r_l r_s r_x"
+// overrides them.
+struct Costs { double k_f, k_r, r_w, r_l, r_s, r_x; };
+Costs const costs = [] {
+        Costs c = CHECKERS ? Costs{ 0.23, 0.0, 1.75, 0.38, 0.008, -0.29 } : Costs{ 0.53, 0.0, 2.25, 0.79, 0.004, -0.37 };
+        if (char const* e = std::getenv("EGDB_COSTS"))
+                std::sscanf(e, "%lf %lf %lf %lf %lf %lf", &c.k_f, &c.k_r, &c.r_w, &c.r_l, &c.r_s, &c.r_x);
+        return c;
+}();
+int const switch_mode = [] {
+        char const* e = std::getenv("EGDB_SWITCH");
+        return !e ? 0 : std::string(e) == "forward" ? 1 : std::string(e) == "retrograde" ? 2 : 0;
+}();
+// EGDB_COUNT=0: retrograde loss rounds without counts (a predecessor of the frontier examines all its king moves), to
+// measure what counting saves
+bool const counting = [] { char const* e = std::getenv("EGDB_COUNT"); return !e || std::string(e) != "0"; }();
+std::atomic<std::uint64_t> forward_rounds{0}, retrograde_rounds{0}, slice_ids{0};
+std::atomic<std::uint64_t> forward_ns{0}, retrograde_ns{0}, pass0_ns{0};      // time in the rounds, and in pass 0 and the lists
+std::FILE* const profile_file = [] { char const* e = std::getenv("EGDB_PROFILE"); return e ? std::fopen(e, "a") : nullptr; }();
+std::string profile_tag;                // the material being built (set by mat_build)
+std::mutex profile_mutex;
+
+void solve_slice_hybrid(Meta const& s, std::uint16_t* out, bool par)
+{
+        static_assert(std::atomic_ref<std::uint16_t>::is_always_lock_free && std::atomic_ref<std::uint8_t>::is_always_lock_free);
+        std::uint64_t const T = 2 * s.P;
+        std::size_t const B = 4096;                             // positions or list entries per parallel task
+        if (T >> 32) { std::cerr << "slice too large for 32-bit work lists" << std::endl; std::abort(); }
+        auto const blocks = [&](std::size_t n) { return (n + B - 1) / B; };
+        auto const pos = [&](std::uint64_t i) { return pos_of(s, i % s.P, int(i / s.P)); };
+        std::vector<std::uint16_t> cur(T), ex(T, NONE16);
+        std::vector<std::uint8_t> cnt(T);                       // at most 6 kings x 9 moves
+        auto const at = [&](std::uint64_t i) { return std::atomic_ref<std::uint16_t>(cur[i]); };
+        auto const p0 = std::chrono::steady_clock::now();
+        // pass 0: exits looked up; positions without king moves decided at once
+        int maxd = over(par, blocks(T), [&](std::size_t k) {
+                Tally t;
+                for (std::uint64_t i = k * B; i < std::min<std::uint64_t>(T, k * B + B); ++i) {
+                        Pos const p = pos(i);
+                        int c = 0, ew = INF, el = 0;
+                        bool ed = false;
+                        for (auto const& mv : moves(p)) {
+                                if (internal_move(p, mv)) { ++c; continue; }
+                                std::uint16_t const v = lookup(mv.next);
+                                if (v == DRAW) ed = true;
+                                else if (v & 1) el = std::max(el, v + 1);
+                                else ew = std::min(ew, v + 1);
+                        }
+                        if (c == 0) {
+                                cur[i] = ew < INF ? std::uint16_t(ew) : ed ? DRAW : std::uint16_t(el);
+                                if (cur[i] != DRAW) t.maxd = std::max(t.maxd, int(cur[i]));
+                        } else {
+                                cur[i] = UNKNOWN16;
+                                cnt[i] = std::uint8_t(c);
+                                ex[i] = ew < INF ? std::uint16_t(ew) : ed ? NONE16 : std::uint16_t(el);
+                                if (ew < INF) t.maxd = std::max(t.maxd, ew);
+                        }
+                }
+                return t;
+        }).maxd;
+        // the work lists
+        std::vector<std::vector<std::uint32_t>> front(std::size_t(maxd) + 2);  // by value, until they are a frontier
+        std::vector<std::vector<std::uint32_t>> exits(std::size_t(maxd) + 2);  // undecided, won through an exit in ex
+        std::vector<std::uint32_t> lossable, others;                            // undecided: ex even, and the others
+        for (std::uint64_t i = 0; i < T; ++i) {
+                if (cur[i] == UNKNOWN16) {
+                        (ex[i] & 1 ? others : lossable).push_back(std::uint32_t(i));
+                        if (ex[i] != NONE16 && (ex[i] & 1)) exits[ex[i]].push_back(std::uint32_t(i));
+                } else if (cur[i] != DRAW) front[cur[i]].push_back(std::uint32_t(i));
+        }
+        std::uint64_t open = lossable.size() + others.size(), open_l = lossable.size();
+        pass0_ns += std::uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - p0).count());
+        std::vector<std::vector<std::uint64_t>> got, keep;      // per task: decided (value << 32 | position), kept
+        auto const tasks = [&](std::size_t n) { if (got.size() < n) got.resize(n); if (keep.size() < n) keep.resize(n); };
+        auto const decide = [&](Tally& r, std::size_t k, std::uint32_t i, int d) {
+                got[k].push_back(std::uint64_t(d) << 32 | i);
+                ++r.decided; r.lossable += !(ex[i] & 1); r.maxd = std::max(r.maxd, d);
+        };
+        auto const merge = [&] {                                // the decided positions into the lists by value
+                for (auto& g : got) {
+                        for (std::uint64_t x : g) {
+                                std::size_t const d = std::size_t(x >> 32);
+                                if (d >= front.size()) front.resize(d + 1);
+                                front[d].push_back(std::uint32_t(x));
+                        }
+                        g.clear();
+                }
+        };
+        // forward round n (in place: a position written in this round reads the same as before for the others); the
+        // lists it walks are compacted on the way
+        auto const forward = [&](int n) {
+                bool const wins = n & 1;
+                std::uint16_t const prev = std::uint16_t(n - 1);
+                Tally t;
+                for (std::vector<std::uint32_t>* list : { &lossable, &others }) {
+                        if (!wins && list == &others) break;
+                        std::size_t const nb = blocks(list->size());
+                        tasks(nb);
+                        t = t + over(par, nb, [&](std::size_t k) {
+                                Tally r;
+                                for (std::size_t j = k * B; j < std::min(list->size(), k * B + B); ++j) {
+                                        std::uint32_t const i = (*list)[j];
+                                        if (at(i).load(std::memory_order_relaxed) != UNKNOWN16) continue;
+                                        Pos const p = pos(i);
+                                        std::uint64_t const other = std::uint64_t(1 - p.stm) * s.P;
+                                        if (wins) {
+                                                bool won = ex[i] == n;
+                                                for (auto const& mv : moves(p)) {
+                                                        if (won) break;
+                                                        if (internal_move(p, mv) && at(other + index_of(s, mv.next)).load(std::memory_order_relaxed) == prev) won = true;
+                                                }
+                                                if (won) { at(i).store(std::uint16_t(n), std::memory_order_relaxed); decide(r, k, i, n); continue; }
+                                        } else {
+                                                int d = ex[i], c = 0;
+                                                for (auto const& mv : moves(p)) {
+                                                        if (!internal_move(p, mv)) continue;
+                                                        std::uint16_t const w = at(other + index_of(s, mv.next)).load(std::memory_order_relaxed);
+                                                        if (w < UNKNOWN16 && (w & 1) && w <= prev) d = std::max(d, int(w) + 1);
+                                                        else ++c;
+                                                }
+                                                if (c == 0) { at(i).store(std::uint16_t(d), std::memory_order_relaxed); decide(r, k, i, d); continue; }
+                                                cnt[i] = std::uint8_t(c);
+                                        }
+                                        keep[k].push_back(i);
+                                }
+                                return r;
+                        });
+                        list->clear();
+                        for (std::size_t k = 0; k < nb; ++k) { for (std::uint64_t x : keep[k]) list->push_back(std::uint32_t(x)); keep[k].clear(); }
+                }
+                return t;
+        };
+        // retrograde round n from the frontier (the positions with value n - 1)
+        auto const retrograde = [&](int n) {
+                bool const wins = n & 1;
+                std::vector<std::uint32_t> const& F = front[std::size_t(n - 1)];
+                std::size_t const nb = blocks(F.size());
+                tasks(nb);
+                Tally t = over(par, nb, [&](std::size_t k) {
+                        Tally r;
+                        for (std::size_t j = k * B; j < std::min(F.size(), k * B + B); ++j)
+                                for_each_predecessor(s, pos(F[j]), [&](std::uint64_t i) {
+                                        ++r.edges;
+                                        if (wins) {
+                                                std::uint16_t e = UNKNOWN16;
+                                                if (at(i).load(std::memory_order_relaxed) != UNKNOWN16
+                                                    || !at(i).compare_exchange_strong(e, std::uint16_t(n), std::memory_order_relaxed)) return;
+                                                decide(r, k, std::uint32_t(i), n);
+                                        } else if (counting) {
+                                                if ((ex[i] & 1) || at(i).load(std::memory_order_relaxed) != UNKNOWN16) return;
+                                                if (std::atomic_ref<std::uint8_t>(cnt[i]).fetch_sub(1, std::memory_order_relaxed) != 1) return;
+                                                int const d = std::max(int(ex[i]), n);
+                                                at(i).store(std::uint16_t(d), std::memory_order_relaxed);
+                                                decide(r, k, std::uint32_t(i), d);
+                                        } else {                // lost if every king move reaches a win in at most n - 1
+                                                if ((ex[i] & 1) || at(i).load(std::memory_order_relaxed) != UNKNOWN16) return;
+                                                Pos const q = pos(i);
+                                                std::uint64_t const other = std::uint64_t(1 - q.stm) * s.P;
+                                                for (auto const& mv : moves(q)) {
+                                                        if (!internal_move(q, mv)) continue;
+                                                        std::uint16_t const w = at(other + index_of(s, mv.next)).load(std::memory_order_relaxed);
+                                                        if (!(w < UNKNOWN16 && (w & 1) && w < n)) return;
+                                                }
+                                                std::uint16_t e = UNKNOWN16;
+                                                int const d = std::max(int(ex[i]), n);
+                                                if (at(i).compare_exchange_strong(e, std::uint16_t(d), std::memory_order_relaxed)) decide(r, k, std::uint32_t(i), d);
+                                        }
+                                });
+                        return r;
+                });
+                if (wins && std::size_t(n) < exits.size()) {   // wins through an exit in n
+                        std::vector<std::uint32_t> const& X = exits[std::size_t(n)];
+                        std::size_t const nx = blocks(X.size());
+                        tasks(nx);
+                        t = t + over(par, nx, [&](std::size_t k) {
+                                Tally r;
+                                for (std::size_t j = k * B; j < std::min(X.size(), k * B + B); ++j) {
+                                        std::uint16_t e = UNKNOWN16;
+                                        if (at(X[j]).compare_exchange_strong(e, std::uint16_t(n), std::memory_order_relaxed)) decide(r, k, X[j], n);
+                                }
+                                return r;
+                        });
+                }
+                return t;
+        };
+        std::uint64_t const id = slice_ids++;
+        for (int n = 1; n <= maxd + 1 && open > 0; ++n) {      // no undecided position left: nothing more to decide
+                bool const wins = n & 1;
+                if (std::size_t(n) > front.size()) front.resize(std::size_t(n));
+                // U: the undecided positions forward examines; L: the length of the lists it walks (with the positions
+                // decided by retrograde rounds since it last compacted them); X: the wins through an exit in n
+                std::uint64_t const F = front[std::size_t(n - 1)].size(), U = wins ? open : open_l;
+                std::uint64_t const L = lossable.size() + (wins ? others.size() : 0);
+                std::uint64_t const X = wins && std::size_t(n) < exits.size() ? exits[std::size_t(n)].size() : 0;
+                Tally t;
+                if (profile_file) {             // both ways from the same state, timed, checked equal; retrograde followed
+                        std::vector<std::uint16_t> fcur = cur;
+                        std::vector<std::uint8_t> fcnt = cnt;
+                        std::vector<std::uint32_t> flossable = lossable, fothers = others;
+                        std::swap(cur, fcur);   // forward on a copy of the state and of the lists
+                        std::swap(cnt, fcnt);
+                        std::swap(lossable, flossable);
+                        std::swap(others, fothers);
+                        auto const t0 = std::chrono::steady_clock::now();
+                        forward(n);
+                        auto const t1 = std::chrono::steady_clock::now();
+                        for (auto& g : got) g.clear();
+                        std::swap(cur, fcur);
+                        std::swap(cnt, fcnt);
+                        std::swap(lossable, flossable);
+                        std::swap(others, fothers);
+                        auto const t2 = std::chrono::steady_clock::now();
+                        t = retrograde(n);
+                        auto const t3 = std::chrono::steady_clock::now();
+                        bool same = cur == fcur;
+                        if (!wins && counting) for (std::uint32_t i : flossable) same = same && (cur[i] != UNKNOWN16 || cnt[i] == fcnt[i]);
+                        if (!same) { std::cerr << "error: forward and retrograde round " << n << " differ" << std::endl; std::abort(); }
+                        auto const ns = [](auto d) { return (long long)std::chrono::duration_cast<std::chrono::nanoseconds>(d).count(); };
+                        std::lock_guard<std::mutex> lock(profile_mutex);
+                        std::fprintf(profile_file, "%s %llu %llu %d %llu %llu %llu %llu %llu %lld %lld\n", profile_tag.c_str(),
+                                     (unsigned long long)id, (unsigned long long)T, n, (unsigned long long)U, (unsigned long long)F,
+                                     (unsigned long long)t.edges, (unsigned long long)L, (unsigned long long)X, ns(t1 - t0), ns(t3 - t2));
+                        std::fflush(profile_file);
+                } else {
+                        bool const retro = switch_mode == 2 || (switch_mode == 0
+                                && costs.k_r + (wins ? costs.r_w : costs.r_l) * double(F) + costs.r_x * double(X)
+                                   < costs.k_f + double(U) + costs.r_s * double(L - U));
+                        auto const t0 = std::chrono::steady_clock::now();
+                        if (retro) { ++retrograde_rounds; t = retrograde(n); }
+                        else { ++forward_rounds; t = forward(n); }
+                        auto const ns = std::uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - t0).count());
+                        (retro ? retrograde_ns : forward_ns) += ns;
+                }
+                merge();
+                maxd = std::max(maxd, t.maxd);
+                if (maxd >= 0xFF00) { std::cerr << "DTM overflow" << std::endl; std::abort(); }
+                open -= t.decided;
+                open_l -= t.lossable;
+                std::vector<std::uint32_t>().swap(front[std::size_t(n - 1)]);   // a frontier only once
+        }
+        for (std::uint64_t i = 0; i < T; ++i) out[i] = cur[i] == UNKNOWN16 ? DRAW : cur[i];
+}
+
+// ---------------------------------------------------------------- one slice solved by several threads
+//
+// A persistent pool of std::jthread workers (the calling thread takes part as worker 0), so that the per-thread caches
+// (blocks, resolved captures) survive from one slice to the next. Synchronisation is std::mutex/condition_variable for
+// starting and finishing a job and std::barrier between the phases of a job, all understood by ThreadSanitizer.
+
+class Pool {
+public:
+        explicit Pool(int n) : n_(n)
+        {
+                for (int t = 1; t < n; ++t) th_.emplace_back([this, t] { loop(t); });
+        }
+        ~Pool()
+        {
+                { std::lock_guard l(m_); stop_ = true; ++gen_; }
+                cv_.notify_all();
+                th_.clear();                    // join the workers while the members they use still exist
+        }
+        int size() const { return n_; }
+        void run(std::function<void(int)> const& job)
+        {
+                {
+                        std::lock_guard l(m_);
+                        job_ = &job;
+                        left_ = n_ - 1;
+                        ++gen_;
+                }
+                cv_.notify_all();
+                job(0);
+                std::unique_lock l(m_);
+                done_.wait(l, [&] { return left_ == 0; });
+                job_ = nullptr;
+        }
+private:
+        void loop(int t)
+        {
+                std::uint64_t seen = 0;
+                for (;;) {
+                        std::function<void(int)> const* j;
+                        {
+                                std::unique_lock l(m_);
+                                cv_.wait(l, [&] { return gen_ != seen; });
+                                seen = gen_;
+                                if (stop_) return;
+                                j = job_;
+                        }
+                        (*j)(t);
+                        std::lock_guard l(m_);
+                        if (--left_ == 0) done_.notify_one();
+                }
+        }
+        int n_;
+        std::mutex m_;
+        std::condition_variable cv_, done_;
+        std::uint64_t gen_ = 0;
+        int left_ = 0;
+        bool stop_ = false;
+        std::function<void(int)> const* job_ = nullptr;
+        std::vector<std::jthread> th_;          // last: destroyed (joined) first
+};
+
+// The leapfrog of solve_slice, level-synchronous and race-free, with the same result for any number of threads (and
+// the same as solve_slice). The positions are cut into blocks of 512 positions (8 words of a bitmap, one cache line of
+// bits). The cheap phases (scan, ewin) give thread t a fixed contiguous range of blocks; the others hand out blocks one
+// at a time, and a thread writes only the positions and words of the blocks it claimed. Per iteration n:
+//   scan    each thread marks its positions with value n - 1 in the frontier bitmap (own words only);
+//   push    from its frontier positions each thread walks the king unmoves: a predecessor that is still unknown becomes
+//           a win in n (n odd: atomic_ref<uint16_t> relaxed load and store, every writer writes the same value) or a
+//           loss candidate (n even: atomic_ref<uint64_t> relaxed fetch_or on the candidate bitmap); nothing else is
+//           written in this phase;
+//   n odd   each thread applies the wins through an exit (ewin) to its own positions;
+//   n even  each thread verifies its own candidates (successors are only read in this phase) into a private list,
+//           and after a barrier writes the losses to its own positions. A successor candidate decided in the same
+//           phase would read as unknown or as a loss: either way "not lost", as in the sequential order.
+// Barriers separate the phases, so no value is read while another thread writes it.
+void solve_slice_par(Meta const& s, std::uint16_t* out, Pool& pool)
+{
+        static_assert(sizeof(std::size_t) == 8, "64-bit indices");
+        static_assert(std::atomic_ref<std::uint64_t>::is_always_lock_free && std::atomic_ref<std::uint16_t>::is_always_lock_free);
+        std::uint64_t const T = 2 * s.P, W = (T + 63) / 64, B = (W + 7) / 8;     // positions, words, blocks of 8 words
+        int const nt = pool.size();
+        std::vector<std::uint16_t> ewin(T, NONE16);
+        std::vector<std::uint64_t> front(W, 0), cand(W, 0);
+        std::vector<int> tmax(static_cast<std::size_t>(nt), 0);
+        std::vector<std::vector<std::pair<std::uint64_t, std::uint16_t>>> res(static_cast<std::size_t>(nt));
+        std::barrier<> bar(nt);
+        // blocks handed out one at a time in the phases whose cost per position varies (pass 0, push, verify): the
+        // writes of a block stay with the thread that claimed it; the counters are reset in the scan phase, between
+        // barriers
+        std::atomic<std::uint64_t> next0{ 0 }, next_push{ 0 }, next_verify{ 0 };
+        pool.run([&](int t) {
+                std::uint64_t const w0 = std::min(W, B * std::uint64_t(t) / std::uint64_t(nt) * 8);
+                std::uint64_t const w1 = std::min(W, B * std::uint64_t(t + 1) / std::uint64_t(nt) * 8);
+                std::uint64_t const i0 = std::min(T, w0 * 64), i1 = std::min(T, w1 * 64);
+                auto claim = [&](std::atomic<std::uint64_t>& next, std::uint64_t& wa, std::uint64_t& wb) {
+                        std::uint64_t const k = next.fetch_add(1, std::memory_order_relaxed);
+                        if (k >= B) return false;
+                        wa = k * 8; wb = std::min(W, wa + 8);
+                        return true;
+                };
+                int mx = 0;
+                std::uint64_t wa = 0, wb = 0;
+                // pass 0: exits looked up; positions without king moves inside the slice decided at once
+                while (claim(next0, wa, wb))
+                for (std::uint64_t i = wa * 64; i < std::min(T, wb * 64); ++i) {
+                        Pos p = pos_of(s, i % s.P, int(i / s.P));
+                        int c = 0, ew = INF, el = 0;
+                        bool ed = false;
+                        for (auto const& mv : moves(p)) {
+                                if (internal_move(p, mv)) { ++c; continue; }
+                                std::uint16_t v = lookup(mv.next);
+                                if (v == DRAW) ed = true;
+                                else if (v & 1) el = std::max(el, v + 1);
+                                else ew = std::min(ew, v + 1);
+                        }
+                        if (c == 0) {
+                                out[i] = ew < INF ? std::uint16_t(ew) : ed ? DRAW : std::uint16_t(el);
+                                if (out[i] != DRAW) mx = std::max(mx, int(out[i]));
+                        } else {
+                                out[i] = UNKNOWN16;
+                                if (ew < INF) { ewin[i] = std::uint16_t(ew); mx = std::max(mx, ew); }
+                        }
+                }
+                tmax[std::size_t(t)] = mx;
+                bar.arrive_and_wait();
+                auto global_max = [&] { int g = 0; for (int x : tmax) g = std::max(g, x); return g; };
+                if (global_max() >= 0xFF00) { std::cerr << "DTM overflow" << std::endl; std::abort(); }
+                for (int n = 1; n <= global_max() + 1; ++n) {
+                        std::uint16_t const prev = std::uint16_t(n - 1);
+                        bool const wins = n & 1;
+                        if (t == 0) { next_push.store(0, std::memory_order_relaxed); next_verify.store(0, std::memory_order_relaxed); }
+                        for (std::uint64_t w = w0; w < w1; ++w) {             // scan
+                                std::uint64_t bits = 0;
+                                for (std::uint64_t i = w * 64; i < std::min(T, w * 64 + 64); ++i)
+                                        if (out[i] == prev) bits |= 1ull << (i - w * 64);
+                                front[w] = bits;
+                        }
+                        bar.arrive_and_wait();
+                        while (claim(next_push, wa, wb))                    // push
+                        for (std::uint64_t w = wa; w < wb; ++w)
+                                for (std::uint64_t b = front[w]; b; b &= b - 1) {
+                                        std::uint64_t const i = w * 64 + std::uint64_t(__builtin_ctzll(b));
+                                        for_each_predecessor(s, pos_of(s, i % s.P, int(i / s.P)), [&](std::uint64_t j) {
+                                                std::atomic_ref<std::uint16_t> a(out[j]);
+                                                if (a.load(std::memory_order_relaxed) != UNKNOWN16) return;
+                                                if (wins) { a.store(std::uint16_t(n), std::memory_order_relaxed); mx = std::max(mx, n); }
+                                                else std::atomic_ref<std::uint64_t>(cand[j / 64]).fetch_or(1ull << (j % 64), std::memory_order_relaxed);
+                                        });
+                                }
+                        bar.arrive_and_wait();
+                        if (wins) {
+                                for (std::uint64_t i = i0; i < i1; ++i)
+                                        if (ewin[i] == n && out[i] == UNKNOWN16) { out[i] = std::uint16_t(n); mx = std::max(mx, n); }
+                        } else {
+                                auto& r = res[std::size_t(t)];
+                                r.clear();
+                                while (claim(next_verify, wa, wb))
+                                for (std::uint64_t w = wa; w < wb; ++w)
+                                        for (std::uint64_t b = cand[w]; b; b &= b - 1) {
+                                                std::uint64_t const j = w * 64 + std::uint64_t(__builtin_ctzll(b));
+                                                if (out[j] != UNKNOWN16) continue;
+                                                Pos p = pos_of(s, j % s.P, int(j / s.P));
+                                                int worst = 0;
+                                                bool lost = true;
+                                                for (auto const& mv : moves(p)) {
+                                                        std::uint16_t v = internal_move(p, mv)
+                                                                ? out[std::uint64_t(1 - p.stm) * s.P + index_of(s, mv.next)]
+                                                                : lookup(mv.next);
+                                                        if (v >= UNKNOWN16 || !(v & 1)) { lost = false; break; }
+                                                        worst = std::max(worst, int(v));
+                                                }
+                                                if (lost) r.push_back({ j, std::uint16_t(worst + 1) });
+                                        }
+                                bar.arrive_and_wait();
+                                for (auto const& [j, v] : r) { out[j] = v; mx = std::max(mx, int(v)); }
+                                for (std::uint64_t w = w0; w < w1; ++w) cand[w] = 0;
+                        }
+                        tmax[std::size_t(t)] = mx;
+                        bar.arrive_and_wait();
+                        if (global_max() >= 0xFF00) { std::cerr << "DTM overflow" << std::endl; std::abort(); }
+                }
+                for (std::uint64_t i = i0; i < i1; ++i)
+                        if (out[i] == UNKNOWN16) out[i] = DRAW;
+        });
+}
+
 // ---------------------------------------------------------------- building all slices up to n pieces
 
 struct Job { std::uint64_t key; int level_n, men, dist; std::uint64_t P; };
@@ -724,8 +1339,8 @@ struct Job { std::uint64_t key; int level_n, men, dist; std::uint64_t P; };
 int distance(Key const& k)
 {
         int d = 0;
-        for (std::uint32_t b = k.wm; b; b &= b - 1) d += __builtin_ctz(b) / 3;           // white: rows to row 0
-        for (std::uint32_t b = k.bm; b; b &= b - 1) d += 5 - __builtin_ctz(b) / 3;       // black: rows to row 5
+        for (auto const sq : k.wm) d += int(sq) / 3;           // white: rows to row 0
+        for (auto const sq : k.bm) d += 5 - int(sq) / 3;       // black: rows to row 5
         return d;
 }
 
@@ -734,17 +1349,19 @@ int distance(Key const& k)
 std::vector<Job> make_jobs(int nmin, int nmax)
 {
         std::vector<Job> jobs;
-        std::uint32_t const allowW = FULL & ~PROMO_WHITE, allowB = FULL & ~PROMO_BLACK;
-        std::vector<std::uint32_t> wsets;
+        // the subsets of a mask by the integer enumeration s = (s - 1) & mask, from the mask down to the empty set
+        std::uint32_t const allowW = u32(FULL - PROMO_WHITE), allowB = u32(FULL - PROMO_BLACK);
+        std::vector<bitboard> wsets;
         for (std::uint32_t w = allowW;; w = (w - 1) & allowW) {
-                if (__builtin_popcount(w) <= nmax) wsets.push_back(w);
+                if (int(bb_of(w).size()) <= nmax) wsets.push_back(bb_of(w));
                 if (w == 0) break;
         }
-        for (std::uint32_t wm : wsets) {
-                std::uint32_t ab = allowB & ~wm;
-                int rest0 = nmax - __builtin_popcount(wm);
-                for (std::uint32_t bm = ab;; bm = (bm - 1) & ab) {
-                        int rest = rest0 - __builtin_popcount(bm);
+        for (bitboard const& wm : wsets) {
+                std::uint32_t const ab = allowB & ~u32(wm);
+                int rest0 = nmax - int(wm.size());
+                for (std::uint32_t b = ab;; b = (b - 1) & ab) {
+                        bitboard const bm = bb_of(b);
+                        int rest = rest0 - int(bm.size());
                         if (rest >= 0)
                                 for (int nwk = 0; nwk <= rest; ++nwk)
                                         for (int nbk = 0; nwk + nbk <= rest; ++nbk) {
@@ -752,9 +1369,9 @@ std::vector<Job> make_jobs(int nmin, int nmax)
                                                 if (pieces(k) < std::max(1, nmin) || !canonical_key(k)) continue;
                                                 Meta m = meta_of(k);
                                                 if (m.P == 0) continue;
-                                                jobs.push_back({ k.pack(), pieces(k), __builtin_popcount(wm | bm), distance(k), m.P });
+                                                jobs.push_back({ k.pack(), pieces(k), int((wm | bm).size()), distance(k), m.P });
                                         }
-                        if (bm == 0) break;
+                        if (b == 0) break;
                 }
         }
         std::sort(jobs.begin(), jobs.end(), [](Job const& a, Job const& b) {
@@ -915,10 +1532,9 @@ bool extend(int n, int threads, std::string const& path, bool resume = false)
                 ::msync(db2, db2_size, MS_SYNC);
                 if (std::FILE* pf = std::fopen((path + ".progress.tmp").c_str(), "w")) {
                         std::fprintf(pf, "%llu\n", (unsigned long long)h);
-                        std::fflush(pf);
-                        ::fsync(::fileno(pf));
+                        sync_file(pf);
                         std::fclose(pf);
-                        std::rename((path + ".progress.tmp").c_str(), (path + ".progress").c_str());
+                        durable_rename(path + ".progress.tmp", path + ".progress");
                 }
                 if (h == jobs.size() || jobs[h].men != jobs[g].men) {
                         double sec = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
@@ -1056,12 +1672,12 @@ bool parse_fen(std::string const& fen, Pos& p)
                         bool king = item[0] == 'K';
                         int sq = std::stoi(king ? item.substr(1) : item) - 1;
                         if (sq < 0 || sq >= N) return false;
-                        (king ? p.k[side] : p.m[side]) |= 1u << sq;
+                        (king ? p.k[side] : p.m[side]).insert(std::size_t(sq));
                 }
                 i = j;
         }
         // men on their own promotion row are illegal
-        if ((p.m[0] & PROMO_WHITE) || (p.m[1] & PROMO_BLACK)) return false;
+        if (!(p.m[0] & PROMO_WHITE).empty() || !(p.m[1] & PROMO_BLACK).empty()) return false;
         return true;
 }
 
@@ -1072,7 +1688,7 @@ std::string fen_of(Pos const& p)
                 s += side ? ":B" : ":W";
                 bool first = true;
                 for (int sq = 0; sq < N; ++sq) {
-                        bool m = p.m[side] >> sq & 1, k = p.k[side] >> sq & 1;
+                        bool m = p.m[side].contains(std::size_t(sq)), k = p.k[side].contains(std::size_t(sq));
                         if (!m && !k) continue;
                         if (!first) s += ',';
                         first = false;
@@ -1085,7 +1701,7 @@ std::string fen_of(Pos const& p)
 
 std::string notation(Move const& mv)
 {
-        return std::to_string(mv.from + 1) + (mv.captured ? "x" : "-") + std::to_string(mv.to + 1);
+        return std::to_string(mv.from + 1) + (!mv.captured.empty() ? "x" : "-") + std::to_string(mv.to + 1);
 }
 
 // ---------------------------------------------------------------- store: units of compressed DTM
@@ -1108,11 +1724,12 @@ std::string notation(Move const& mv)
 // where the side to move can capture repeat the previous value of the block; their values follow from the captures
 // and are resolved at lookup (captures are compulsory, so a capture position takes the best of its captures).
 
-constexpr std::uint32_t MEN_W = FULL & ~PROMO_WHITE;      // squares where a white man can stand
-constexpr std::uint32_t MEN_B = FULL & ~PROMO_BLACK;      // squares where a black man can stand
-constexpr std::uint32_t MEN_MID = MEN_W & MEN_B;          // squares 4-15
+constexpr bitboard MEN_W = FULL - PROMO_WHITE;            // squares where a white man can stand
+constexpr bitboard MEN_B = FULL - PROMO_BLACK;            // squares where a black man can stand
+constexpr bitboard MEN_MID = MEN_W & MEN_B;               // squares 4-15
 constexpr std::uint64_t BLOCK = 4096;                     // positions (bytes) per compressed block
-constexpr std::uint64_t CDB_MAGIC = 0x3678364244424331ull;
+constexpr std::uint64_t CDB_MAGIC = 0x3678364244424331ull;     // version 1: draw 253, no escapes (still read)
+constexpr std::uint64_t CDB_MAGIC2 = 0x3678364244424332ull;    // version 2: draw 255, escape codes E..254 (see ESC8)
 constexpr int ZLEVEL = 19;
 
 // placements of nwm white and nbm black men with j white men on squares 16-18
@@ -1130,16 +1747,16 @@ std::uint64_t men_count(int nwm, int nbm)
 }
 
 // rank of a placement of men: [white men on 16-18 (count j)][white men on 16-18][white men on 4-15][black men]
-std::uint64_t men_rank(std::uint32_t wm, std::uint32_t bm)
+std::uint64_t men_rank(bitboard const& wm, bitboard const& bm)
 {
-        int const nwm = __builtin_popcount(wm), nbm = __builtin_popcount(bm), j = __builtin_popcount(wm & PROMO_BLACK);
+        int const nwm = int(wm.size()), nbm = int(bm.size()), j = int((wm & PROMO_BLACK).size());
         std::uint64_t r = 0;
         for (int i = 0; i < j; ++i) r += men_part(nwm, nbm, i);
         std::uint64_t const cm = binom[12][nwm - j], cb = binom[15 - (nwm - j)][nbm];
-        return r + (rank_in(wm & PROMO_BLACK, PROMO_BLACK) * cm + rank_in(wm & MEN_MID, MEN_MID)) * cb + rank_in(bm, MEN_B & ~wm);
+        return r + (rank_in(wm & PROMO_BLACK, PROMO_BLACK) * cm + rank_in(wm & MEN_MID, MEN_MID)) * cb + rank_in(bm, MEN_B - wm);
 }
 
-void men_unrank(int nwm, int nbm, std::uint64_t r, std::uint32_t& wm, std::uint32_t& bm)
+void men_unrank(int nwm, int nbm, std::uint64_t r, bitboard& wm, bitboard& bm)
 {
         int j = 0;
         while (r >= men_part(nwm, nbm, j)) r -= men_part(nwm, nbm, j++);
@@ -1147,7 +1764,7 @@ void men_unrank(int nwm, int nbm, std::uint64_t r, std::uint32_t& wm, std::uint3
         std::uint64_t const c = r % cb;
         r /= cb;
         wm = unrank_in(r / cm, j, PROMO_BLACK) | unrank_in(r % cm, nwm - j, MEN_MID);
-        bm = unrank_in(c, nbm, MEN_B & ~wm);
+        bm = unrank_in(c, nbm, MEN_B - wm);
 }
 
 struct UnitMat {
@@ -1158,8 +1775,34 @@ struct UnitMat {
         std::uint64_t size() const { return men * std::uint64_t(S) * P; }
 };
 
+// Material mode (the mat* commands): the store holds one file per material, 6x6-wp-bp-wm-bm (white pieces, black
+// pieces, white men, black men), each a .cdb with a material table of one entry. While only_mat is set, unit_layout and
+// unit_path for its (n, m) give that material and its file, so that the unit functions (build, verify, compress, ...)
+// work on it unchanged; store_open then opens the files of all finished materials.
+struct OnlyMat {
+        bool on = false;
+        int wm = 0, bm = 0, wk = 0, bk = 0;
+        int n() const { return wm + bm + wk + bk; }
+        int m() const { return wm + bm; }
+} only_mat;
+
+// a material as stored: at most 6 pieces and at least one per side, and not the colour mirror of a smaller one
+bool stored_material(int wm, int bm, int wk, int bk)
+{
+        if (wm < 0 || bm < 0 || wk < 0 || bk < 0 || wm + wk < 1 || bm + bk < 1 || wm + wk > 6 || bm + bk > 6) return false;
+        return !(std::tuple(bm, wm, bk, wk) < std::tuple(wm, bm, wk, bk));
+}
+
+std::vector<UnitMat> mat_layout(int wm, int bm, int wk, int bk)
+{
+        int const F = N - wm - bm;
+        bool const sym = std::tuple(wm, bm, wk, bk) == std::tuple(bm, wm, bk, wk);
+        return { UnitMat{ wm, bm, wk, bk, 0, men_count(wm, bm), binom[F][wk] * binom[F - wk][bk], sym ? 1 : 2 } };
+}
+
 std::vector<UnitMat> unit_layout(int n, int m)
 {
+        if (only_mat.on && n == only_mat.n() && m == only_mat.m()) return mat_layout(only_mat.wm, only_mat.bm, only_mat.wk, only_mat.bk);
         std::vector<UnitMat> v;
         std::uint64_t base = 0;
         for (int wm = 0; wm <= m; ++wm)
@@ -1181,7 +1824,7 @@ std::uint64_t unit_positions(std::vector<UnitMat> const& lay) { return lay.empty
 // the stored representative of a position: the canonical material, white to move for a symmetric one
 Pos canon(Pos const& p)
 {
-        auto const a = std::tuple(__builtin_popcount(p.m[0]), __builtin_popcount(p.m[1]), __builtin_popcount(p.k[0]), __builtin_popcount(p.k[1]));
+        auto const a = std::tuple(p.m[0].size(), p.m[1].size(), p.k[0].size(), p.k[1].size());
         auto const b = std::tuple(std::get<1>(a), std::get<0>(a), std::get<3>(a), std::get<2>(a));
         if (a < b) return p;
         if (b < a) return mirror(p);
@@ -1190,10 +1833,10 @@ Pos canon(Pos const& p)
 
 std::uint64_t king_index(Pos const& p)
 {
-        std::uint32_t const free = ~(p.m[0] | p.m[1]) & FULL;
-        int const F = __builtin_popcount(free);
-        std::uint64_t const nb = binom[F - __builtin_popcount(p.k[0])][__builtin_popcount(p.k[1])];
-        return rank_in(p.k[0], free) * nb + rank_in(p.k[1], free & ~p.k[0]);
+        bitboard const free = FULL - (p.m[0] | p.m[1]);
+        std::size_t const F = free.size();
+        std::uint64_t const nb = binom[F - p.k[0].size()][p.k[1].size()];
+        return rank_in(p.k[0], free) * nb + rank_in(p.k[1], free - p.k[0]);
 }
 
 struct Unit {
@@ -1205,7 +1848,60 @@ struct Unit {
         std::uint64_t const* off = nullptr; // compressed: block offsets (nblocks + 1) relative to data
         std::uint8_t const* data = nullptr;
         std::uint64_t id = 0;               // unique per opened unit (block cache tag)
+        std::uint64_t const* ovf = nullptr; // raw: overflow table, sorted entries offset << 16 | DTM (see ESC8)
+        std::size_t novf = 0;
+        int version = 0;                    // compressed: 1 (draw 253, no escapes) or 2 (draw 255, escapes from esc)
+        unsigned esc = 255;                 // compressed version 2: the first escape code E (255: no escapes)
 };
+
+// Long distances.
+// Raw unit (during a build): DTM up to dtm8_max (251; EGDB_DTM8_MAX lowers it, to test on small units), above that the
+// byte ESC8 with the exact value in an overflow table kept in memory (raw_ovf) and in the file .ovf next to the raw
+// file, written at every checkpoint. Draws are DRAW8 (253), positions not yet decided UNKNOWN8 (254).
+// Compressed unit (version 2): one code byte per position, 255 a draw, 0 .. E - 1 the DTM itself, E .. 254 escape codes:
+// code c with extra byte x is DTM E + 256 (c - E) + x. The extra bytes follow the block's position bytes in the same
+// zstd frame, the k-th escape of the block taking the k-th extra byte. E (header word 7) is chosen per unit as large as
+// possible: 255 (no escapes) when no DTM exceeds 254, else 255 - k with k codes reaching 254 + 255 k plies (EGDB_ESC
+// forces a smaller E, to test the escapes on small units).
+constexpr std::uint8_t ESC8 = 252;
+constexpr std::uint8_t DRAW_CODE = 255;
+int const dtm8_max = [] { char const* e = std::getenv("EGDB_DTM8_MAX"); return std::clamp(e ? std::atoi(e) : 251, 1, 251); }();
+std::vector<std::uint64_t> raw_ovf;
+
+std::vector<std::uint64_t> read_ovf(std::string const& path)
+{
+        std::vector<std::uint64_t> t;
+        if (std::FILE* f = std::fopen(path.c_str(), "rb")) {
+                std::uint64_t x;
+                while (std::fread(&x, 8, 1, f) == 1) t.push_back(x);
+                std::fclose(f);
+        }
+        return t;
+}
+
+bool write_ovf(std::string const& path, std::vector<std::uint64_t> const& t)
+{
+        if (t.empty()) { std::remove(path.c_str()); return true; }
+        std::string const tmp = path + ".tmp";
+        std::FILE* f = std::fopen(tmp.c_str(), "wb");
+        if (!f) return false;
+        bool ok = std::fwrite(t.data(), 8, t.size(), f) == t.size() && sync_file(f);
+        ok = std::fclose(f) == 0 && ok;
+        return ok && durable_rename(tmp, path);
+}
+
+std::uint16_t ovf_find(std::uint64_t const* t, std::size_t n, std::uint64_t off)
+{
+        std::uint64_t const* it = std::lower_bound(t, t + n, off << 16);
+        if (it == t + n || (*it >> 16) != off) { std::cerr << "store: no overflow entry for offset " << off << std::endl; std::abort(); }
+        return std::uint16_t(*it & 0xFFFF);
+}
+
+// the value of a stored byte at offset off of unit u
+std::uint16_t value_of(Unit const& u, std::uint64_t off, std::uint8_t b)
+{
+        return b == ESC8 ? ovf_find(u.ovf, u.novf, off) : widen(b);
+}
 
 struct MatRef { int unit = -1; int S = 0; std::uint64_t base = 0, P = 0; };
 
@@ -1214,9 +1910,19 @@ MatRef mat_ref[7][7][7][7];
 std::uint64_t next_unit_id = 1;
 std::uint64_t store_gen = 0;           // changes whenever the store is opened again (capture cache tag)
 
+std::string mat_path(std::string const& dir, int wm, int bm, int wk, int bk, char const* ext)
+{
+        char name[40];   // 6x6-wp-bp-wm-bm
+        std::snprintf(name, sizeof name, "/6x6-%02d-%02d-%02d-%02d", wm + wk, bm + bk, wm, bm);
+        return dir + name + ext;
+}
+
 std::string unit_path(std::string const& dir, int n, int m, char const* ext)
 {
-        return dir + "/6x6_" + std::to_string(n) + "_" + std::to_string(m) + ext;
+        if (only_mat.on && n == only_mat.n() && m == only_mat.m()) return mat_path(dir, only_mat.wm, only_mat.bm, only_mat.wk, only_mat.bk, ext);
+        char name[32];   // 6x6-nn-mm: with leading zeros the names sort in build order
+        std::snprintf(name, sizeof name, "/6x6-%02d-%02d", n, m);
+        return dir + name + ext;
 }
 
 // mode 0: read only; 1: create (truncate) for writing; 2: open existing for writing
@@ -1250,18 +1956,24 @@ bool unit_open(std::string const& dir, int n, int m, int mode)
         if (u.raw) {
                 u.p = map_any(unit_path(dir, n, m, ".raw"), u.size, mode, u.npos);
                 if (!u.p) { std::cerr << "store: cannot map " << unit_path(dir, n, m, ".raw") << std::endl; return false; }
+                if (mode == 1) { raw_ovf.clear(); std::remove(unit_path(dir, n, m, ".ovf").c_str()); }
+                else raw_ovf = read_ovf(unit_path(dir, n, m, ".ovf"));
+                u.ovf = raw_ovf.data(); u.novf = raw_ovf.size();
         } else {
                 std::string const path = unit_path(dir, n, m, ".cdb");
                 u.p = map_any(path, u.size, 0);
                 if (!u.p) { std::cerr << "store: cannot map " << path << std::endl; return false; }
                 auto const* h = reinterpret_cast<std::uint64_t const*>(u.p);
-                bool ok = u.size >= 64 && h[0] == CDB_MAGIC && h[1] == std::uint64_t(n) && h[2] == std::uint64_t(m) && h[3] == lay.size()
+                u.version = u.size >= 64 && h[0] == CDB_MAGIC2 ? 2 : 1;
+                bool ok = u.size >= 64 && (h[0] == CDB_MAGIC || h[0] == CDB_MAGIC2) && h[1] == std::uint64_t(n) && h[2] == std::uint64_t(m) && h[3] == lay.size()
                        && h[4] == u.npos && h[5] == BLOCK && h[6] == (u.npos + BLOCK - 1) / BLOCK;
                 for (std::size_t i = 0; ok && i < lay.size(); ++i) ok = h[8 + 2 * i] == lay[i].code() && h[9 + 2 * i] == lay[i].base;
                 if (!ok) { std::cerr << "store: bad header in " << path << std::endl; ::munmap(u.p, u.size); return false; }
                 u.nblocks = h[6];
                 u.off = h + 8 + 2 * lay.size();
                 u.data = reinterpret_cast<std::uint8_t const*>(u.off + u.nblocks + 1);
+                u.esc = u.version == 2 ? unsigned(h[7]) : 255;
+                if (u.version == 2 && (u.esc < 1 || u.esc > 255)) { std::cerr << "store: bad escape code in " << path << std::endl; ::munmap(u.p, u.size); return false; }
                 if (std::size_t(u.data - u.p) + u.off[u.nblocks] != u.size) { std::cerr << "store: bad size of " << path << std::endl; ::munmap(u.p, u.size); return false; }
         }
         units.push_back(u);
@@ -1276,6 +1988,22 @@ bool unit_before(int n1, int m1, int n2, int m2) { return n1 < n2 || (n1 == n2 &
 bool store_open(std::string const& dir, int n, int m, int own, bool partial = false)
 {
         store_close();
+        if (only_mat.on) {      // material mode: every finished material (a missing one answers "not in database")
+                OnlyMat const self = only_mat;
+                for (int wm = 0; wm <= 6; ++wm) for (int bm = 0; bm <= 6; ++bm) for (int wk = 0; wk <= 6; ++wk) for (int bk = 0; bk <= 6; ++bk) {
+                        if (!stored_material(wm, bm, wk, bk) || std::tuple(wm, bm, wk, bk) == std::tuple(self.wm, self.bm, self.wk, self.bk)) continue;
+                        if (::access(mat_path(dir, wm, bm, wk, bk, ".cdb").c_str(), R_OK) != 0) continue;
+                        only_mat = OnlyMat{ true, wm, bm, wk, bk };
+                        bool const ok = unit_open(dir, wm + bm + wk + bk, wm + bm, 3);
+                        only_mat = self;
+                        if (!ok) return false;
+                }
+                if (own >= 0 && !unit_open(dir, n, m, own)) return false;
+                store_on = true;
+                store_gen = next_unit_id;
+                slice_max = std::max(slice_max, 12);
+                return true;
+        }
         for (int a = 2; a <= 12; ++a)
                 for (int b = 0; b <= a; ++b) {
                         if (!unit_before(a, b, n, m)) continue;
@@ -1308,15 +2036,44 @@ ZSTD_CCtx* new_cctx()
         return cx;
 }
 
-void decode_block(ZSTD_DCtx* dx, Unit const& u, std::uint64_t b, std::uint8_t* out)
+// a whole decoded block: the bytes of its positions, then the extra bytes of its escapes (out holds 2 * BLOCK bytes)
+std::size_t decode_block(ZSTD_DCtx* dx, Unit const& u, std::uint64_t b, std::uint8_t* out)
 {
         std::size_t const want = std::size_t(std::min(BLOCK, u.npos - b * BLOCK));
-        std::size_t const r = ZSTD_decompressDCtx(dx, out, BLOCK, u.data + u.off[b], std::size_t(u.off[b + 1] - u.off[b]));
-        if (ZSTD_isError(r) || r != want) {
+        std::size_t const r = ZSTD_decompressDCtx(dx, out, 2 * BLOCK, u.data + u.off[b], std::size_t(u.off[b + 1] - u.off[b]));
+        if (ZSTD_isError(r) || r < want || (r > want && u.esc == 255)) {
                 std::cerr << "store: block " << b << " of unit " << u.n << "/" << u.m << " does not decode" << std::endl;
                 std::abort();
         }
+        return r;
 }
+
+// a code byte without its extra byte: the value, or ESCAPED
+constexpr std::uint16_t ESCAPED = 0xFFFE;
+std::uint16_t code_value(Unit const& u, std::uint8_t c)
+{
+        if (u.version == 1) return c == DRAW8 ? DRAW : c;
+        if (c == DRAW_CODE) return DRAW;
+        return c < u.esc ? c : ESCAPED;
+}
+
+std::uint16_t escape_value(Unit const& u, std::uint8_t c, std::uint8_t x) { return std::uint16_t(u.esc + 256 * (c - u.esc) + x); }
+
+// The block cache keeps the position bytes of a block in a slot of 4 KiB. A block with escapes does not fit there: it is
+// decoded once more into a scratch buffer, its position bytes copied to the slot and its extra bytes kept beside it,
+// with a bitset of its escaped positions and prefix counts, so that the extra byte of position i is number
+// prefix[i / 64] + popcount(bits[i / 64] & ((1 << i % 64) - 1)).
+struct Escapes {
+        std::array<std::uint64_t, BLOCK / 64> bits{};
+        std::array<std::uint16_t, BLOCK / 64> prefix{};
+        std::vector<std::uint8_t> extra;
+        std::uint8_t at(std::size_t i) const
+        {
+                std::size_t const w = i / 64;
+                std::uint64_t const below = bits[w] & ((std::uint64_t(1) << (i % 64)) - 1);
+                return extra[prefix[w] + std::size_t(std::popcount(below))];
+        }
+};
 
 std::size_t cache_bits = [] { char const* e = std::getenv("EGDB_CACHE_BITS"); return std::size_t(e ? std::atoi(e) : 14); }();
 std::atomic<std::uint64_t> cache_hits{0}, cache_misses{0};
@@ -1324,17 +2081,52 @@ struct BlockCache {
         std::size_t const SLOTS = std::size_t(1) << cache_bits;
         std::vector<std::uint64_t> tag = std::vector<std::uint64_t>(SLOTS, 0);
         std::vector<std::uint8_t> buf = std::vector<std::uint8_t>(SLOTS * BLOCK);
+        std::vector<std::unique_ptr<Escapes>> esc = std::vector<std::unique_ptr<Escapes>>(SLOTS);
+        std::vector<std::uint8_t> has_esc = std::vector<std::uint8_t>(SLOTS, 0);
+        std::vector<std::uint8_t> scratch = std::vector<std::uint8_t>(2 * BLOCK);
         ZSTD_DCtx* dx = new_dctx();
         std::uint64_t hits = 0, misses = 0;
         ~BlockCache() { ZSTD_freeDCtx(dx); }
-        std::uint8_t byte(Unit const& u, std::uint64_t off)
+        std::size_t slot(Unit const& u, std::uint64_t b)
         {
-                std::uint64_t const b = off / BLOCK, id = u.id << 40 | b;
+                std::uint64_t const id = u.id << 40 | b;
                 std::size_t const s = std::size_t((id * 0x9E3779B97F4A7C15ull) >> (64 - cache_bits));
+                if (tag[s] == id) { ++hits; return s; }
+                ++misses;
                 std::uint8_t* d = buf.data() + s * BLOCK;
-                if (tag[s] != id) { decode_block(dx, u, b, d); tag[s] = id; ++misses; }
-                else ++hits;
-                return d[off % BLOCK];
+                std::size_t const want = std::size_t(std::min(BLOCK, u.npos - b * BLOCK));
+                std::uint8_t const* src = d;
+                std::size_t r = ZSTD_decompressDCtx(dx, d, BLOCK, u.data + u.off[b], std::size_t(u.off[b + 1] - u.off[b]));
+                if (ZSTD_isError(r)) {          // extra bytes that do not fit the slot: decode the whole block
+                        r = decode_block(dx, u, b, scratch.data());
+                        std::memcpy(d, scratch.data(), want);
+                        src = scratch.data();
+                } else if (r < want || (r > want && u.esc == 255)) {
+                        std::cerr << "store: block " << b << " of unit " << u.n << "/" << u.m << " does not decode" << std::endl;
+                        std::abort();
+                }
+                has_esc[s] = r > want;
+                if (r > want) {
+                        if (!esc[s]) esc[s] = std::make_unique<Escapes>();
+                        Escapes& e = *esc[s];
+                        e.bits.fill(0);
+                        for (std::size_t i = 0; i < want; ++i)
+                                if (code_value(u, src[i]) == ESCAPED) e.bits[i / 64] |= std::uint64_t(1) << (i % 64);
+                        std::uint16_t run = 0;
+                        for (std::size_t w = 0; w < BLOCK / 64; ++w) { e.prefix[w] = run; run = std::uint16_t(run + std::popcount(e.bits[w])); }
+                        e.extra.assign(src + want, src + r);
+                        if (run != r - want) { std::cerr << "store: escapes of block " << b << " of unit " << u.n << "/" << u.m << " do not match" << std::endl; std::abort(); }
+                }
+                tag[s] = id;
+                return s;
+        }
+        std::uint8_t byte(Unit const& u, std::uint64_t off) { return buf[slot(u, off / BLOCK) * BLOCK + off % BLOCK]; }
+        std::uint16_t value(Unit const& u, std::uint64_t off)
+        {
+                std::size_t const s = slot(u, off / BLOCK), i = std::size_t(off % BLOCK);
+                std::uint8_t const c = buf[s * BLOCK + i];
+                std::uint16_t const v = code_value(u, c);
+                return v != ESCAPED ? v : escape_value(u, c, esc[s]->at(i));
         }
 };
 thread_local BlockCache block_cache;
@@ -1346,7 +2138,7 @@ std::uint64_t stored_offset(MatRef const& r, Pos const& q)
 
 MatRef const& mat_of(Pos const& q)
 {
-        return mat_ref[__builtin_popcount(q.m[0])][__builtin_popcount(q.m[1])][__builtin_popcount(q.k[0])][__builtin_popcount(q.k[1])];
+        return mat_ref[q.m[0].size()][q.m[1].size()][q.k[0].size()][q.k[1].size()];
 }
 
 // the values of capture positions resolved through compressed units, per thread (direct mapped, 2^20 entries):
@@ -1372,7 +2164,7 @@ std::uint16_t resolve_capture(Pos const& q)
 
 std::uint16_t store_lookup(Pos const& p)
 {
-        int const w = __builtin_popcount(p.m[0] | p.k[0]), b = __builtin_popcount(p.m[1] | p.k[1]);
+        int const w = int((p.m[0] | p.k[0]).size()), b = int((p.m[1] | p.k[1]).size());
         if ((p.stm ? b : w) == 0) return 0;                     // no pieces: no moves
         if (w == 0 || b == 0) return from_successors(p);
         if (w > 6 || b > 6) throw NotInDatabase{};
@@ -1382,9 +2174,10 @@ std::uint16_t store_lookup(Pos const& p)
         Unit const& u = units[std::size_t(r.unit)];
         if (!u.raw && has_capture(q)) return resolve_capture(q);
         std::uint64_t const off = stored_offset(r, q);
-        std::uint8_t const v = u.raw ? u.p[off] : block_cache.byte(u, off);
+        if (!u.raw) return block_cache.value(u, off);
+        std::uint8_t const v = u.p[off];
         if (v > DRAW8) { std::cerr << "store: no value yet for " << fen_of(p) << std::endl; std::abort(); }
-        return widen(v);
+        return value_of(u, off, v);
 }
 
 // the stored positions of a unit in storage order: one slice (placement of the men, side to move) at a time
@@ -1399,7 +2192,7 @@ struct Cursor {
         {
                 if (mi >= lay.size()) return;
                 UnitMat const& x = lay[mi];
-                std::uint32_t wm, bm;
+                bitboard wm, bm;
                 men_unrank(x.wm, x.bm, slot / std::uint64_t(x.S), wm, bm);
                 stm = x.S == 2 ? int(slot % 2) : 0;
                 meta = meta_of(Key{ wm, bm, x.wk, x.bk });
@@ -1424,18 +2217,29 @@ struct Cursor {
 };
 
 // the block as stored: capture positions repeat the previous value of the block
-void filled_block(std::vector<UnitMat> const& lay, std::uint8_t const* raw, std::uint64_t npos, std::uint64_t b, std::uint8_t* out)
+// returns the size: the block's positions, then the extra bytes of its escapes (out holds 2 * BLOCK bytes)
+std::size_t filled_block(std::vector<UnitMat> const& lay, std::uint8_t const* raw, std::vector<std::uint64_t> const& ovf,
+                         std::uint64_t npos, std::uint64_t b, unsigned esc, std::uint8_t* out)
 {
         Cursor c(lay);
         c.seek(b * BLOCK);
         std::uint64_t const end = std::min(npos, (b + 1) * BLOCK);
-        int prev = -1;
+        std::size_t extra = std::size_t(end - b * BLOCK);
+        std::uint16_t prev = 0;
         for (std::uint64_t o = b * BLOCK; o < end; ++o, c.next()) {
-                int v = raw[o];
-                if (prev >= 0 && has_capture(c.pos())) v = prev;
-                out[o - b * BLOCK] = std::uint8_t(v);
+                std::uint16_t v = raw[o] == ESC8 ? ovf_find(ovf.data(), ovf.size(), o) : widen(raw[o]);
+                if (o > b * BLOCK && has_capture(c.pos())) v = prev;
                 prev = v;
+                std::uint8_t code = v == DRAW ? DRAW_CODE : std::uint8_t(v);
+                if (v != DRAW && v >= esc) {
+                        unsigned const e = unsigned(v) - esc, c = esc + e / 256;
+                        if (c > 254) { std::cerr << "DTM overflow (" << v << ")" << std::endl; std::abort(); }
+                        code = std::uint8_t(c);
+                        out[extra++] = std::uint8_t(e % 256);
+                }
+                out[o - b * BLOCK] = code;
         }
+        return extra;
 }
 
 double seconds_since(std::chrono::steady_clock::time_point t0)
@@ -1448,15 +2252,135 @@ void write_progress(std::string const& path, std::string const& text)
         std::string const tmp = path + ".tmp";
         if (std::FILE* f = std::fopen(tmp.c_str(), "w")) {
                 std::fputs(text.c_str(), f);
-                std::fflush(f);
-                ::fsync(::fileno(f));
+                sync_file(f);
                 std::fclose(f);
-                std::rename(tmp.c_str(), path.c_str());
+                durable_rename(tmp, path);
         }
 }
 
 // build unit (n, m) as a raw file, with the units before it compressed; resumes from the progress file if there is one
-bool unit_build(std::string const& dir, int n, int m, int threads)
+// slices with at least this many positions that are more than one thread's share of their group are solved by all
+// threads together (solve_slice_par)
+std::uint64_t const BIG_SLICE = [] { char const* e = std::getenv("EGDB_BIG_SLICE"); return e ? std::uint64_t(std::atoll(e)) : std::uint64_t(1) << 20; }();   // EGDB_BIG_SLICE: for tests
+
+// memory per thread for the slices spread over the threads: the solver's arrays (2 + 2 bytes and a bit per position)
+// for the largest such slice, and the per-thread caches (blocks and resolved captures)
+std::uint64_t thread_bytes(std::uint64_t largest)
+{
+        return largest * 4 + largest / 8 + (std::uint64_t(1) << cache_bits) * (2 * BLOCK + 8) + CaptureCache::SLOTS * 26;
+}
+
+// Build the material of only_mat (material mode): its slices one wave (distance) at a time, every dependency read
+// from the finished materials or from earlier waves of this one. threads == 1: one slice after another (solve_slice).
+// threads > 1: the slices of a wave side by side (std::for_each with std::execution::par), and a big slice by itself
+// with all cores (solve_slice_pull). No other synchronisation: every slice writes only its own positions.
+// EGDB_SOLVER=classic: solve_slice (one thread) and solve_slice_pull (big slices), as before solve_slice_hybrid
+bool const classic_solver = [] { char const* e = std::getenv("EGDB_SOLVER"); return e && std::string(e) == "classic"; }();
+
+bool mat_build(std::string const& dir, int threads)
+{
+        int const n = only_mat.n(), m = only_mat.m();
+        profile_tag = std::to_string(only_mat.wm + only_mat.wk) + " " + std::to_string(only_mat.bm + only_mat.bk) + " " + std::to_string(only_mat.wm) + " " + std::to_string(only_mat.bm);
+        auto const lay = unit_layout(n, m);
+        std::uint64_t const npos = unit_positions(lay);
+        std::string const raw = unit_path(dir, n, m, ".raw"), prog = raw + ".progress";
+        std::size_t start = 0;
+        bool resume = false;
+        if (std::FILE* f = std::fopen(prog.c_str(), "r")) {
+                unsigned long long s = 0;
+                if (std::fscanf(f, "%llu", &s) == 1) { start = std::size_t(s); resume = true; }
+                std::fclose(f);
+        }
+        if (!store_open(dir, n, m, resume ? 2 : 1)) return false;
+        Unit& u = units.back();
+        if (!resume) {
+                std::memset(u.p, UNKNOWN8, std::size_t(npos));
+                write_progress(prog, "0\n");
+        }
+        std::vector<std::pair<int, std::uint64_t>> jobs;       // (distance, slice key), in build order
+        for (auto const& x : lay)
+                for (std::uint64_t r = 0; r < x.men; ++r) {
+                        bitboard wm, bm;
+                        men_unrank(x.wm, x.bm, r, wm, bm);
+                        Key const k{ wm, bm, x.wk, x.bk };
+                        if (x.S == 1 && !canonical_key(k)) continue;
+                        jobs.push_back({ distance(k), k.pack() });
+                }
+        std::sort(jobs.begin(), jobs.end());
+        std::cerr << "material " << only_mat.wm + only_mat.wk << "-" << only_mat.bm + only_mat.bk << "-" << only_mat.wm << "-" << only_mat.bm
+                  << ": " << jobs.size() << " slices, " << npos << " positions, " << threads << (threads == 1 ? " thread" : " threads")
+                  << (resume ? ", resuming after slice " + std::to_string(start) : std::string()) << std::endl;
+        auto const t0 = std::chrono::steady_clock::now();
+        std::string const ovf_path = unit_path(dir, n, m, ".ovf");
+        // write a solved slice (for a symmetric material the positions with black to move go to the mirrored slice);
+        // values above dtm8_max go to the slice's own overflow list
+        auto store = [&](std::size_t i, Meta const& s, std::vector<std::uint16_t> const& tmp, std::vector<std::uint64_t>& ovf) {
+                auto put = [&](std::uint64_t off, std::uint16_t v) {
+                        if (v == DRAW) return DRAW8;
+                        if (v > dtm8_max) { ovf.push_back(off << 16 | v); return ESC8; }
+                        return std::uint8_t(v);
+                };
+                std::uint64_t bad = 0;
+                MatRef const r = mat_of(pos_of(s, 0, 0));
+                std::uint64_t const base = stored_offset(r, pos_of(s, 0, 0));
+                for (std::uint64_t x = 0; x < std::uint64_t(r.S) * s.P; ++x) u.p[base + x] = put(base + x, tmp[x]);
+                if (r.S == 1)
+                        for (std::uint64_t x = 0; x < s.P; ++x) {
+                                Pos const q = mirror(pos_of(s, x, 1));
+                                std::uint64_t const o = stored_offset(r, q);
+                                std::uint8_t const b = put(o, tmp[s.P + x]);
+                                if (u.p[o] != UNKNOWN8 && u.p[o] != b && Key::unpack(jobs[i].second).pack() == key_of(q).pack()) ++bad;
+                                u.p[o] = b;
+                        }
+                return bad;
+        };
+        for (std::size_t g = start; g < jobs.size();) {
+                std::size_t h = g;
+                while (h < jobs.size() && jobs[h].first == jobs[g].first) ++h;
+                std::vector<std::vector<std::uint64_t>> ovf(h - g);
+                std::vector<std::uint64_t> bad(h - g, 0);
+                std::vector<std::size_t> big, small;
+                for (std::size_t i = g; i < h; ++i)
+                        (threads > 1 && 2 * meta_of(Key::unpack(jobs[i].second)).P >= BIG_SLICE ? big : small).push_back(i);
+                for (std::size_t i : big) {
+                        Meta const s = meta_of(Key::unpack(jobs[i].second));
+                        std::vector<std::uint16_t> tmp(2 * s.P);
+                        if (classic_solver) solve_slice_pull(s, tmp.data()); else solve_slice_hybrid(s, tmp.data(), true);
+                        bad[i - g] = store(i, s, tmp, ovf[i - g]);
+                }
+                auto solve = [&](std::size_t i) {
+                        Meta const s = meta_of(Key::unpack(jobs[i].second));
+                        std::vector<std::uint16_t> tmp(2 * s.P);
+                        if (classic_solver) solve_slice(s, tmp.data()); else solve_slice_hybrid(s, tmp.data(), false);
+                        bad[i - g] = store(i, s, tmp, ovf[i - g]);
+                };
+                if (threads > 1) std::for_each(std::execution::par, small.begin(), small.end(), solve);
+                else std::for_each(small.begin(), small.end(), solve);
+                std::uint64_t nbad = 0;
+                for (auto b : bad) nbad += b;
+                if (nbad) { std::cerr << "material: " << nbad << " mirrored positions disagree" << std::endl; return false; }
+                std::size_t const old = raw_ovf.size();
+                for (auto const& q : ovf) raw_ovf.insert(raw_ovf.end(), q.begin(), q.end());
+                std::sort(raw_ovf.begin() + std::ptrdiff_t(old), raw_ovf.end());
+                std::inplace_merge(raw_ovf.begin(), raw_ovf.begin() + std::ptrdiff_t(old), raw_ovf.end());
+                raw_ovf.erase(std::unique(raw_ovf.begin(), raw_ovf.end()), raw_ovf.end());
+                u.ovf = raw_ovf.data(); u.novf = raw_ovf.size();
+                ::msync(u.p, u.size, MS_SYNC);
+                if (!write_ovf(ovf_path, raw_ovf)) { std::cerr << "material: cannot write " << ovf_path << std::endl; return false; }
+                write_progress(prog, std::to_string(h) + "\n");
+                g = h;
+        }
+        std::uint64_t const unknown = std::uint64_t(std::count(u.p, u.p + npos, UNKNOWN8));
+        if (unknown) { std::cerr << "material: " << unknown << " positions without value" << std::endl; return false; }
+        write_progress(prog, std::to_string(jobs.size()) + " complete\n");
+        std::cout << "built " << only_mat.wm + only_mat.wk << " " << only_mat.bm + only_mat.bk << " " << only_mat.wm << " " << only_mat.bm
+                  << " positions " << npos << " slices " << jobs.size() << " overflow " << raw_ovf.size() << " seconds " << seconds_since(t0)
+                  << " solver " << (classic_solver ? "classic" : "hybrid") << " forward_rounds " << forward_rounds << " retrograde_rounds " << retrograde_rounds
+                  << " forward_ns " << forward_ns << " retrograde_ns " << retrograde_ns << " pass0_ns " << pass0_ns << '\n';
+        return true;
+}
+
+bool unit_build(std::string const& dir, int n, int m, int threads, double mem_gb = 0)
 {
         auto const lay = unit_layout(n, m);
         if (lay.empty()) { std::cout << "empty " << n << " " << m << '\n'; return true; }
@@ -1482,44 +2406,91 @@ bool unit_build(std::string const& dir, int n, int m, int threads)
         std::vector<std::pair<int, std::uint64_t>> jobs;
         for (auto const& x : lay)
                 for (std::uint64_t r = 0; r < x.men; ++r) {
-                        std::uint32_t wm, bm;
+                        bitboard wm, bm;
                         men_unrank(x.wm, x.bm, r, wm, bm);
                         Key const k{ wm, bm, x.wk, x.bk };
                         if (x.S == 1 && !canonical_key(k)) continue;
                         jobs.push_back({ distance(k), k.pack() });
                 }
         std::sort(jobs.begin(), jobs.end());
+        // the number of threads for the small slices from the memory budget (0 = no budget)
+        int small_threads = threads;
+        if (mem_gb > 0) {
+                std::uint64_t largest = 0;
+                for (auto const& [d, k] : jobs) largest = std::max(largest, 2 * meta_of(Key::unpack(k)).P);
+                small_threads = int(std::clamp<double>(mem_gb * 1e9 / double(thread_bytes(largest)), 1, threads));
+        }
+        static std::unique_ptr<Pool> pool;
+        if (!pool || pool->size() != threads) { pool.reset(); pool = std::make_unique<Pool>(threads); }
         std::cerr << "unit " << n << "/" << m << ": " << lay.size() << " materials, " << jobs.size() << " slices, " << npos << " positions"
                   << (resume ? ", resuming after slice " + std::to_string(start) : std::string()) << std::endl;
         auto const t0 = std::chrono::steady_clock::now();
         std::uint64_t bad = 0;
+        // values above dtm8_max: the byte ESC8 and an entry for the overflow table, collected per thread and merged after
+        // each distance group (a slice reads only earlier groups, whose entries are merged by then)
+        std::string const ovf_path = unit_path(dir, n, m, ".ovf");
+        std::vector<std::vector<std::uint64_t>> pending(std::size_t(std::max(threads, small_threads)) + 1);
         auto put = [&](std::uint64_t off, std::uint16_t v) {
-                if (v != DRAW && v > MAXDTM8) { std::cerr << "DTM overflow (" << v << ")" << std::endl; std::abort(); }
-                std::uint8_t const b = v == DRAW ? DRAW8 : std::uint8_t(v);
-                return std::pair(off, b);
+                if (v == DRAW) return std::pair(off, DRAW8);
+                if (v > dtm8_max) {
+                        pending[std::size_t(omp_get_thread_num())].push_back(off << 16 | v);
+                        return std::pair(off, ESC8);
+                }
+                return std::pair(off, std::uint8_t(v));
+        };
+        auto merge_pending = [&] {
+                std::size_t const old = raw_ovf.size();
+                for (auto& q : pending) { raw_ovf.insert(raw_ovf.end(), q.begin(), q.end()); q.clear(); }
+                std::sort(raw_ovf.begin() + std::ptrdiff_t(old), raw_ovf.end());
+                std::inplace_merge(raw_ovf.begin(), raw_ovf.begin() + std::ptrdiff_t(old), raw_ovf.end());
+                raw_ovf.erase(std::unique(raw_ovf.begin(), raw_ovf.end()), raw_ovf.end());
+                u.ovf = raw_ovf.data(); u.novf = raw_ovf.size();
+        };
+        // write a solved slice to the unit (a slice is a contiguous range; for a symmetric material the positions with
+        // black to move go to the mirrored slice, which is never solved itself)
+        auto store = [&](std::size_t i, Meta const& s, std::vector<std::uint16_t> const& tmp) {
+                std::uint64_t bad1 = 0;
+                MatRef const r = mat_of(pos_of(s, 0, 0));
+                std::uint64_t const base = stored_offset(r, pos_of(s, 0, 0));    // king placement 0, white to move
+                std::uint64_t const sides = std::uint64_t(r.S);
+                for (std::uint64_t x = 0; x < sides * s.P; ++x) { auto [o, b] = put(base + x, tmp[x]); u.p[o] = b; }
+                if (r.S == 1)    // black to move: the mirrored position with white to move (in this slice or its mirror)
+                        for (std::uint64_t x = 0; x < s.P; ++x) {
+                                Pos const q = mirror(pos_of(s, x, 1));
+                                auto [o, b] = put(stored_offset(r, q), tmp[s.P + x]);
+                                if (u.p[o] != UNKNOWN8 && u.p[o] != b && Key::unpack(jobs[i].second).pack() == key_of(q).pack()) ++bad1;
+                                u.p[o] = b;
+                        }
+                return bad1;
         };
         for (std::size_t g = start; g < jobs.size();) {
                 std::size_t h = g;
                 while (h < jobs.size() && jobs[h].first == jobs[g].first) ++h;
-                #pragma omp parallel for schedule(dynamic, 1) reduction(+ : bad) num_threads(threads)
+                // a slice that alone is more than one thread's share of the group is solved by all threads together
+                std::uint64_t group = 0;
+                for (std::size_t i = g; i < h; ++i) group += 2 * meta_of(Key::unpack(jobs[i].second)).P;
+                std::vector<std::size_t> big, small;
                 for (std::size_t i = g; i < h; ++i) {
+                        std::uint64_t const T = 2 * meta_of(Key::unpack(jobs[i].second)).P;
+                        (T >= BIG_SLICE && T * std::uint64_t(threads) > group ? big : small).push_back(i);
+                }
+                for (std::size_t i : big) {                                     // one at a time, all threads
                         Meta const s = meta_of(Key::unpack(jobs[i].second));
                         std::vector<std::uint16_t> tmp(2 * s.P);
+                        solve_slice_par(s, tmp.data(), *pool);
+                        bad += store(i, s, tmp);
+                }
+                #pragma omp parallel for schedule(dynamic, 1) reduction(+ : bad) num_threads(small_threads)
+                for (std::size_t k = 0; k < small.size(); ++k) {
+                        Meta const s = meta_of(Key::unpack(jobs[small[k]].second));
+                        std::vector<std::uint16_t> tmp(2 * s.P);
                         solve_slice(s, tmp.data());
-                        MatRef const r = mat_of(pos_of(s, 0, 0));
-                        std::uint64_t const base = stored_offset(r, pos_of(s, 0, 0));    // king placement 0, white to move
-                        std::uint64_t const sides = std::uint64_t(r.S);
-                        for (std::uint64_t x = 0; x < sides * s.P; ++x) { auto [o, b] = put(base + x, tmp[x]); u.p[o] = b; }
-                        if (r.S == 1)    // black to move: the mirrored position with white to move (in this slice or its mirror)
-                                for (std::uint64_t x = 0; x < s.P; ++x) {
-                                        Pos const q = mirror(pos_of(s, x, 1));
-                                        auto [o, b] = put(stored_offset(r, q), tmp[s.P + x]);
-                                        if (u.p[o] != UNKNOWN8 && u.p[o] != b && Key::unpack(jobs[i].second).pack() == key_of(q).pack()) ++bad;
-                                        u.p[o] = b;
-                                }
+                        bad += store(small[k], s, tmp);
                 }
                 if (bad) { std::cerr << "unit " << n << "/" << m << ": " << bad << " mirrored positions disagree" << std::endl; return false; }
+                merge_pending();
                 ::msync(u.p, u.size, MS_SYNC);
+                if (!write_ovf(ovf_path, raw_ovf)) { std::cerr << "unit " << n << "/" << m << ": cannot write " << ovf_path << std::endl; return false; }
                 write_progress(prog, std::to_string(h) + "\n");
                 std::cerr << "unit " << n << "/" << m << ": distance " << jobs[g].first << " done, " << h << " / " << jobs.size() << " slices, "
                           << seconds_since(t0) << " s" << std::endl;
@@ -1530,7 +2501,8 @@ bool unit_build(std::string const& dir, int n, int m, int threads)
         for (std::uint64_t o = 0; o < npos; ++o) unknown += u.p[o] == UNKNOWN8;
         if (unknown) { std::cerr << "unit " << n << "/" << m << ": " << unknown << " positions without value" << std::endl; return false; }
         write_progress(prog, std::to_string(jobs.size()) + " complete\n");
-        std::cout << "built " << n << " " << m << " positions " << npos << " slices " << jobs.size() << " seconds " << seconds_since(t0) << '\n';
+        std::cout << "built " << n << " " << m << " positions " << npos << " slices " << jobs.size() << " overflow " << raw_ovf.size()
+                  << " seconds " << seconds_since(t0) << '\n';
         return true;
 }
 
@@ -1584,14 +2556,15 @@ bool unit_verify(std::string const& dir, int n, int m, bool compressed, int thre
                         int best_win = INF, max_loss = -1;
                         bool draw = false;
                         for (auto const& mv : moves(q)) {
-                                std::uint16_t const v = internal_move(q, mv) ? widen(u.p[other + index_of(cur.meta, mv.next)]) : lookup(mv.next);
+                                std::uint64_t const o = other + index_of(cur.meta, mv.next);
+                                std::uint16_t const v = internal_move(q, mv) ? value_of(u, o, u.p[o]) : lookup(mv.next);
                                 if (v == DRAW) draw = true;
                                 else if (v & 1) max_loss = std::max(max_loss, v + 1);
                                 else best_win = std::min(best_win, v + 1);
                         }
                         b = best_win < INF ? std::uint16_t(best_win) : draw ? DRAW : std::uint16_t(std::max(max_loss, 0));
                 } else b = from_successors(q);
-                std::uint16_t const a = widen(compressed ? block_cache.byte(u, off) : u.p[off]);
+                std::uint16_t const a = compressed ? block_cache.value(u, off) : value_of(u, off, u.p[off]);
                 ++t[0];
                 if (a != b) {
                         if (++t[2] <= 10) {
@@ -1613,6 +2586,80 @@ bool unit_verify(std::string const& dir, int n, int m, bool compressed, int thre
         return errors == 0 && checked + skipped == unit_positions(lay);
 }
 
+// the longest win and the longest loss per material of a unit (stored positions, capture positions resolved):
+// for each material the largest odd and the largest even DTM, each with the first stored position that has it
+bool unit_max(std::string const& dir, int n, int m, int threads)
+{
+        auto const lay = unit_layout(n, m);
+        if (lay.empty()) { std::cout << "empty " << n << " " << m << '\n'; return true; }
+        if (!store_open(dir, n, m, 3)) return false;
+        Unit const& u = units.back();
+        struct Best { std::uint16_t v = 0; std::uint64_t off = ~0ull; };
+        std::size_t const M = lay.size();
+        std::vector<Best> win(std::size_t(threads) * M), loss(std::size_t(threads) * M);
+        auto better = [](Best const& a, std::uint16_t v, std::uint64_t off) { return v > a.v || (v == a.v && off < a.off); };
+        for_each_stored(lay, threads, "max", [&](Cursor const& cur, std::uint64_t off) {
+                Pos const q = cur.pos();
+                std::uint16_t const v = has_capture(q) ? lookup(q) : block_cache.value(u, off);
+                if (v == DRAW) return;
+                std::size_t const i = std::size_t(omp_get_thread_num()) * M + cur.mi;
+                Best& b = (v & 1) ? win[i] : loss[i];
+                if (better(b, v, off)) b = { v, off };
+        });
+        for (std::size_t mi = 0; mi < M; ++mi) {
+                Best w, l;
+                for (int t = 0; t < threads; ++t) {
+                        Best const& a = win[std::size_t(t) * M + mi];
+                        Best const& b = loss[std::size_t(t) * M + mi];
+                        if (a.off != ~0ull && better(w, a.v, a.off)) w = a;
+                        if (b.off != ~0ull && better(l, b.v, b.off)) l = b;
+                }
+                auto fen = [&](Best const& b) { if (b.off == ~0ull) return std::string("-"); Cursor c(lay); c.seek(b.off); return fen_of(c.pos()); };
+                UnitMat const& x = lay[mi];
+                std::cout << "max " << n << " " << m << " material " << x.wm << " " << x.bm << " " << x.wk << " " << x.bk
+                          << " win " << (w.off == ~0ull ? "-" : show(w.v)) << " " << fen(w)
+                          << " loss " << (l.off == ~0ull ? "-" : show(l.v)) << " " << fen(l) << '\n';
+        }
+        return true;
+}
+
+// a checksum of the values (not the stored bytes) of a compressed unit: every position without capture with its
+// value (overflow entries resolved), order independent; equal for two stores of the same values in different encodings
+bool unit_values(std::string const& dir, int n, int m, int threads)
+{
+        auto const lay = unit_layout(n, m);
+        if (lay.empty()) { std::cout << "empty " << n << " " << m << '\n'; return true; }
+        if (!store_open(dir, n, m, 3)) return false;
+        Unit const& u = units.back();
+        std::vector<std::uint64_t> sum(std::size_t(threads), 0), cnt(std::size_t(threads), 0);
+        std::size_t const M = lay.size();
+        std::vector<std::uint64_t> msum(std::size_t(threads) * M, 0), mcnt(std::size_t(threads) * M, 0);
+        auto mix = [](std::uint64_t x) { x *= 0x9E3779B97F4A7C15ull; x ^= x >> 29; x *= 0xBF58476D1CE4E5B9ull; x ^= x >> 32; return x; };
+        for_each_stored(lay, threads, "values", [&](Cursor const& cur, std::uint64_t off) {
+                Pos const q = cur.pos();
+                if (has_capture(q)) return;
+                std::uint16_t const v = block_cache.value(u, off);
+                std::size_t const t = std::size_t(omp_get_thread_num());
+                sum[t] += mix(off << 16 | v); ++cnt[t];
+                PosKey const k = pack(q);       // keyed by the position, not its offset: the same in any layout
+                msum[t * M + cur.mi] += mix(mix(std::uint64_t(k)) ^ std::uint64_t(k >> 64) ^ (std::uint64_t(v) << 48)); ++mcnt[t * M + cur.mi];
+        });
+        for (std::size_t mi = 0; mi < M; ++mi) {
+                std::uint64_t a = 0, b = 0;
+                for (int t = 0; t < threads; ++t) { a += msum[std::size_t(t) * M + mi]; b += mcnt[std::size_t(t) * M + mi]; }
+                char h[24];
+                std::snprintf(h, sizeof h, "%016llx", static_cast<unsigned long long>(a));
+                UnitMat const& x = lay[mi];
+                std::cout << "material " << x.wm + x.wk << " " << x.bm + x.bk << " " << x.wm << " " << x.bm << " positions " << b << " " << h << '\n';
+        }
+        std::uint64_t s = 0, c = 0;
+        for (int t = 0; t < threads; ++t) { s += sum[std::size_t(t)]; c += cnt[std::size_t(t)]; }
+        char hex[24];
+        std::snprintf(hex, sizeof hex, "%016llx", static_cast<unsigned long long>(s));
+        std::cout << "values " << n << " " << m << " positions " << c << " " << hex << '\n';
+        return true;
+}
+
 // compress the raw file of unit (n, m) into blocks of 4096 positions (zstd -19)
 // file: magic, n, m, materials, positions, block, blocks, 0; per material (code, base); offsets[blocks + 1]; data
 bool unit_compress(std::string const& dir, int n, int m, int threads)
@@ -1624,9 +2671,17 @@ bool unit_compress(std::string const& dir, int n, int m, int threads)
         std::uint8_t* raw = map_any(unit_path(dir, n, m, ".raw"), rsize, 0, npos);
         if (!raw) return false;
         std::string const path = unit_path(dir, n, m, ".cdb"), tmp = path + ".tmp";
+        std::vector<std::uint64_t> const ovf = read_ovf(unit_path(dir, n, m, ".ovf"));
         std::FILE* f = std::fopen(tmp.c_str(), "wb");
         if (!f) return false;
-        std::vector<std::uint64_t> head{ CDB_MAGIC, std::uint64_t(n), std::uint64_t(m), lay.size(), npos, BLOCK, nb, 0 };
+        // E: the first escape code, as large as the longest DTM allows (255: no escapes)
+        unsigned longest = 0;
+        for (std::uint64_t o = 0; o < npos; ++o) if (raw[o] <= MAXDTM8 && raw[o] != ESC8) longest = std::max(longest, unsigned(raw[o]));
+        for (std::uint64_t x : ovf) longest = std::max(longest, unsigned(x & 0xFFFF));
+        unsigned const k = longest <= 254 ? 0 : (longest - 254 + 254) / 255;
+        unsigned esc = 255 - k;
+        if (char const* e = std::getenv("EGDB_ESC")) esc = std::min(esc, unsigned(std::clamp(std::atoi(e), 1, 255)));
+        std::vector<std::uint64_t> head{ CDB_MAGIC2, std::uint64_t(n), std::uint64_t(m), lay.size(), npos, BLOCK, nb, esc };
         for (auto const& x : lay) { head.push_back(x.code()); head.push_back(x.base); }
         std::vector<std::uint64_t> off(nb + 1, 0);
         std::fwrite(head.data(), 8, head.size(), f);
@@ -1640,11 +2695,10 @@ bool unit_compress(std::string const& dir, int n, int m, int threads)
                 #pragma omp parallel num_threads(threads)
                 {
                         ZSTD_CCtx* cx = new_cctx();
-                        std::vector<std::uint8_t> blk(BLOCK);
+                        std::vector<std::uint8_t> blk(2 * BLOCK);
                         #pragma omp for schedule(dynamic, 16)
                         for (std::uint64_t b = b0; b < b1; ++b) {
-                                filled_block(lay, raw, npos, b, blk.data());
-                                std::size_t const len = std::size_t(std::min(BLOCK, npos - b * BLOCK));
+                                std::size_t const len = filled_block(lay, raw, ovf, npos, b, esc, blk.data());
                                 auto& o = out[b - b0];
                                 o.resize(ZSTD_compressBound(len));
                                 std::size_t const r = ZSTD_compress2(cx, o.data(), o.size(), blk.data(), len);
@@ -1662,13 +2716,110 @@ bool unit_compress(std::string const& dir, int n, int m, int threads)
         }
         off[nb] = total;
         bool ok = ::fseeko(f, off_t(head.size() * 8), SEEK_SET) == 0 && std::fwrite(off.data(), 8, off.size(), f) == off.size();
-        ok = ok && std::fflush(f) == 0 && ::fsync(::fileno(f)) == 0;
+        ok = ok && sync_file(f);
         ok = std::fclose(f) == 0 && ok;
         ::munmap(raw, rsize);
-        if (!ok || std::rename(tmp.c_str(), path.c_str()) != 0) return false;
+        if (!ok || !durable_rename(tmp, path)) return false;
         std::uint64_t const fsize = head.size() * 8 + off.size() * 8 + total;
         std::cout << "compressed " << n << " " << m << " positions " << npos << " blocks " << nb << " bytes " << fsize
-                  << " bits_per_position " << 8.0 * double(fsize) / double(npos) << " seconds " << seconds_since(t0) << '\n';
+                  << " bits_per_position " << 8.0 * double(fsize) / double(npos) << " longest " << longest << " escape " << esc
+                  << " seconds " << seconds_since(t0) << '\n';
+        return true;
+}
+
+// CRC32C (Castagnoli, as in iSCSI and ext4) with the SSE4.2 instruction
+std::uint32_t crc32c(std::uint32_t crc, std::uint8_t const* p, std::size_t n)
+{
+        std::uint64_t c = ~crc;
+        std::size_t i = 0;
+        for (; i + 8 <= n; i += 8) { std::uint64_t x; std::memcpy(&x, p + i, 8); c = _mm_crc32_u64(c, x); }
+        for (; i < n; ++i) c = _mm_crc32_u8(std::uint32_t(c), p[i]);
+        return ~std::uint32_t(c);
+}
+
+// the checksum of a compressed unit: CRC32C of its stored bytes in order (every block decoded, capture positions as
+// filled in), so independent of the zstd version that compressed it; equal for every build of the same unit
+bool unit_crc(std::string const& dir, int n, int m)
+{
+        auto const lay = unit_layout(n, m);
+        if (lay.empty()) { std::cout << "empty " << n << " " << m << '\n'; return true; }
+        if (!store_open(dir, n, m, 3)) return false;
+        Unit const& u = units.back();
+        ZSTD_DCtx* dx = new_dctx();
+        std::vector<std::uint8_t> buf(2 * BLOCK);
+        std::uint32_t crc = 0;
+        for (std::uint64_t b = 0; b < u.nblocks; ++b) crc = crc32c(crc, buf.data(), decode_block(dx, u, b, buf.data()));   // with extra bytes
+        ZSTD_freeDCtx(dx);
+        char hex[16];
+        std::snprintf(hex, sizeof hex, "%08x", crc);
+        std::cout << "crc32c " << n << " " << m << " positions " << u.npos << " " << hex << '\n';
+        return true;
+}
+
+// recode a compressed unit of version 1 (draw 253) to version 2 (draw 255, no escapes: version 1 has no DTM above 252):
+// every block decoded, its draws recoded, compressed again and decoded once more to check it; the values stay the same
+bool unit_recode(std::string const& dir, int n, int m, int threads)
+{
+        auto const lay = unit_layout(n, m);
+        if (lay.empty()) { std::cout << "empty " << n << " " << m << '\n'; return true; }
+        if (!store_open(dir, n, m, 3)) return false;
+        Unit const& u = units.back();
+        if (u.version == 2) { std::cout << "recoded " << n << " " << m << " already version 2\n"; return true; }
+        std::string const path = unit_path(dir, n, m, ".cdb"), tmp = path + ".tmp";
+        std::FILE* f = std::fopen(tmp.c_str(), "wb");
+        if (!f) return false;
+        std::size_t const nhead = std::size_t(u.data - u.p) / 8 - (u.nblocks + 1);   // header words before the offsets
+        std::vector<std::uint64_t> head(nhead);
+        std::memcpy(head.data(), u.p, nhead * 8);
+        head[0] = CDB_MAGIC2;
+        head[7] = 255;
+        std::vector<std::uint64_t> off(u.nblocks + 1, 0);
+        std::fwrite(head.data(), 8, head.size(), f);
+        std::fwrite(off.data(), 8, off.size(), f);
+        auto const t0 = std::chrono::steady_clock::now();
+        std::uint64_t const nb = u.nblocks, batch = 16384;
+        std::vector<std::vector<std::uint8_t>> out(batch);
+        std::uint64_t total = 0, draws = 0;
+        std::atomic<bool> bad{false};
+        for (std::uint64_t b0 = 0; b0 < nb; b0 += batch) {
+                std::uint64_t const b1 = std::min(nb, b0 + batch);
+                #pragma omp parallel num_threads(threads) reduction(+ : draws)
+                {
+                        ZSTD_CCtx* cx = new_cctx();
+                        ZSTD_DCtx* dx = new_dctx();
+                        std::vector<std::uint8_t> blk(2 * BLOCK), back(2 * BLOCK);
+                        #pragma omp for schedule(dynamic, 16)
+                        for (std::uint64_t b = b0; b < b1; ++b) {
+                                std::size_t const len = decode_block(dx, u, b, blk.data());
+                                for (std::size_t i = 0; i < len; ++i) {
+                                        if (blk[i] == DRAW8) { blk[i] = DRAW_CODE; ++draws; }
+                                        else if (blk[i] > DRAW8) bad = true;
+                                }
+                                auto& o = out[b - b0];
+                                o.resize(ZSTD_compressBound(len));
+                                std::size_t const r = ZSTD_compress2(cx, o.data(), o.size(), blk.data(), len);
+                                if (ZSTD_isError(r)) { std::cerr << "zstd: " << ZSTD_getErrorName(r) << std::endl; std::abort(); }
+                                o.resize(r);
+                                std::size_t const g = ZSTD_decompressDCtx(dx, back.data(), back.size(), o.data(), o.size());
+                                if (g != len || std::memcmp(back.data(), blk.data(), len) != 0) bad = true;
+                        }
+                        ZSTD_freeDCtx(dx);
+                        ZSTD_freeCCtx(cx);
+                }
+                for (std::uint64_t b = b0; b < b1; ++b) {
+                        off[b] = total;
+                        total += out[b - b0].size();
+                        std::fwrite(out[b - b0].data(), 1, out[b - b0].size(), f);
+                }
+        }
+        off[nb] = total;
+        bool ok = !bad && ::fseeko(f, off_t(head.size() * 8), SEEK_SET) == 0 && std::fwrite(off.data(), 8, off.size(), f) == off.size();
+        ok = ok && sync_file(f);
+        ok = std::fclose(f) == 0 && ok;
+        if (!ok) { std::remove(tmp.c_str()); std::cerr << "recode: unit " << n << "/" << m << " failed" << std::endl; return false; }
+        if (!durable_rename(tmp, path)) return false;
+        std::cout << "recoded " << n << " " << m << " positions " << u.npos << " draws " << draws << " bytes "
+                  << (head.size() + off.size()) * 8 + total << " seconds " << seconds_since(t0) << '\n';
         return true;
 }
 
@@ -1686,25 +2837,25 @@ bool unit_compare(std::string const& dir, int n, int m, int threads)
         std::size_t rsize = 0;
         std::uint8_t* raw = map_any(unit_path(dir, n, m, ".raw"), rsize, 0, npos);
         if (!raw) return false;
+        std::vector<std::uint64_t> const ovf = read_ovf(unit_path(dir, n, m, ".ovf"));
         auto const t0 = std::chrono::steady_clock::now();
         std::uint64_t bad_bytes = 0, bytes = 0;
         #pragma omp parallel num_threads(threads) reduction(+ : bad_bytes, bytes)
         {
                 ZSTD_DCtx* dx = new_dctx();
-                std::vector<std::uint8_t> want(BLOCK), got(BLOCK);
+                std::vector<std::uint8_t> want(2 * BLOCK), got(2 * BLOCK);
                 #pragma omp for schedule(dynamic, 64)
                 for (std::uint64_t b = 0; b < u.nblocks; ++b) {
-                        decode_block(dx, u, b, got.data());
-                        filled_block(lay, raw, npos, b, want.data());
-                        std::size_t const len = std::size_t(std::min(BLOCK, npos - b * BLOCK));
-                        for (std::size_t i = 0; i < len; ++i) bad_bytes += want[i] != got[i];
-                        bytes += len;
+                        std::size_t const g = decode_block(dx, u, b, got.data());
+                        std::size_t const w = filled_block(lay, raw, ovf, npos, b, u.esc, want.data());
+                        for (std::size_t i = 0; i < std::max(g, w); ++i) bad_bytes += i >= g || i >= w || want[i] != got[i];
+                        bytes += std::size_t(std::min(BLOCK, npos - b * BLOCK));
                 }
                 ZSTD_freeDCtx(dx);
         }
         ::munmap(raw, rsize);
         std::cout << "compare " << n << " " << m << " positions " << npos << " blocks " << u.nblocks << " bytes_compared " << bytes
-                  << " byte_errors " << bad_bytes << " seconds " << seconds_since(t0) << '\n';
+                  << " byte_errors " << bad_bytes << " overflow " << ovf.size() << " seconds " << seconds_since(t0) << '\n';
         return bad_bytes == 0 && bytes == npos;
 }
 
@@ -1773,17 +2924,98 @@ int main()
                         std::cout << (ok ? "store ok " : "error store failed ") << dir << " units " << units.size() << "\nend" << std::endl;
                         continue;
                 }
+                if (cmd == "unitcrc") {
+                        std::string dir;
+                        int n = 0, m = 0;
+                        rs >> dir >> n >> m;
+                        bool ok = unit_crc(dir, n, m);
+                        std::cout << (ok ? "unitcrc ok" : "error unitcrc failed") << "\nend" << std::endl;
+                        continue;
+                }
+                if (cmd.rfind("mat", 0) == 0) {
+                        // material mode: mat<step> <dir> <wp> <bp> <wm> <bm> [raw|cdb] [threads]
+                        std::string dir, kind;
+                        int wp = 0, bp = 0, wm = 0, bm = 0, threads = 1;
+                        rs >> dir >> wp >> bp >> wm >> bm;
+                        if (cmd == "matverify") rs >> kind;
+                        rs >> threads;
+                        threads = std::max(threads, 1);
+                        bool ok = stored_material(wm, bm, wp - wm, bp - bm);
+                        if (!ok) std::cout << "error not a stored material " << wp << "-" << bp << "-" << wm << "-" << bm << '\n';
+                        else {
+                                only_mat = OnlyMat{ true, wm, bm, wp - wm, bp - bm };
+                                int const n = wp + bp, m = wm + bm;
+                                ok = cmd == "matbuild" ? mat_build(dir, threads)
+                                   : cmd == "matverify" ? unit_verify(dir, n, m, kind == "cdb", threads)
+                                   : cmd == "matcompress" ? unit_compress(dir, n, m, threads)
+                                   : cmd == "matcompare" ? unit_compare(dir, n, m, threads)
+                                   : cmd == "matcrc" ? unit_crc(dir, n, m)
+                                   : cmd == "matvalues" ? unit_values(dir, n, m, threads)
+                                   : cmd == "matmax" ? unit_max(dir, n, m, threads)
+                                   : (std::cout << "error unknown command " << cmd << '\n', false);
+                                only_mat = OnlyMat{};
+                        }
+                        std::cout << (ok ? cmd + " ok" : "error " + cmd + " failed") << "\nend" << std::endl;
+                        continue;
+                }
+                if (cmd == "unitrecode") {
+                        std::string dir;
+                        int n = 0, m = 0, threads = 4;
+                        rs >> dir >> n >> m >> threads;
+                        bool const ok = unit_recode(dir, n, m, threads);
+                        std::cout << (ok ? "unitrecode ok" : "error unitrecode failed") << "\nend" << std::endl;
+                        continue;
+                }
+                if (cmd == "unitvalues") {
+                        std::string dir;
+                        int n = 0, m = 0, threads = 4;
+                        rs >> dir >> n >> m >> threads;
+                        bool const ok = unit_values(dir, n, m, threads);
+                        std::cout << (ok ? "unitvalues ok" : "error unitvalues failed") << "\nend" << std::endl;
+                        continue;
+                }
+                if (cmd == "unitmax") {
+                        std::string dir;
+                        int n = 0, m = 0, threads = 4;
+                        rs >> dir >> n >> m >> threads;
+                        bool const ok = unit_max(dir, n, m, threads);
+                        std::cout << (ok ? "unitmax ok" : "error unitmax failed") << "\nend" << std::endl;
+                        continue;
+                }
                 if (cmd == "unitbuild" || cmd == "unitverify" || cmd == "unitcompress" || cmd == "unitcompare") {
                         std::string dir, kind;
                         int n = 0, m = 0, threads = 4;
+                        double mem_gb = 0;
                         rs >> dir >> n >> m;
                         if (cmd == "unitverify") rs >> kind;
                         rs >> threads;
-                        bool ok = cmd == "unitbuild" ? unit_build(dir, n, m, threads)
+                        if (cmd == "unitbuild") rs >> mem_gb;
+                        bool ok = cmd == "unitbuild" ? unit_build(dir, n, m, threads, mem_gb)
                                 : cmd == "unitverify" ? unit_verify(dir, n, m, kind == "cdb", threads)
                                 : cmd == "unitcompress" ? unit_compress(dir, n, m, threads)
                                 : unit_compare(dir, n, m, threads);
                         std::cout << (ok ? cmd + " ok" : "error " + cmd + " failed") << "\nend" << std::endl;
+                        continue;
+                }
+                if (cmd == "perft") {
+                        // perft <depth> [FEN] [dups]: leaf counts per depth from the position (default: the start position)
+                        int depth = 0;
+                        rs >> depth;
+                        std::string fen = "W:W13,14,15,16,17,18:B1,2,3,4,5,6", word;
+                        keep_duplicates = false;
+                        while (rs >> word) { if (word == "dups") keep_duplicates = true; else fen = word; }
+                        Pos p0;
+                        if (!parse_fen(fen, p0)) { std::cout << "error bad fen\nend" << std::endl; keep_duplicates = false; continue; }
+                        std::function<std::uint64_t(Pos const&, int)> perft = [&](Pos const& q, int d) -> std::uint64_t {
+                                auto const ms = moves(q);
+                                if (d == 1) return ms.size();
+                                std::uint64_t c = 0;
+                                for (auto const& mv : ms) c += perft(mv.next, d - 1);
+                                return c;
+                        };
+                        for (int d = 1; d <= depth; ++d) std::cout << "perft " << d << " " << perft(p0, d) << std::endl;
+                        keep_duplicates = false;
+                        std::cout << "end" << std::endl;
                         continue;
                 }
                 if (cmd == "verify") {

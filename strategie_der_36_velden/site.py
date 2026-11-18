@@ -11,10 +11,10 @@ move is clickable, a large board follows, and for every position the database va
 The pages are generated locally (the databases are needed) into _site/strategie_der_36_velden/ (not tracked) and published on the
 gh-pages branch:
 
-    python3 strategie_der_36_velden/site.py data/egdb_6x6
+    python3 strategie_der_36_velden/site.py data/egdb_6x6 --store data/units
     git worktree add ../gh-pages gh-pages && cp -r _site/* ../gh-pages/ && cd ../gh-pages && git add -A && git commit
 
-usage: site.py path/to/egdb_6x6 [--out _site/strategie_der_36_velden]
+usage: site.py path/to/egdb_6x6 [--store data/units | --db data/6x6_le9.db --attach data/6x6_10.dtm] [--out _site/strategie_der_36_velden]
 """
 
 import argparse
@@ -60,7 +60,7 @@ PAGES = [
     ('h3-3', 'Hoofdstuk 3.3', 'Moeizame remise en luchtig slot', H + 'strategie-der-36-velden-3/', ['3.3'],
      ['3.4', '3.5c']),
     ('h4', 'Hoofdstuk 4', 'Een zwarte schijf op 15 en een zwarte dam', H + 'strategie-der-36-velden-hoofdstuk-4/',
-     ['4.1', '4.2', '4.3'], ['4.1', '4.2', '4.3', '4.4', '4.10', '4.11', '4.12']),
+     ['4.1', '4.2', '4.3'], ['4.1', '4.2', '4.3', '4.4', '4.8', '4.9', '4.10', '4.11', '4.12']),
     ('h5a', 'Hoofdstuk 5a', 'Scouppe I', H + 'scouppe/', ['5.1'], ['5.1', '5.2']),
     ('h5b', 'Hoofdstuk 5b', 'Scouppe Trucs', H + 'scouppe-trucs/', ['5.2'], ['5.3', '5.4']),
     ('h5c', 'Hoofdstuk 5c', 'Scouppe: Dam op 17', H + 'dam-op-17/', ['5.3'], ['5.5', '5.6']),
@@ -80,7 +80,7 @@ PAGES = [
      ['6.10', '6.11', '6.12', '6.13', '6.14', '6.15']),
     ('h7-2', 'Hoofdstuk 7.2', 'De derde zet', H + '7-2-de-derde-zet/', ['7.2'], ['7.1', '7.3', '7.4j']),
     ('h7-3', 'Hoofdstuk 7.3', 'De vierde zet', H + '7-3-de-vierde-zet/', ['7.3'],
-     ['7.4', '7.5', '7.6', '7.7', '7.8', '7.9', '7.10', '7.11']),
+     ['7.4', '7.5', '7.6', '7.7', '7.8', '6.11', '7.9', '7.10', '7.11']),
     ('h7-4', 'Hoofdstuk 7.4', 'Naar voren', H + '7-4-naar-voren/', ['7.4'], ['7.12', '7.13', '7.14', '7.15']),
     ('h7-5', 'Hoofdstuk 7.5', 'Achteruit', H + '7-5-achteruit-de-zesde-zet/', ['7.5'], ['7.16', '7.17']),
     ('h7-6', 'Hoofdstuk 7.6', 'Een dijk van een stand', H + '7-6-een-dijk-van-een-stand/', ['7.6'],
@@ -143,6 +143,16 @@ def heading_en(h):
                  ('Vervolg', 'continued'), ('De opening', 'The opening')):
         h = h.replace(a, b)
     return h
+
+
+# the number a page of the book's website gives a diagram, where it differs from our key: the website reuses the
+# numbers 3.5 and 7.4 for a second position, calls its final position "Slot", and labels diagram 6.5 as 6.4 on its
+# solutions page
+SHOWN = {('h3-3', '3.5c'): '3.5', ('h7-2', '7.4j'): '7.4', ('h6a-opl', '6.5'): '6.4', ('h9', '9.slot'): 'Slot'}
+
+
+def shown(did, pid):
+    return SHOWN.get((pid, did), did)
 
 
 def base(did):
@@ -293,8 +303,12 @@ class Site:
 
     def diagram_block(self, pg, did, pid):
         d = self.diag[did]
-        out = [f'<section class="diag" id="d{did}"><h3>Diagram {did}</h3>']
+        lab = shown(did, pid)
         home = self.home[did] == pid
+        listed = did in self.page_of[pid][5]
+        # a diagram of another page whose variations continue here: not one of this page's diagrams
+        head = f'Diagram {lab}' if home or listed else f'{self.t("Vanuit diagram", "From diagram")} {lab}'
+        out = [f'<section class="diag" id="d{did}"><h3>{head}</h3>']
         # lines added from the database (not from the book) are shown as refutations instead
         mylines = [r for r in self.lines[pid] if r['start'] == did and not (r['note'] or '').startswith('database:')]
         if home:
@@ -303,7 +317,7 @@ class Site:
                     out.append('<div style="clear:right"></div>')
                 fen = stm + d['fen'][1:]
                 sd = d['sides'][stm]
-                fig, i0 = pg.diagram(fen, f'diagram {did}, {self.side(stm)} {self.t("aan zet", "to move")}')
+                fig, i0 = pg.diagram(fen, f'diagram {lab}, {self.side(stm)} {self.t("aan zet", "to move")}')
                 out.append(fig)
                 if 'error' in sd:
                     out.append(f'<p class="claim">{pg.prose(self.btext(d['note']), '6x6')}: {pg.prose(sd['error'], '6x6')}</p>')
@@ -324,10 +338,9 @@ class Site:
                     out.append(f'<p class="var">{self.claim_refutation(pg, fen, i0, did)}</p>')
             if d['note']:
                 out.insert(1, f'<p class="note">{pg.prose(self.btext(d['note']), '6x6')}</p>')
-        elif mylines:
-            r0 = mylines[0]
-            fig, _ = pg.diagram(r0['start_fen'], f'diagram {did}, {self.side(r0["start_fen"][0])} '
-                                                 f'{self.t("aan zet", "to move")}')
+        elif mylines or listed:
+            f0 = mylines[0]['start_fen'] if mylines else d['fen']
+            fig, _ = pg.diagram(f0, f'diagram {lab}, {self.side(f0[0])} {self.t("aan zet", "to move")}')
             out.append(fig + f'<p class="note">{self.t("zie ook", "see also")} <a href="{self.home[did]}.html#d{did}">'
                              f'{esc(self.ttl(self.page_of[self.home[did]][2]))}</a></p>')
         starts = {}
@@ -390,7 +403,7 @@ class Site:
         h, *_ = pg.moves(fen, plan, mnum, black, cls, prev, nbook=0, auto_aside=False)
         if ref['reached']:
             d = ref['reached'][0]
-            h += f' → <a href="{self.home[d]}.html#d{d}">diagram {d}</a> ({ref["reached"][1]})'
+            h += f' → <a href="{self.home[d]}.html#d{d}">diagram {shown(d, self.home[d])}</a> ({ref["reached"][1]})'
         elif ref['ending'] == 'draw':
             h += ' … D'
         return h
@@ -398,11 +411,13 @@ class Site:
     def chapter_page(self, k):
         pid, lab, title, orig, sections, listed = PAGES[k]
         pg = self.page()
-        dids = [did for did in DIAGRAMS if self.home[did] == pid or any(r['start'] == did for r in self.lines[pid])]
+        dids = [did for did in DIAGRAMS
+                if self.home[did] == pid or did in listed or any(r['start'] == did for r in self.lines[pid])]
 
         def key(did):
             b = base(did)
-            return (listed.index(b) if b in listed else len(listed), list(DIAGRAMS).index(did))
+            return (listed.index(did) if did in listed else listed.index(b) if b in listed else len(listed),
+                    list(DIAGRAMS).index(did))
         dids.sort(key=key)
         body = [f'<p class="src">{esc(self.lab(lab))}</p>' if lab else '', f'<h1>{esc(self.ttl(title))}</h1>',
                 f'<p class="src">Herm Jan Brascamp, <a href="{orig}">{esc(title)}</a>, <em>Strategie der 36 '
@@ -423,7 +438,8 @@ class Site:
         for did in dids:
             sides = self.diag[did]['sides'].values() if self.home[did] == pid else []
             oks = [x.get('ok') for x in sides if x.get('ok') is not None]
-            marks.append(f'<a href="#d{did}">{did}{" ❌" if False in oks else " ✅" if oks else ""}</a>')
+            pre = '' if self.home[did] == pid or did in listed else self.t('vanuit ', 'from ')
+            marks.append(f'<a href="#d{did}">{pre}{shown(did, pid)}{" ❌" if False in oks else " ✅" if oks else ""}</a>')
         nd = len(dids)
         body.append(f'<details class="onpage"><summary>' + self.t(f'Op deze pagina: {nd} diagram{"men" if nd != 1 else ""}',
                                                                f'On this page: {nd} diagram{"s" if nd != 1 else ""}')
@@ -511,9 +527,10 @@ def main():
     ap.add_argument('engine')
     ap.add_argument('--db', default=str(ROOT / 'data' / '6x6_le9.db'))
     ap.add_argument('--attach', default=str(ROOT / 'data' / '6x6_10.dtm'))
+    ap.add_argument('--store', help='the unit store of units_6x6.py (e.g. data/units), instead of --db/--attach')
     ap.add_argument('--out', default=str(ROOT / '_site' / 'strategie_der_36_velden'))
     args = ap.parse_args()
-    eng = Engine(args.engine, 10, args.db, args.attach)
+    eng = Engine(args.engine, 10, args.db, args.attach, store=args.store)
     for lang in ('nl', 'en'):
         out = Path(args.out) / ('' if lang == 'nl' else 'en')
         out.mkdir(parents=True, exist_ok=True)

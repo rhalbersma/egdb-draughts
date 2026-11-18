@@ -35,6 +35,8 @@ TITLES_EN = {
 }
 
 NOTES_EN = {
+    'spoken (als diagram 4.4)': 'ghosts (as diagram 4.4)',
+    'waz remise (als diagram 4.3): de drie dammen winnen niet doordat deze stand met wit aan zet remise is': 'wtm draw (as diagram 4.3): the three kings do not win because this position with white to move is a draw',
     'wit wint (als diagram 2.2)': 'white wins (as diagram 2.2)',
     'luchtige opgave, wit wint (op de website ook diagram 3.5)': 'a light problem, white wins (on the website also diagram 3.5)',
     'wit wint (als diagram 1.1)': 'white wins (as diagram 1.1)',

@@ -1,28 +1,46 @@
-# A Thompson (1986) style build for 6×6 international draughts
+# Thompson style builds (1986 and 1996) for 6×6 international draughts
 
 `thompson86.cpp` builds endgame databases in the manner of K. Thompson, "Retrograde analysis of certain endgames",
-ICCA Journal 9(3), 1986, adapted to draughts and to the design notes in
-[`literature/egdb_primitives.md`](../literature/egdb_primitives.md):
+ICCA Journal 9(3), 1986, and "6-piece endgames", ICCA Journal 19(4), 1996, adapted to draughts and to the design
+notes in [`literature/egdb_primitives.md`](../literature/egdb_primitives.md).
 
-* **one byte per position with White to move**: the number of White moves to a win (DTM: a win in i moves is
-  2i − 1 plies), 0 for "not a win" (draw, loss or illegal slot). Black-to-move values are not stored: one ply of
-  search over White-to-move results gives them (lost in max(i) moves when every Black move leads to a White win in i);
-* **runs**: a run is a material read as capacities (WM white men, WK white kings, BM black men, BK black kings). It
-  holds every position with at most that many pieces of each colour and type; captured pieces are parked on graveyard
-  squares above the board (per colour and type a colex rank over the squares where the piece may stand plus one
-  graveyard square per piece, the parked pieces filling the graveyard in order, so every parked layer is a contiguous
-  block whose offset follows from the rank formula);
-* **captures forward, no uncaptures**: units (the slices of `egdb_6x6`: a placement of the men and the numbers of
-  kings) are built in order of pieces on the board and distance of the men to promotion. Pass 0 looks up every move
-  that leaves the unit (captures, man moves, promotions) in a finished unit or run; positions without king moves
-  inside the unit are decided there (captures are compulsory);
-* **Thompson's rounds on bit planes**: P2 (White king unmoves from the Black losses of the last level), P3 (Black
-  king unmoves from the new White wins: candidates), P4 (a candidate is lost when every Black king move leads into W
-  and its exits are lost already); exit results enter at their depth (deferred seeds), so the depths are exact;
-* **the promotion DAG via Snakemake**: a run needs the run where a white man has promoted and the run where a black
-  man has; captures add no edges. All runs of n pieces cover every material with at most n pieces;
-* **memory and disk**: per run the result bytes and per unit a handful of bit planes in RAM; finished runs are read
-  through read-only memory maps; the only disk write is one sequential write of a finished run.
+**One byte per position with White to move**: the number of plies to the goal of a White win, 0 for "not a win"
+(draw, loss or illegal slot). Black-to-move values are not stored: one ply of search over White-to-move results
+gives them. Three metrics, which differ only in the moves that end the count (by either side, as long as the win is
+kept):
+
+| metric | the count ends at |
+|---|---|
+| `dtm` | the end of the game (Black has no move) |
+| `dtc` | the end, or a capture or promotion: a conversion into another material |
+| `dtz` | the end, or a capture or man move: a zeroing move of the 25-move rule |
+
+A White win can end with Black's forced capture, so in dtc and dtz a win can take an even number of plies.
+
+**Runs.** A run is a material (WM white men, WK white kings, BM black men, BK black kings) read as capacities: it
+holds every position with at most that many pieces of each colour and type, the captured ones parked on graveyard
+squares above the board (per colour and type a colex rank over the squares where the piece may stand plus one
+graveyard square per piece, the parked pieces filling the graveyard in order, so every parked layer is a contiguous
+block whose offset follows from the rank formula). Promotions leave the run; the runs form a DAG through promotions,
+which Snakemake builds in order. All runs of n pieces cover every material with at most n pieces.
+
+**Two styles**, the same results byte for byte:
+
+| | 1986 (`style=86`) | 1996 (`style=96`) |
+|---|---|---|
+| group solved together | one slice of `egdb_6x6` (a placement of the men and the numbers of kings), in order of pieces on the board, then distance | a wave: every slice with the same number of pieces (for dtz also the same distance, since a man move ends the count there) |
+| moves inside the group | king moves without capture | king moves and man moves without capture or promotion (dtz: king moves only) |
+| unmoves in the rounds | king unmoves | king unmoves and man unmoves |
+| passes | each pass tests its target at once | masked late, as in Thompson's I/O-enhanced algorithm: P2 writes a superset, P3 and P4 mask it with `~won`, `~lost` |
+
+In both, every move that leaves a group (captures, promotions, and in the 1986 style man moves) is looked up forward
+in pass 0, in a finished group or run: **no uncaptures anywhere**. A position without moves inside its group is
+decided there (captures are compulsory); the others keep their exit results as seeds at their depth. The rounds run
+by ply level d: W_d from the unmoves of B_{d−1} plus exits that win in d plies; B_d from the unmoves of W_{d−1},
+verified (every move inside leads into W, and the exits are lost by d), plus positions decided in pass 0 at d.
+
+**Memory and disk**: per run the result bytes and per group a handful of bit planes in RAM; finished runs are read
+through read-only memory maps; the only disk write is one sequential write of a finished run.
 
 ## Build and run
 
@@ -31,13 +49,15 @@ g++-14 -std=c++23 -O2 -march=native -fopenmp -I<xstd-bits>/include -I<xstd-ints>
 ```
 
 ```bash
-snakemake -s thompson86/Snakefile --cores 4 --config engine=build/thompson86 dir=data/thompson86 pieces=6
+snakemake -s thompson86/Snakefile --cores 4 --config engine=build/thompson86 dir=data/thompson86 pieces=6 metric=dtm style=86
 ```
 
 or with CMake, target `thompson86`. The last Snakemake job (`checkall`) builds `egdb_6x6`'s databases in memory and
-compares every position of every run, both sides to move, with its DTM.
+compares every position of every run, both sides to move: dtm exactly; dtc and dtz their wins and losses, and every
+White-to-move value against the value recomputed from its successors. `thompson86 order <dtz> <dtc> <dtm> n` checks
+dtz ≤ dtc ≤ dtm for every White win.
 
-## Results (4 cores)
+## Results of the first version (dtm, 1986 style, 4 cores)
 
 | pieces | runs | positions (both sides to move) | slots | wall time, build and check | differences from `egdb_6x6` |
 |---|---|---|---|---|---|

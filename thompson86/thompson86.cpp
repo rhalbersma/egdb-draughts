@@ -3,8 +3,12 @@
 //    (See accompanying file LICENSE_1_0.txt or copy at
 //          http://www.boost.org/LICENSE_1_0.txt)
 
-// A Thompson (1986) style build for 6x6 international draughts: one byte per position with White to move, the
-// number of White moves to a win (DTM, a win in i moves is 2i - 1 plies), 0 for "not a win" (draw, loss, illegal).
+// Thompson style builds (1986 and 1996) for 6x6 international draughts, for three metrics: one byte per position
+// with White to move, the number of plies to the goal of a White win, 0 for "not a win" (draw, loss, illegal slot):
+//   dtm   the goal is the end of the game (Black has no move)
+//   dtc   the end, or a capture or promotion (a conversion: another material) that keeps the win
+//   dtz   the end, or a capture or man move (a zeroing move of the 25-move rule) that keeps the win
+// A goal move by either side ends the count: a White win can end with Black's forced capture (an even number of plies).
 //
 // Runs. A run is a material (WM white men, WK white kings, BM black men, BK black kings), read as capacities: the run
 // holds every position with at most that many pieces of each colour and type, the captured ones parked on graveyard
@@ -18,26 +22,33 @@
 //   index = ((rank_wm * size_bm + rank_bm) * size_wk + rank_wk) * size_bk + rank_bk
 // Slots where pieces of different colours or types share a square are never written (0 = not a win).
 //
-// Work inside a run: units are the slices of egdb_6x6 (a placement of the men and the numbers of kings), built in
-// order of pieces on the board, then distance of the men to promotion, so that every move that leaves a unit lands
-// in a finished unit or a finished run.
-//   pass 0   every position: moves that leave the unit (captures, man moves, promotions) are looked up forward, no
-//            uncaptures anywhere; a position without king moves inside the unit is decided here (captures are
-//            compulsory); the others keep their exit results as seeds at their depth
-//   rounds   Thompson's P2 / P3 / P4 on bit planes: B_i -> (White king unmoves) -> W_{i+1};
-//            W_{i+1} -> (Black king unmoves) -> candidates -> (all Black king moves into W, exits already lost) -> B_{i+1}
-// Only White-to-move results are kept. A Black-to-move value, needed when a White move leaves a unit, is one ply of
-// search over White-to-move results: lost in max(i) moves if every Black move leads to a White win in i moves.
+// Groups. The positions of a run are solved group by group, each group after every group its moves can leave to:
+//   1986 style   a group is one slice of egdb_6x6 (a placement of the men and the numbers of kings), in order of pieces
+//                on the board, then distance of the men to promotion; only king moves without capture stay inside
+//   1996 style   a group is a wave: every slice with the same number of pieces on the board (for dtz: and the same
+//                distance, since a man move ends the count there); king moves and man moves without capture or
+//                promotion stay inside; the passes mask late, as in Thompson's I/O-enhanced algorithm (Figure 3)
+// In both, every move that leaves a group (captures, promotions, and in the 1986 style man moves) is looked up
+// forward in pass 0, in a finished group or run: no uncaptures anywhere. A position without moves inside the group
+// is decided there (captures are compulsory); the others keep their exit results as seeds at their depth.
+// Rounds, level d = 1, 2, ... in plies, on bit planes (Thompson's P2 / P3 / P4):
+//   W_d = unmoves of B_{d-1} into open White-to-move positions, plus exits that win in d
+//   B_d = unmoves of W_{d-1} into open Black-to-move positions whose exits all lose by d, verified: every move inside
+//         the group leads into W (levels < d); plus positions decided in pass 0 at d
+// Only White-to-move results are kept. A Black-to-move value is one ply of search over White-to-move results.
 //
-// Memory: the run's result bytes (written to disk once, sequentially, at the end) and bit planes per unit.
+// Memory: the run's result bytes (written to disk once, sequentially, at the end) and bit planes per group.
 // Disk: other runs are read through read-only memory maps (random reads); the only write is the sequential one.
 //
-// build: g++-14 -std=c++23 -O2 -march=native -fopenmp -Isrc -I<xstd-bits>/include -I<xstd-ints>/include
+// build: g++-14 -std=c++23 -O2 -march=native -fopenmp -I<xstd-bits>/include -I<xstd-ints>/include
 //        -I<xstd-misc>/include thompson86/thompson86.cpp -lzstd -ltbb -o thompson86
-// usage: thompson86 build <dir> WM WK BM BK      build one run (the runs it promotes into must exist in dir)
-//        thompson86 check <dir> WM WK BM BK      compare every position of the run with egdb_6x6's DTM (built in memory)
-//        thompson86 checkall <dir> n [threads]   the same for every run of n pieces, with one oracle
-//        thompson86 size WM WK BM BK             the number of slots of a run
+// usage: thompson86 build <dir> WM WK BM BK <metric> <style>   build one run (the runs it promotes into must exist)
+//        thompson86 checkall <dir> n <metric> [threads]         every run of n pieces against egdb_6x6 (built in
+//                                                               memory): dtm exactly, dtc / dtz their wins and losses,
+//                                                               and every value recomputed from its successors
+//        thompson86 order <dir_dtz> <dir_dtc> <dir_dtm> n       dtz <= dtc <= dtm for every White-to-move win
+//        thompson86 size WM WK BM BK                            the number of slots of a run
+// metric: dtm, dtc, dtz; style: 86, 96
 
 #define main egdb_6x6_main
 #include "../src/egdb_6x6.cpp"
@@ -59,6 +70,44 @@ void init_cc()
                 CC[n][0] = 1;
                 for (std::size_t k = 1; k <= n; ++k) CC[n][k] = CC[n - 1][k - 1] + (k <= n - 1 ? CC[n - 1][k] : 0);
         }
+}
+
+// ---------------------------------------------------------------- metric and style
+
+enum class Metric { dtm, dtc, dtz };
+Metric g_metric = Metric::dtm;
+bool g_waves = false;                                   // the 1996 style
+
+bool parse_metric(std::string const& s)
+{
+        if (s == "dtm") g_metric = Metric::dtm;
+        else if (s == "dtc") g_metric = Metric::dtc;
+        else if (s == "dtz") g_metric = Metric::dtz;
+        else return false;
+        return true;
+}
+
+bool is_capture(Move const& mv) { return !mv.captured.empty(); }
+bool is_promotion(Pos const& p, Move const& mv) { return mv.next.k[p.stm].size() > p.k[p.stm].size(); }
+bool is_man_move(Pos const& p, Move const& mv) { return !p.k[p.stm].contains(std::size_t(mv.from)); }
+
+// a move that ends the count
+bool goal_move(Pos const& p, Move const& mv)
+{
+        switch (g_metric) {
+        case Metric::dtm: return false;
+        case Metric::dtc: return is_capture(mv) || is_promotion(p, mv);
+        case Metric::dtz: return is_capture(mv) || is_man_move(p, mv);
+        }
+        return false;
+}
+
+// a move that stays inside the group being solved
+bool inside(Pos const& p, Move const& mv)
+{
+        if (is_capture(mv) || is_promotion(p, mv)) return false;
+        if (!is_man_move(p, mv)) return true;                          // a king move without capture
+        return g_waves && g_metric != Metric::dtz;                      // a man move: inside a wave, unless it ends the count
 }
 
 // ---------------------------------------------------------------- runs and their index
@@ -109,12 +158,6 @@ struct RunIndex {
                 size(wm.size * bm.size * wk.size * bk.size)
         {}
 
-        bool fits(Pos const& p) const
-        {
-                return int(p.m[0].size()) <= caps.wm && int(p.k[0].size()) <= caps.wk && int(p.m[1].size()) <= caps.bm
-                    && int(p.k[1].size()) <= caps.bk;
-        }
-
         std::uint64_t index(Pos const& p) const
         {
                 return ((wm.rank(p.m[0]) * bm.size + bm.rank(p.m[1])) * wk.size + wk.rank(p.k[0])) * bk.size + bk.rank(p.k[1]);
@@ -132,19 +175,19 @@ Caps caps_after(Caps c, Pos const& before, Pos const& after)
         return c;
 }
 
-std::string run_path(std::string const& dir, Caps c) { return dir + "/run-" + c.name() + ".res"; }
+char const* metric_name()
+{
+        return g_metric == Metric::dtm ? "dtm" : g_metric == Metric::dtc ? "dtc" : "dtz";
+}
+
+std::string run_path(std::string const& dir, Caps c) { return dir + "/run-" + c.name() + "." + metric_name(); }
 
 // ---------------------------------------------------------------- results: the run being built, and finished runs
-
-struct Mapped {
-        std::uint8_t const* p = nullptr;
-        std::size_t size = 0;
-};
 
 std::string g_dir;
 Caps g_current{ -1, -1, -1, -1 };
 std::vector<std::uint8_t> g_res;                    // the run being built (written to disk at the end)
-std::map<Caps, Mapped> g_runs;                      // finished runs, memory-mapped read-only
+std::map<Caps, std::uint8_t const*> g_runs;         // finished runs, memory-mapped read-only
 std::map<Caps, RunIndex> g_index;
 
 RunIndex const& run_index(Caps c)
@@ -154,43 +197,56 @@ RunIndex const& run_index(Caps c)
         return it->second;
 }
 
-std::uint8_t const* run_data(Caps c)
+std::uint8_t const* map_run(std::string const& path, std::size_t size)
 {
-        if (c == g_current) return g_res.data();
-        auto it = g_runs.find(c);
-        if (it != g_runs.end()) return it->second.p;
-        std::string const path = run_path(g_dir, c);
         int fd = ::open(path.c_str(), O_RDONLY);
         if (fd < 0) { std::cerr << "missing run " << path << std::endl; std::exit(1); }
         struct stat st{};
         ::fstat(fd, &st);
-        std::size_t const size = std::size_t(st.st_size);
-        if (size != run_index(c).size) { std::cerr << "wrong size " << path << std::endl; std::exit(1); }
+        if (std::size_t(st.st_size) != size) { std::cerr << "wrong size " << path << std::endl; std::exit(1); }
         void* m = ::mmap(nullptr, size, PROT_READ, MAP_SHARED, fd, 0);
         ::close(fd);
         if (m == MAP_FAILED) { std::cerr << "mmap failed " << path << std::endl; std::exit(1); }
-        g_runs[c] = { static_cast<std::uint8_t const*>(m), size };
         return static_cast<std::uint8_t const*>(m);
 }
 
-// White to move: moves to a White win, 0 if not a win
-std::uint8_t lookup_wtm(Caps c, Pos const& p)
+std::uint8_t const* run_data(Caps c)
+{
+        if (c == g_current) return g_res.data();
+        auto it = g_runs.find(c);
+        if (it != g_runs.end()) return it->second;
+        return g_runs[c] = map_run(run_path(g_dir, c), run_index(c).size);
+}
+
+// White to move: plies to the goal of a White win, 0 if not a win
+int lookup_wtm(Caps c, Pos const& p)
 {
         if ((p.m[0] | p.k[0]).empty()) return 0;          // White has no pieces: lost
         return run_data(c)[run_index(c).index(p)];
 }
 
-// Black to move: the number of moves in which Black is lost, -1 if Black is not lost (one ply over White results)
+// Black to move: plies to the goal of Black's loss, -1 if Black is not lost (one ply over White-to-move results)
 int lookup_btm_lost(Caps c, Pos const& p)
 {
         if ((p.m[1] | p.k[1]).empty()) return 0;          // Black has no pieces: lost
         int lost = 0;
         for (auto const& mv : moves(p)) {                   // no move: lost now (0)
-                std::uint8_t const v = lookup_wtm(caps_after(c, p, mv.next), mv.next);
+                int const v = lookup_wtm(caps_after(c, p, mv.next), mv.next);
                 if (v == 0) return -1;
-                lost = std::max(lost, int(v));
+                lost = std::max(lost, goal_move(p, mv) ? 1 : 1 + v);
         }
         return lost;
+}
+
+// White to move, recomputed from the successors: the fastest goal over the moves, 0 if none wins
+int wtm_from_successors(Caps c, Pos const& p)
+{
+        int best = INF;
+        for (auto const& mv : moves(p)) {
+                int const j = lookup_btm_lost(caps_after(c, p, mv.next), mv.next);
+                if (j >= 0) best = std::min(best, goal_move(p, mv) ? 1 : 1 + j);
+        }
+        return best < INF ? best : 0;
 }
 
 // ---------------------------------------------------------------- bit planes
@@ -202,6 +258,10 @@ struct Plane {
         void set(std::uint64_t i) { w[i >> 6] |= std::uint64_t(1) << (i & 63); }
         void clear() { std::ranges::fill(w, 0); }
         bool empty() const { return std::ranges::all_of(w, [](std::uint64_t x) { return x == 0; }); }
+        void mask(Plane const& keep, bool complement)   // this &= keep (or ~keep): one sequential pass
+        {
+                for (std::size_t k = 0; k < w.size(); ++k) w[k] &= complement ? ~keep.w[k] : keep.w[k];
+        }
         template<class F> void for_each(F&& f) const
         {
                 for (std::size_t k = 0; k < w.size(); ++k)
@@ -211,39 +271,90 @@ struct Plane {
 
 struct Seed { int level; std::uint32_t idx; };
 
-// ---------------------------------------------------------------- one unit (a slice of egdb_6x6)
+// ---------------------------------------------------------------- a group of slices, solved together
 
-void solve_unit(Caps caps, RunIndex const& ri, Meta const& s)
+struct Group {
+        std::vector<Meta> units;
+        std::vector<std::uint64_t> base;                                // first index of each slice
+        std::unordered_map<std::uint64_t, std::size_t> slot;            // slice key -> its number in the group
+        std::uint64_t P = 0;                                            // positions per side to move
+
+        void add(Meta const& m) { slot[m.key.pack()] = units.size(); units.push_back(m); base.push_back(P); P += m.P; }
+
+        std::uint64_t index(Pos const& p) const
+        {
+                std::size_t const u = slot.at(key_of(p).pack());
+                return base[u] + index_of(units[u], p);
+        }
+
+        Pos pos(std::uint64_t g, int stm) const
+        {
+                std::size_t const u = std::size_t(std::ranges::upper_bound(base, g) - base.begin()) - 1;
+                return pos_of(units[u], g - base[u], stm);
+        }
+};
+
+// the positions of the group from which a move inside the group leads to q: king unmoves, and in a wave man unmoves
+template<class F>
+void for_each_inside_predecessor(Group const& g, Pos const& q, F&& f)
 {
-        std::uint64_t const P = s.P;
+        int const mover = 1 - q.stm;
+        bitboard const occ = q.occ();
+        for (auto const t : q.k[mover])
+                for (int d = 0; d < 4; ++d)
+                        for (int fr : rays[std::size_t(t)][std::size_t(d)]) {
+                                if (occ.contains(std::size_t(fr))) break;
+                                Pos pr = q;
+                                pr.k[mover].erase(t);
+                                pr.k[mover].insert(std::size_t(fr));
+                                pr.stm = mover;
+                                f(g.index(pr));
+                        }
+        if (!g_waves || g_metric == Metric::dtz) return;
+        for (auto const t : q.m[mover])
+                for (int d = mover == 0 ? 2 : 0; d < (mover == 0 ? 4 : 2); ++d) {     // a man came from behind
+                        auto const& ray = rays[std::size_t(t)][std::size_t(d)];
+                        if (ray.empty() || occ.contains(std::size_t(ray[0]))) continue;
+                        Pos pr = q;
+                        pr.m[mover].erase(t);
+                        pr.m[mover].insert(std::size_t(ray[0]));
+                        pr.stm = mover;
+                        f(g.index(pr));
+                }
+}
+
+void solve_group(Caps caps, RunIndex const& ri, Group const& g)
+{
+        std::uint64_t const P = g.P;
         Plane open_w(P), open_b(P), lossable(P), exits_done(P), won(P), lost(P);
         std::vector<Seed> win_seeds, loss_decided, exit_seeds;
 
-        // pass 0: forward over every position, both sides to move
+        // pass 0: forward over every position, both sides to move; exits are looked up in finished groups and runs
         for (std::uint64_t i = 0; i < P; ++i) {
-                Pos const p = pos_of(s, i, 0);
-                int internal = 0, best = INF;
+                Pos const p = g.pos(i, 0);
+                bool in = false;
+                int best = INF;
                 for (auto const& mv : moves(p)) {
-                        if (internal_move(p, mv)) { ++internal; continue; }
+                        if (inside(p, mv)) { in = true; continue; }
                         int const j = lookup_btm_lost(caps_after(caps, p, mv.next), mv.next);
-                        if (j >= 0) best = std::min(best, j + 1);
+                        if (j >= 0) best = std::min(best, goal_move(p, mv) ? 1 : 1 + j);
                 }
-                if (internal > 0) open_w.set(i);
+                if (in) open_w.set(i);
                 if (best < INF) win_seeds.push_back({ best, std::uint32_t(i) });
         }
         for (std::uint64_t i = 0; i < P; ++i) {
-                Pos const p = pos_of(s, i, 1);
+                Pos const p = g.pos(i, 1);
                 auto const ml = moves(p);
                 if (ml.empty()) { loss_decided.push_back({ 0, std::uint32_t(i) }); continue; }
-                int internal = 0, slowest = 0;
-                bool all_lose = true;
+                bool in = false, all_lose = true;
+                int slowest = 0;
                 for (auto const& mv : ml) {
-                        if (internal_move(p, mv)) { ++internal; continue; }
-                        std::uint8_t const v = lookup_wtm(caps_after(caps, p, mv.next), mv.next);
+                        if (inside(p, mv)) { in = true; continue; }
+                        int const v = lookup_wtm(caps_after(caps, p, mv.next), mv.next);
                         if (v == 0) all_lose = false;
-                        else slowest = std::max(slowest, int(v));
+                        else slowest = std::max(slowest, goal_move(p, mv) ? 1 : 1 + v);
                 }
-                if (internal == 0) {                                    // every move leaves the unit: decided
+                if (!in) {                                              // every move leaves the group: decided
                         if (all_lose) loss_decided.push_back({ slowest, std::uint32_t(i) });
                         continue;
                 }
@@ -261,57 +372,63 @@ void solve_unit(Caps caps, RunIndex const& ri, Meta const& s)
         for (auto const* v : { &win_seeds, &loss_decided, &exit_seeds })
                 if (!v->empty()) max_seed = std::max(max_seed, v->back().level);
 
-        // rounds: B_i -> W_{i+1} -> B_{i+1}
+        // rounds, level d in plies: W_d from B_{d-1}, B_d from W_{d-1}
         std::size_t ws = 0, ld = 0, xs = 0;
-        Plane b_front(P), w_new(P), b_new(P), cand(P);
-        while (ld < loss_decided.size() && loss_decided[ld].level == 0) { b_front.set(loss_decided[ld].idx); lost.set(loss_decided[ld].idx); ++ld; }
-        for (int i = 0;; ++i) {
-                // P2: White wins in i + 1: White king unmoves from Black losses in i, and exits that win in i + 1
+        Plane w_last(P), b_last(P), w_new(P), b_new(P), cand(P);
+        for (; ld < loss_decided.size() && loss_decided[ld].level == 0; ++ld) { b_last.set(loss_decided[ld].idx); lost.set(loss_decided[ld].idx); }
+        for (int d = 1;; ++d) {
+                // P2: White wins in d
                 w_new.clear();
-                b_front.for_each([&](std::uint64_t q) {
-                        for_each_predecessor(s, pos_of(s, q, 1), [&](std::uint64_t id) {
-                                if (open_w.test(id) && !won.test(id)) w_new.set(id);
+                b_last.for_each([&](std::uint64_t q) {
+                        for_each_inside_predecessor(g, g.pos(q, 1), [&](std::uint64_t id) {
+                                if (!g_waves) { if (open_w.test(id) && !won.test(id)) w_new.set(id); }
+                                else w_new.set(id);                                     // 1996: mask later
                         });
                 });
-                for (; ws < win_seeds.size() && win_seeds[ws].level == i + 1; ++ws)
-                        if (!won.test(win_seeds[ws].idx)) w_new.set(win_seeds[ws].idx);
-                w_new.for_each([&](std::uint64_t q) {
-                        won.set(q);
-                        g_res[ri.index(pos_of(s, q, 0))] = std::uint8_t(i + 1);
-                });
+                if (g_waves) w_new.mask(open_w, false);                         // unmoves only reach open positions
+                for (; ws < win_seeds.size() && win_seeds[ws].level == d; ++ws) w_new.set(win_seeds[ws].idx);
+                w_new.mask(won, true);
 
-                // P3: candidates: Black king unmoves from White wins in i + 1, and positions whose exits all lose by i + 1
+                // P3: candidates for Black losses in d
                 cand.clear();
-                for (; xs < exit_seeds.size() && exit_seeds[xs].level == i + 1; ++xs) {
+                for (; xs < exit_seeds.size() && exit_seeds[xs].level == d; ++xs) {
                         exits_done.set(exit_seeds[xs].idx);
                         cand.set(exit_seeds[xs].idx);
                 }
-                w_new.for_each([&](std::uint64_t q) {
-                        for_each_predecessor(s, pos_of(s, q, 0), [&](std::uint64_t id) {
-                                std::uint64_t const j = id - P;
-                                if (open_b.test(j) && lossable.test(j) && !lost.test(j)) cand.set(j);
+                w_last.for_each([&](std::uint64_t q) {
+                        for_each_inside_predecessor(g, g.pos(q, 0), [&](std::uint64_t id) {
+                                if (!g_waves) { if (open_b.test(id) && lossable.test(id) && !lost.test(id)) cand.set(id); }
+                                else cand.set(id);                                      // 1996: mask later
                         });
                 });
-                // P4: lost in i + 1 iff every Black king move leads into W (the exits are lost already)
+                if (g_waves) { cand.mask(open_b, false); cand.mask(lossable, false); cand.mask(lost, true); }
+
+                // P4: lost in d iff the exits are lost by d and every move inside leads into W (levels below d)
                 b_new.clear();
                 cand.for_each([&](std::uint64_t q) {
                         if (!exits_done.test(q) || lost.test(q)) return;
-                        Pos const p = pos_of(s, q, 1);
+                        Pos const p = g.pos(q, 1);
                         for (auto const& mv : moves(p))
-                                if (internal_move(p, mv) && !won.test(index_of(s, mv.next))) return;
+                                if (inside(p, mv) && !won.test(g.index(mv.next))) return;
                         b_new.set(q);
                 });
-                for (; ld < loss_decided.size() && loss_decided[ld].level == i + 1; ++ld) b_new.set(loss_decided[ld].idx);
-                b_new.for_each([&](std::uint64_t q) { lost.set(q); });
+                for (; ld < loss_decided.size() && loss_decided[ld].level == d; ++ld) b_new.set(loss_decided[ld].idx);
 
-                std::swap(b_front, b_new);
-                if (w_new.empty() && b_front.empty() && i + 1 >= max_seed) break;
+                w_new.for_each([&](std::uint64_t q) {
+                        won.set(q);
+                        g_res[ri.index(g.pos(q, 0))] = std::uint8_t(d);
+                });
+                b_new.for_each([&](std::uint64_t q) { lost.set(q); });
+                std::swap(w_last, w_new);
+                std::swap(b_last, b_new);
+                if (d > 255) { std::cerr << "depth beyond one byte" << std::endl; std::exit(1); }
+                if (w_last.empty() && b_last.empty() && d >= max_seed) break;
         }
 }
 
-// ---------------------------------------------------------------- the units of a run, in dependency order
+// ---------------------------------------------------------------- the groups of a run, in dependency order
 
-std::vector<Meta> units_of(Caps c)
+std::vector<Group> groups_of(Caps c)
 {
         std::vector<std::pair<std::tuple<int, int, std::uint64_t>, Meta>> units;
         for (std::uint32_t w = u32(DOM_WM);; w = (w - 1) & u32(DOM_WM)) {
@@ -335,8 +452,15 @@ std::vector<Meta> units_of(Caps c)
                 if (w == 0) break;
         }
         std::ranges::sort(units, {}, [](auto const& u) { return u.first; });
-        std::vector<Meta> out;
-        for (auto const& u : units) out.push_back(u.second);
+        // 1986: one slice per group; 1996: a wave per number of pieces (dtz: per number of pieces and distance)
+        auto wave = [](std::tuple<int, int, std::uint64_t> const& k) {
+                return std::pair(std::get<0>(k), g_metric == Metric::dtz ? std::get<1>(k) : 0);
+        };
+        std::vector<Group> out;
+        for (std::size_t i = 0; i < units.size(); ++i) {
+                if (out.empty() || !g_waves || wave(units[i].first) != wave(units[i - 1].first)) out.emplace_back();
+                out.back().add(units[i].second);
+        }
         return out;
 }
 
@@ -346,10 +470,10 @@ bool build_run(std::string const& dir, Caps c)
         g_current = c;
         RunIndex const& ri = run_index(c);
         g_res.assign(ri.size, 0);
-        auto const units = units_of(c);
+        auto const groups = groups_of(c);
         auto const t0 = std::chrono::steady_clock::now();
         std::uint64_t positions = 0;
-        for (auto const& s : units) { solve_unit(c, ri, s); positions += 2 * s.P; }
+        for (auto const& g : groups) { solve_group(c, ri, g); positions += 2 * g.P; }
         std::string const path = run_path(dir, c), tmp = path + ".tmp";
         {
                 std::ofstream f(tmp, std::ios::binary | std::ios::trunc);
@@ -361,76 +485,83 @@ bool build_run(std::string const& dir, Caps c)
         int longest = 0;
         for (auto v : g_res) { wins += v != 0; longest = std::max(longest, int(v)); }
         double const sec = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-        std::cout << "run " << c.name() << ": " << units.size() << " units, " << positions << " positions, " << ri.size
-                  << " slots, " << wins << " White wins, longest " << longest << " moves, " << sec << " s" << std::endl;
+        std::cout << "run " << c.name() << " " << metric_name() << (g_waves ? " 1996" : " 1986") << ": " << groups.size()
+                  << " groups, " << positions << " positions, " << ri.size << " slots, " << wins << " White wins, longest "
+                  << longest << " plies, " << sec << " s" << std::endl;
         return true;
 }
 
-// ---------------------------------------------------------------- check against egdb_6x6
+// ---------------------------------------------------------------- checks
 
-bool check_run(std::string const& dir, Caps c, int threads)
+std::vector<Caps> runs_of(int n)
 {
-        g_dir = dir;
-        build(c.wm + c.wk + c.bm + c.bk, threads, c.wm + c.wk + c.bm + c.bk);   // egdb_6x6: every slice, exact DTM
-        RunIndex const& ri = run_index(c);
-        std::uint8_t const* res = run_data(c);
-        std::uint64_t checked = 0, bad_w = 0, bad_b = 0;
-        for (auto const& s : units_of(c)) {
-                for (std::uint64_t i = 0; i < s.P; ++i) {
-                        Pos const pw = pos_of(s, i, 0);
-                        std::uint16_t const v = lookup(pw);
-                        int const want = v != DRAW && (v & 1) ? (v + 1) / 2 : 0;
-                        if (res[ri.index(pw)] != want) {
-                                if (bad_w++ < 5) std::cerr << "W " << fen_of(pw) << " got " << int(res[ri.index(pw)]) << " want " << want << std::endl;
-                        }
-                        Pos const pb = pos_of(s, i, 1);
-                        std::uint16_t const u = lookup(pb);
-                        int const want_b = u != DRAW && !(u & 1) ? u / 2 : -1;
-                        int const got_b = lookup_btm_lost(c, pb);
-                        if (got_b != want_b) {
-                                if (bad_b++ < 5) std::cerr << "B " << fen_of(pb) << " got " << got_b << " want " << want_b << std::endl;
-                        }
-                        checked += 2;
-                }
-        }
-        std::cout << "check " << c.name() << ": " << checked << " positions, " << bad_w << " White-to-move and " << bad_b
-                  << " Black-to-move differences" << std::endl;
-        return bad_w == 0 && bad_b == 0;
-}
-
-bool check_all(std::string const& dir, int n, int threads)
-{
-        g_dir = dir;
-        build(n, threads, n);                                   // egdb_6x6 once, for every run
-        bool ok = true;
+        std::vector<Caps> out;
         for (int wm = 0; wm <= n; ++wm)
                 for (int wk = 0; wm + wk <= n; ++wk)
                         for (int bm = 0; wm + wk + bm <= n; ++bm) {
                                 int const bk = n - wm - wk - bm;
-                                if (wm + wk == 0 || bm + bk == 0) continue;
-                                Caps const c{ wm, wk, bm, bk };
-                                RunIndex const& ri = run_index(c);
-                                std::uint8_t const* res = run_data(c);
-                                std::uint64_t checked = 0, bad_w = 0, bad_b = 0;
-                                for (auto const& s : units_of(c))
-                                        for (std::uint64_t i = 0; i < s.P; ++i) {
-                                                Pos const pw = pos_of(s, i, 0), pb = pos_of(s, i, 1);
-                                                std::uint16_t const v = lookup(pw), u = lookup(pb);
-                                                int const want = v != DRAW && (v & 1) ? (v + 1) / 2 : 0;
-                                                int const want_b = u != DRAW && !(u & 1) ? u / 2 : -1;
-                                                if (res[ri.index(pw)] != want && bad_w++ < 3)
-                                                        std::cerr << "W " << fen_of(pw) << " got " << int(res[ri.index(pw)]) << " want " << want << std::endl;
-                                                int const got_b = lookup_btm_lost(c, pb);
-                                                if (got_b != want_b && bad_b++ < 3)
-                                                        std::cerr << "B " << fen_of(pb) << " got " << got_b << " want " << want_b << std::endl;
-                                                checked += 2;
-                                        }
-                                std::cout << "check " << c.name() << ": " << checked << " positions, " << bad_w << " / " << bad_b
-                                          << " differences (White / Black to move)" << std::endl;
-                                ok = ok && bad_w == 0 && bad_b == 0;
+                                if (wm + wk > 0 && bm + bk > 0) out.push_back({ wm, wk, bm, bk });
                         }
-        std::cout << (ok ? "all runs agree with egdb_6x6" : "DIFFERENCES") << std::endl;
+        return out;
+}
+
+// dtm: every value equals egdb_6x6's DTM, both sides to move; dtc, dtz: the wins and losses equal egdb_6x6's, and every
+// White-to-move value equals the value recomputed from its successors
+bool check_all(std::string const& dir, int n, int threads)
+{
+        g_dir = dir;
+        build(n, threads, n);                                   // egdb_6x6, once for every run
+        bool ok = true;
+        for (Caps const c : runs_of(n)) {
+                RunIndex const& ri = run_index(c);
+                std::uint8_t const* res = run_data(c);
+                std::uint64_t checked = 0, bad_w = 0, bad_b = 0, bad_s = 0;
+                for (auto const& g : groups_of(c))
+                        for (std::uint64_t i = 0; i < g.P; ++i) {
+                                Pos const pw = g.pos(i, 0), pb = g.pos(i, 1);
+                                std::uint16_t const v = lookup(pw), u = lookup(pb);
+                                bool const win = v != DRAW && (v & 1), loss = u != DRAW && !(u & 1);
+                                int const got = res[ri.index(pw)], got_b = lookup_btm_lost(c, pb);
+                                bool const w_ok = g_metric == Metric::dtm ? got == (win ? int(v) : 0) : (got != 0) == win;
+                                bool const b_ok = g_metric == Metric::dtm ? got_b == (loss ? int(u) : -1) : (got_b >= 0) == loss;
+                                if (!w_ok && bad_w++ < 3) std::cerr << "W " << fen_of(pw) << " got " << got << " oracle " << show(v) << std::endl;
+                                if (!b_ok && bad_b++ < 3) std::cerr << "B " << fen_of(pb) << " got " << got_b << " oracle " << show(u) << std::endl;
+                                if (g_metric != Metric::dtm) {
+                                        int const s = wtm_from_successors(c, pw);
+                                        if (s != got && bad_s++ < 3) std::cerr << "S " << fen_of(pw) << " stored " << got << " from successors " << s << std::endl;
+                                }
+                                checked += 2;
+                        }
+                std::cout << "check " << c.name() << " " << metric_name() << ": " << checked << " positions, " << bad_w << " / "
+                          << bad_b << " differences from egdb_6x6 (White / Black to move), " << bad_s
+                          << " differences from the successors" << std::endl;
+                ok = ok && bad_w == 0 && bad_b == 0 && bad_s == 0;
+        }
+        std::cout << (ok ? "all runs check out" : "DIFFERENCES") << std::endl;
         return ok;
+}
+
+// dtz <= dtc <= dtm for every White-to-move win, and the same wins in all three
+bool check_order(std::string const& dz, std::string const& dc, std::string const& dm, int n)
+{
+        std::uint64_t wins = 0, bad = 0, equal_zc = 0, equal_cm = 0;
+        for (Caps const c : runs_of(n)) {
+                std::size_t const size = run_index(c).size;
+                g_metric = Metric::dtz; auto const z = map_run(run_path(dz, c), size);
+                g_metric = Metric::dtc; auto const x = map_run(run_path(dc, c), size);
+                g_metric = Metric::dtm; auto const m = map_run(run_path(dm, c), size);
+                for (std::size_t i = 0; i < size; ++i) {
+                        if ((z[i] == 0) != (m[i] == 0) || (x[i] == 0) != (m[i] == 0)) { ++bad; continue; }
+                        if (m[i] == 0) continue;
+                        ++wins;
+                        if (!(z[i] <= x[i] && x[i] <= m[i])) ++bad;
+                        equal_zc += z[i] == x[i];
+                        equal_cm += x[i] == m[i];
+                }
+        }
+        std::cout << "order: " << wins << " White wins, " << bad << " violations of dtz <= dtc <= dtm (or of equal wins); dtz = dtc in "
+                  << equal_zc << ", dtc = dtm in " << equal_cm << std::endl;
+        return bad == 0;
 }
 
 } // namespace
@@ -441,10 +572,15 @@ int main(int argc, char* argv[])
         init_cc();
         std::vector<std::string> const a(argv + 1, argv + argc);
         auto caps_at = [&](std::size_t i) { return Caps{ std::stoi(a[i]), std::stoi(a[i + 1]), std::stoi(a[i + 2]), std::stoi(a[i + 3]) }; };
-        if (a.size() == 6 && a[0] == "build") return build_run(a[1], caps_at(2)) ? 0 : 1;
-        if ((a.size() == 6 || a.size() == 7) && a[0] == "check") return check_run(a[1], caps_at(2), a.size() == 7 ? std::stoi(a[6]) : 4) ? 0 : 1;
-        if ((a.size() == 3 || a.size() == 4) && a[0] == "checkall") return check_all(a[1], std::stoi(a[2]), a.size() == 4 ? std::stoi(a[3]) : 4) ? 0 : 1;
+        if (a.size() == 8 && a[0] == "build" && parse_metric(a[6]) && (a[7] == "86" || a[7] == "96")) {
+                g_waves = a[7] == "96";
+                return build_run(a[1], caps_at(2)) ? 0 : 1;
+        }
+        if ((a.size() == 4 || a.size() == 5) && a[0] == "checkall" && parse_metric(a[3]))
+                return check_all(a[1], std::stoi(a[2]), a.size() == 5 ? std::stoi(a[4]) : 4) ? 0 : 1;
+        if (a.size() == 5 && a[0] == "order") return check_order(a[1], a[2], a[3], std::stoi(a[4])) ? 0 : 1;
         if (a.size() == 5 && a[0] == "size") { std::cout << RunIndex(caps_at(1)).size << std::endl; return 0; }
-        std::cerr << "usage: thompson86 build|check <dir> WM WK BM BK [threads] | checkall <dir> n [threads] | size WM WK BM BK" << std::endl;
+        std::cerr << "usage: thompson86 build <dir> WM WK BM BK dtm|dtc|dtz 86|96 | checkall <dir> n dtm|dtc|dtz [threads]"
+                     " | order <dir_dtz> <dir_dtc> <dir_dtm> n | size WM WK BM BK" << std::endl;
         return 2;
 }

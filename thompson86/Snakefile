@@ -3,18 +3,22 @@
 #    (See accompanying file LICENSE_1_0.txt or copy at
 #          http://www.boost.org/LICENSE_1_0.txt)
 
-# Thompson-style runs of n pieces for 6x6 international draughts (thompson86.cpp), built in the order of the
+# Thompson style runs of n pieces for 6x6 international draughts (thompson86.cpp), built in the order of the
 # promotion DAG: a run (WM white men, WK white kings, BM black men, BK black kings) needs the run where a white man
 # has become a king (WM - 1, WK + 1) and the run where a black man has (BM - 1, BK + 1). Captures stay inside a run
 # (graveyard squares), so they add no edges. Every run of n pieces is built; the runs with fewer pieces are not
 # needed, because each lies inside a run of n pieces.
 #
 # usage (from the root of the repo):
-#   snakemake -s thompson86/Snakefile --cores 4 --config engine=build/thompson86 dir=data/thompson86 pieces=6
+#   snakemake -s thompson86/Snakefile --cores 4 --config engine=build/thompson86 dir=data/thompson86 pieces=6 \
+#       metric=dtm style=86
+# metric: dtm, dtc or dtz; style: 86 (one slice at a time) or 96 (waves, masked passes)
 
 ENGINE = config.get('engine', 'build/thompson86')
 D = config.get('dir', 'data/thompson86')
 N = int(config.get('pieces', 6))
+METRIC = config.get('metric', 'dtm')
+STYLE = str(config.get('style', '86'))
 THREADS = int(config.get('threads', 4))
 
 RUNS = [(wm, wk, bm, N - wm - wk - bm)
@@ -39,20 +43,20 @@ wildcard_constraints:
 
 
 rule all:
-    input: f'{D}/check-{N}.ok'
+    input: f'{D}/check-{N}.{METRIC}.ok'
 
 
 rule build:
-    input: lambda w: [f'{D}/run-{name(d)}.res' for d in deps(tuple(map(int, w.run.split('-'))))]
-    output: f'{D}/run-{{run}}.res'
-    log: f'{D}/run-{{run}}.log'
+    input: lambda w: [f'{D}/run-{name(d)}.{METRIC}' for d in deps(tuple(map(int, w.run.split('-'))))]
+    output: f'{D}/run-{{run}}.{METRIC}'
+    log: f'{D}/run-{{run}}.{METRIC}.log'
     params: caps=lambda w: w.run.replace('-', ' ')
-    shell: '{ENGINE} build {D} {params.caps} > {log} 2>&1'
+    shell: '{ENGINE} build {D} {params.caps} {METRIC} {STYLE} > {log} 2>&1'
 
 
 rule check:
-    input: [f'{D}/run-{name(c)}.res' for c in RUNS]
-    output: f'{D}/check-{N}.ok'
-    log: f'{D}/check-{N}.log'
+    input: [f'{D}/run-{name(c)}.{METRIC}' for c in RUNS]
+    output: f'{D}/check-{N}.{METRIC}.ok'
+    log: f'{D}/check-{N}.{METRIC}.log'
     threads: THREADS
-    shell: '{ENGINE} checkall {D} {N} {threads} > {log} 2>&1 && touch {output}'
+    shell: '{ENGINE} checkall {D} {N} {METRIC} {threads} > {log} 2>&1 && touch {output}'

@@ -18,10 +18,11 @@ for every primitive is what the pass ranges over and whether it writes only the 
 * [6. Data per position](#6-data-per-position)
 * [7. Rules for one `for_each` per pass](#7-rules-for-one-for_each-per-pass)
 * [8. Best of breed for draughts](#8-best-of-breed-for-draughts)
-* [9. Storage](#9-storage)
-* [10. Verification](#10-verification)
-* [11. The open decisions of DESIGN_STATE.md](#11-the-open-decisions-of-design_statemd)
-* [12. Measurements still needed](#12-measurements-still-needed)
+* [9. Value encodings in domain language](#9-value-encodings-in-domain-language)
+* [10. Storage](#10-storage)
+* [11. Verification](#11-verification)
+* [12. The open decisions of DESIGN_STATE.md](#12-the-open-decisions-of-design_statemd)
+* [13. Measurements still needed](#13-measurements-still-needed)
 * [Appendix: the papers in one line each](#appendix-the-papers-in-one-line-each)
 
 ---
@@ -284,7 +285,7 @@ depth is bounded by the longest phase of king moves inside one slice, not by the
 Haworth: maxDTC 6 against maxDTM 107 in KQBNKN); it will usually fit a byte, but only a measurement says so, and the
 build should not depend on it. The build never meets a range
 limit (no syzygy-style `reduce_tables`, no fit check of depth plus counter, no escapes); the storage form is the
-existing byte with escape codes (§9), converted once when a unit or material is written.
+existing byte with escape codes (§10), converted once when a unit or material is written.
 
 ### 8.1 The value cell (16 bits, per position and side to move)
 
@@ -376,7 +377,135 @@ Build DTM **after** DTZ: with WDL known, drawn positions are never visited, and 
 | man-move exits as a near-sequential gather | — | a man move keeps the kings, so the target index in the child slice is an order-preserving remap of the king ranks over the changed set of free squares: read the child's raw array almost sequentially |
 | sort and deduplicate probes | Wu-Liu-Hsu | 69.7 M of 211.7 M lookups land on a capture position, 26.0 M distinct (`DESIGN_STATE.md`): batch by target block |
 
-## 9. Storage
+## 9. Value encodings in domain language
+
+The passes should not know how a value is stored. Each encoding is a type that names the values in the terms of
+the game (a win in so many plies, a draw, unknown), and pass 0, the round, the verification pass and the store pass
+are templates on it. One algorithm then serves every metric, every width (16-bit build cell, 8-bit store, 2-bit WDL)
+and every on-disk convention.
+
+### 9.1 Stored bytes are their own type
+
+```cpp
+enum class stored : std::uint8_t {};   // a byte as it is on disk or in the build cell
+```
+
+Code reads and writes raw elements (`std::span<stored>`, no proxy references) and converts on the right-hand side:
+`raw[i] = E::W(p)`. Mixing a logical value with a stored byte (`raw[i] = 34`, `raw[i] == 0xFF`) does not compile,
+`std::atomic_ref<stored>` works (a scoped enum is trivially copyable), and so do pointers, `std::fill` and every
+other algorithm. A proxy `operator[]` would read as nicely but brings `vector<bool>`'s limits (`auto x = f[i]`
+copies the proxy, no `&f[i]`, no `atomic_ref`).
+
+### 9.2 One-sided depth: Thompson's result file
+
+Thompson 1986 stores, for White to move, the number of moves to a White win, and 0 for "not a White win" (draw, loss
+or illegal: his database is one-sided, see §2). The same information in three encodings, all with exact plies:
+
+```cpp
+struct direct            // 0..254: win in 2n + 1 plies; 0xFF: not a win
+{
+        static constexpr stored none{0xFF};
+        static constexpr stored W(std::size_t plies) noexcept { return stored((plies - 1) / 2); }
+        static constexpr std::optional<std::size_t> plies(stored s) noexcept
+        {
+                if (s == none) { return std::nullopt; }
+                return 2 * std::to_underlying(s) + 1;
+        }
+};
+
+struct complemented      // the same, stored as 0xFF - byte: "not a win" is 0x00
+{
+        static constexpr stored none{0x00};
+        static constexpr stored W(std::size_t plies) noexcept { return stored(0xFF - (plies - 1) / 2); }
+        static constexpr std::optional<std::size_t> plies(stored s) noexcept
+        {
+                if (s == none) { return std::nullopt; }
+                return 2 * (0xFF - std::to_underlying(s)) + 1;
+        }
+};
+
+struct thompson          // Thompson 1986: i = win in i moves (2i - 1 plies), 0 = not a win
+{
+        static constexpr stored none{0x00};
+        static constexpr stored W(std::size_t plies) noexcept { return stored((plies + 1) / 2); }
+        static constexpr std::optional<std::size_t> plies(stored s) noexcept
+        {
+                if (s == none) { return std::nullopt; }
+                return 2 * std::to_underlying(s) - 1;
+        }
+};
+
+static_assert(direct::plies(direct::W(69)) == 69 && !direct::plies(direct::none));
+```
+
+`W` takes plies (odd, at most 509), not moves, so call sites never see Thompson's moves or the byte's n; the hot
+test "still not a win" stays `raw[i] == E::none`.
+
+### 9.3 The background value: make "unknown" zero
+
+A new file created and sized (`::open(O_CREAT | O_TRUNC)`, then `std::filesystem::resize_file`) is sparse: no disk
+blocks, every byte reads as 0x00, and `mmap` hands out zero pages on first touch. A background that is not zero must
+be written first:
+
+```cpp
+if constexpr (std::to_underlying(E::none) != 0) {
+        std::fill(policy, data, data + n, E::none);      // touches every page, allocates every block
+}
+```
+
+Measured here on 2 · 10⁹ positions: `direct` 1.0 s and 2,000,007,168 bytes on disk before a single result;
+`complemented` and `thompson` no time and 8,192 bytes (the two pages written). (The fill ran on one thread: with
+libstdc++, `std::execution::par` is parallel only with `-ltbb`.) `std::vector<std::uint8_t>(n)` is no shortcut: it
+zero-fills eagerly, at the same cost as `(n, 0xFF)`; and a buffer that pass 0 overwrites completely needs no fill at
+all (`std::make_unique_for_overwrite`).
+
+The cost grows with the file: the fill is one full write of it before any result exists, every block allocated on
+disk even where nothing will ever be written, and every page that pass 0 later rewrites goes to the disk twice. In RAM
+that is memory bandwidth (seconds for 10¹¹ bytes); for a memory-mapped file it is the disk's write bandwidth, minutes
+for the 10¹⁰–10¹¹-byte files of 10×10 or of the 12-piece 6×6 layer, and a doubling of what the disk has to absorb.
+
+So every encoding should put its "unknown" (build) or "not a win" (one-sided store) at 0. For the depth encodings
+this means an offset or a complement: the DTM convention L0 = 0 (no move, lost) collides with unknown = 0, so the
+build cell stores decided values shifted (as Thompson's i = n + 1). `unit_build` now fills each fresh `.raw` with
+`UNKNOWN8 = 254`; with unknown = 0 that pass goes, and the resume check that counts unknown bytes counts zeros instead
+(or relies on the `.progress` checkpoint alone).
+
+### 9.4 WDL is an enum
+
+```cpp
+enum class wdl : std::uint8_t { U, L, D, W };      // U = 0: unknown, free on a fresh file; L < D < W: the preference order
+
+constexpr wdl operator-(wdl v) noexcept { return wdl(-std::to_underlying(v) & 3); }   // the parent's view of a child
+
+static_assert(-wdl::L == wdl::W && -wdl::W == wdl::L && -wdl::D == wdl::D && -wdl::U == wdl::U);
+```
+
+Two's-complement negation modulo 4 swaps L and W and leaves D and U alone, so "best over successors" is
+`std::max(best, -child)`, negamax in two bits. Because U is the smallest, `max` passes over unknown children, so
+`best` is only a lower bound while any child is unknown: a W decides at once, a D or L only when no child is unknown
+(Chinook's lattice in two bits). U exists only during a build; in storage the fourth code is free for "don't care"
+(capture positions, illegal slots). `E::W` is spelled the same for an enumerator and a static member, so a template
+written for the enum also accepts the depth encodings that add `W(plies)`, `L(plies)` and `plies`.
+
+### 9.5 The vocabulary of the two-sided build
+
+| operation | used by |
+|---|---|
+| `W(p)`, `L(p)`, `D` (WDL: constants) | pass 0, the round |
+| `U`, `nolose`, `count(c)` | the build cell only: undecided codes and Gasser's counter |
+| negation / `backup`: child W(p) → parent L(p + 1), child L(p) → parent W(p + 1) | the round, verification |
+| `better(a, b)` for the side to move: fastest win, then draw, then slowest loss | pass 0, verification |
+| `plies(s)` → `std::optional<std::size_t>` | probing, statistics, the store pass |
+
+The 16-bit build cell (§8.1) and the 8-bit store both model it, so the store pass is the generic
+`out = Store::from(Build::decode(v))`, and the rounds are written once for DTZ, DTM and WDL.
+
+Where per-byte access ends: the escaped store (cdb v2) keeps the extra byte in the block's appendix, so its `W(p)` is
+a block-level operation for depths beyond the escape base; a packed 2-bit WDL array holds four positions per byte,
+so writes go per owned word (§7, rule 2) or through `fetch_and` / `fetch_or`. Neither matters to the build, which
+uses neither.
+
+## 10. Storage
 
 Keep what is there: blocks of 4096 positions with zstd per block, capture positions filled with the previous value
 (Chinook's run-continuing fill, syzygy's and Zakharov's don't-care values: all three report large gains), **the
@@ -390,7 +519,7 @@ exactly from one ply of search, cheap with compulsory capture: an exit counts 1 
 move one more than the stored value; unlike syzygy, depths stay in plies, never in moves), and a search for the man/king order that compresses best (syzygy's
 `permute_piece_wdl`); Zakharov adds bounded fills (≥ n, ≤ n) for DTM.
 
-## 10. Verification
+## 11. Verification
 
 | check | source | status |
 |---|---|---|
@@ -401,7 +530,7 @@ move one more than the stored value; unlike syzygy, depths stay in plies, never 
 | CRC per block and per copy | Chinook 2003, NWH (MD5) | present (crc32c per unit) |
 | statistics against published counts | `egdb_fast` (mdgsoftware.nl) | present for kings-only |
 
-## 11. The open decisions of DESIGN_STATE.md
+## 12. The open decisions of DESIGN_STATE.md
 
 | # | decision | recommendation from the literature |
 |---|---|---|
@@ -416,7 +545,7 @@ move one more than the stored value; unlike syzygy, depths stay in plies, never 
 Naming clashes listed in `DESIGN_STATE.md` §1 (`S`, `big`, `NONE16 = DRAW`) disappear with one solver and one
 value encoding per metric.
 
-## 12. Measurements still needed
+## 13. Measurements still needed
 
 1. largest DTZ per slice and per unit (how often would the 8-bit storage of DTZ need escapes at all?);
 2. pass 0 with a raw 2-bit WDL dependency store against the compressed store with capture resolution;

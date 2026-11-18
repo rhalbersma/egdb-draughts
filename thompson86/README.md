@@ -36,3 +36,35 @@ snakemake -s thompson86/Snakefile --cores 4 --config engine=build/thompson86 dir
 
 or with CMake, target `thompson86`. The last Snakemake job (`checkall`) builds `egdb_6x6`'s databases in memory and
 compares every position of every run, both sides to move, with its DTM.
+
+## Results (4 cores)
+
+| pieces | runs | positions (both sides to move) | slots | wall time, build and check | differences from `egdb_6x6` |
+|---|---|---|---|---|---|
+| 2 / 3 / 4 | 4 / 12 / 25 | | | < 1 s each | 0 |
+| 5 | 44 | | | 5.6 s | 0 |
+| 6 | 70 | 139,310,092 | 193,682,790 | 44 s (the builds alone: 18.7 s) | **0** |
+
+At 6 pieces the runs hold 1,618,608 units and 28,928,639 White-to-move wins; the files take 186 MB. The longest win is
+35 moves (69 plies), in the run 4-0-0-2 (four white men against two black kings, with its smaller materials).
+Every position of every run, White to move (the stored byte) and Black to move (one ply of search over the stored
+bytes), equals `egdb_6x6`'s DTM.
+
+## Against `egdb_6x6` (6 pieces, 4 cores)
+
+| | positions computed | CPU | per position | wall time | stored |
+|---|---|---|---|---|---|
+| `egdb_6x6 build 6` | 51,237,726 (one of each mirror pair, both sides to move) | 22.6 s | 0.44 µs | 6.6 s (4 threads) | DTM for both sides to move, 51 MB |
+| `thompson86`, 6 pieces | 139,310,092 | 67.2 s | 0.48 µs | 18.7 s (4 Snakemake jobs) | DTM for White to move, 186 MB of slots |
+
+Per position the two cost the same; the Thompson build is about 3× slower because it computes 2.7× as many
+positions:
+
+* **2× from one-sidedness**: a run only finds White's wins, so Black's wins in a material come from the run of its
+  mirror (colours swapped), and both are built; `egdb_6x6` builds one of each mirror pair and gets both sides to move
+  from it;
+* **about 1.36× from the runs' duplication**: a smaller material lies inside every run whose captures reach it, and is
+  computed in each of them.
+
+The slots add a further 1.4× to the file size (illegal slots where pieces share a square, and the gaps between the
+parked layers), but cost no time, because nothing ever visits them.

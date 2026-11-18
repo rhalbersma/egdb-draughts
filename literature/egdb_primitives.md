@@ -18,10 +18,11 @@ for every primitive is what the pass ranges over and whether it writes only the 
 * [6. Data per position](#6-data-per-position)
 * [7. Rules for one `for_each` per pass](#7-rules-for-one-for_each-per-pass)
 * [8. Best of breed for draughts](#8-best-of-breed-for-draughts)
-* [9. Storage](#9-storage)
-* [10. Verification](#10-verification)
-* [11. The open decisions of DESIGN_STATE.md](#11-the-open-decisions-of-design_statemd)
-* [12. Measurements still needed](#12-measurements-still-needed)
+* [9. Value encodings in domain language](#9-value-encodings-in-domain-language)
+* [10. Storage](#10-storage)
+* [11. Verification](#11-verification)
+* [12. The open decisions of DESIGN_STATE.md](#12-the-open-decisions-of-design_statemd)
+* [13. Measurements still needed](#13-measurements-still-needed)
 * [Appendix: the papers in one line each](#appendix-the-papers-in-one-line-each)
 
 ---
@@ -235,13 +236,38 @@ Options, from the literature:
 | 2 bits WDL | 0.25 | Chinook, Lincke-Marzetta | WDL; the dependency store |
 | 1 bit in RAM, rest streamed | 0.125 | Wu-Beal | out-of-core builds (not needed on 6×6) |
 
-Two facts that keep counters correct, from Thompson 1996 and Herik 1985:
+### Symmetry reduction
 
-* a counter counts *moves out of* a position, and must equal the number of *unmoves into* it. That holds only when
-  the index is not folded by symmetry inside the slice. `egdb_6x6` keeps the index unfolded inside a slice and folds
-  the mirror only at storage, which is the right choice; keep it;
-* when a slice is its own mirror, every image of a position must be written. The unit build already checks
-  "mirrored positions disagree".
+On an even square board (6×6, 8×8, 10×10) four symmetries keep dark squares dark: the identity, the 180° rotation,
+and reflection in each of the two long diagonals. Quarter turns and straight mirrors swap the colours of the squares
+and do not qualify; on a rectangular board only the 180° rotation remains. Which ones apply depends on the pieces:
+
+| slice | symmetries | reduction |
+|---|---|---|
+| kings only | all four: kings have no forward direction | **4×** |
+| with men | only the 180° rotation with the colours swapped (the mirror `egdb_6x6` uses now), since men move forward | 2× |
+| a material that is its own colour swap | in addition the side to move (`S = 1` in the units) | a further 2× on those materials |
+
+The 4× falls exactly where it is needed: the all-king slices are the largest, and the ones that outgrow RAM on 10×10
+(4 against 4 kings: 3.8 · 10¹⁰ positions per side to move, about 9.5 · 10⁹ folded, 19 GB as 16-bit cells). On 6×6 the
+same four symmetries apply to the kings-only slices, but those are at most 17.2 M positions per side to move, so
+folding them saves memory that is not needed.
+
+Folding the index inside a slice brings back two pitfalls from the literature:
+
+* **counters** (Thompson 1996): a counter counts *moves out of* a position and must equal the number of *unmoves into*
+  it. In a folded index a position fixed by a symmetry can have two successors that are images of each other and fold
+  onto one stored position, so the two numbers differ and a counter set from the move count never reaches zero.
+  On folded slices, either set the counters by counting unmoves into the folded index (an extra full pass, as
+  Thompson notes), or use the verification variant of the loss step (§8.2), which rechecks all moves and needs no
+  counter;
+* **images** (Herik-Herschberg 1985): their first run was wrong because a position on a symmetry axis has fewer
+  distinct images, and not all of them were written. With only the canonical form stored this cannot happen, but every
+  move and unmove must go through the canonical form, and the canonicalisation must be tested on exactly the positions
+  on the axes. The unit build's check "mirrored positions disagree" is this test for the 2× mirror.
+
+The cost per move is the canonical form: up to four images computed and the smallest kept. So: keep the index unfolded
+inside slices with men (2× by the mirror, at storage, as now); fold the kings-only slices 4× once they are large.
 
 ## 7. Rules for one `for_each` per pass
 
@@ -264,6 +290,27 @@ Two facts that keep counters correct, from Thompson 1996 and Herik 1985:
 5. **Nesting.** Slices of one (pieces, men, distance) group are independent: outer `for_each(par)` over small slices
    with `seq` inside; a big slice alone with `par` inside. The policy is a type, so the slice solver is a template on
    it and the scheduler dispatches per slice.
+6. **Random reads anywhere, random writes only in RAM.** Every pass declares its read-only inputs and its outputs
+   with their access pattern. Inputs may be read sequentially or randomly, from RAM or from disk: random disk reads go
+   through the page cache or a block cache, and cost little with a slice's locality (measured on a memory-mapped 6×6
+   layer: 3–8 µs per cold lookup, `compression_mmap_10.txt`). Outputs on disk are written strictly sequentially, in
+   index order, with no exception for writes that happen to be dense. Random writes go to RAM only, to avoid
+   thrashing the SSD: every scattered write dirties a whole 4 KiB page (the drive writes 4096 bytes for one), pages
+   may be flushed and rewritten repeatedly, the drive wears, and after an interruption nobody knows which scattered
+   writes reached the disk. A pass whose output is scattered therefore builds it in RAM and writes it out in order. In the passes of §8 the only scattered writes are the rounds'
+   pushes into predecessors and next-frontier bits, into the slice's arrays in RAM. When a slice no longer fits in
+   RAM (all-king slices on 10×10), the remedies are the 4× symmetry reduction of kings-only slices (§6), a smaller
+   cell, or Wu-Liu-Hsu's batching: the round appends its updates as (target, value) pairs, sorts them by target
+   (externally if needed) and applies them in one sequential pass over the values; the only one of these that removes
+   the scattered writes altogether. The current code breaks the rule in one place: for a symmetric
+   material, `unit_build` / `mat_build` write the Black-to-move half through the mirror
+   (`u.p[stored_offset(r, mirror(pos))] = b`), scattered over the mirrored slice's range of the mapped file. The fix
+   needs no buffer: turn the scatter into a gather. The mirror is its own inverse, so walk the mirrored slice's range
+   in index order and fetch each slot's value from the solved slice still in RAM (`tmp`): the random access moves to
+   the read side, in RAM, and the disk write becomes strictly sequential. For a slice that is its own mirror the
+   target range is its own White-to-move half, already written; there the gather becomes the existing consistency
+   check (compare instead of write). The general form: when an output would be scattered, gather it instead (for
+   each output slot in order, compute where its value comes from), whenever that inverse map is cheap.
 
 ## 8. Best of breed for draughts
 
@@ -272,12 +319,19 @@ Take from Chinook: slicing by irreversible moves (finer here: by the placement o
 once before the rounds. Take from Gasser 1996 and the `egdb_6x6` measurements: outcounting with the counter inside
 the value cell. Take from Thompson: explicit frontier bitsets (the rounds touch only the frontier, not the slice).
 
+**Every product keeps the exact depth in plies**, never rounded and never a bound. That excludes three things the
+literature does: syzygy stores DTZ in moves rather than plies unless a table needs ply accuracy (`ply_accurate_win`,
+`ply_accurate_loss`), which can be one ply off; Chinook's in-place sweeps decide positions in passes whose numbers are
+only lower bounds on the depth (Lake-Schaeffer-Treloar 1992, Schaeffer et al. 2003); and Trice-Dodgen's DTC is
+defined by such pass numbers. The rounds here are level-synchronous (§7, rule 4), so the round in which a position
+is decided is its exact depth.
+
 **Values are 16 bits during the build and 8 bits in storage**, for every metric. DTZ restarts at every exit, so its
 depth is bounded by the longest phase of king moves inside one slice, not by the whole game (Bourzutschky-Tamplin-
 Haworth: maxDTC 6 against maxDTM 107 in KQBNKN); it will usually fit a byte, but only a measurement says so, and the
 build should not depend on it. The build never meets a range
 limit (no syzygy-style `reduce_tables`, no fit check of depth plus counter, no escapes); the storage form is the
-existing byte with escape codes (§9), converted once when a unit or material is written.
+existing byte with escape codes (§10), converted once when a unit or material is written.
 
 ### 8.1 The value cell (16 bits, per position and side to move)
 
@@ -359,7 +413,39 @@ the case without seeds (its exit wins are W(1) in pass 0, its exit losses never 
 
 Build DTM **after** DTZ: with WDL known, drawn positions are never visited, and every lossable position is truly lost.
 
-### 8.4 Conversion (pass 0) is the real cost
+### 8.4 Pass 0 is one max over all moves: forced and optional exits
+
+Pass 0 gives every position the best value over all its moves (the max on the chain of §9.4): each exit contributes
+the exact value of its target, looked up in a finished database and seen from the mover, and the internal moves
+together contribute U. Whether the result is final or only a bound then follows from the move list alone: with no
+internal move, no U enters and the max is exact; with internal moves left, the exits only bound the value.
+
+| game | exits that are forced (the max is exact) | exits that are optional (the max is a bound) |
+|---|---|---|
+| draughts, checkers | captures (compulsory), including a capture that ends on the back row and promotes | man moves, promotions |
+| chess | none; a position without legal moves is terminal (mate, stalemate) | captures, pawn moves, promotions (including under-promotions and capture-promotions) |
+| Stratego, known pieces | none; a side without a legal move has lost | attacks, whatever their outcome (attacker wins, loses, or both pieces go) |
+
+What an optional exit settles:
+
+| best exit | result | final? |
+|---|---|---|
+| wins | W | final for WDL and DTZ (a win by a zeroing move now cannot be beaten); for DTM a deferred seed (§8.3) |
+| draws | ≥D (cannot lose) | a bound: the internal moves may still win |
+| loses | nothing, unless no internal move is left | — |
+
+Syzygy's `CAPT_WIN`, `CAPT_DRAW` and `CAPT_CLOSS`, written with a compare-and-swap that keeps the maximum, and
+Chinook's Lookups (W, L only when every move is a lookup, else ≥D) are this table for chess captures and for
+checkers' advancing leading checker. "Captures are compulsory" is not a special case in the engine: it only means
+that the rules generate no internal move, so the rules concept needs nothing beyond the legal moves.
+
+Where the exits lead also follows from the game: a capture or an attack goes to a smaller material; a promotion to
+another material with the same number of pieces; a man or pawn move to another slice of the same material (another
+placement of the men, or pawn structure). Stratego has neither men nor promotions: its slices are fixed by the
+material and by the squares of the pieces that never move (bombs, flag), every exit is an attack, pass 0 yields
+almost only bounds, and nearly all the work falls to the rounds, the opposite of a draughts endgame full of men.
+
+### 8.5 Conversion (pass 0) is the real cost
 
 | option | source | for draughts |
 |---|---|---|
@@ -369,7 +455,167 @@ Build DTM **after** DTZ: with WDL known, drawn positions are never visited, and 
 | man-move exits as a near-sequential gather | — | a man move keeps the kings, so the target index in the child slice is an order-preserving remap of the king ranks over the changed set of free squares: read the child's raw array almost sequentially |
 | sort and deduplicate probes | Wu-Liu-Hsu | 69.7 M of 211.7 M lookups land on a capture position, 26.0 M distinct (`DESIGN_STATE.md`): batch by target block |
 
-## 9. Storage
+## 9. Value encodings in domain language
+
+The passes should not know how a value is stored. Each encoding is a type that names the values in the terms of
+the game (a win in so many plies, a draw, unknown), and pass 0, the round, the verification pass and the store pass
+are templates on it. One algorithm then serves every metric, every width (16-bit build cell, 8-bit store, 2-bit WDL)
+and every on-disk convention.
+
+### 9.1 Stored bytes are their own type
+
+```cpp
+enum class stored : std::uint8_t {};   // a byte as it is on disk or in the build cell
+```
+
+Code reads and writes raw elements (`std::span<stored>`, no proxy references) and converts on the right-hand side:
+`raw[i] = E::W(p)`. Mixing a logical value with a stored byte (`raw[i] = 34`, `raw[i] == 0xFF`) does not compile,
+`std::atomic_ref<stored>` works (a scoped enum is trivially copyable), and so do pointers, `std::fill` and every
+other algorithm. A proxy `operator[]` would read as nicely but brings `vector<bool>`'s limits (`auto x = f[i]`
+copies the proxy, no `&f[i]`, no `atomic_ref`).
+
+### 9.2 One-sided depth: Thompson's result file
+
+Thompson 1986 stores, for White to move, the number of moves to a White win, and 0 for "not a White win" (draw, loss
+or illegal: his database is one-sided, see §2). The same information in three encodings, all with exact plies:
+
+```cpp
+struct direct            // 0..254: win in 2n + 1 plies; 0xFF: not a win
+{
+        static constexpr stored none{0xFF};
+        static constexpr stored W(std::size_t plies) noexcept { return stored((plies - 1) / 2); }
+        static constexpr std::optional<std::size_t> plies(stored s) noexcept
+        {
+                if (s == none) { return std::nullopt; }
+                return 2 * std::to_underlying(s) + 1;
+        }
+};
+
+struct complemented      // the same, stored as 0xFF - byte: "not a win" is 0x00
+{
+        static constexpr stored none{0x00};
+        static constexpr stored W(std::size_t plies) noexcept { return stored(0xFF - (plies - 1) / 2); }
+        static constexpr std::optional<std::size_t> plies(stored s) noexcept
+        {
+                if (s == none) { return std::nullopt; }
+                return 2 * (0xFF - std::to_underlying(s)) + 1;
+        }
+};
+
+struct thompson          // Thompson 1986: i = win in i moves (2i - 1 plies), 0 = not a win
+{
+        static constexpr stored none{0x00};
+        static constexpr stored W(std::size_t plies) noexcept { return stored((plies + 1) / 2); }
+        static constexpr std::optional<std::size_t> plies(stored s) noexcept
+        {
+                if (s == none) { return std::nullopt; }
+                return 2 * std::to_underlying(s) - 1;
+        }
+};
+
+static_assert(direct::plies(direct::W(69)) == 69 && !direct::plies(direct::none));
+```
+
+`W` takes plies (odd, at most 509), not moves, so call sites never see Thompson's moves or the byte's n; the hot
+test "still not a win" stays `raw[i] == E::none`.
+
+### 9.3 The background value: make "unknown" zero
+
+A new file created and sized (`::open(O_CREAT | O_TRUNC)`, then `std::filesystem::resize_file`) is sparse: no disk
+blocks, every byte reads as 0x00, and `mmap` hands out zero pages on first touch. A background that is not zero must
+be written first:
+
+```cpp
+if constexpr (std::to_underlying(E::none) != 0) {
+        std::fill(policy, data, data + n, E::none);      // touches every page, allocates every block
+}
+```
+
+Measured here on 2 · 10⁹ positions: `direct` 1.0 s and 2,000,007,168 bytes on disk before a single result;
+`complemented` and `thompson` no time and 8,192 bytes (the two pages written). (The fill ran on one thread: with
+libstdc++, `std::execution::par` is parallel only with `-ltbb`.) `std::vector<std::uint8_t>(n)` is no shortcut: it
+zero-fills eagerly, at the same cost as `(n, 0xFF)`; and a buffer that pass 0 overwrites completely needs no fill at
+all (`std::make_unique_for_overwrite`).
+
+The cost grows with the file: the fill is one full write of it before any result exists, every block allocated on
+disk even where nothing will ever be written, and every page that pass 0 later rewrites goes to the disk twice. In RAM
+that is memory bandwidth (seconds for 10¹¹ bytes); for a memory-mapped file it is the disk's write bandwidth, minutes
+for the 10¹⁰–10¹¹-byte files of 10×10 or of the 12-piece 6×6 layer, and a doubling of what the disk has to absorb.
+
+So every encoding should put its "unknown" (build) or "not a win" (one-sided store) at 0. For the depth encodings
+this means an offset or a complement: the DTM convention L0 = 0 (no move, lost) collides with unknown = 0, so the
+build cell stores decided values shifted (as Thompson's i = n + 1). `unit_build` now fills each fresh `.raw` with
+`UNKNOWN8 = 254`; with unknown = 0 that pass goes, and the resume check that counts unknown bytes counts zeros instead
+(or relies on the `.progress` checkpoint alone).
+
+### 9.4 WDL as a signed interval chain
+
+While a database is being built, a position's value is not one of L, D, W but the set of values still possible: an
+interval over L < D < W. There are six (Björnsson-Schaeffer-Sturtevant 2005 name them LL, TT, WW, LT, LW, TW):
+
+| interval | meaning | code |
+|---|---|---|
+| [L, L] | lost | −2 |
+| [L, D] | cannot win | −1 |
+| [L, W] | unknown | 0 |
+| [D, W] | cannot lose (a drawing exit: `NOLOSE` in §8.1) | +1 |
+| [W, W] | won | +2 |
+| [D, D] | drawn | (outside the chain) |
+
+The backup is exact on intervals: the parent's view of a child is −[lo, hi] = [−hi, −lo], and the best over the
+moves is the componentwise maximum [max lo, max hi]. The five coded intervals form a chain, closed under both
+operations, and with these signed codes both are plain arithmetic:
+
+```cpp
+enum class wdl : std::int8_t { L = -2, LD = -1, U = 0, DW = 1, W = 2 };
+
+constexpr wdl operator-(wdl v) noexcept { return wdl(-std::to_underlying(v)); }   // W <-> L, DW <-> LD, U fixed
+
+wdl best = wdl::L;                                    // negamax: exact on the chain
+for (auto c : children) { best = std::max(best, -c); }
+```
+
+The sign answers the questions the passes ask: `v < 0` cannot win, `v == 0` unknown, `v > 0` cannot lose, ±2 decided.
+Pass 0 is the same `max`: each exit contributes W, DW or L from the exact value of its target, the internal king
+moves together contribute U, so a winning exit gives W, else a drawing exit DW, else open internal moves U, else L.
+
+The exact draw [D, D] is incomparable with U and falls outside the chain; a move into an exact draw counts as DW (or,
+seen from the other side, LD). That only loosens a bound, never makes a value wrong. Draws become exact at the end:
+the final pass maps U, LD and DW to D = 0. So 0 means *unknown* during the build, where it is the free background of
+§9.3, and *drawn* afterwards; the stored codes are L = −2, D = 0, W = +2, and negation stays `−x`.
+
+No two-bit total order can be exact, because D ∨ U = [D, W] is neither D nor U; every 2-bit layout rounds. A packed
+2-bit WDL build (Chinook's) keeps the four codes L, U, DW, W and stores LD as U: LD only arises inside a backup, as the
+parent's view of a DW child, and storing it as U changes no decision (a position is lost only when all its moves lead
+to wins), it only gives up marking that child's parent "cannot lose" early. The 16-bit build cell and an `int8_t`
+hold the full chain anyway.
+
+Depth fits the same scale: wins large and positive, faster ones larger, W(p) = WMAX − p; losses mirrored,
+L(p) = −(WMAX − p); the small magnitudes reserved for the bounds and for draw/unknown. The backup becomes "negate and
+step one ply toward zero", the `up()` that the forward search in `egdb_6x6.cpp` already applies to its `to_score`
+values, so the build cell, the stored values and the search can share one signed scale.
+
+### 9.5 The vocabulary of the two-sided build
+
+| operation | used by |
+|---|---|
+| `W(p)`, `L(p)`, `D` (WDL: constants) | pass 0, the round |
+| `U`, `nolose`, `count(c)` | the build cell only: undecided codes and Gasser's counter |
+| negation / `backup` (§9.4): child W(p) → parent L(p + 1), child L(p) → parent W(p + 1), bounds swap | the round, verification |
+| `better(a, b)` for the side to move: fastest win, then draw, then slowest loss | pass 0, verification |
+| `plies(s)` → `std::optional<std::size_t>` | probing, statistics, the store pass |
+
+The 16-bit build cell (§8.1) and the 8-bit store both model it, so the store pass is the generic
+`out = Store::from(Build::decode(v))`, and the rounds are written once for DTZ, DTM and WDL. `E::W` is spelled the same
+for an enumerator and for a static member or function of a struct, so a template written against the WDL enum also
+accepts the depth encodings.
+
+Where per-byte access ends: the escaped store (cdb v2) keeps the extra byte in the block's appendix, so its `W(p)` is
+a block-level operation for depths beyond the escape base; a packed 2-bit WDL array holds four positions per byte,
+so writes go per owned word (§7, rule 2) or through `fetch_and` / `fetch_or`. Neither matters to the build, which
+uses neither.
+
+## 10. Storage
 
 Keep what is there: blocks of 4096 positions with zstd per block, capture positions filled with the previous value
 (Chinook's run-continuing fill, syzygy's and Zakharov's don't-care values: all three report large gains), **the
@@ -378,11 +624,12 @@ and a CRC per unit. **8 bits in storage, 16 bits in the build**: the escapes are
 one conversion pass when a unit or material is written; the build never needs them.
 
 Products per material: **WDL** (2 bits, dense, the probe for search), **DTZ** (byte, escapes if ever needed), **DTM**
-(byte + escapes). Options from syzygy worth measuring: DTZ for one side to move only (*[bg]*; the other side is one
-ply of search, cheap with compulsory capture), and a search for the man/king order that compresses best (syzygy's
+(byte + escapes). Options from syzygy worth measuring: DTZ for one side to move only (*[bg]*; the other side follows
+exactly from one ply of search, cheap with compulsory capture: an exit counts 1 from the WDL of its target, an internal
+move one more than the stored value; unlike syzygy, depths stay in plies, never in moves), and a search for the man/king order that compresses best (syzygy's
 `permute_piece_wdl`); Zakharov adds bounded fills (≥ n, ≤ n) for DTM.
 
-## 10. Verification
+## 11. Verification
 
 | check | source | status |
 |---|---|---|
@@ -393,7 +640,7 @@ ply of search, cheap with compulsory capture), and a search for the man/king ord
 | CRC per block and per copy | Chinook 2003, NWH (MD5) | present (crc32c per unit) |
 | statistics against published counts | `egdb_fast` (mdgsoftware.nl) | present for kings-only |
 
-## 11. The open decisions of DESIGN_STATE.md
+## 12. The open decisions of DESIGN_STATE.md
 
 | # | decision | recommendation from the literature |
 |---|---|---|
@@ -408,7 +655,7 @@ ply of search, cheap with compulsory capture), and a search for the man/king ord
 Naming clashes listed in `DESIGN_STATE.md` §1 (`S`, `big`, `NONE16 = DRAW`) disappear with one solver and one
 value encoding per metric.
 
-## 12. Measurements still needed
+## 13. Measurements still needed
 
 1. largest DTZ per slice and per unit (how often would the 8-bit storage of DTZ need escapes at all?);
 2. pass 0 with a raw 2-bit WDL dependency store against the compressed store with capture resolution;

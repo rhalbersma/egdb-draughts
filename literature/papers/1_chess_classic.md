@@ -6,7 +6,7 @@ Source notes: every PDF was read through the Google Drive text extractor. How co
 |---|---|
 | 1977-DM-Strohlein-Zagler.pdf | Complete, but the OCR is very noisy. Most Boolean matrix formulas are garbled, and the formulas below are reconstructed from the surrounding prose. |
 | 1985-ICCA-Herik-Herschberg.pdf | Complete (pp. 66-87), clean text. Not scanned-only, despite the 10 MB size. |
-| 1986-ICCA-Thompson.pdf | Pages 132-139 only. The first page (p. 131: introduction and the "G" (Gödel) index function) is missing from the extraction. Table 1 and the move notation in the game lines are garbled. |
+| 1986-ICCA-Thompson.pdf | Pages 132-139 through the Drive text extractor; p. 131 (introduction and the "G" (Gödel) index function) is a scan without a text layer and was read from the rendered page image. Table 1 and the move notation in the game lines are garbled. |
 | 1996-ICCA-Thompson.pdf | Starts at p. 216. The opening page(s) (introduction and sections 1-2) are missing. Everything from section 2's hardware table onward is readable. |
 | 1996-GoNC-Stiller.pdf | Complete (Games of No Chance pp. 151-192, about 115 KB of text). Matrix formulas are partly garbled but can be reconstructed. |
 | 2001-ICGA-Stiller.pdf | Complete (2 pages). |
@@ -101,17 +101,19 @@ Source notes: every PDF was read through the Google Drive text extractor. How co
 
 ## 1986-ICCA-Thompson.pdf
 
-*(Extraction starts at p. 132. Page 131, which defines the "G" Gödel index function and the introduction, is missing.)*
+*(Pages 132-139 from the text extractor; p. 131, a scan without text layer, read from the rendered page image.)*
 
 1. **Citation**: K. Thompson, "Retrograde analysis of certain endgames", *ICCA Journal* 9(3), September 1986, pp. 131-139.
 2. **Scope**:
    - Chess 5-piece endgames, pawnless and with one pawn. Table 1 is garbled. From the prose and background: KQKBB (71 moves), KRBKR, KBBKN, KBNKN, and the promotion targets needed for KQPKQ and KRPKR.
-   - Pawnless index size: 121,110,528 positions per side-to-move bitmap. [Inference, not stated in the extracted text: 121,110,528 = 462 × 64^3, i.e. 462 symmetry-reduced king pairs × 3 free men, consistent with the 462 of Thompson 1996.]
+   - Pawnless index size: 121,110,528 positions per side-to-move bitmap = 462 × 64 × 64 × 64 (p. 131).
    - Hardware: Sequent Balance 8000, 12 × NS32032, 16 MB shared memory, on average 4 processors in background.
    - Run time: 2-3 weeks real time per pawnless endgame, about 6 weeks for a pawn database (excluding subgames).
 3. **Metric**: DTM ("Max to Mate", single pass) or DTC ("Max to Win", two-pass: mate *or* capture into a won subgame, "precisely the conditions for the 50-move rule"). For pawn endgames the metric extends to "capture, mate or pawn move", i.e. DTZ. Final encoding: one byte per position. Byte j = i if bit j is in W_i, and 0 if the position is not a White win. White-to-move results only.
 4. **Indexing**:
-   - Pawnless: the G function (the defining page is missing). Thompson notes it counts some positions more than once (symmetric duplicates), which skews the win percentages.
+   - Pawnless (p. 131): G = (king pair, piece 1, piece 2, piece 3) with ranges 0-461 × 0-63 × 0-63 × 0-63. The White king is confined to the octant a8-d8-d5 by rotation/reflection; the Black king is encoded relative to it (not adjacent; if the White king is on the a8-d5 diagonal, the Black king is reflected above that diagonal). One table lookup gives the 462 legal king pairs and the rotation/reflection to apply to the other three pieces, which are then encoded by their square.
+   - **A captured piece is encoded on the White king's square**, a slot that is otherwise illegal. So every sub-material (one or two pieces captured) lives inside the same index: the files W, B, J cover the sub-games too, and un-capture ("leaving an enemy piece behind") stays inside the same bitmaps. This is what makes the two-pass "Max to Win" work without separate sub-game files.
+   - Symmetries deliberately not exploited: like pieces (two White rooks could exchange places), bishops on fixed colours (each on a 32-square subset). Thompson notes G counts some positions more than once, which skews the win percentages.
    - Pawn: size 83,886,080 per rank slice. The G function loses symmetry. The pawn is on one of four files (left-right mirror), "one rank at a time", and each pawn position is solved as its own sub-game. After the six per-rank result files (83 MB each) are built, they are inverted into four rank-oriented files of 117 MB each, which is a final re-slicing. Illegal slots are kept in the index.
 5. **Working storage**: All on **disk** as bit-map files of 121,110,528 bits:
    - W: all known WTM wins;

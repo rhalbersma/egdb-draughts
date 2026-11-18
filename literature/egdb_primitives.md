@@ -367,7 +367,39 @@ the case without seeds (its exit wins are W(1) in pass 0, its exit losses never 
 
 Build DTM **after** DTZ: with WDL known, drawn positions are never visited, and every lossable position is truly lost.
 
-### 8.4 Conversion (pass 0) is the real cost
+### 8.4 Pass 0 is one max over all moves: forced and optional exits
+
+Pass 0 gives every position the best value over all its moves (the max on the chain of §9.4): each exit contributes
+the exact value of its target, looked up in a finished database and seen from the mover, and the internal moves
+together contribute U. Whether the result is final or only a bound then follows from the move list alone: with no
+internal move, no U enters and the max is exact; with internal moves left, the exits only bound the value.
+
+| game | exits that are forced (the max is exact) | exits that are optional (the max is a bound) |
+|---|---|---|
+| draughts, checkers | captures (compulsory), including a capture that ends on the back row and promotes | man moves, promotions |
+| chess | none; a position without legal moves is terminal (mate, stalemate) | captures, pawn moves, promotions (including under-promotions and capture-promotions) |
+| Stratego, known pieces | none; a side without a legal move has lost | attacks, whatever their outcome (attacker wins, loses, or both pieces go) |
+
+What an optional exit settles:
+
+| best exit | result | final? |
+|---|---|---|
+| wins | W | final for WDL and DTZ (a win by a zeroing move now cannot be beaten); for DTM a deferred seed (§8.3) |
+| draws | ≥D (cannot lose) | a bound: the internal moves may still win |
+| loses | nothing, unless no internal move is left | — |
+
+Syzygy's `CAPT_WIN`, `CAPT_DRAW` and `CAPT_CLOSS`, written with a compare-and-swap that keeps the maximum, and
+Chinook's Lookups (W, L only when every move is a lookup, else ≥D) are this table for chess captures and for
+checkers' advancing leading checker. "Captures are compulsory" is not a special case in the engine: it only means
+that the rules generate no internal move, so the rules concept needs nothing beyond the legal moves.
+
+Where the exits lead also follows from the game: a capture or an attack goes to a smaller material; a promotion to
+another material with the same number of pieces; a man or pawn move to another slice of the same material (another
+placement of the men, or pawn structure). Stratego has neither men nor promotions: its slices are fixed by the
+material and by the squares of the pieces that never move (bombs, flag), every exit is an attack, pass 0 yields
+almost only bounds, and nearly all the work falls to the rounds, the opposite of a draughts endgame full of men.
+
+### 8.5 Conversion (pass 0) is the real cost
 
 | option | source | for draughts |
 |---|---|---|

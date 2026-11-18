@@ -190,9 +190,9 @@ that leaves the slice.** Inside a slice only kings move without capture. So:
 | a winning exit | win | **win in 1, decided in pass 0** | tentative win in DTM(target) + 1; a faster internal win can still beat it |
 | losing exits (all moves that exit lose) | irrelevant unless no internal move | **irrelevant** unless no internal move (the loser prefers internal moves, which count one more) | the slowest one bounds the loss from below: a lost position can be decided at a depth > n |
 | a drawing exit | the position cannot lose | the position cannot lose | the position cannot lose |
-| exit information kept after pass 0 | none (it is in the code) | **none** (a code: "cannot lose") | tentative win value, loss bound, "cannot lose" |
+| exit information kept after pass 0 | none (it is in the code) | **none** (a code: "cannot lose") | the same codes, plus **deferred seeds**: "win in d if nothing faster", "the losing exits are used up in round b" |
 | depth range | — | small (BTH 2005: KQBNKN maxDTM 107, maxDTC 6) | long, adds up across slices (escapes above 251 on 6×6) |
-| dependency store during a build | 2 bits per position | **2 bits per position** | DTM per position (1 byte + escapes) or the compressed store with capture resolution |
+| dependency store during a build | 2 bits per position | **2 bits per position** | DTM per position (the 8-bit storage form with escapes) or the compressed store with capture resolution |
 | rule relevance | — | *[bg]* the FMJD 25-move rule (only king moves without capture) and the 16-move rule count exactly these moves: DTZ is the draughts analogue of DTZ50 | analysis, books ("win in n") |
 | slice self-contained? | yes, given WDL of exits | **yes, given WDL of exits** | no: depths of all finished slices flow in |
 
@@ -220,7 +220,8 @@ Per slice the working set is small on 6×6: a slice with F free squares and k, l
 C(F, k) · C(F − k, l) positions per side to move, at most C(18, 6) · C(12, 6) = 17.2 M (6 against 6 kings, no men).
 **On 6×6 the memory pressure is the dependency store, not the working set** (`DESIGN_STATE.md` §5). On 10×10
 all-king slices are large (4 against 4: C(50, 4) · C(46, 4) ≈ 3.8 · 10¹⁰), and there the bytes per position matter as
-much as they do for syzygy.
+much as they do for syzygy: a 16-bit build value costs twice syzygy's byte, bought for one value type for every
+metric and no range checks.
 
 Options, from the literature:
 
@@ -229,6 +230,7 @@ Options, from the literature:
 | value byte with codes, implicit frontier | 1 | syzygy | DTZ, WDL |
 | value byte with the counter merged into the free code range | 1 | Gasser 1996 | DTZ, WDL (if max depth + max internal moves < ≈ 250) |
 | value byte + frontier bitsets | 1 + 2 bits | Thompson's bitmaps on a value array | DTZ, WDL |
+| **value 16 bit with the counter merged + frontier bitsets** | 2 + 2 bits | Gasser 1996 widened; the choice here (§8) | **DTZ, DTM, WDL alike** |
 | value 16 bit + counter byte + frontier bitsets | 3 + 2 bits | Fang 2000, Bal-Allis | DTM |
 | 2 bits WDL | 0.25 | Chinook, Lincke-Marzetta | WDL; the dependency store |
 | 1 bit in RAM, rest streamed | 0.125 | Wu-Beal | out-of-core builds (not needed on 6×6) |
@@ -251,7 +253,7 @@ Two facts that keep counters correct, from Thompson 1996 and Herik 1985:
    by the element, without atomics, whatever chunking the policy picks. A `for_each` over single positions cannot
    promise that, because `par` chooses the chunk boundaries.
 3. **Scatters are idempotent or claim with compare-exchange.** Writing W(n) into an unknown predecessor, marking a
-   candidate, setting a frontier bit: `std::atomic_ref<std::uint8_t>::compare_exchange` on the value, `fetch_or` on
+   candidate, setting a frontier bit: `std::atomic_ref<std::uint16_t>::compare_exchange` on the value, `fetch_or` on
    the frontier word. A counter decrement is a compare-exchange loop that leaves decided values alone; the thread that
    takes it to zero decides the position and is the only one that can. Relaxed ordering is enough inside a pass; the
    end of the `for_each` is the synchronisation point between passes. Under `seq` these cost almost nothing, so the
@@ -265,22 +267,35 @@ Two facts that keep counters correct, from Thompson 1996 and Herik 1985:
 
 ## 8. Best of breed for draughts
 
-Take from syzygy: the metric split (WDL + DTZ), one value byte with codes, the fused round, level synchrony.
+Take from syzygy: the metric split (WDL + DTZ), one value cell with codes, the fused round, level synchrony.
 Take from Chinook: slicing by irreversible moves (finer here: by the placement of the men) and resolving all exits
-once before the rounds. Take from Gasser 1996 and the `egdb_6x6` measurements: outcounting with the counter in the
-value byte. Take from Thompson: explicit frontier bitsets (the rounds touch only the frontier, not the slice).
+once before the rounds. Take from Gasser 1996 and the `egdb_6x6` measurements: outcounting with the counter inside
+the value cell. Take from Thompson: explicit frontier bitsets (the rounds touch only the frontier, not the slice).
 
-### 8.1 DTZ (and with it WDL): one byte per position, two bitsets
+**Values are 16 bits during the build and 8 bits in storage**, for every metric. DTZ restarts at every exit, so its
+depth is bounded by the longest phase of king moves inside one slice, not by the whole game (Bourzutschky-Tamplin-
+Haworth: maxDTC 6 against maxDTM 107 in KQBNKN); it will usually fit a byte, but only a measurement says so, and the
+build should not depend on it. The build never meets a range
+limit (no syzygy-style `reduce_tables`, no fit check of depth plus counter, no escapes); the storage form is the
+existing byte with escape codes (§9), converted once when a unit or material is written.
 
-Value byte, per side to move (exact numbers to be fixed; the order of the ranges matters):
+### 8.1 The value cell (16 bits, per position and side to move)
+
+The same layout for DTZ and DTM (exact numbers to be fixed; what matters is that decided values and codes are
+separate ranges):
 
 ```
-W(d)      d = 1, 2, …     win, the winning zeroing move after d plies       (W(1): a winning exit now)
-L(d)      d = 0, 1, …     loss                                               (L(0): no move; L(1): only losing exits)
+decided   win or loss with its depth          DTM: odd = win, even = loss (as now)
+                                              DTZ: a loss flag bit, because DTZ parity does not separate wins from losses
+                                              (a zeroing move can be the winner's or the loser's)
 DRAW
-NOLOSE                    undecided, has a drawing exit: can never lose
-CNT(c)    c = 1 … cmax    undecided, lossable, c internal moves not yet known to be won (Gasser's merged counter)
+NOLOSE    undecided, cannot lose any more (a drawing exit; for DTM also: a winning exit, see 8.3)
+CNT(c)    undecided, lossable, c moves not yet known to be won (Gasser's counter, inside the cell)
 ```
+
+Per position and side to move: 2 bytes, plus 2 bits for the frontier bitsets of the current and the next round.
+
+### 8.2 DTZ (and with it WDL)
 
 Passes, each a single `for_each`:
 
@@ -309,6 +324,7 @@ round n    // n = 1, 2, …: F holds the decisions of depth n − 1, G collects 
 
 final      for_each(policy, words(slice), [](w) { undecided → DRAW })          // gather
 verify     transform_reduce(policy, words(slice), …)  value == best over successors   // gather + count
+store      for_each(policy, blocks(slice), …)  16-bit values → bytes with escapes      // gather per output block
 ```
 
 Why the round can be one pass: a predecessor can receive both a win (from a lost successor) and decrements (from won
@@ -319,31 +335,31 @@ with a capture are never touched, because pass 0 decided them (no capture test o
 
 The grandfather variant replaces `CNT(c)` by a single `LOSSABLE` code and the decrement by a candidate mark
 (`LOSSABLE → CAND`), plus a second pass per round: `for_each(words(candidates))` verifies all internal successors
-(gather; writes only itself and its own frontier word). It needs no counter range and no non-idempotent scatter, at
-the price of regenerating the candidates' moves. The measurements on 8-piece checkers (`DESIGN_STATE.md` §5:
-retrograde with counting 1032 s, without 1204.5 s, classic 1376 s) favour counting; both fit the skeleton, so keep
-the grandfather version as the alternative behind the same interface.
+(gather; writes only itself and its own frontier word). It needs no counter and no non-idempotent scatter, at the
+price of regenerating the candidates' moves. The measurements on 8-piece checkers (`DESIGN_STATE.md` §5: retrograde
+with counting 1032 s, without 1204.5 s, classic 1376 s) favour counting; both fit the skeleton, so keep the
+grandfather version as the alternative behind the same interface.
 
-Conditions to check before fixing the byte layout: the largest DTZ in a slice plus the largest number of internal
-king moves must fit below 256 minus the codes (both are far below that on 6×6, but measure); if a depth ever comes
-close, remap as syzygy's `reduce_tables` does, or fall back to a 16-bit value for that slice.
+### 8.3 DTM: the same cell, the same round, plus deferred seeds
 
-### 8.2 DTM: the same skeleton, 16-bit values and deferred seeds
+Exits now carry depths, which shows in two places, and both become **deferred seeds**: entries (round, side,
+position) produced in pass 0, sorted by round, and processed as extra elements of that round's `for_each`.
 
-What changes: exits carry depths, so pass 0 writes a **tentative** win W(DTM(exit) + 1) (the round's win CAS keeps
-the smaller value, as syzygy's `SET_WIN_VALUE`), and a lossable position keeps the **bound** of its slowest losing
-exit. A lost position is then lost in max(n, bound), possibly later than the round in which its counter reaches zero,
-and a tentative win becomes final only when the rounds reach it. Both are **deferred seeds**: a position whose value
-d > n is known, to enter the frontier in round d + 1. Keep them as lists sorted by d (what `ewin` does now) and add
-them to F at the start of the round, or use syzygy's implicit frontier (scan for value = n − 1) for DTM only.
+* **A winning exit** wins in d = DTM(exit) + 1 unless an internal win comes first. Pass 0 writes `NOLOSE` (the
+  position can no longer lose) and a seed *win at d*. In round d the seed does `CAS NOLOSE → W(d)`; if an internal
+  win came earlier, the CAS finds a decided value and does nothing.
+* **Losing exits** make a loss no faster than b = 1 + the slowest exit loss. Count all losing exits together as one
+  extra virtual move: pass 0 writes `CNT(c + 1)` and a seed *decrement at round b − 1*. The counter then reaches zero
+  exactly in round max(n, b), so the loss value is simply the round number, as for DTZ, and no bound is kept in the
+  cell.
 
-Layout: value 16 bit (decided values, tentative wins, loss bound in the undecided range) + counter byte + bitsets:
-3 bytes and 2 bits per position, enough on 6×6.
+So the cell needs no tentative values and no loss bounds, and DTZ and DTM share the layout and the round; DTZ is
+the case without seeds (its exit wins are W(1) in pass 0, its exit losses never matter). The seed lists replace
+`ewin` / `eloss` (2 + 2 bytes per position now) by entries only for the positions with exits.
 
-Build DTM **after** DTZ: with WDL known, drawn positions are never visited, every lossable position is truly lost
-(its counter is exact), and the DTM build is a pure layering of known wins and losses.
+Build DTM **after** DTZ: with WDL known, drawn positions are never visited, and every lossable position is truly lost.
 
-### 8.3 Conversion (pass 0) is the real cost
+### 8.4 Conversion (pass 0) is the real cost
 
 | option | source | for draughts |
 |---|---|---|
@@ -358,8 +374,8 @@ Build DTM **after** DTZ: with WDL known, drawn positions are never visited, ever
 Keep what is there: blocks of 4096 positions with zstd per block, capture positions filled with the previous value
 (Chinook's run-continuing fill, syzygy's and Zakharov's don't-care values: all three report large gains), **the
 successive escape codes E … 254 with their extra bytes appended to each block in the same frame** (cdb version 2),
-and a CRC per unit. The escapes are a storage concern only; the build keeps 16-bit values (DTM) or bytes (DTZ) and
-never needs them.
+and a CRC per unit. **8 bits in storage, 16 bits in the build**: the escapes are a storage concern only, applied in
+one conversion pass when a unit or material is written; the build never needs them.
 
 Products per material: **WDL** (2 bits, dense, the probe for search), **DTZ** (byte, escapes if ever needed), **DTM**
 (byte + escapes). Options from syzygy worth measuring: DTZ for one side to move only (*[bg]*; the other side is one
@@ -382,11 +398,11 @@ ply of search, cheap with compulsory capture), and a search for the man/king ord
 | # | decision | recommendation from the literature |
 |---|---|---|
 | 1 | one pipeline (materials) and one storage format | materials, as both lineages build: the unit of dependency is the material. Units can stay a packaging of the files |
-| 2 | one slice solver | yes: the round of §8.1, counting by default, grandfather behind the same interface; the classic solvers go. Keep the pull round (P10, ~20 lines in this skeleton) as the test oracle |
+| 2 | one slice solver | yes: the round of §8.2 (and §8.3 for DTM), counting by default, grandfather behind the same interface; the classic solvers go. Keep the pull round (P10, ~20 lines in this skeleton) as the test oracle |
 | 3 | adaptive forward rounds (4 % of a build) | drop the six-constant model and `switch.py`. If switching stays, Gasser's one-term rule (#frontier · mean unmoves > #undecided → pull) |
 | 4 | true values of capture positions | in the build-time dependency store: yes (raw, 2-bit WDL for DTZ builds); in the distributed compressed files: no, the fill is what makes them small |
 | 5 | bitsets instead of lists | yes for DTZ: two live bitsets per side to move, iterated per 64-bit word. DTM keeps short sorted lists for the deferred seeds |
-| 6 | fewer bytes per position | DTZ: 1 byte (syzygy codes + Gasser's merged counter). DTM: 3 bytes. On 6×6 the dependency store matters more; on 10×10 both matter |
+| 6 | fewer bytes per position | 2 bytes for every metric: a 16-bit cell with syzygy-style codes and Gasser's counter inside (now 5 bytes plus lists); 8 bits with escapes in storage. On 6×6 the dependency store matters more than the cell; on 10×10 both matter |
 | 7 | the metric | both: WDL + DTZ in one build (slices self-contained, exits need only WDL), DTM in a second build that uses the WDL. DTZ is also the metric of the 25-move rule |
 
 Naming clashes listed in `DESIGN_STATE.md` §1 (`S`, `big`, `NONE16 = DRAW`) disappear with one solver and one
@@ -394,7 +410,7 @@ value encoding per metric.
 
 ## 12. Measurements still needed
 
-1. largest DTZ per slice and largest number of internal king moves (does Gasser's merged byte fit?);
+1. largest DTZ per slice and per unit (how often would the 8-bit storage of DTZ need escapes at all?);
 2. pass 0 with a raw 2-bit WDL dependency store against the compressed store with capture resolution;
 3. counting against grandfather in the one-pass round, `seq` and `par`, on 8-piece checkers and on the large 11–12
    piece international slices;

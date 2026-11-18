@@ -29,8 +29,10 @@ Shown for dtm; dtc and dtz alike (`wtm.dtc`, ...). These are **full results** (w
 `thompson86` stores **half results** (`dtm-W`, `dtm-L`, `bit-W`, `bit-L`). The `wdl` files carry no metric: they are
 the same for all three, so the files of each metric go into a directory of their own, `<dir>/<metric>`.
 
-The value for the side to move: 0 a draw (or an illegal slot), 2n a win in n plies, 2n + 1 a loss in n plies (n = 0:
-no move). Exact plies, 16 bits during the build, one byte stored (up to 127 plies). The three metrics are those of
+The value for the side to move, in the build: 0 a draw (or an illegal slot), 2n a win in n plies, 2n + 1 a loss in n
+plies (n = 0: no move), 16 bits. Stored, one byte: dtc and dtz the same (up to 127 plies); dtm compactly, the plies + 1
+(up to 254 plies), since a dtm win always takes an odd and a dtm loss an even number of plies, so the parity still tells
+win from loss (loss in 0: 1, win in 1: 2, loss in 2: 3, ...). Exact plies either way. The three metrics are those of
 `thompson86`:
 
 | metric | the count ends at |

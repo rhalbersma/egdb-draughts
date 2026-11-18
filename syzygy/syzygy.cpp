@@ -8,7 +8,7 @@
 //   0          draw (also an illegal slot)
 //   2n         win in n plies (n >= 1)
 //   2n + 1     loss in n plies (n >= 0; 0: no move)
-// 16 bits during the build, one byte stored. The metric decides which moves end the count (as in thompson86):
+// 16 bits during the build, one byte stored (dtm compactly: the plies + 1, see to_byte). The metric decides which moves end the count (as in thompson86):
 //   dtm   none: the count runs to the end of the game
 //   dtc   captures and promotions (a conversion into another material)
 //   dtz   captures and man moves (the zeroing moves of the 25-move rule)
@@ -18,7 +18,7 @@
 // mirror is built (the same 82 materials up to 6 pieces as strongly_solving_6x6/materials); a position in the other
 // one is looked up as its mirror image. Full results; per material four files, 6x6-wp-bp-wm-bm.<side to move>.<kind>
 // (for dtm; dtc and dtz alike):
-//   wtm.dtm   one byte per slot, White to move
+//   wtm.dtm   one byte per slot, White to move: plies + 1 (odd: a loss, even: a win; dtc, dtz: 2n win, 2n + 1 loss)
 //   btm.dtm   one byte per slot, Black to move
 //   wtm.wdl   two bits per slot (0 draw, 1 loss, 2 win), White to move
 //   btm.wdl   two bits per slot, Black to move
@@ -185,6 +185,22 @@ void open_successors(Material c)
 // a position in a stored material: itself or its mirror image (the value for the side to move is the same)
 Pos stored_pos(Pos const& p) { return stored(material_of(p)) ? p : mirror(p); }
 
+// The stored bytes. A dtm win always takes an odd number of plies and a dtm loss an even number, so a dtm byte is the
+// plies + 1 and its parity tells win from loss; dtc and dtz store the build value (2n win in n plies, 2n + 1 loss),
+// since their wins can take an even number of plies. 0: draw. Exact plies either way; only the files differ.
+int to_byte(Metric mt, std::uint16_t v)
+{
+        if (mt != Metric::dtm || v == 0) return v;
+        if ((plies(v) % 2 == 1) != is_win(v)) { std::cerr << "dtm: a win in an even or a loss in an odd number of plies" << std::endl; std::exit(1); }
+        return plies(v) + 1;                                    // loss in 0: 1, win in 1: 2, loss in 2: 3, ...
+}
+
+std::uint16_t from_byte(Metric mt, std::uint8_t s)
+{
+        if (mt != Metric::dtm || s == 0) return s;
+        return (s & 1) ? loss(s - 1) : win(s - 1);
+}
+
 // the value of a position for the side to move
 std::uint16_t probe(Pos const& p0)
 {
@@ -192,7 +208,7 @@ std::uint16_t probe(Pos const& p0)
         Pos const p = stored_pos(p0);
         Material const m = material_of(p);
         std::uint64_t const i = mat_index(m).index(p);
-        return m == g_current ? g_val[std::size_t(p.stm)][i] : mat_file(m, p.stm)[i];
+        return m == g_current ? g_val[std::size_t(p.stm)][i] : from_byte(g_metric, mat_file(m, p.stm)[i]);
 }
 
 // win, draw or loss of a position for the side to move
@@ -407,8 +423,9 @@ bool build_material(std::string const& dir, Material c)
                 std::vector<std::uint8_t> bytes(mi.size), wdl((mi.size + 3) / 4, 0);
                 for (std::uint64_t i = 0; i < mi.size; ++i) {
                         std::uint16_t const v = g_val[std::size_t(s)][i];
-                        if (v > 255) { std::cerr << "value beyond one byte" << std::endl; return false; }
-                        bytes[i] = std::uint8_t(v);
+                        int const b = to_byte(g_metric, v);
+                        if (b > 255) { std::cerr << "value beyond one byte" << std::endl; return false; }
+                        bytes[i] = std::uint8_t(b);
                         wdl[i >> 2] |= std::uint8_t(wdl_of(v) << (2 * (i & 3)));
                         wins[s] += is_win(v);
                         losses[s] += is_loss(v);
@@ -484,7 +501,9 @@ bool compare_thompson86(std::string const& dir, std::string const& dir86, int n)
                         for (std::uint64_t i = 0; i < g.P; ++i) {
                                 Pos const pw = g.pos(i, 0), pb = g.pos(i, 1);
                                 std::uint16_t const vw = probe(pw), vb = probe(pb);
-                                int const ew = is_win(vw) ? plies(vw) : 0, el = is_loss(vb) ? plies(vb) + 1 : 0;
+                                bool const dtm = g_metric == Metric::dtm;              // thompson86's bytes (dtm in moves)
+                                int const ew = !is_win(vw) ? 0 : dtm ? (plies(vw) + 1) / 2 : plies(vw);
+                                int const el = !is_loss(vb) ? 0 : dtm ? plies(vb) / 2 + 1 : plies(vb) + 1;
                                 std::uint64_t const k = mi.index(pw);
                                 if (w[k] != ew && bad++ < 3) std::cerr << "w " << fen_of(pw) << " thompson86 " << int(w[k]) << " syzygy " << vw << std::endl;
                                 if (l[k] != el && bad++ < 3) std::cerr << "l " << fen_of(pb) << " thompson86 " << int(l[k]) << " syzygy " << vb << std::endl;
@@ -506,10 +525,12 @@ bool check_order(std::string const& dz, std::string const& dc, std::string const
                         g_metric = Metric::dtc; auto const x = map_file(mat_path(dc, c, s), size);
                         g_metric = Metric::dtm; auto const m = map_file(mat_path(dm, c, s), size);
                         for (std::uint64_t i = 0; i < size; ++i) {
-                                if (wdl_of(z[i]) != wdl_of(m[i]) || wdl_of(x[i]) != wdl_of(m[i])) { ++bad; continue; }
-                                if (m[i] == 0) continue;
-                                (is_win(m[i]) ? wins : losses) += 1;
-                                if (!(plies(z[i]) <= plies(x[i]) && plies(x[i]) <= plies(m[i]))) ++bad;
+                                std::uint16_t const zv = from_byte(Metric::dtz, z[i]), xv = from_byte(Metric::dtc, x[i]),
+                                                    mv = from_byte(Metric::dtm, m[i]);
+                                if (wdl_of(zv) != wdl_of(mv) || wdl_of(xv) != wdl_of(mv)) { ++bad; continue; }
+                                if (mv == 0) continue;
+                                (is_win(mv) ? wins : losses) += 1;
+                                if (!(plies(zv) <= plies(xv) && plies(xv) <= plies(mv))) ++bad;
                         }
                 }
                 for (int s : { 0, 1 }) {

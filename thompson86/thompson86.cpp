@@ -6,9 +6,10 @@
 // Thompson style builds (1986 and 1996) for 6x6 international draughts, for three metrics. One-sided: half results,
 // White's wins and Black's losses. Per material four files, 6x6-wp-bp-wm-bm.<side to move>.<kind> (for dtm; dtc and dtz
 // alike):
-//   wtm.dtm-W   one byte: the number of plies to the goal of a White win, 0 for "not a win" (draw, loss, illegal slot)
-//   btm.dtm-L   one byte: 1 + the number of plies to the goal of Black's loss, 0 for "not lost" (a loss can take 0
-//               plies: Black has no move), as Thompson 1996 kept the Black-to-move loss distances (RES)
+//   wtm.dtm-W   one byte: k for a White win in 2k - 1 plies, 0 for "not a win" (draw, loss, illegal slot); dtc-W, dtz-W
+//               store the plies n (their wins can take an even number of plies)
+//   btm.dtm-L   one byte: k for Black lost in 2(k - 1) plies, 0 for "not lost" (a loss can take 0 plies: Black has no
+//               move); dtc-L, dtz-L store n + 1; as Thompson 1996 kept the Black-to-move loss distances (RES)
 //   wtm.bit-W   one bit: White wins (a by-product, the half-result outcome)
 //   btm.bit-L   one bit: Black is lost
 // The bit files are the same for all three metrics. After a goal move only the outcome counts, so a dtc or dtz build
@@ -98,6 +99,35 @@ std::uint8_t const* mat_file(Material m, int kind)
         return g_files[{ m, kind }] = map_file(mat_path(g_dir, m, kind), file_size(m, kind));
 }
 
+// The stored bytes. A dtm win always takes an odd number of plies and a dtm loss an even number (no move ends the count
+// early), so dtm stores moves; dtc and dtz store plies (a goal move by the loser can end a win on an even ply):
+//   dtm-W   k: win in 2k - 1 plies        dtc-W, dtz-W   n: win in n plies
+//   dtm-L   k: loss in 2(k - 1) plies     dtc-L, dtz-L   n + 1: loss in n plies
+// 0: not a win, not lost. Exact plies either way; the build works in plies, and only the files are in these units.
+int encode(Metric mt, int side, int plies)
+{
+        if (mt == Metric::dtm) return side == 0 ? (plies + 1) / 2 : plies / 2 + 1;
+        return side == 0 ? plies : plies + 1;
+}
+
+int decode(Metric mt, int side, std::uint8_t s)         // the plies, -1 for 0 (not a win, not lost)
+{
+        if (s == 0) return -1;
+        if (mt == Metric::dtm) return side == 0 ? 2 * s - 1 : 2 * (s - 1);
+        return side == 0 ? s : s - 1;
+}
+
+std::uint8_t store_byte(int side, int plies)
+{
+        if (g_metric == Metric::dtm && (plies % 2 == 1) != (side == 0)) {
+                std::cerr << "dtm: a win in an even or a loss in an odd number of plies" << std::endl;
+                std::exit(1);
+        }
+        int const s = encode(g_metric, side, plies);
+        if (s > 255) { std::cerr << "depth beyond one byte" << std::endl; std::exit(1); }
+        return std::uint8_t(s);
+}
+
 std::uint8_t const* mat_data(Material m, int side)
 {
         return m == g_current ? g_res[std::size_t(side)].data() : mat_file(m, BYTES + side);
@@ -115,7 +145,7 @@ int lookup_wtm(Pos const& p)
 {
         if ((p.m[0] | p.k[0]).empty() || (p.m[1] | p.k[1]).empty()) return 0;   // a side without pieces: not a White win to look up
         Material const m = material_of(p);
-        return mat_data(m, 0)[mat_index(m).index(p)];
+        return std::max(0, decode(g_metric, 0, mat_data(m, 0)[mat_index(m).index(p)]));
 }
 
 // Black to move: plies to the goal of Black's loss, -1 if Black is not lost
@@ -124,7 +154,7 @@ int lookup_btm_lost(Pos const& p)
         if ((p.m[1] | p.k[1]).empty()) return 0;          // Black has no pieces: lost
         if ((p.m[0] | p.k[0]).empty()) return -1;         // White has no pieces: Black has won
         Material const m = material_of(p);
-        return int(mat_data(m, 1)[mat_index(m).index(p)]) - 1;
+        return decode(g_metric, 1, mat_data(m, 1)[mat_index(m).index(p)]);
 }
 
 // White to move: does White win (one bit)
@@ -243,7 +273,7 @@ void solve_group(MatIndex const& mi, Group const& g)
                 std::uint32_t const q = loss_decided[ld].idx;
                 b_last.set(q);
                 lost.set(q);
-                g_res[1][mi.index(g.pos(q, 1))] = 1;                    // lost in 0 plies: no move
+                g_res[1][mi.index(g.pos(q, 1))] = store_byte(1, 0);     // lost in 0 plies: no move
         }
         for (int d = 1;; ++d) {
                 // P2: White wins in d
@@ -285,15 +315,14 @@ void solve_group(MatIndex const& mi, Group const& g)
 
                 w_new.for_each([&](std::uint64_t q) {
                         won.set(q);
-                        g_res[0][mi.index(g.pos(q, 0))] = std::uint8_t(d);
+                        g_res[0][mi.index(g.pos(q, 0))] = store_byte(0, d);
                 });
                 b_new.for_each([&](std::uint64_t q) {
                         lost.set(q);
-                        g_res[1][mi.index(g.pos(q, 1))] = std::uint8_t(d + 1);
+                        g_res[1][mi.index(g.pos(q, 1))] = store_byte(1, d);
                 });
                 std::swap(w_last, w_new);
                 std::swap(b_last, b_new);
-                if (d >= 254) { std::cerr << "depth beyond one byte" << std::endl; std::exit(1); }
                 if (w_last.empty() && b_last.empty() && d >= max_seed) break;
         }
 }
@@ -326,8 +355,8 @@ bool build_material(std::string const& dir, Material c)
         }
         std::uint64_t wins = 0, losses = 0;
         int longest = 0, longest_loss = 0;
-        for (auto v : g_res[0]) { wins += v != 0; longest = std::max(longest, int(v)); }
-        for (auto v : g_res[1]) { losses += v != 0; longest_loss = std::max(longest_loss, int(v) - 1); }
+        for (auto v : g_res[0]) { wins += v != 0; longest = std::max(longest, decode(g_metric, 0, v)); }
+        for (auto v : g_res[1]) { losses += v != 0; longest_loss = std::max(longest_loss, decode(g_metric, 1, v)); }
         double const sec = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
         std::cout << "material " << c.name() << " " << metric_name() << (g_waves ? " 1996" : " 1986") << ": " << groups.size()
                   << " groups, " << positions << " positions, " << mi.size << " slots, " << wins << " White wins, longest "
@@ -347,15 +376,13 @@ bool check_all(std::string const& dir, int n, int threads)
         bool ok = true;
         std::uint64_t total = 0;
         for (Material const c : materials_up_to(n)) {
-                MatIndex const& mi = mat_index(c);
-                std::uint8_t const* res = mat_data(c, 0);
                 std::uint64_t checked = 0, bad_w = 0, bad_b = 0, bad_s = 0, bad_bit = 0;
                 for (auto const& g : groups_of(c))
                         for (std::uint64_t i = 0; i < g.P; ++i) {
                                 Pos const pw = g.pos(i, 0), pb = g.pos(i, 1);
                                 std::uint16_t const v = lookup(pw), u = lookup(pb);
                                 bool const win = v != DRAW && (v & 1), loss = u != DRAW && !(u & 1);
-                                int const got = res[mi.index(pw)], got_b = lookup_btm_lost(pb);
+                                int const got = lookup_wtm(pw), got_b = lookup_btm_lost(pb);
                                 bool const w_ok = g_metric == Metric::dtm ? got == (win ? int(v) : 0) : (got != 0) == win;
                                 bool const b_ok = g_metric == Metric::dtm ? got_b == (loss ? int(u) : -1) : (got_b >= 0) == loss;
                                 if (!w_ok && bad_w++ < 3) std::cerr << "W " << fen_of(pw) << " got " << got << " oracle " << show(v) << std::endl;
@@ -389,12 +416,14 @@ bool check_order(std::string const& dz, std::string const& dc, std::string const
                         g_metric = Metric::dtc; auto const x = map_file(mat_path(dc, c, side), size);
                         g_metric = Metric::dtm; auto const m = map_file(mat_path(dm, c, side), size);
                         for (std::size_t i = 0; i < size; ++i) {
-                                if ((z[i] == 0) != (m[i] == 0) || (x[i] == 0) != (m[i] == 0)) { ++bad; continue; }
-                                if (m[i] == 0) continue;
+                                int const zp = decode(Metric::dtz, side, z[i]), xp = decode(Metric::dtc, side, x[i]),
+                                          mp = decode(Metric::dtm, side, m[i]);       // plies, -1 for none
+                                if ((zp < 0) != (mp < 0) || (xp < 0) != (mp < 0)) { ++bad; continue; }
+                                if (mp < 0) continue;
                                 ++count;
-                                if (!(z[i] <= x[i] && x[i] <= m[i])) ++bad;
-                                equal_zc += z[i] == x[i];
-                                equal_cm += x[i] == m[i];
+                                if (!(zp <= xp && xp <= mp)) ++bad;
+                                equal_zc += zp == xp;
+                                equal_cm += xp == mp;
                         }
                         std::uint64_t const bs = file_size(c, BITS + side);
                         g_metric = Metric::dtz; auto const zb = map_file(mat_path(dz, c, BITS + side), bs);

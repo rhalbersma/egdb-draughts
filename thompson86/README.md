@@ -9,10 +9,14 @@ and unmoves are in `src/materials_6x6.hpp`, shared with the two-sided [`syzygy`]
 
 | file | side to move | per position | value | 0 means |
 |---|---|---|---|---|
-| `wtm.dtm-W` | White | one byte | the number of plies to the goal of a White win | not a win (draw, loss or illegal slot) |
-| `btm.dtm-L` | Black | one byte | 1 + the number of plies to the goal of Black's loss (a loss can take 0 plies: Black has no move) | not lost |
+| `wtm.dtm-W` | White | one byte | k: a White win in 2k − 1 plies (dtc-W, dtz-W: n, a win in n plies) | not a win (draw, loss or illegal slot) |
+| `btm.dtm-L` | Black | one byte | k: Black lost in 2(k − 1) plies (dtc-L, dtz-L: n + 1, lost in n plies; a loss can take 0 plies: Black has no move) | not lost |
 | `wtm.bit-W` | White | one bit | 1: White wins | not a win |
 | `btm.bit-L` | Black | one bit | 1: Black is lost | not lost |
+
+**Exact plies, compactly.** A dtm win always takes an odd number of plies and a dtm loss an even number, so dtm stores
+moves, Thompson's "win in k": up to 509 plies in a byte. In dtc and dtz a goal move by the losing side (Black's forced
+capture) can end a White win on an even ply, so they store plies. The build works in plies; only the files differ.
 
 The notation, shared with [`syzygy`](../syzygy/): a file is `6x6-wp-bp-wm-bm.<side to move>.<kind>`. A **full result**
 holds win, draw and loss: `dtm` (with depth) or `wdl` (outcome only). A **half result** holds one of them: `dtm-W`,

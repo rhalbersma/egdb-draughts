@@ -278,7 +278,12 @@ Two facts that keep counters correct, from Thompson 1996 and Herik 1985:
    them by index, apply them in one sequential pass. The current code breaks the rule in one place: for a symmetric
    material, `unit_build` / `mat_build` write the Black-to-move half through the mirror
    (`u.p[stored_offset(r, mirror(pos))] = b`), scattered over the mirrored slice's range of the mapped file. The fix
-   is to mirror into a RAM buffer of that range first (at most about 17 MB on 6×6) and copy it to the file in order.
+   needs no buffer: turn the scatter into a gather. The mirror is its own inverse, so walk the mirrored slice's range
+   in index order and fetch each slot's value from the solved slice still in RAM (`tmp`): the random access moves to
+   the read side, in RAM, and the disk write becomes strictly sequential. For a slice that is its own mirror the
+   target range is its own White-to-move half, already written; there the gather becomes the existing consistency
+   check (compare instead of write). The general form: when an output would be scattered, gather it instead (for
+   each output slot in order, compute where its value comes from), whenever that inverse map is cheap.
 
 ## 8. Best of breed for draughts
 

@@ -8,6 +8,10 @@
 //   .w   White to move: the number of plies to the goal of a White win, 0 for "not a win" (draw, loss, illegal slot)
 //   .l   Black to move: 1 + the number of plies to the goal of Black's loss, 0 for "not lost" (a loss can take 0 plies:
 //        Black has no move), as Thompson 1996 kept the Black-to-move loss distances (RES)
+// and as a by-product their outcomes, one bit per position (the one-sided WDL: won or not, lost or not):
+//   .w.bit   White to move wins        .l.bit   Black to move is lost
+// After a goal move only the outcome counts, so a dtc or dtz build reads only the bit files of the materials that its
+// moves out lead into (every move out of a material is a goal move there); dtm reads the bytes.
 // The goal:
 //   dtm   the goal is the end of the game (Black has no move)
 //   dtc   the end, or a capture or promotion (a conversion: another material) that keeps the win
@@ -66,11 +70,16 @@
 
 namespace {
 
-// side 0: .w (White to move, wins), side 1: .l (Black to move, losses)
-std::string mat_path(std::string const& dir, Material m, int side)
+// kind 0: .w (White to move, wins), 1: .l (Black to move, losses), one byte per slot; 2: .w.bit, 3: .l.bit, one bit per
+// slot (won, lost); kind = side + 2 * bit
+enum : int { BYTES = 0, BITS = 2 };
+
+std::string mat_path(std::string const& dir, Material m, int kind)
 {
-        return dir + "/6x6-" + m.name() + "." + metric_name() + (side == 0 ? ".w" : ".l");
+        return dir + "/6x6-" + m.name() + "." + metric_name() + (kind % 2 == 0 ? ".w" : ".l") + (kind >= BITS ? ".bit" : "");
 }
+
+std::uint64_t file_size(Material m, int kind) { return kind < BITS ? mat_index(m).size : (mat_index(m).size + 7) / 8; }
 
 // ---------------------------------------------------------------- results: the material being built, and finished ones
 
@@ -79,12 +88,23 @@ Material g_current{ -1, -1, -1, -1 };
 std::array<std::vector<std::uint8_t>, 2> g_res;     // the material being built, .w and .l (written to disk at the end)
 std::map<std::pair<Material, int>, std::uint8_t const*> g_files;    // finished materials, memory-mapped read-only
 
+std::uint8_t const* mat_file(Material m, int kind)
+{
+        auto it = g_files.find({ m, kind });
+        if (it != g_files.end()) return it->second;
+        return g_files[{ m, kind }] = map_file(mat_path(g_dir, m, kind), file_size(m, kind));
+}
+
 std::uint8_t const* mat_data(Material m, int side)
 {
-        if (m == g_current) return g_res[std::size_t(side)].data();
-        auto it = g_files.find({ m, side });
-        if (it != g_files.end()) return it->second;
-        return g_files[{ m, side }] = map_file(mat_path(g_dir, m, side), mat_index(m).size);
+        return m == g_current ? g_res[std::size_t(side)].data() : mat_file(m, BYTES + side);
+}
+
+// side 0: White to move wins; side 1: Black to move is lost (one bit; the material being built: its bytes)
+bool mat_bit(Material m, int side, std::uint64_t i)
+{
+        if (m == g_current) return g_res[std::size_t(side)][i] != 0;
+        return mat_file(m, BITS + side)[i >> 3] >> (i & 7) & 1;
 }
 
 // White to move: plies to the goal of a White win, 0 if not a win
@@ -104,15 +124,49 @@ int lookup_btm_lost(Pos const& p)
         return int(mat_data(m, 1)[mat_index(m).index(p)]) - 1;
 }
 
+// White to move: does White win (one bit)
+bool wtm_won(Pos const& p)
+{
+        if ((p.m[0] | p.k[0]).empty() || (p.m[1] | p.k[1]).empty()) return false;
+        Material const m = material_of(p);
+        return mat_bit(m, 0, mat_index(m).index(p));
+}
+
+// Black to move: is Black lost (one bit)
+bool btm_lost(Pos const& p)
+{
+        if ((p.m[1] | p.k[1]).empty()) return true;
+        if ((p.m[0] | p.k[0]).empty()) return false;
+        Material const m = material_of(p);
+        return mat_bit(m, 1, mat_index(m).index(p));
+}
+
+// a White move: the plies to the goal of the win through it, -1 if it does not win; after a goal move only the outcome
+// counts, so dtc and dtz read only the bit files of the materials that their moves out lead into
+int white_move(Pos const& p, Move const& mv)
+{
+        if (goal_move(p, mv)) return btm_lost(mv.next) ? 1 : -1;
+        int const j = lookup_btm_lost(mv.next);
+        return j >= 0 ? 1 + j : -1;
+}
+
+// a Black move: the plies to the goal of Black's loss through it, 0 if White does not win after it
+int black_move(Pos const& p, Move const& mv)
+{
+        if (goal_move(p, mv)) return wtm_won(mv.next) ? 1 : 0;
+        int const v = lookup_wtm(mv.next);
+        return v != 0 ? 1 + v : 0;
+}
+
 // the same, recomputed by one ply over White-to-move results
 int btm_lost_from_successors(Pos const& p)
 {
         if ((p.m[1] | p.k[1]).empty()) return 0;          // Black has no pieces: lost
         int lost = 0;
         for (auto const& mv : moves(p)) {                   // no move: lost now (0)
-                int const v = lookup_wtm(mv.next);
+                int const v = black_move(p, mv);
                 if (v == 0) return -1;
-                lost = std::max(lost, goal_move(p, mv) ? 1 : 1 + v);
+                lost = std::max(lost, v);
         }
         return lost;
 }
@@ -122,8 +176,8 @@ int wtm_from_successors(Pos const& p)
 {
         int best = INF;
         for (auto const& mv : moves(p)) {
-                int const j = lookup_btm_lost(mv.next);
-                if (j >= 0) best = std::min(best, goal_move(p, mv) ? 1 : 1 + j);
+                int const j = white_move(p, mv);
+                if (j >= 0) best = std::min(best, j);
         }
         return best < INF ? best : 0;
 }
@@ -143,8 +197,8 @@ void solve_group(MatIndex const& mi, Group const& g)
                 int best = INF;
                 for (auto const& mv : moves(p)) {
                         if (inside(p, mv)) { in = true; continue; }
-                        int const j = lookup_btm_lost(mv.next);
-                        if (j >= 0) best = std::min(best, goal_move(p, mv) ? 1 : 1 + j);
+                        int const j = white_move(p, mv);
+                        if (j >= 0) best = std::min(best, j);
                 }
                 if (in) open_w.set(i);
                 if (best < INF) win_seeds.push_back({ best, std::uint32_t(i) });
@@ -157,9 +211,9 @@ void solve_group(MatIndex const& mi, Group const& g)
                 int slowest = 0;
                 for (auto const& mv : ml) {
                         if (inside(p, mv)) { in = true; continue; }
-                        int const v = lookup_wtm(mv.next);
+                        int const v = black_move(p, mv);
                         if (v == 0) all_lose = false;
-                        else slowest = std::max(slowest, goal_move(p, mv) ? 1 : 1 + v);
+                        else slowest = std::max(slowest, v);
                 }
                 if (!in) {                                              // every move leaves the group: decided
                         if (all_lose) loss_decided.push_back({ slowest, std::uint32_t(i) });
@@ -251,15 +305,21 @@ bool build_material(std::string const& dir, Material c)
         auto const t0 = std::chrono::steady_clock::now();
         std::uint64_t positions = 0;
         for (auto const& g : groups) { solve_group(mi, g); positions += 2 * g.P; }
-        for (int side : { 0, 1 }) {
-                std::string const path = mat_path(dir, c, side), tmp = path + ".tmp";
+        auto const write = [&](int kind, std::vector<std::uint8_t> const& r) {
+                std::string const path = mat_path(dir, c, kind), tmp = path + ".tmp";
                 {
-                        auto const& r = g_res[std::size_t(side)];
                         std::ofstream f(tmp, std::ios::binary | std::ios::trunc);
                         f.write(reinterpret_cast<char const*>(r.data()), std::streamsize(r.size()));   // one sequential write
                         if (!f) { std::cerr << "write failed " << tmp << std::endl; return false; }
                 }
                 std::filesystem::rename(tmp, path);
+                return true;
+        };
+        for (int side : { 0, 1 }) {
+                auto const& r = g_res[std::size_t(side)];
+                std::vector<std::uint8_t> bits((mi.size + 7) / 8, 0);       // the by-product: won (.w.bit), lost (.l.bit)
+                for (std::uint64_t i = 0; i < mi.size; ++i) bits[i >> 3] |= std::uint8_t((r[i] != 0) << (i & 7));
+                if (!write(BYTES + side, r) || !write(BITS + side, bits)) return false;
         }
         std::uint64_t wins = 0, losses = 0;
         int longest = 0, longest_loss = 0;
@@ -286,7 +346,7 @@ bool check_all(std::string const& dir, int n, int threads)
         for (Material const c : materials_up_to(n)) {
                 MatIndex const& mi = mat_index(c);
                 std::uint8_t const* res = mat_data(c, 0);
-                std::uint64_t checked = 0, bad_w = 0, bad_b = 0, bad_s = 0;
+                std::uint64_t checked = 0, bad_w = 0, bad_b = 0, bad_s = 0, bad_bit = 0;
                 for (auto const& g : groups_of(c))
                         for (std::uint64_t i = 0; i < g.P; ++i) {
                                 Pos const pw = g.pos(i, 0), pb = g.pos(i, 1);
@@ -297,6 +357,7 @@ bool check_all(std::string const& dir, int n, int threads)
                                 bool const b_ok = g_metric == Metric::dtm ? got_b == (loss ? int(u) : -1) : (got_b >= 0) == loss;
                                 if (!w_ok && bad_w++ < 3) std::cerr << "W " << fen_of(pw) << " got " << got << " oracle " << show(v) << std::endl;
                                 if (!b_ok && bad_b++ < 3) std::cerr << "B " << fen_of(pb) << " got " << got_b << " oracle " << show(u) << std::endl;
+                                if (wtm_won(pw) != (got != 0) || btm_lost(pb) != (got_b >= 0)) ++bad_bit;
                                 int const sv = wtm_from_successors(pw), sb = btm_lost_from_successors(pb);
                                 if (sv != got && bad_s++ < 3) std::cerr << "S " << fen_of(pw) << " stored " << got << " from successors " << sv << std::endl;
                                 if (sb != got_b && bad_s++ < 3) std::cerr << "S " << fen_of(pb) << " stored " << got_b << " from successors " << sb << std::endl;
@@ -305,19 +366,20 @@ bool check_all(std::string const& dir, int n, int threads)
                 total += checked;
                 std::cout << "check " << c.name() << " " << metric_name() << ": " << checked << " positions, " << bad_w << " / "
                           << bad_b << " differences from egdb_6x6 (White / Black to move), " << bad_s
-                          << " differences from the successors" << std::endl;
-                ok = ok && bad_w == 0 && bad_b == 0 && bad_s == 0;
+                          << " differences from the successors, " << bad_bit << " in the bit files" << std::endl;
+                ok = ok && bad_w == 0 && bad_b == 0 && bad_s == 0 && bad_bit == 0;
         }
         std::cout << total << " positions; " << (ok ? "all materials check out" : "DIFFERENCES") << std::endl;
         return ok;
 }
 
-// dtz <= dtc <= dtm for every White-to-move win and every Black-to-move loss, and the same wins and losses in all three
+// dtz <= dtc <= dtm for every White-to-move win and every Black-to-move loss, the same wins and losses in all three, and
+// the same bit files
 bool check_order(std::string const& dz, std::string const& dc, std::string const& dm, int n)
 {
         bool ok = true;
         for (int side : { 0, 1 }) {
-                std::uint64_t count = 0, bad = 0, equal_zc = 0, equal_cm = 0;
+                std::uint64_t count = 0, bad = 0, equal_zc = 0, equal_cm = 0, bad_bits = 0;
                 for (Material const c : materials_up_to(n)) {
                         std::size_t const size = mat_index(c).size;
                         g_metric = Metric::dtz; auto const z = map_file(mat_path(dz, c, side), size);
@@ -331,11 +393,16 @@ bool check_order(std::string const& dz, std::string const& dc, std::string const
                                 equal_zc += z[i] == x[i];
                                 equal_cm += x[i] == m[i];
                         }
+                        std::uint64_t const bs = file_size(c, BITS + side);
+                        g_metric = Metric::dtz; auto const zb = map_file(mat_path(dz, c, BITS + side), bs);
+                        g_metric = Metric::dtc; auto const xb = map_file(mat_path(dc, c, BITS + side), bs);
+                        g_metric = Metric::dtm; auto const mb = map_file(mat_path(dm, c, BITS + side), bs);
+                        bad_bits += !std::equal(zb, zb + bs, mb) || !std::equal(xb, xb + bs, mb);
                 }
                 std::cout << "order: " << count << (side == 0 ? " White-to-move wins, " : " Black-to-move losses, ") << bad
                           << " violations of dtz <= dtc <= dtm (or of the same set); dtz = dtc in " << equal_zc << ", dtc = dtm in "
-                          << equal_cm << std::endl;
-                ok = ok && bad == 0;
+                          << equal_cm << "; " << bad_bits << " bit files that differ" << std::endl;
+                ok = ok && bad == 0 && bad_bits == 0;
         }
         return ok;
 }

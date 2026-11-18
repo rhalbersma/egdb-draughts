@@ -2,19 +2,28 @@
 
 `thompson86.cpp` builds endgame databases in the manner of K. Thompson, "Retrograde analysis of certain endgames",
 ICCA Journal 9(3), 1986, and "6-piece endgames", ICCA Journal 19(4), 1996, adapted to draughts and to the design
-notes in [`literature/egdb_primitives.md`](../literature/egdb_primitives.md). Its metrics, materials, index, groups and unmoves are in
-`src/materials_6x6.hpp`, shared with the two-sided [`syzygy`](../syzygy/) builder.
+notes in [`literature/egdb_primitives.md`](../literature/egdb_primitives.md). Its metrics, materials, index, groups
+and unmoves are in `src/materials_6x6.hpp`, shared with the two-sided [`syzygy`](../syzygy/) builder.
 
-**Two files per material, one byte per position**, both one-sided (White's wins and Black's losses):
+**Four files per material**, all one-sided (White's wins and Black's losses):
 
-| file | side to move | value | 0 means |
-|---|---|---|---|
-| `.w` | White | the number of plies to the goal of a White win | not a win (draw, loss or illegal slot) |
-| `.l` | Black | 1 + the number of plies to the goal of Black's loss (a loss can take 0 plies: Black has no move) | not lost |
+| file | side to move | per position | value | 0 means |
+|---|---|---|---|---|
+| `.w` | White | one byte | the number of plies to the goal of a White win | not a win (draw, loss or illegal slot) |
+| `.l` | Black | one byte | 1 + the number of plies to the goal of Black's loss (a loss can take 0 plies: Black has no move) | not lost |
+| `.w.bit` | White | one bit | 1: White wins | not a win |
+| `.l.bit` | Black | one bit | 1: Black is lost | not lost |
 
-The `.l` file is Thompson 1996's RES, the Black-to-move loss distances. With it every lookup is a single read: after a
-White move into `.l`, after a Black move into `.w`, without a ply of search. Three metrics, which differ only in the moves that end the count (by either side, as long as the win is
-kept):
+**Why depths, and why bits.** `.w` is the database: the dtm, dtc or dtz of every White-to-move win, which you need to
+play the win out. `.l` holds the Black-to-move loss depths, which a dtm build needs (a White capture wins in 1 + the
+loss depth of the position it leads to) and which you need to play the defence. The bit files are the one-sided WDL,
+a by-product of the bytes. They are all that dtc and dtz need from the materials that a move leads into: every move
+out of a material is a goal move there, after which only the outcome counts. So the dtc and dtz Snakemake rules read
+only the bit files of the captures and promotions; dtm reads the bytes.
+
+The `.l` file is Thompson 1996's RES, the Black-to-move loss distances. With it every lookup is a single read: after
+a White move into `.l`, after a Black move into `.w`, without a ply of search. Three metrics, which differ only in
+the moves that end the count (by either side, as long as the win is kept):
 
 | metric | the count ends at |
 |---|---|
@@ -48,7 +57,7 @@ decided there (captures are compulsory); the others keep their exit results as s
 by ply level d: W_d from the unmoves of B_{d−1} plus exits that win in d plies; B_d from the unmoves of W_{d−1},
 verified (every move inside leads into W, and the exits are lost by d), plus positions decided in pass 0 at d.
 
-**Memory and disk**: per material its two result arrays and per group a handful of bit planes in RAM; finished
+**Memory and disk**: per material its two byte arrays and per group a handful of bit planes in RAM; finished
 materials are read through read-only memory maps; the only disk writes are one sequential write per file of a finished
 material (to a temporary name, then renamed).
 
@@ -64,8 +73,9 @@ snakemake -s thompson86/Snakefile --cores 4 --config engine=build/thompson86 dir
 
 or with CMake, target `thompson86`. The last Snakemake job (`checkall`) builds `egdb_6x6`'s databases in memory and
 compares every position of every material, both sides to move: dtm exactly; dtc and dtz their wins and losses. For
-all three metrics every value of both files is also compared with the value recomputed by one ply over the other file.
-`thompson86 order <dtz> <dtc> <dtm> n` checks dtz ≤ dtc ≤ dtm for every White win and every Black loss.
+all three metrics every value of both byte files is also compared with the value recomputed by one ply over the other
+file, and the bit files with the bytes. `thompson86 order <dtz> <dtc> <dtm> n` checks dtz ≤ dtc ≤ dtm for every White
+win and every Black loss, and that the bit files of the three metrics are identical.
 
 ## Results (6 pieces, 4 cores)
 
@@ -90,6 +100,8 @@ type per metric), 20,482,891 White-to-move wins and 11,884,425 Black-to-move los
   (wins: dtz = dtc in 16,667,806, dtc = dtm in 3,662,469; losses: dtz = dtc in 7,693,843, dtc = dtm in 1,107,200);
 * a dtz loss can be a ply longer than the longest dtz win: Black makes a king move that does not zero, then White
   needs 27 plies;
+* the bit files (12.2 MB per side and metric) equal the bytes everywhere, and are the same for all three metrics and
+  both styles; rebuilding with them left every byte file unchanged;
 * 3 and 4 pieces check out the same way.
 
 **Storing `.l` costs a second file and saves a third of the CPU.** With only `.w`, every White move out of a group

@@ -52,7 +52,9 @@
 //
 // build: g++-14 -std=c++23 -O2 -march=native -fopenmp -I<xstd-bits>/include -I<xstd-ints>/include
 //        -I<xstd-misc>/include thompson86/thompson86.cpp -lzstd -ltbb -o thompson86
-// usage: thompson86 build <dir> wp bp wm bm <metric> <style>   build one material (its captures and promotions must exist)
+// usage: thompson86 build <dir> wp bp wm bm <metric> <style> [groups|array]
+//                                                               build one material (its captures and promotions must exist);
+//                                                               the depth sink: per-group files (default) or the array
 //        thompson86 checkall <dir> n <metric> [threads]         every material of at most n pieces against egdb_6x6 (built in
 //                                                               memory): dtm exactly, dtc / dtz their wins and losses,
 //                                                               and every value of both files recomputed from its
@@ -89,7 +91,6 @@ std::uint64_t file_size(Material m, int kind) { return kind < BITS ? mat_index(m
 
 std::string g_dir;
 Material g_current{ -1, -1, -1, -1 };
-std::array<std::vector<std::uint8_t>, 2> g_res;     // the material being built, dtm-W and dtm-L (written to disk at the end)
 std::map<std::pair<Material, int>, std::uint8_t const*> g_files;    // finished materials, memory-mapped read-only
 
 std::uint8_t const* mat_file(Material m, int kind)
@@ -128,15 +129,163 @@ std::uint8_t store_byte(int side, int plies)
         return std::uint8_t(s);
 }
 
-std::uint8_t const* mat_data(Material m, int side)
+// ---------------------------------------------------------------- depth sinks: where the depth bytes of the material being built go
+//
+// The rounds only put depth bytes (dtm-W with White to move, dtm-L with Black to move) and never read them back for
+// their own group; moves out of a group read the bytes of earlier, finished groups of the same material. Two backends:
+//   array    the whole material's bytes in RAM, indexed like its files (rung 0)
+//   groups   only the current group's bytes in RAM; each finished group is appended to one file per side in group
+//            order (strictly sequential writes), mapped once read-only for the lookups: a finished group is an input
+//            like a finished material. (A file per group would need two memory maps per group, and the 1986 style has
+//            tens of thousands of groups per material, more than the kernel's map limit.)
+// Either way the material's files are written by one sequential pass in index order that gathers each slot's byte.
+class DepthSink
 {
-        return m == g_current ? g_res[std::size_t(side)].data() : mat_file(m, BYTES + side);
+public:
+        virtual ~DepthSink() = default;
+        virtual void begin_group(std::size_t k, Group const& g) = 0;
+        virtual void put(int side, std::uint64_t local, Pos const& p, std::uint8_t byte) = 0;      // local: index in the group
+        virtual void end_group() = 0;
+        virtual std::uint8_t read(int side, Pos const& p) const = 0;            // a finished group's byte, else 0
+        virtual std::uint8_t at(int side, std::uint64_t slot) const = 0;        // the byte of a slot of the material
+};
+
+class ArraySink final : public DepthSink
+{
+        MatIndex const& mi_;
+        std::array<std::vector<std::uint8_t>, 2> res_;
+
+public:
+        explicit ArraySink(MatIndex const& mi) : mi_(mi) { for (auto& r : res_) r.assign(mi.size, 0); }
+        void begin_group(std::size_t, Group const&) override {}
+        void put(int side, std::uint64_t, Pos const& p, std::uint8_t byte) override { res_[std::size_t(side)][mi_.index(p)] = byte; }
+        void end_group() override {}
+        std::uint8_t read(int side, Pos const& p) const override { return res_[std::size_t(side)][mi_.index(p)]; }
+        std::uint8_t at(int side, std::uint64_t slot) const override { return res_[std::size_t(side)][slot]; }
+};
+
+class GroupSink final : public DepthSink
+{
+        struct Slice { std::uint64_t offset; Meta const* meta; std::size_t group; };
+
+        Material c_;
+        MatIndex const& mi_;
+        std::vector<Group> const& groups_;
+        std::vector<std::uint64_t> gbase_;                              // offset of each group in the group-order files
+        std::unordered_map<std::uint64_t, Slice> slice_;                // slice key -> where its positions are
+        mutable std::uint64_t last_key_ = ~std::uint64_t(0);
+        mutable Slice const* last_ = nullptr;
+        std::vector<char> done_;                                        // finished groups
+        std::array<std::string, 2> path_;
+        std::array<int, 2> fd_{ -1, -1 };
+        std::array<std::uint8_t const*, 2> map_{ nullptr, nullptr };
+        std::uint64_t total_ = 0;
+        std::size_t k_ = 0;
+        std::array<std::vector<std::uint8_t>, 2> buf_;                  // the current group, both sides to move
+
+        Slice const* find(Pos const& p) const
+        {
+                std::uint64_t const key = key_of(p).pack();
+                if (key != last_key_) {
+                        auto const it = slice_.find(key);
+                        last_ = it == slice_.end() ? nullptr : &it->second;
+                        last_key_ = key;
+                }
+                return last_;
+        }
+
+public:
+        GroupSink(std::string const& dir, Material c, MatIndex const& mi, std::vector<Group> const& groups)
+        :
+                c_(c), mi_(mi), groups_(groups), done_(groups.size(), 0)
+        {
+                for (std::size_t k = 0; k < groups.size(); ++k) {
+                        gbase_.push_back(total_);
+                        for (std::size_t u = 0; u < groups[k].units.size(); ++u)
+                                slice_[groups[k].units[u].key.pack()] = { total_ + groups[k].base[u], &groups[k].units[u], k };
+                        total_ += groups[k].P;
+                }
+                for (int side : { 0, 1 }) {     // one file per side, in group order, sized up front, mapped once read-only
+                        path_[std::size_t(side)] = dir + "/tmp-6x6-" + c.name() + "." + metric_name() + (side == 0 ? ".wtm" : ".btm");
+                        int const fd = ::open(path_[std::size_t(side)].c_str(), O_RDWR | O_CREAT | O_TRUNC, 0644);
+                        if (fd < 0 || ::ftruncate(fd, off_t(total_)) != 0) { std::cerr << "cannot create " << path_[std::size_t(side)] << std::endl; std::exit(1); }
+                        fd_[std::size_t(side)] = fd;
+                        if (total_ == 0) continue;
+                        void* m = ::mmap(nullptr, total_, PROT_READ, MAP_SHARED, fd, 0);
+                        if (m == MAP_FAILED) { std::cerr << "mmap failed " << path_[std::size_t(side)] << std::endl; std::exit(1); }
+                        map_[std::size_t(side)] = static_cast<std::uint8_t const*>(m);
+                }
+        }
+
+        ~GroupSink() override
+        {
+                for (int side : { 0, 1 }) {
+                        if (map_[std::size_t(side)]) ::munmap(const_cast<std::uint8_t*>(map_[std::size_t(side)]), total_);
+                        if (fd_[std::size_t(side)] >= 0) ::close(fd_[std::size_t(side)]);
+                        std::filesystem::remove(path_[std::size_t(side)]);
+                }
+        }
+
+        void begin_group(std::size_t k, Group const& g) override
+        {
+                k_ = k;
+                for (auto& b : buf_) b.assign(g.P, 0);
+        }
+
+        void put(int side, std::uint64_t local, Pos const&, std::uint8_t byte) override { buf_[std::size_t(side)][local] = byte; }
+
+        void end_group() override                                       // append the group: the writes go in group order
+        {
+                for (int side : { 0, 1 }) {
+                        auto const& b = buf_[std::size_t(side)];
+                        for (std::uint64_t done = 0; done < b.size();) {
+                                ssize_t const n = ::pwrite(fd_[std::size_t(side)], b.data() + done, b.size() - done, off_t(gbase_[k_] + done));
+                                if (n <= 0) { std::cerr << "write failed " << path_[std::size_t(side)] << std::endl; std::exit(1); }
+                                done += std::uint64_t(n);
+                        }
+                        std::vector<std::uint8_t>().swap(buf_[std::size_t(side)]);
+                }
+                done_[k_] = 1;
+        }
+
+        std::uint8_t read(int side, Pos const& p) const override
+        {
+                Slice const* s = find(p);
+                if (!s || !done_[s->group]) return 0;
+                return map_[std::size_t(side)][s->offset + index_of(*s->meta, p)];
+        }
+
+        std::uint8_t at(int side, std::uint64_t slot) const override  // un-rank the slot, then read its group
+        {
+                std::uint64_t const rbk = slot % mi_.sbk, t1 = slot / mi_.sbk, rwk = t1 % mi_.swk, t2 = t1 / mi_.swk;
+                std::uint64_t const rbm = t2 % mi_.sbm, rwm = t2 / mi_.sbm;
+                Pos p;
+                p.m[0] = unrank_in(rwm, c_.wm, DOM_WM);
+                p.m[1] = unrank_in(rbm, c_.bm, DOM_BM);
+                p.k[0] = unrank_in(rwk, c_.wk, FULL);
+                p.k[1] = unrank_in(rbk, c_.bk, FULL);
+                p.stm = side;
+                bitboard const pieces[] = { p.m[0], p.m[1], p.k[0], p.k[1] };
+                for (int i = 0; i < 4; ++i)
+                        for (int j = i + 1; j < 4; ++j)
+                                if (!(pieces[i] & pieces[j]).empty()) return 0;         // an illegal slot
+                return read(side, p);
+        }
+};
+
+DepthSink* g_sink = nullptr;                                    // of the material being built
+
+std::uint8_t mat_byte(Material m, int side, Pos const& p)       // the stored byte (dtm-W, dtm-L)
+{
+        if (m == g_current) return g_sink->read(side, p);
+        return mat_file(m, BYTES + side)[mat_index(m).index(p)];
 }
 
 // side 0: White to move wins; side 1: Black to move is lost (one bit; the material being built: its bytes)
-bool mat_bit(Material m, int side, std::uint64_t i)
+bool mat_bit(Material m, int side, Pos const& p)
 {
-        if (m == g_current) return g_res[std::size_t(side)][i] != 0;
+        if (m == g_current) return g_sink->read(side, p) != 0;
+        std::uint64_t const i = mat_index(m).index(p);
         return mat_file(m, BITS + side)[i >> 3] >> (i & 7) & 1;
 }
 
@@ -145,7 +294,7 @@ int lookup_wtm(Pos const& p)
 {
         if ((p.m[0] | p.k[0]).empty() || (p.m[1] | p.k[1]).empty()) return 0;   // a side without pieces: not a White win to look up
         Material const m = material_of(p);
-        return std::max(0, decode(g_metric, 0, mat_data(m, 0)[mat_index(m).index(p)]));
+        return std::max(0, decode(g_metric, 0, mat_byte(m, 0, p)));
 }
 
 // Black to move: plies to the goal of Black's loss, -1 if Black is not lost
@@ -154,7 +303,7 @@ int lookup_btm_lost(Pos const& p)
         if ((p.m[1] | p.k[1]).empty()) return 0;          // Black has no pieces: lost
         if ((p.m[0] | p.k[0]).empty()) return -1;         // White has no pieces: Black has won
         Material const m = material_of(p);
-        return decode(g_metric, 1, mat_data(m, 1)[mat_index(m).index(p)]);
+        return decode(g_metric, 1, mat_byte(m, 1, p));
 }
 
 // White to move: does White win (one bit)
@@ -162,7 +311,7 @@ bool wtm_won(Pos const& p)
 {
         if ((p.m[0] | p.k[0]).empty() || (p.m[1] | p.k[1]).empty()) return false;
         Material const m = material_of(p);
-        return mat_bit(m, 0, mat_index(m).index(p));
+        return mat_bit(m, 0, p);
 }
 
 // Black to move: is Black lost (one bit)
@@ -171,7 +320,7 @@ bool btm_lost(Pos const& p)
         if ((p.m[1] | p.k[1]).empty()) return true;
         if ((p.m[0] | p.k[0]).empty()) return false;
         Material const m = material_of(p);
-        return mat_bit(m, 1, mat_index(m).index(p));
+        return mat_bit(m, 1, p);
 }
 
 // a White move: the plies to the goal of the win through it, -1 if it does not win; after a goal move only the outcome
@@ -217,7 +366,7 @@ int wtm_from_successors(Pos const& p)
 
 struct Seed { int level; std::uint32_t idx; };
 
-void solve_group(MatIndex const& mi, Group const& g)
+void solve_group(Group const& g, DepthSink& sink)
 {
         std::uint64_t const P = g.P;
         Plane open_w(P), open_b(P), lossable(P), exits_done(P), won(P), lost(P);
@@ -273,7 +422,7 @@ void solve_group(MatIndex const& mi, Group const& g)
                 std::uint32_t const q = loss_decided[ld].idx;
                 b_last.set(q);
                 lost.set(q);
-                g_res[1][mi.index(g.pos(q, 1))] = store_byte(1, 0);     // lost in 0 plies: no move
+                sink.put(1, q, g.pos(q, 1), store_byte(1, 0));          // lost in 0 plies: no move
         }
         for (int d = 1;; ++d) {
                 // P2: White wins in d
@@ -315,11 +464,11 @@ void solve_group(MatIndex const& mi, Group const& g)
 
                 w_new.for_each([&](std::uint64_t q) {
                         won.set(q);
-                        g_res[0][mi.index(g.pos(q, 0))] = store_byte(0, d);
+                        sink.put(0, q, g.pos(q, 0), store_byte(0, d));
                 });
                 b_new.for_each([&](std::uint64_t q) {
                         lost.set(q);
-                        g_res[1][mi.index(g.pos(q, 1))] = store_byte(1, d);
+                        sink.put(1, q, g.pos(q, 1), store_byte(1, d));
                 });
                 std::swap(w_last, w_new);
                 std::swap(b_last, b_new);
@@ -327,41 +476,64 @@ void solve_group(MatIndex const& mi, Group const& g)
         }
 }
 
+bool g_group_files = true;                                      // the depth sink: per-group files (false: the material array)
+
 bool build_material(std::string const& dir, Material c)
 {
         g_dir = dir;
         g_current = c;
         MatIndex const& mi = mat_index(c);
-        for (auto& r : g_res) r.assign(mi.size, 0);
         auto const groups = groups_of(c);
+        std::unique_ptr<DepthSink> sink;
+        if (g_group_files) sink = std::make_unique<GroupSink>(dir, c, mi, groups);
+        else sink = std::make_unique<ArraySink>(mi);
+        g_sink = sink.get();
         auto const t0 = std::chrono::steady_clock::now();
         std::uint64_t positions = 0;
-        for (auto const& g : groups) { solve_group(mi, g); positions += 2 * g.P; }
-        auto const write = [&](int kind, std::vector<std::uint8_t> const& r) {
-                std::string const path = mat_path(dir, c, kind), tmp = path + ".tmp";
-                {
-                        std::ofstream f(tmp, std::ios::binary | std::ios::trunc);
-                        f.write(reinterpret_cast<char const*>(r.data()), std::streamsize(r.size()));   // one sequential write
-                        if (!f) { std::cerr << "write failed " << tmp << std::endl; return false; }
-                }
-                std::filesystem::rename(tmp, path);
-                return true;
-        };
-        for (int side : { 0, 1 }) {
-                auto const& r = g_res[std::size_t(side)];
-                std::vector<std::uint8_t> bits((mi.size + 7) / 8, 0);       // the by-product: bit-W (won), bit-L (lost)
-                for (std::uint64_t i = 0; i < mi.size; ++i) bits[i >> 3] |= std::uint8_t((r[i] != 0) << (i & 7));
-                if (!write(BYTES + side, r) || !write(BITS + side, bits)) return false;
+        for (std::size_t k = 0; k < groups.size(); ++k) {
+                sink->begin_group(k, groups[k]);
+                solve_group(groups[k], *sink);
+                sink->end_group();
+                positions += 2 * groups[k].P;
         }
+
+        // the four files of the material, each written once, sequentially, in index order: the bytes gathered from the
+        // sink slot by slot, the bits from the bytes
         std::uint64_t wins = 0, losses = 0;
         int longest = 0, longest_loss = 0;
-        for (auto v : g_res[0]) { wins += v != 0; longest = std::max(longest, decode(g_metric, 0, v)); }
-        for (auto v : g_res[1]) { losses += v != 0; longest_loss = std::max(longest_loss, decode(g_metric, 1, v)); }
+        constexpr std::uint64_t chunk = std::uint64_t(1) << 20;         // slots per write, a multiple of 8
+        for (int side : { 0, 1 }) {
+                std::string const pb = mat_path(dir, c, BYTES + side), pt = mat_path(dir, c, BITS + side);
+                std::ofstream fb(pb + ".tmp", std::ios::binary | std::ios::trunc), ft(pt + ".tmp", std::ios::binary | std::ios::trunc);
+                std::vector<std::uint8_t> bytes, bits;
+                for (std::uint64_t lo = 0; lo < mi.size; lo += chunk) {
+                        std::uint64_t const hi = std::min(mi.size, lo + chunk);
+                        bytes.assign(hi - lo, 0);
+                        bits.assign((hi - lo + 7) / 8, 0);
+                        for (std::uint64_t i = lo; i < hi; ++i) {
+                                std::uint8_t const v = sink->at(side, i);
+                                bytes[i - lo] = v;
+                                bits[(i - lo) >> 3] |= std::uint8_t((v != 0) << ((i - lo) & 7));
+                                if (v == 0) continue;
+                                int const d = decode(g_metric, side, v);
+                                if (side == 0) { ++wins; longest = std::max(longest, d); }
+                                else { ++losses; longest_loss = std::max(longest_loss, d); }
+                        }
+                        fb.write(reinterpret_cast<char const*>(bytes.data()), std::streamsize(bytes.size()));
+                        ft.write(reinterpret_cast<char const*>(bits.data()), std::streamsize(bits.size()));
+                }
+                if (!fb || !ft) { std::cerr << "write failed " << pb << std::endl; return false; }
+                fb.close();
+                ft.close();
+                std::filesystem::rename(pb + ".tmp", pb);
+                std::filesystem::rename(pt + ".tmp", pt);
+        }
+        g_sink = nullptr;
         double const sec = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-        std::cout << "material " << c.name() << " " << metric_name() << (g_waves ? " 1996" : " 1986") << ": " << groups.size()
-                  << " groups, " << positions << " positions, " << mi.size << " slots, " << wins << " White wins, longest "
-                  << longest << " plies, " << losses << " Black losses, longest " << longest_loss << " plies, " << sec << " s"
-                  << std::endl;
+        std::cout << "material " << c.name() << " " << metric_name() << (g_waves ? " 1996" : " 1986")
+                  << (g_group_files ? " group files" : " array") << ": " << groups.size() << " groups, " << positions
+                  << " positions, " << mi.size << " slots, " << wins << " White wins, longest " << longest << " plies, "
+                  << losses << " Black losses, longest " << longest_loss << " plies, " << sec << " s" << std::endl;
         return true;
 }
 
@@ -451,15 +623,19 @@ int main(int argc, char* argv[])
                 if (wm < 0 || bm < 0 || wm > wp || bm > bp) { std::cerr << "not a material: wp bp wm bm" << std::endl; std::exit(2); }
                 return Material{ wm, wp - wm, bm, bp - bm };
         };
-        if (a.size() == 8 && a[0] == "build" && parse_metric(a[6]) && (a[7] == "86" || a[7] == "96")) {
+        if ((a.size() == 8 || a.size() == 9) && a[0] == "build" && parse_metric(a[6]) && (a[7] == "86" || a[7] == "96")) {
                 g_waves = a[7] == "96";
+                if (a.size() == 9) {
+                        if (a[8] != "groups" && a[8] != "array") { std::cerr << "sink: groups or array" << std::endl; return 2; }
+                        g_group_files = a[8] == "groups";
+                }
                 return build_material(a[1], mat_at(2)) ? 0 : 1;
         }
         if ((a.size() == 4 || a.size() == 5) && a[0] == "checkall" && parse_metric(a[3]))
                 return check_all(a[1], std::stoi(a[2]), a.size() == 5 ? std::stoi(a[4]) : 4) ? 0 : 1;
         if (a.size() == 5 && a[0] == "order") return check_order(a[1], a[2], a[3], std::stoi(a[4])) ? 0 : 1;
         if (a.size() == 5 && a[0] == "size") { std::cout << MatIndex(mat_at(1)).size << std::endl; return 0; }
-        std::cerr << "usage: thompson86 build <dir> wp bp wm bm dtm|dtc|dtz 86|96 | checkall <dir> n dtm|dtc|dtz [threads]"
+        std::cerr << "usage: thompson86 build <dir> wp bp wm bm dtm|dtc|dtz 86|96 [groups|array] | checkall <dir> n dtm|dtc|dtz [threads]"
                      " | order <dir_dtz> <dir_dtc> <dir_dtm> n | size wp bp wm bm" << std::endl;
         return 2;
 }

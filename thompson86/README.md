@@ -68,9 +68,22 @@ decided there (captures are compulsory); the others keep their exit results as s
 by ply level d: W_d from the unmoves of B_{d−1} plus exits that win in d plies; B_d from the unmoves of W_{d−1},
 verified (every move inside leads into W, and the exits are lost by d), plus positions decided in pass 0 at d.
 
-**Memory and disk**: per material its two byte arrays and per group a handful of bit planes in RAM; finished
-materials are read through read-only memory maps; the only disk writes are one sequential write per file of a finished
-material (to a temporary name, then renamed).
+**Memory and disk**: per group a handful of bit planes in RAM; finished materials are read through read-only memory
+maps. The depth bytes of the material being built go to a **depth sink** (`sink=` in Snakemake, the last argument of
+`build`):
+
+| sink | depth bytes in RAM | finished groups of the material | at the end |
+|---|---|---|---|
+| `groups` (default) | the current group's only | appended to one file per side in group order (strictly sequential writes), mapped once read-only for the lookups that moves out of a group make into earlier groups | |
+| `array` | the whole material's | read from the array | |
+| both | | | each of the four files written once, sequentially, in index order, gathering every slot's byte (from the group-order files: un-rank the slot, find its group, read) |
+
+A file per group would need two memory maps per group, and the 1986 style has tens of thousands of groups (one per
+slice) in the largest materials: more than the kernel's limit of 65,530 maps per process. At 6 pieces both sinks give
+byte-identical files; `groups` costs 10–15 % more CPU (dtm 38.1 s against 33.8 s, 1986 style) for the slice lookups
+and the gathering pass, and the largest material (03-03-01-01, 5.27 M slots per side) peaks at 19.3 MB instead of
+24.9 MB of RSS (13.2 MB of it the program's own tables). This is rung 1 of the memory ladder in
+[`literature/egdb_primitives.md`](../literature/egdb_primitives.md) §7.2.
 
 ## Build and run
 

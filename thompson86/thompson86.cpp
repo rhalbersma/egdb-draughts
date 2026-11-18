@@ -14,10 +14,11 @@
 //   dtz   the end, or a capture or man move (a zeroing move of the 25-move rule) that keeps the win
 // A goal move by either side ends the count: a White win can end with Black's forced capture (an even number of plies).
 //
-// Materials. Every material (WM white men, WK white kings, BM black men, BK black kings, both sides with a piece)
-// is built once, into a file of its own. Its index: per colour and type the colex rank over the squares where such a
+// Materials. A material is named wp-bp-wm-bm (white pieces, black pieces, white men, black men, two digits each, as
+// in egdb_6x6's material mode); every material with a piece on each side is built once, into files of its own,
+// 6x6-wp-bp-wm-bm.<metric>.w and .l. Its index: per colour and type the colex rank over the squares where such a
 // piece may stand (15 for men, 18 for kings),
-//   index = ((rank_wm * C(15, BM) + rank_bm) * C(18, WK) + rank_wk) * C(18, BK) + rank_bk
+//   index = ((rank_wm * C(15, bm) + rank_bm) * C(18, wp - wm) + rank_wk) * C(18, bp - bm) + rank_bk
 // Slots where pieces of different colours or types share a square are never written (0). A move into another
 // material (a capture, a promotion) is a lookup in that material's files at its own index: after a White move in .l,
 // after a Black move in .w; the smaller
@@ -44,14 +45,14 @@
 //
 // build: g++-14 -std=c++23 -O2 -march=native -fopenmp -I<xstd-bits>/include -I<xstd-ints>/include
 //        -I<xstd-misc>/include thompson86/thompson86.cpp -lzstd -ltbb -o thompson86
-// usage: thompson86 build <dir> WM WK BM BK <metric> <style>   build one material (its captures and promotions must exist)
+// usage: thompson86 build <dir> wp bp wm bm <metric> <style>   build one material (its captures and promotions must exist)
 //        thompson86 checkall <dir> n <metric> [threads]         every material of at most n pieces against egdb_6x6 (built in
 //                                                               memory): dtm exactly, dtc / dtz their wins and losses,
 //                                                               and every value of both files recomputed from its
 //                                                               successors
 //        thompson86 order <dir_dtz> <dir_dtc> <dir_dtm> n       dtz <= dtc <= dtm for every White-to-move win and every
 //                                                               Black-to-move loss
-//        thompson86 size WM WK BM BK                            the number of slots of a material
+//        thompson86 size wp bp wm bm                            the number of slots of a material
 // metric: dtm, dtc, dtz; style: 86, 96
 
 #define main egdb_6x6_main
@@ -120,9 +121,11 @@ struct Material {
         int wm, wk, bm, bk;
         auto operator<=>(Material const&) const = default;
         int pieces() const { return wm + wk + bm + bk; }
-        std::string name() const
+        int wp() const { return wm + wk; }
+        int bp() const { return bm + bk; }
+        std::string name() const                        // wp-bp-wm-bm
         {
-                return std::to_string(wm) + "-" + std::to_string(wk) + "-" + std::to_string(bm) + "-" + std::to_string(bk);
+                return std::format("{:02}-{:02}-{:02}-{:02}", wp(), bp(), wm, bm);
         }
 };
 
@@ -158,7 +161,7 @@ char const* metric_name()
 // side 0: .w (White to move, wins), side 1: .l (Black to move, losses)
 std::string mat_path(std::string const& dir, Material m, int side)
 {
-        return dir + "/mat-" + m.name() + "." + metric_name() + (side == 0 ? ".w" : ".l");
+        return dir + "/6x6-" + m.name() + "." + metric_name() + (side == 0 ? ".w" : ".l");
 }
 
 // ---------------------------------------------------------------- results: the material being built, and finished ones
@@ -573,7 +576,11 @@ int main(int argc, char* argv[])
         init_tables();
         init_cc();
         std::vector<std::string> const a(argv + 1, argv + argc);
-        auto mat_at = [&](std::size_t i) { return Material{ std::stoi(a[i]), std::stoi(a[i + 1]), std::stoi(a[i + 2]), std::stoi(a[i + 3]) }; };
+        auto mat_at = [&](std::size_t i) {                             // wp bp wm bm
+                int const wp = std::stoi(a[i]), bp = std::stoi(a[i + 1]), wm = std::stoi(a[i + 2]), bm = std::stoi(a[i + 3]);
+                if (wm < 0 || bm < 0 || wm > wp || bm > bp) { std::cerr << "not a material: wp bp wm bm" << std::endl; std::exit(2); }
+                return Material{ wm, wp - wm, bm, bp - bm };
+        };
         if (a.size() == 8 && a[0] == "build" && parse_metric(a[6]) && (a[7] == "86" || a[7] == "96")) {
                 g_waves = a[7] == "96";
                 return build_material(a[1], mat_at(2)) ? 0 : 1;
@@ -582,7 +589,7 @@ int main(int argc, char* argv[])
                 return check_all(a[1], std::stoi(a[2]), a.size() == 5 ? std::stoi(a[4]) : 4) ? 0 : 1;
         if (a.size() == 5 && a[0] == "order") return check_order(a[1], a[2], a[3], std::stoi(a[4])) ? 0 : 1;
         if (a.size() == 5 && a[0] == "size") { std::cout << MatIndex(mat_at(1)).size << std::endl; return 0; }
-        std::cerr << "usage: thompson86 build <dir> WM WK BM BK dtm|dtc|dtz 86|96 | checkall <dir> n dtm|dtc|dtz [threads]"
-                     " | order <dir_dtz> <dir_dtc> <dir_dtm> n | size WM WK BM BK" << std::endl;
+        std::cerr << "usage: thompson86 build <dir> wp bp wm bm dtm|dtc|dtz 86|96 | checkall <dir> n dtm|dtc|dtz [threads]"
+                     " | order <dir_dtz> <dir_dtc> <dir_dtm> n | size wp bp wm bm" << std::endl;
         return 2;
 }

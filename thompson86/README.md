@@ -23,13 +23,14 @@ kept):
 
 A White win can end with Black's forced capture, so in dtc and dtz a win can take an even number of plies.
 
-**One file per material.** A material (WM white men, WK white kings, BM black men, BK black kings) is the file
-`mat-WM-WK-BM-BK.<metric>.w` and `.l`, indexed by a product of four colex ranks, one per colour and type: the men over the 15
-squares a man may stand on, the kings over all 18 squares. Pieces of one colour and type never share a square, the
-two colours may (those slots are illegal and never visited), as in Thompson's 462 × 64ⁿ. Every move that leaves the
-material, a capture or a promotion of either side, is a lookup into the files of the material it leads into: virtual
-addressing into finished files instead of copies parked inside a bigger run. The files form a DAG through captures
-and promotions, which Snakemake builds in order; a capture of a side's last piece ends the game and needs no file.
+**One file pair per material.** A material is named wp-bp-wm-bm (white pieces, black pieces, white men, black men,
+two digits each, as in `egdb_6x6`'s material mode); its files are `6x6-wp-bp-wm-bm.<metric>.w` and `.l`, indexed by a
+product of four colex ranks, one per colour and type: the men over the 15 squares a man may stand on, the kings over
+all 18 squares. Pieces of one colour and type never share a square, the two colours may (those slots are illegal and
+never visited), as in Thompson's 462 × 64ⁿ. Every move that leaves the material, a capture or a promotion of either
+side, is a lookup into the files of the material it leads into: virtual addressing into finished files instead of
+copies parked inside a bigger run. The files form a DAG through captures and promotions, which Snakemake builds in
+order; a capture of a side's last piece ends the game and needs no file.
 
 **Two styles**, the same results byte for byte:
 
@@ -72,9 +73,9 @@ type per metric), 20,482,891 White-to-move wins and 11,884,425 Black-to-move los
 
 | style | metric | wall time, builds | CPU summed | longest win (`.w`) | longest loss (`.l`) |
 |---|---|---|---|---|---|
-| 1986 | dtm | 10.0 s | 34.3 s | 69 plies (4-0-0-2) | 68 plies (3-1-0-2) |
-| 1986 | dtc | 9.9 s | 32.4 s | 43 plies (2-1-1-1) | 42 plies (2-1-1-1) |
-| 1986 | dtz | 9.4 s | 31.5 s | 27 plies (1-2-2-1) | 28 plies (1-2-2-1) |
+| 1986 | dtm | 10.0 s | 34.3 s | 69 plies (04-02-04-00) | 68 plies (04-02-03-00) |
+| 1986 | dtc | 9.9 s | 32.4 s | 43 plies (03-02-02-01) | 42 plies (03-02-02-01) |
+| 1986 | dtz | 9.4 s | 31.5 s | 27 plies (03-03-01-02) | 28 plies (03-03-01-02) |
 | 1996 | dtm | 10.4 s | 35.2 s | 69 plies | 68 plies |
 | 1996 | dtc | 9.4 s | 31.6 s | 43 plies | 42 plies |
 | 1996 | dtz | 10.6 s | 34.7 s | 27 plies | 28 plies |

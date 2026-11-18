@@ -686,7 +686,9 @@ void for_each_predecessor(Meta const& s, Pos const& q, F&& f)
                                 pr.k[mover].erase(t);
                                 pr.k[mover].insert(std::size_t(fr));
                                 pr.stm = mover;
-                                if (!has_capture(pr)) f(std::uint64_t(mover) * s.P + index_of(s, pr));  // captures are compulsory
+                                // a predecessor with a capture has no king move (captures are compulsory), but needs no test:
+                                // it was decided in pass 0, and every caller skips decided positions
+                                f(std::uint64_t(mover) * s.P + index_of(s, pr));
                                 if (!LONG_KINGS) break;
                         }
         }

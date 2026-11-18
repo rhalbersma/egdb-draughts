@@ -20,8 +20,8 @@ Per material, named wp-bp-wm-bm (white pieces, black pieces, white men, black me
 
 | file | contents |
 |---|---|
-| `6x6-wp-bp-wm-bm.wtm.dtm` | one byte per slot, White to move |
-| `6x6-wp-bp-wm-bm.btm.dtm` | one byte per slot, Black to move |
+| `6x6-wp-bp-wm-bm.wtm.dtm` | one byte per slot, White to move: the unsigned depth |
+| `6x6-wp-bp-wm-bm.btm.dtm` | one byte per slot, Black to move: the unsigned depth |
 | `6x6-wp-bp-wm-bm.wtm.wdl` | two bits per slot (0 draw, 1 loss, 2 win), White to move |
 | `6x6-wp-bp-wm-bm.btm.wdl` | two bits per slot, Black to move |
 
@@ -30,10 +30,18 @@ Shown for dtm; dtc and dtz alike (`wtm.dtc`, ...). These are **full results** (w
 the same for all three, so the files of each metric go into a directory of their own, `<dir>/<metric>`.
 
 The value for the side to move, in the build: 0 a draw (or an illegal slot), 2n a win in n plies, 2n + 1 a loss in n
-plies (n = 0: no move), 16 bits. Stored, one byte: dtc and dtz the same (up to 127 plies); dtm compactly, the plies + 1
-(up to 254 plies), since a dtm win always takes an odd and a dtm loss an even number of plies, so the parity still tells
-win from loss (loss in 0: 1, win in 1: 2, loss in 2: 3, ...). Exact plies either way. The three metrics are those of
-`thompson86`:
+plies (n = 0: no move), 16 bits. **Stored: an unsigned byte, its sign in the `wdl` file** of the same side to move:
+
+| | byte | range in one byte |
+|---|---|---|
+| dtm | k: a win in 2k − 1 plies, or a loss in 2k plies (0: lost in 0 plies, no move) | 509 plies of win, 510 of loss |
+| dtc, dtz | n: a win or a loss in n plies | 255 plies |
+
+A dtm win always takes an odd and a dtm loss an even number of plies, so dtm stores moves; in dtc and dtz a goal move
+by the losing side can end a win on an even ply, so they store plies. A draw is 0 in both files. The two-sided files
+reach the range of `thompson86`'s half results, which need no sign since each holds only wins or only losses. A depth
+probe reads the `wdl` bits too (search reads them first anyway). Exact plies either way. The three metrics are those
+of `thompson86`:
 
 | metric | the count ends at |
 |---|---|

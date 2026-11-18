@@ -8,7 +8,8 @@
 # captures and promotions. A material is named wp-bp-wm-bm (white pieces, black pieces, white men, black men, two
 # digits each); inside, a tuple (wm, wk, bm, bk) with kings. Per material four files of full results,
 # 6x6-wp-bp-wm-bm.<side to move>.<kind>: wtm.<metric>, btm.<metric> (one byte per slot) and wtm.wdl, btm.wdl (two bits
-# per slot). A dtm build reads wtm.dtm and btm.dtm of the materials it leads into; a dtc or dtz build only their wdl
+# per slot). The depth bytes are unsigned: their signs are in the wdl files. A dtm build reads wtm.dtm and btm.dtm of
+# the materials it leads into, with their wdl files; a dtc or dtz build only their wdl
 # files (every move out of a material is a goal move there). The files of a metric go into <dir>/<metric>: the wdl
 # files are the same for all three.
 #
@@ -76,7 +77,7 @@ def files(m):
 
 
 def inputs(m):
-    kinds = ('wtm.dtm', 'btm.dtm') if METRIC == 'dtm' else ('wtm.wdl', 'btm.wdl')
+    kinds = ('wtm.dtm', 'btm.dtm', 'wtm.wdl', 'btm.wdl') if METRIC == 'dtm' else ('wtm.wdl', 'btm.wdl')
     return [f'{D}/6x6-{name(d)}.{k}' for d in deps(m) for k in kinds]
 
 

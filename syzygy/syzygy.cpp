@@ -8,7 +8,7 @@
 //   0          draw (also an illegal slot)
 //   2n         win in n plies (n >= 1)
 //   2n + 1     loss in n plies (n >= 0; 0: no move)
-// 16 bits during the build, one byte stored (dtm compactly: the plies + 1, see to_byte). The metric decides which moves end the count (as in thompson86):
+// 16 bits during the build; stored as one unsigned byte with the sign from the wdl file (see to_byte). The metric decides which moves end the count (as in thompson86):
 //   dtm   none: the count runs to the end of the game
 //   dtc   captures and promotions (a conversion into another material)
 //   dtz   captures and man moves (the zeroing moves of the 25-move rule)
@@ -18,13 +18,15 @@
 // mirror is built (the same 82 materials up to 6 pieces as strongly_solving_6x6/materials); a position in the other
 // one is looked up as its mirror image. Full results; per material four files, 6x6-wp-bp-wm-bm.<side to move>.<kind>
 // (for dtm; dtc and dtz alike):
-//   wtm.dtm   one byte per slot, White to move: plies + 1 (odd: a loss, even: a win; dtc, dtz: 2n win, 2n + 1 loss)
+//   wtm.dtm   one byte per slot, White to move: the unsigned depth, k for a win in 2k - 1 or a loss in 2k plies
+//             (dtc, dtz: n plies); the sign is in wtm.wdl
 //   btm.dtm   one byte per slot, Black to move
 //   wtm.wdl   two bits per slot (0 draw, 1 loss, 2 win), White to move
 //   btm.wdl   two bits per slot, Black to move
 // The wdl files are a by-product: the sign of every value, the same for all three metrics. They are all that dtc and
 // dtz need from the materials that a move leads into (every move out of a material is a goal move there), so their
-// builds read only the wdl files of their captures and promotions; dtm needs the depths and reads wtm.dtm, btm.dtm.
+// builds read only the wdl files of their captures and promotions; dtm needs the depths and reads wtm.dtm, btm.dtm
+// with the wdl files for their signs.
 //
 // Groups. Captures and promotions (and in dtz man moves, which end the count) are looked up forward in pass 0, in
 // finished files: no uncaptures. A dtm or dtc material is one group, with king moves and man moves inside; a dtz
@@ -178,28 +180,37 @@ void open_successors(Material c)
         for (Material const m : successors_of(c)) {
                 mat_index(m);
                 mat_index(mirror_of(m));
-                for (int kind : g_metric == Metric::dtm ? std::vector{ BYTES, BYTES + 1 } : std::vector{ WDL, WDL + 1 }) mat_file(m, kind);
+                for (int kind : g_metric == Metric::dtm ? std::vector<int>{ BYTES, BYTES + 1, WDL, WDL + 1 } : std::vector<int>{ WDL, WDL + 1 })
+                        mat_file(m, kind);                      // dtm: the depths with their signs; dtc, dtz: the signs
         }
 }
 
 // a position in a stored material: itself or its mirror image (the value for the side to move is the same)
 Pos stored_pos(Pos const& p) { return stored(material_of(p)) ? p : mirror(p); }
 
-// The stored bytes. A dtm win always takes an odd number of plies and a dtm loss an even number, so a dtm byte is the
-// plies + 1 and its parity tells win from loss; dtc and dtz store the build value (2n win in n plies, 2n + 1 loss),
-// since their wins can take an even number of plies. 0: draw. Exact plies either way; only the files differ.
+// The stored bytes: unsigned depths, the sign (win, draw or loss) from the wdl file of the same side to move. A dtm win
+// always takes an odd number of plies and a dtm loss an even number, so dtm stores moves; dtc and dtz store plies
+// (their wins can take an even number of plies):
+//   dtm   k: a win in 2k - 1 plies, or a loss in 2k plies (0: lost in 0 plies, no move)
+//   dtc, dtz   n: a win or a loss in n plies
+// A draw is 0 in both files. Exact plies either way; the build works in plies (2n win, 2n + 1 loss) and only the files
+// differ: up to 509 plies of dtm win (510 of loss) and 255 plies of dtc or dtz in a byte.
 int to_byte(Metric mt, std::uint16_t v)
 {
-        if (mt != Metric::dtm || v == 0) return v;
+        if (v == 0) return 0;
+        if (mt != Metric::dtm) return plies(v);
         if ((plies(v) % 2 == 1) != is_win(v)) { std::cerr << "dtm: a win in an even or a loss in an odd number of plies" << std::endl; std::exit(1); }
-        return plies(v) + 1;                                    // loss in 0: 1, win in 1: 2, loss in 2: 3, ...
+        return is_win(v) ? (plies(v) + 1) / 2 : plies(v) / 2;
 }
 
-std::uint16_t from_byte(Metric mt, std::uint8_t s)
+std::uint16_t from_byte(Metric mt, std::uint8_t s, std::uint8_t r)    // r: the wdl of the same position
 {
-        if (mt != Metric::dtm || s == 0) return s;
-        return (s & 1) ? loss(s - 1) : win(s - 1);
+        if (r == WDL_DRAW) return 0;
+        bool const dtm = mt == Metric::dtm;
+        return r == WDL_WIN ? win(dtm ? 2 * s - 1 : s) : loss(dtm ? 2 * s : s);
 }
+
+std::uint8_t wdl_bits(std::uint8_t const* w, std::uint64_t i) { return std::uint8_t(w[i >> 2] >> (2 * (i & 3)) & 3); }
 
 // the value of a position for the side to move
 std::uint16_t probe(Pos const& p0)
@@ -208,7 +219,8 @@ std::uint16_t probe(Pos const& p0)
         Pos const p = stored_pos(p0);
         Material const m = material_of(p);
         std::uint64_t const i = mat_index(m).index(p);
-        return m == g_current ? g_val[std::size_t(p.stm)][i] : from_byte(g_metric, mat_file(m, p.stm)[i]);
+        if (m == g_current) return g_val[std::size_t(p.stm)][i];
+        return from_byte(g_metric, mat_file(m, BYTES + p.stm)[i], wdl_bits(mat_file(m, WDL + p.stm), i));
 }
 
 // win, draw or loss of a position for the side to move
@@ -219,7 +231,7 @@ std::uint8_t probe_wdl(Pos const& p0)
         Material const m = material_of(p);
         std::uint64_t const i = mat_index(m).index(p);
         if (m == g_current) return wdl_of(g_val[std::size_t(p.stm)][i]);
-        return std::uint8_t(mat_file(m, WDL + p.stm)[i >> 2] >> (2 * (i & 3)) & 3);
+        return wdl_bits(mat_file(m, WDL + p.stm), i);
 }
 
 // the value of a move for the side making it: after a goal move only the outcome counts
@@ -521,12 +533,14 @@ bool check_order(std::string const& dz, std::string const& dc, std::string const
         for (Material const c : stored_materials_up_to(n)) {
                 std::uint64_t const size = mat_index(c).size;
                 for (int s : { 0, 1 }) {
-                        g_metric = Metric::dtz; auto const z = map_file(mat_path(dz, c, s), size);
-                        g_metric = Metric::dtc; auto const x = map_file(mat_path(dc, c, s), size);
-                        g_metric = Metric::dtm; auto const m = map_file(mat_path(dm, c, s), size);
+                        std::uint64_t const ws = file_size(c, WDL + s);
+                        g_metric = Metric::dtz; auto const z = map_file(mat_path(dz, c, s), size), zw = map_file(mat_path(dz, c, WDL + s), ws);
+                        g_metric = Metric::dtc; auto const x = map_file(mat_path(dc, c, s), size), xw = map_file(mat_path(dc, c, WDL + s), ws);
+                        g_metric = Metric::dtm; auto const m = map_file(mat_path(dm, c, s), size), mw = map_file(mat_path(dm, c, WDL + s), ws);
                         for (std::uint64_t i = 0; i < size; ++i) {
-                                std::uint16_t const zv = from_byte(Metric::dtz, z[i]), xv = from_byte(Metric::dtc, x[i]),
-                                                    mv = from_byte(Metric::dtm, m[i]);
+                                std::uint16_t const zv = from_byte(Metric::dtz, z[i], wdl_bits(zw, i)),
+                                                    xv = from_byte(Metric::dtc, x[i], wdl_bits(xw, i)),
+                                                    mv = from_byte(Metric::dtm, m[i], wdl_bits(mw, i));
                                 if (wdl_of(zv) != wdl_of(mv) || wdl_of(xv) != wdl_of(mv)) { ++bad; continue; }
                                 if (mv == 0) continue;
                                 (is_win(mv) ? wins : losses) += 1;

@@ -272,6 +272,13 @@ Take from Chinook: slicing by irreversible moves (finer here: by the placement o
 once before the rounds. Take from Gasser 1996 and the `egdb_6x6` measurements: outcounting with the counter inside
 the value cell. Take from Thompson: explicit frontier bitsets (the rounds touch only the frontier, not the slice).
 
+**Every product keeps the exact depth in plies**, never rounded and never a bound. That excludes three things the
+literature does: syzygy stores DTZ in moves rather than plies unless a table needs ply accuracy (`ply_accurate_win`,
+`ply_accurate_loss`), which can be one ply off; Chinook's in-place sweeps decide positions in passes whose numbers are
+only lower bounds on the depth (Lake-Schaeffer-Treloar 1992, Schaeffer et al. 2003); and Trice-Dodgen's DTC is
+defined by such pass numbers. The rounds here are level-synchronous (§7, rule 4), so the round in which a position
+is decided is its exact depth.
+
 **Values are 16 bits during the build and 8 bits in storage**, for every metric. DTZ restarts at every exit, so its
 depth is bounded by the longest phase of king moves inside one slice, not by the whole game (Bourzutschky-Tamplin-
 Haworth: maxDTC 6 against maxDTM 107 in KQBNKN); it will usually fit a byte, but only a measurement says so, and the
@@ -378,8 +385,9 @@ and a CRC per unit. **8 bits in storage, 16 bits in the build**: the escapes are
 one conversion pass when a unit or material is written; the build never needs them.
 
 Products per material: **WDL** (2 bits, dense, the probe for search), **DTZ** (byte, escapes if ever needed), **DTM**
-(byte + escapes). Options from syzygy worth measuring: DTZ for one side to move only (*[bg]*; the other side is one
-ply of search, cheap with compulsory capture), and a search for the man/king order that compresses best (syzygy's
+(byte + escapes). Options from syzygy worth measuring: DTZ for one side to move only (*[bg]*; the other side follows
+exactly from one ply of search, cheap with compulsory capture: an exit counts 1 from the WDL of its target, an internal
+move one more than the stored value; unlike syzygy, depths stay in plies, never in moves), and a search for the man/king order that compresses best (syzygy's
 `permute_piece_wdl`); Zakharov adds bounded fills (≥ n, ≤ n) for DTM.
 
 ## 10. Verification

@@ -236,13 +236,38 @@ Options, from the literature:
 | 2 bits WDL | 0.25 | Chinook, Lincke-Marzetta | WDL; the dependency store |
 | 1 bit in RAM, rest streamed | 0.125 | Wu-Beal | out-of-core builds (not needed on 6×6) |
 
-Two facts that keep counters correct, from Thompson 1996 and Herik 1985:
+### Symmetry reduction
 
-* a counter counts *moves out of* a position, and must equal the number of *unmoves into* it. That holds only when
-  the index is not folded by symmetry inside the slice. `egdb_6x6` keeps the index unfolded inside a slice and folds
-  the mirror only at storage, which is the right choice; keep it;
-* when a slice is its own mirror, every image of a position must be written. The unit build already checks
-  "mirrored positions disagree".
+On an even square board (6×6, 8×8, 10×10) four symmetries keep dark squares dark: the identity, the 180° rotation,
+and reflection in each of the two long diagonals. Quarter turns and straight mirrors swap the colours of the squares
+and do not qualify; on a rectangular board only the 180° rotation remains. Which ones apply depends on the pieces:
+
+| slice | symmetries | reduction |
+|---|---|---|
+| kings only | all four: kings have no forward direction | **4×** |
+| with men | only the 180° rotation with the colours swapped (the mirror `egdb_6x6` uses now), since men move forward | 2× |
+| a material that is its own colour swap | in addition the side to move (`S = 1` in the units) | a further 2× on those materials |
+
+The 4× falls exactly where it is needed: the all-king slices are the largest, and the ones that outgrow RAM on 10×10
+(4 against 4 kings: 3.8 · 10¹⁰ positions per side to move, about 9.5 · 10⁹ folded, 19 GB as 16-bit cells). On 6×6 the
+same four symmetries apply to the kings-only slices, but those are at most 17.2 M positions per side to move, so
+folding them saves memory that is not needed.
+
+Folding the index inside a slice brings back two pitfalls from the literature:
+
+* **counters** (Thompson 1996): a counter counts *moves out of* a position and must equal the number of *unmoves into*
+  it. In a folded index a position fixed by a symmetry can have two successors that are images of each other and fold
+  onto one stored position, so the two numbers differ and a counter set from the move count never reaches zero.
+  On folded slices, either set the counters by counting unmoves into the folded index (an extra full pass, as
+  Thompson notes), or use the verification variant of the loss step (§8.2), which rechecks all moves and needs no
+  counter;
+* **images** (Herik-Herschberg 1985): their first run was wrong because a position on a symmetry axis has fewer
+  distinct images, and not all of them were written. With only the canonical form stored this cannot happen, but every
+  move and unmove must go through the canonical form, and the canonicalisation must be tested on exactly the positions
+  on the axes. The unit build's check "mirrored positions disagree" is this test for the 2× mirror.
+
+The cost per move is the canonical form: up to four images computed and the smallest kept. So: keep the index unfolded
+inside slices with men (2× by the mirror, at storage, as now); fold the kings-only slices 4× once they are large.
 
 ## 7. Rules for one `for_each` per pass
 
@@ -274,8 +299,10 @@ Two facts that keep counters correct, from Thompson 1996 and Herik 1985:
    may be flushed and rewritten repeatedly, the drive wears, and after an interruption nobody knows which scattered
    writes reached the disk. A pass whose output is scattered therefore builds it in RAM and writes it out in order. In the passes of §8 the only scattered writes are the rounds'
    pushes into predecessors and next-frontier bits, into the slice's arrays in RAM. When a slice no longer fits in
-   RAM (all-king slices on 10×10), the remedies are finer slices or Wu-Liu-Hsu's batching: collect the updates, sort
-   them by index, apply them in one sequential pass. The current code breaks the rule in one place: for a symmetric
+   RAM (all-king slices on 10×10), the remedies are the 4× symmetry reduction of kings-only slices (§6), a smaller
+   cell, or Wu-Liu-Hsu's batching: the round appends its updates as (target, value) pairs, sorts them by target
+   (externally if needed) and applies them in one sequential pass over the values; the only one of these that removes
+   the scattered writes altogether. The current code breaks the rule in one place: for a symmetric
    material, `unit_build` / `mat_build` write the Black-to-move half through the mirror
    (`u.p[stored_offset(r, mirror(pos))] = b`), scattered over the mirrored slice's range of the mapped file. The fix
    needs no buffer: turn the scatter into a gather. The mirror is its own inverse, so walk the mirrored slice's range

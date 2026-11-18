@@ -10,7 +10,7 @@ passes.
 |---|---|---|
 | sides | one: White-to-move wins (`.w`), Black-to-move losses (`.l`) | two: both sides to move, wins, draws and losses |
 | materials (≤ 6 pieces) | 155: every material and its colour mirror | 82: one of each mirror pair, the other looked up as its mirror image |
-| per round | bit planes: the new wins and losses as frontiers | byte arrays scanned in full for the values of the previous ply, as `rtbgen` |
+| per round | bit planes: the new wins and losses as frontiers | the same frontiers (default), or as `rtbgen` full scans of the byte array for the values of the previous ply (`rounds=scan`) |
 | losses | candidates verified forward (1996 style: masked late) | `rtbgen`'s `check_loss` on every predecessor of a new win |
 | WDL | not stored (one-sided) | a by-product: `.wtm.wdl` and `.btm.wdl`, two bits per position |
 
@@ -50,16 +50,25 @@ solved one distance at a time (as `thompson86`'s 1996 style), with only king mov
 * **pass 0**: every position looks up its moves out of the group. Without a move inside it is decided at once
   (captures are compulsory); otherwise it keeps its fastest win and its slowest loss through an exit (no loss if an
   exit draws or wins).
-* **round n, losses in n**: the array is scanned for wins in n − 1; each unmoves to its predecessors, and each
+* **round n, losses in n**: every win in n − 1 unmoves to its predecessors, and each
   undecided predecessor whose exits lose by n is checked forward (`check_loss`): lost iff every move inside leads to a
   win in fewer than n plies. Also every undecided position whose exits lose in exactly n.
-* **round n, wins in n**: the array is scanned for losses in n − 1; their undecided predecessors win in n, and so does
-  every undecided position whose exit wins in n.
+* **round n, wins in n**: the undecided predecessors of the losses in n − 1 win in n, and so does every undecided
+  position whose exit wins in n.
+
+Two ways to find the wins and losses of the previous ply, with byte-identical files:
+
+* **frontier** (default): bit planes of the wins and losses found in the previous round, and lists by level of the
+  positions decided in pass 0 and of the exit seeds. A round visits only these.
+* **scan** (`rounds=scan`), as `rtbgen`: every round scans the whole byte array twice, once for the wins and once for
+  the losses of the previous ply.
 
 The losses of a round read only the wins of earlier rounds, and the wins only the losses of earlier rounds, so each
 half is one `std::for_each` over blocks of positions, `seq` or `par` (every writer writes the same value, through
-relaxed `std::atomic_ref`): the files are the same either way. Positions decided in pass 0 can have any depth; the
-scan finds them as a frontier at their own level, and `check_loss` must not count a win deeper than n − 1.
+relaxed `std::atomic_ref`, the frontier bits through `fetch_or`): the files are the same either way. Before the passes
+a build opens every file it can read and fills the index memo, so the parallel passes only read those maps. Positions
+decided in pass 0 can have any depth; they are a frontier at their own level, and `check_loss` must not count a win
+deeper than n − 1.
 
 Disk, as rule 6: the group's arrays in RAM; finished materials read through read-only memory maps; each file written
 once, sequentially, to a temporary name and then renamed.
@@ -74,7 +83,8 @@ g++-14 -std=c++23 -O2 -march=native -fopenmp -I<xstd-bits>/include -I<xstd-ints>
 snakemake -s syzygy/Snakefile --cores 4 --config engine=build/syzygy dir=data/syzygy pieces=6 metric=dtz
 ```
 
-or with CMake, target `syzygy`. `policy=par` runs each build with `std::execution::par`. The last Snakemake job
+or with CMake, target `syzygy`. `policy=par` runs each build with `std::execution::par`; `rounds=scan` finds the
+frontiers by full scans. The last Snakemake job
 (`checkall`) builds `egdb_6x6`'s databases in memory and compares every position of every material, both sides to
 move: dtm exactly, dtc and dtz their wins and losses; every value against its recomputation from the successors; the
 `.wdl` files against the values. Further checks:
@@ -89,17 +99,20 @@ move: dtm exactly, dtc and dtz their wins and losses; every value against its re
 82 materials, 53,366,312 positions (both sides to move), 2 × 53.8 MB of bytes and 2 × 13.5 MB of `.wdl` per metric;
 21,650,623 wins and 11,988,249 losses (both sides to move).
 
-| metric | wall time, builds (4 jobs, `seq`) | CPU summed | wall time, one job at a time, `par` | longest win | longest loss |
-|---|---|---|---|---|---|
-| dtm | 15.5 s | 44.8 s | 16.5 s | 69 plies (Black to move, 02-04-00-04) | 68 plies (White to move, 02-04-00-04) |
-| dtc | 12.9 s | 34.8 s | 13.0 s | 43 plies (Black to move, 02-03-01-02) | 42 plies (White to move, 02-03-01-02) |
-| dtz | 9.2 s | 28.8 s | 11.7 s | 27 plies (White to move, 03-03-01-02) | 28 plies (Black to move, 03-03-01-02) |
+| metric | frontier: wall time, builds (4 jobs, `seq`) | frontier: CPU summed | scan: wall time | scan: CPU summed | longest win | longest loss |
+|---|---|---|---|---|---|---|
+| dtm | 11.8 s | 36.4 s | 18.0 s | 53.1 s | 69 plies (Black to move, 02-04-00-04) | 68 plies (White to move, 02-04-00-04) |
+| dtc | 10.7 s | 33.3 s | 13.0 s | 39.1 s | 43 plies (Black to move, 02-03-01-02) | 42 plies (White to move, 02-03-01-02) |
+| dtz | 9.5 s | 28.0 s | 10.1 s | 32.0 s | 27 plies (White to move, 03-03-01-02) | 28 plies (Black to move, 03-03-01-02) |
+
+The two modes were timed back to back; a second frontier run gave 36.3, 32.6 and 27.1 s of CPU. One job at a time
+with `par` takes 13–16 s wall: the small materials do not keep four threads busy.
 
 * `checkall`: every material checks out for all three metrics;
 * `cmp86`: all 97,762,498 positions of `thompson86`'s 155 materials agree, for all three metrics: the two-sided
   values contain the one-sided files exactly;
 * `order`: dtz ≤ dtc ≤ dtm for every win and loss; the `.wdl` files of the three metrics are identical;
-* `seq` and `par` give identical files.
+* `frontier` and `scan` give identical files, and so do `seq` and `par`.
 
 **Against `thompson86` and `egdb_6x6`** (dtm, 4 cores):
 
@@ -107,10 +120,11 @@ move: dtm exactly, dtc and dtz their wins and losses; every value against its re
 |---|---|---|---|---|
 | `egdb_6x6 build 6` (two-sided, slices, leapfrog) | 51,237,726 | 22.6 s | 0.44 µs | 6.6 s |
 | `thompson86` (one-sided, bit planes, 1986 style) | 97,762,498 | 34.3 s | 0.35 µs | 10.0 s |
-| `syzygy` (two-sided, scans) | 53,366,312 | 44.8 s | 0.84 µs | 15.5 s |
+| `syzygy`, frontier (two-sided, bit planes) | 53,366,312 | 36.4 s | 0.68 µs | 11.8 s |
+| `syzygy`, scan (two-sided, full scans) | 53,366,312 | 53.1 s | 1.00 µs | 18.0 s |
 
-Two-sidedness halves the positions, but for dtm the scans cost more than that saves: every round scans the whole
-group twice, and a dtm material is one group with up to 69 rounds. Frontier bit planes (as in `thompson86` and
-`egdb_6x6`) visit only the positions of the previous ply. The dtz waves have few rounds each, so there the scans are
-cheap: 28.8 s of CPU against 31.5 s for `thompson86`'s dtz (1986 style), which builds twice the positions. (`egdb_6x6` stores a symmetric material with White to move
-only, hence its slightly smaller count.)
+The scans cost dtm a third of its time: a dtm material is one group with up to 69 rounds, and every round scans the
+whole group twice. With frontiers `syzygy` is level with `thompson86` for dtm and ahead for dtz. A position here
+settles both colours, so per settled cell (positions × colours) the frontier build costs 0.34 µs for dtm and 0.26 µs
+for dtz, against `thompson86`'s 0.35 and 0.32. (`egdb_6x6` stores a symmetric material with White to move only,
+hence its slightly smaller count.)

@@ -12,13 +12,15 @@
 #
 # usage (from the root of the repo):
 #   snakemake -s syzygy/Snakefile --cores 4 --config engine=build/syzygy dir=data/syzygy pieces=6 metric=dtz
-# metric: dtm, dtc or dtz; policy=par runs each build in parallel (std::execution::par)
+# metric: dtm, dtc or dtz; policy=par runs each build in parallel (std::execution::par); rounds=scan finds the frontier
+# by full scans as rtbgen (default: frontier bit planes)
 
 ENGINE = config.get('engine', 'build/syzygy')
 D = config.get('dir', 'data/syzygy')
 N = int(config.get('pieces', 6))
 METRIC = config.get('metric', 'dtm')
 POLICY = config.get('policy', 'seq')
+ROUNDS = config.get('rounds', 'frontier')
 THREADS = int(config.get('threads', 4))
 
 
@@ -88,7 +90,7 @@ rule build:
     output: files('{mat}')
     log: f'{D}/6x6-{{mat}}.{METRIC}.log'
     params: m=lambda w: w.mat.replace('-', ' ')
-    shell: '{ENGINE} build {D} {params.m} {METRIC} {POLICY} > {log} 2>&1'
+    shell: '{ENGINE} build {D} {params.m} {METRIC} {POLICY} {ROUNDS} > {log} 2>&1'
 
 
 rule check:

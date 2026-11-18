@@ -29,7 +29,7 @@
 // finished files: no uncaptures. A dtm or dtc material is one group, with king moves and man moves inside; a dtz
 // material is solved one distance at a time (man moves lead to a smaller distance), with king moves inside.
 //
-// Passes, in the manner of rtbgen: one byte array per group, both sides to move, scanned in full in every pass.
+// Passes, in the manner of rtbgen: one byte array per group, both sides to move.
 //   pass 0      every position looks up its moves out of the group: without a move inside it is decided at once
 //               (captures are compulsory); otherwise its fastest win and its slowest loss through an exit are kept
 //               (no loss if an exit draws or wins)
@@ -38,6 +38,10 @@
 //               in fewer than n plies (pass 0 decides positions of any depth: they are a frontier at their level);
 //               also every undecided position whose exits lose in n. Then wins in n: every position lost in n - 1
 //               unmoves to its undecided predecessors, and every undecided position whose exit wins in n
+// Two ways to find the positions of the previous ply, with the same files:
+//   frontier    (default) bit planes of the wins and losses found in the previous round, and lists by level of the
+//               positions decided in pass 0 and of the exit seeds: a round visits only these
+//   scan        as rtbgen: every round scans the whole byte array for the values of the previous ply
 // Within a round the losses read only wins of earlier rounds, and the wins only losses of earlier rounds, so each
 // half can run in parallel (std::for_each, seq or par, over blocks of positions; every writer writes the same value).
 // Rule 6: the group's arrays are in RAM; finished materials are read through read-only memory maps; each file is
@@ -45,7 +49,8 @@
 //
 // build: g++-14 -std=c++23 -O2 -march=native -fopenmp -I<xstd-bits>/include -I<xstd-ints>/include
 //        -I<xstd-misc>/include syzygy/syzygy.cpp -lzstd -ltbb -o syzygy
-// usage: syzygy build <dir> wp bp wm bm <metric> [seq|par]   build one material (its captures and promotions must exist)
+// usage: syzygy build <dir> wp bp wm bm <metric> [seq|par] [frontier|scan]
+//                                                            build one material (its captures and promotions must exist)
 //        syzygy checkall <dir> n <metric> [threads]          every material of at most n pieces against egdb_6x6
 //                                                            (built in memory): dtm exactly, dtc / dtz their wins and
 //                                                            losses; every value against its successors; the .wdl files
@@ -92,6 +97,7 @@ std::uint16_t better(std::uint16_t a, std::uint16_t b)
 // ---------------------------------------------------------------- seq or par, over blocks of positions
 
 bool g_par = false;
+bool g_frontier = true;                                 // rounds from frontier bit planes (false: rtbgen's full scans)
 
 template<class F>
 void for_blocks(std::uint64_t n, F&& f)
@@ -127,11 +133,51 @@ Material g_current{ -1, -1, -1, -1 };
 std::array<std::vector<std::uint16_t>, 2> g_val;        // the material being built, 16 bits per slot and side to move
 std::map<std::pair<Material, int>, std::uint8_t const*> g_files;
 
+bool g_frozen = false;                                  // during the passes of a build: the maps are only read
+
 std::uint8_t const* mat_file(Material m, int kind)
 {
         auto it = g_files.find({ m, kind });
         if (it != g_files.end()) return it->second;
+        if (g_frozen) { std::cerr << "not opened before the passes: " << mat_path(g_dir, m, kind) << std::endl; std::abort(); }
         return g_files[{ m, kind }] = map_file(mat_path(g_dir, m, kind), file_size(m, kind));
+}
+
+Material mirror_of(Material m) { return { m.bm, m.bk, m.wm, m.wk }; }
+Material canonical(Material m) { return stored(m) ? m : mirror_of(m); }
+
+// the stored materials that one move can lead into: a promotion, or a capture of at least one piece and not the last
+// (the capturing man possibly promoted), by either side (as deps in syzygy/Snakefile)
+std::vector<Material> successors_of(Material c)
+{
+        std::vector<Material> out;
+        auto const add = [&](Material m) {
+                Material const k = canonical(m);
+                if (k != c && std::ranges::find(out, k) == out.end()) out.push_back(k);
+        };
+        for (int side : { 0, 1 }) {
+                Material const s = side == 0 ? c : mirror_of(c);               // the mover as White
+                if (s.wm > 0) add(side == 0 ? Material{ s.wm - 1, s.wk + 1, s.bm, s.bk } : mirror_of({ s.wm - 1, s.wk + 1, s.bm, s.bk }));
+                for (int i = 0; i <= s.bm; ++i)
+                        for (int j = 0; j <= s.bk; ++j) {
+                                if (i + j == 0 || i + j == s.bm + s.bk) continue;
+                                Material const t{ s.wm, s.wk, s.bm - i, s.bk - j }, u{ s.wm - 1, s.wk + 1, s.bm - i, s.bk - j };
+                                add(side == 0 ? t : mirror_of(t));
+                                if (s.wm > 0) add(side == 0 ? u : mirror_of(u));
+                        }
+        }
+        return out;
+}
+
+// open every file a build of c can read, and fill the index memo, so that the parallel passes only read the maps
+void open_successors(Material c)
+{
+        mat_index(c);
+        for (Material const m : successors_of(c)) {
+                mat_index(m);
+                mat_index(mirror_of(m));
+                for (int kind : g_metric == Metric::dtm ? std::vector{ BYTES, BYTES + 1 } : std::vector{ WDL, WDL + 1 }) mat_file(m, kind);
+        }
 }
 
 // a position in a stored material: itself or its mirror image (the value for the side to move is the same)
@@ -221,50 +267,99 @@ void solve_group(MatIndex const& mi, Group const& g)
                 if (open[id] && eloss[id] != NONE) max_seed = std::max(max_seed, int(eloss[id]));
         }
 
-        for (int n = 1;; ++n) {
-                std::atomic<bool> found{ false };
+        // the two steps of a round, shared by both ways of finding the frontier
+        auto const check_loss = [&](std::uint64_t id, int n) {                 // rtbgen's check_loss: lost in n?
+                if (!open[id] || load(v[id]) != 0 || eloss[id] == NONE || eloss[id] > n) return false;
+                Pos const p = pos(id);
+                for (auto const& mv : moves(p)) {                               // every move inside to a win in fewer than n plies
+                        if (!inside(p, mv)) continue;
+                        std::uint16_t const x = load(v[id_of(mv.next)]);
+                        if (!is_win(x) || plies(x) >= n) return false;          // pass 0 decides wins of any depth
+                }
+                store(v[id], loss(n));
+                return true;
+        };
+        auto const mark_win = [&](std::uint64_t id, int n) {                    // undecided: won in n
+                if (!open[id] || load(v[id]) != 0) return false;
+                store(v[id], win(n));
+                return true;
+        };
+        auto const predecessors = [&](std::uint64_t q, auto&& f) {             // the other side to move
+                std::uint64_t const off = (1 - q / P) * P;
+                for_each_inside_predecessor(g, pos(q), [&](std::uint64_t i) { f(off + i); });
+        };
 
-                // losses in n: rtbgen's check_loss on the predecessors of the wins in n - 1, and on the exits losing in n
-                auto const check_loss = [&](std::uint64_t id) {
-                        if (!open[id] || load(v[id]) != 0 || eloss[id] == NONE || eloss[id] > n) return;
-                        Pos const p = pos(id);
-                        for (auto const& mv : moves(p)) {               // every move inside to a win in fewer than n plies
-                                if (!inside(p, mv)) continue;
-                                std::uint16_t const x = load(v[id_of(mv.next)]);
-                                if (!is_win(x) || plies(x) >= n) return;        // pass 0 decides wins of any depth
+        if (!g_frontier) {
+                // rtbgen: every round scans the whole group for the values of the previous ply
+                for (int n = 1;; ++n) {
+                        std::atomic<bool> found{ false };
+                        auto const note = [&](bool b) { if (b) found.store(true, std::memory_order_relaxed); };
+                        for_blocks(T, [&](std::uint64_t lo, std::uint64_t hi) {         // losses in n
+                                for (std::uint64_t q = lo; q < hi; ++q) {
+                                        if (n > 1 && load(v[q]) == win(n - 1))            // win(0) would be 0
+                                                predecessors(q, [&](std::uint64_t id) { note(check_loss(id, n)); });
+                                        if (open[q] && eloss[q] == n) note(check_loss(q, n));
+                                }
+                        });
+                        for_blocks(T, [&](std::uint64_t lo, std::uint64_t hi) {         // wins in n
+                                for (std::uint64_t q = lo; q < hi; ++q) {
+                                        if (load(v[q]) == loss(n - 1))
+                                                predecessors(q, [&](std::uint64_t id) { note(mark_win(id, n)); });
+                                        if (open[q] && ewin[q] == n) note(mark_win(q, n));
+                                }
+                        });
+                        if (!found && n > max_seed) break;      // positions decided at max_seed are a frontier in max_seed + 1
+                }
+        } else {
+                // frontiers: bit planes of the wins and losses found in the previous round, plus lists by level of the
+                // positions decided in pass 0 and of the exits; a round visits only these
+                using List = std::vector<std::uint32_t>;
+                std::vector<List> won_at(std::size_t(max_seed) + 1), lost_at(won_at.size()), ewin_at(won_at.size()),
+                        eloss_at(won_at.size());
+                for (std::uint64_t id = 0; id < T; ++id) {
+                        auto const i = std::uint32_t(id);
+                        if (!open[id]) {
+                                if (is_win(v[id])) won_at[std::size_t(plies(v[id]))].push_back(i);
+                                else if (is_loss(v[id])) lost_at[std::size_t(plies(v[id]))].push_back(i);
+                                continue;
                         }
-                        store(v[id], loss(n));
-                        found.store(true, std::memory_order_relaxed);
+                        if (ewin[id] != 0) ewin_at[ewin[id]].push_back(i);
+                        if (eloss[id] != NONE && eloss[id] != 0) eloss_at[eloss[id]].push_back(i);
+                }
+                auto const at = [&](std::vector<List> const& by, int n) -> List const& {
+                        static List const none;
+                        return n >= 0 && n < int(by.size()) ? by[std::size_t(n)] : none;
                 };
-                for_blocks(T, [&](std::uint64_t lo, std::uint64_t hi) {
-                        for (std::uint64_t q = lo; q < hi; ++q) {
-                                if (n > 1 && load(v[q]) == win(n - 1)) {               // win(0) would be 0
-                                        std::uint64_t const off = (1 - q / P) * P;     // the predecessors: other side to move
-                                        for_each_inside_predecessor(g, pos(q), [&](std::uint64_t i) { check_loss(off + i); });
-                                }
-                                if (open[q] && eloss[q] == n) check_loss(q);
-                        }
-                });
-
-                // wins in n: the undecided predecessors of the losses in n - 1, and the exits winning in n
-                for_blocks(T, [&](std::uint64_t lo, std::uint64_t hi) {
-                        for (std::uint64_t q = lo; q < hi; ++q) {
-                                if (load(v[q]) == loss(n - 1)) {
-                                        std::uint64_t const off = (1 - q / P) * P;
-                                        for_each_inside_predecessor(g, pos(q), [&](std::uint64_t i) {
-                                                if (open[off + i] && load(v[off + i]) == 0) {
-                                                        store(v[off + i], win(n));
-                                                        found.store(true, std::memory_order_relaxed);
-                                                }
-                                        });
-                                }
-                                if (open[q] && ewin[q] == n && load(v[q]) == 0) {
-                                        store(v[q], win(n));
-                                        found.store(true, std::memory_order_relaxed);
-                                }
-                        }
-                });
-                if (!found && n > max_seed) break;              // positions decided at max_seed are a frontier in max_seed + 1
+                auto const for_list = [&](List const& l, auto&& f) {
+                        for_blocks(l.size(), [&](std::uint64_t lo, std::uint64_t hi) { for (auto j = lo; j < hi; ++j) f(l[j]); });
+                };
+                auto const for_plane = [&](Plane const& pl, auto&& f) {
+                        for_blocks(pl.w.size(), [&](std::uint64_t lo, std::uint64_t hi) {
+                                for (auto k = lo; k < hi; ++k)
+                                        for (std::uint64_t b = pl.w[k]; b; b &= b - 1) f(k * 64 + std::uint64_t(std::countr_zero(b)));
+                        });
+                };
+                auto const set_bit = [](Plane& pl, std::uint64_t i) {
+                        std::atomic_ref<std::uint64_t>(pl.w[i >> 6]).fetch_or(std::uint64_t(1) << (i & 63), std::memory_order_relaxed);
+                };
+                Plane won_prev(T), lost_prev(T), won_new(T), lost_new(T);
+                for (int n = 1;; ++n) {
+                        auto const lose = [&](std::uint64_t id) { if (check_loss(id, n)) set_bit(lost_new, id); };
+                        auto const gain = [&](std::uint64_t id) { if (mark_win(id, n)) set_bit(won_new, id); };
+                        // losses in n: the predecessors of the wins in n - 1, and the exits losing in n
+                        for_plane(won_prev, [&](std::uint64_t q) { predecessors(q, lose); });
+                        for_list(at(won_at, n - 1), [&](std::uint64_t q) { predecessors(q, lose); });
+                        for_list(at(eloss_at, n), lose);
+                        // wins in n: the predecessors of the losses in n - 1, and the exits winning in n
+                        for_plane(lost_prev, [&](std::uint64_t q) { predecessors(q, gain); });
+                        for_list(at(lost_at, n - 1), [&](std::uint64_t q) { predecessors(q, gain); });
+                        for_list(at(ewin_at, n), gain);
+                        std::swap(won_prev, won_new);
+                        std::swap(lost_prev, lost_new);
+                        won_new.clear();
+                        lost_new.clear();
+                        if (won_prev.empty() && lost_prev.empty() && n > max_seed) break;
+                }
         }
 
         for_blocks(T, [&](std::uint64_t lo, std::uint64_t hi) {
@@ -297,6 +392,8 @@ bool build_material(std::string const& dir, Material c)
         g_waves = true;                                 // king moves and man moves inside (dtz: king moves only)
         MatIndex const& mi = mat_index(c);
         for (auto& r : g_val) r.assign(mi.size, 0);
+        open_successors(c);
+        g_frozen = true;
         auto const groups = groups_of(c);
         auto const t0 = std::chrono::steady_clock::now();
         std::uint64_t positions = 0;
@@ -439,15 +536,19 @@ int main(int argc, char* argv[])
                 if (wm < 0 || bm < 0 || wm > wp || bm > bp) { std::cerr << "not a material: wp bp wm bm" << std::endl; std::exit(2); }
                 return Material{ wm, wp - wm, bm, bp - bm };
         };
-        if ((a.size() == 7 || a.size() == 8) && a[0] == "build" && parse_metric(a[6])) {
-                g_par = a.size() == 8 && a[7] == "par";
+        if (a.size() >= 7 && a.size() <= 9 && a[0] == "build" && parse_metric(a[6])) {
+                for (std::size_t i = 7; i < a.size(); ++i) {
+                        if (a[i] == "seq" || a[i] == "par") g_par = a[i] == "par";
+                        else if (a[i] == "scan" || a[i] == "frontier") g_frontier = a[i] == "frontier";
+                        else { std::cerr << "unknown option " << a[i] << std::endl; return 2; }
+                }
                 return build_material(a[1], mat_at(2)) ? 0 : 1;
         }
         if ((a.size() == 4 || a.size() == 5) && a[0] == "checkall" && parse_metric(a[3]))
                 return check_all(a[1], std::stoi(a[2]), a.size() == 5 ? std::stoi(a[4]) : 4) ? 0 : 1;
         if (a.size() == 5 && a[0] == "cmp86" && parse_metric(a[4])) return compare_thompson86(a[1], a[2], std::stoi(a[3])) ? 0 : 1;
         if (a.size() == 5 && a[0] == "order") return check_order(a[1], a[2], a[3], std::stoi(a[4])) ? 0 : 1;
-        std::cerr << "usage: syzygy build <dir> wp bp wm bm dtm|dtc|dtz [seq|par] | checkall <dir> n dtm|dtc|dtz [threads]"
+        std::cerr << "usage: syzygy build <dir> wp bp wm bm dtm|dtc|dtz [seq|par] [frontier|scan] | checkall <dir> n dtm|dtc|dtz [threads]"
                      " | cmp86 <dir> <dir_thompson86> n dtm|dtc|dtz | order <dir_dtz> <dir_dtc> <dir_dtm> n" << std::endl;
         return 2;
 }

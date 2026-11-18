@@ -726,6 +726,11 @@ versa):
 
 Any cell that is not stored costs a ply of search per lookup (the half result from the other side to move's file).
 
+So the outcome files have two different roles. For **dtm** they are a by-product, nice to have: the build reads
+only depths, and the bits (or `wdl`) serve search, where a WDL probe touches a file 8× (or 4×) smaller than the
+bytes. For **dtc and dtz** they are needed to build: the materials built on top read nothing else. Since the outcome
+files are the same for every metric, any metric's build can supply them.
+
 ## 10. Storage
 
 Keep what is there: blocks of 4096 positions with zstd per block, capture positions filled with the previous value

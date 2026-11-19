@@ -32,6 +32,11 @@ tempo tw + tb less the material's smallest; a material needs every
 material its captures and promotions lead into (materials outside --split count as built). The width of a level is the
 number of groups that could run side by side.
 
+The number of levels (passes) is an outcome of the build, set by the longest win, and cannot be predicted: the frontier
+builds of rungs 0-2 do not depend on it (every position enters one frontier once, so their work grows with the
+positions), but rtbgen's scans, Chinook's sweeps and the streams of rung 3 cost a full pass per level, so for those the
+estimate gives a range, from the levels of the calibration build to what the byte holds.
+
 With --cores, the groups are refined further (the group limit halved, below the RAM limit) until a list schedule on
 that many cores reaches the target utilization: memory sets the coarsest layout, parallelism how much finer to go
 (Gilbert 2009 subdivided for parallelism, not memory). A group's time is its positions (--rate turns it into days).
@@ -129,8 +134,8 @@ class Profile:
     def us(self, metric, n):                                   # microseconds per position and side to move
         return 1e6 * self._extrapolate(self.cost[metric], n, True)
 
-    def level(self, metric, n):
-        return self._extrapolate(self.levels[metric], n, False)
+    def least_levels(self, metric):                            # the levels are an outcome: only a lower bound carries over
+        return max(self.levels[metric].values())
 
 
 def read_calibration(path):
@@ -357,8 +362,11 @@ def main():
     ap.add_argument('--index', choices=('disjoint', 'overlapping'), default='disjoint',
                     help='with --builder: file slots per legal placement (disjoint, the default) or per independent '
                          'colex ranks per colour and type, as thompson86 and syzygy index today (overlapping)')
-    ap.add_argument('--levels', type=int, default=100,
-                    help='with --builder: levels of a group that needs rung 3 (its per-level streams), default 100')
+    ap.add_argument('--levels', type=int,
+                    help='with --builder: levels of a group that needs rung 3 (its per-level streams). The levels are an '
+                         'outcome of the build (the longest win), not predictable: by default a range, from the most '
+                         'levels of the calibration build (larger materials are not shallower) to what the byte holds '
+                         '(509 plies for dtm, 255 for dtc and dtz)')
     ap.add_argument('--kings-symmetry', type=int, default=4,
                     help='divide kings-only materials by this: 4 (both diagonals and the half turn, the default), '
                          '2 (one diagonal, as Gilbert 2005), 1 (none)')
@@ -505,14 +513,20 @@ def estimate(a, b, board, ms, plan, positions, canon, refine, max_pos, cost):
                 worst += pos(s_) * per_pos
                 used.add(s_)
         best += sum(pos(x) * per_pos for x in used)
-    # groups that do not fit RAM at the builder's cost: rung 3, about a dozen plane streams per level
+    cal = read_calibration(a.calibration) if a.calibration else None
+    # groups that do not fit RAM at the builder's cost: rung 3, about a dozen plane streams per level. The number of
+    # levels is an outcome (the longest win), so a range: at least the calibration build's, at most what the byte holds
     big = [g for p_ in plan.values() for v in p_[1].values() for g in v if g * cost > a.ram]
-    streams = sum(a.levels * 12 * 2 * g / 8 for g in big) * n
+    per_level = sum(12 * 2 * g / 8 for g in big) * n
+    if a.levels:
+        lv_lo = lv_hi = a.levels
+    else:
+        lv_lo = max(cal.least_levels(x) for x in cal.cost) if isinstance(cal, Profile) else 1
+        lv_hi = 509 if b['depth'] else None                    # WDL: no byte to bound it
     writes, reads_lo, reads_hi = files, best, worst
     mbps = a.disk_mbps * 1e6
-    io_lo = (writes + reads_lo + streams) / mbps
-    io_hi = (writes + reads_hi + streams) / mbps
-    cal = read_calibration(a.calibration) if a.calibration else None
+    io_lo = (writes + reads_lo + per_level * lv_lo) / mbps
+    io_hi = (writes + reads_hi + per_level * (lv_hi or lv_lo)) / mbps
     bench = cal if isinstance(cal, dict) else None
     profile = cal if isinstance(cal, Profile) else None
     if profile:                                                 # the instrumented build: per material, its own cost
@@ -526,9 +540,10 @@ def estimate(a, b, board, ms, plan, positions, canon, refine, max_pos, cost):
             path_s = max(path_s, path_m)
         cpu *= n / len(metrics) if b['depth'] else 1
         shown = ', '.join(f'{x} {profile.us(x, a.pieces):.2f}' for x in metrics)
-        lev = ', '.join(f'{x} {profile.level(x, a.pieces):.0f}' for x in metrics)
+        lev = ', '.join(f'{x} {profile.least_levels(x)}' for x in metrics)
         profile_line = (f'  profile instrumented build to {profile.measured} pieces: at {a.pieces} pieces {shown} µs per position '
-                        f'and side' + (' (extrapolated)' if a.pieces > profile.measured else '') + f', levels {lev}')
+                        f'and side' + (' (extrapolated)' if a.pieces > profile.measured else '') + f'; levels are an outcome, '
+                        f'at least {lev} (measured)')
     if a.us:
         us, source = a.us, 'given'
     elif profile:
@@ -555,7 +570,8 @@ def estimate(a, b, board, ms, plan, positions, canon, refine, max_pos, cost):
           f'scratch {size(scratch, False)}: {size(files + scratch, False)}'
           + (f' of {size(a.disk, False)}: {"fits" if files + scratch <= a.disk else "DOES NOT FIT"}' if a.disk else ''))
     print(f'  I/O     writes {size(writes, False)} (sequential), reads {size(reads_lo, False)} to {size(reads_hi, False)}'
-          + (f', rung-3 streams {size(streams, False)} ({len(big)} groups over the RAM, {a.levels} levels each)' if big else '')
+          + (f', rung-3 streams {size(per_level, False)} per level ({len(big)} groups over the RAM; '
+             + (f'{lv_lo} levels' if lv_lo == lv_hi else f'{lv_lo} to {lv_hi or "?"} levels') + ')' if big else '')
           + f': {t(io_lo)} to {t(io_hi)} of disk time'
           + (f'; {writes / (a.tbw * 1e12):.2%} of {a.tbw:g} TBW' if a.tbw else ''))
     if bench:                                                   # pass 0's lookups into other materials

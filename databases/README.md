@@ -160,7 +160,9 @@ machine:
 **Every build is a calibration run.** As a profile-guided build, both engines measure themselves (a few popcounts per
 round and timers around the passes) and end each material's log with a `stats` line: positions, groups, levels,
 frontier positions summed over the rounds, seconds in pass 0, the rounds and the write. `src/egdb_calibrate.py`
-collects a build's lines; `egdb_layout.py --calibration` fits per metric the cost per position and the levels against
-the pieces, extrapolates them geometrically (cost) and linearly (levels) from the last two, and schedules each material
-at its own cost. Calibrated on the build to 5 pieces, thompson86 dtm, predicted for the 6-piece materials against the
-build to 6 pieces: 0.40 against 0.419 µs per position and side, 75 against 70 levels, about 36 against 40.5 s of CPU.
+collects a build's lines; `egdb_layout.py --calibration` fits per metric the cost per position against the pieces,
+extrapolates it geometrically from the last two, and schedules each material at its own cost. Calibrated on the build
+to 5 pieces, thompson86 dtm, predicted for the 6-piece materials against the build to 6 pieces: 0.40 against 0.419 µs
+per position and side, about 36 against 40.5 s of CPU. The number of levels (passes) is an outcome of the build, the
+longest win, and is not predicted: the frontier builds do not depend on it, and what costs a pass per level (rung 3)
+is given as a range, from the calibration build's levels to what the byte holds.

@@ -102,11 +102,11 @@ find_program(SNAKEMAKE_EXECUTABLE snakemake REQUIRED DOC "Snakemake (8.x)")
 set(REPO "${CMAKE_CURRENT_SOURCE_DIR}/..")
 file(MAKE_DIRECTORY "${DATA_DIR}")
 execute_process(
-    COMMAND "${Python3_EXECUTABLE}" -I "${REPO}/src/egdb_configure.py" "${BUILDER}" "${PIECES}" "${METRICS}" "${DATA_DIR}"
+    COMMAND "${Python3_EXECUTABLE}" -I "${REPO}/src/egdb_configure.py" "${BUILDER}" "${PIECES}" "${METRICS}" "${DATA_DIR}" "${CORES}"
     OUTPUT_VARIABLE probe COMMAND_ERROR_IS_FATAL ANY)
 string(REGEX REPLACE "\n$" "" probe "${probe}")
 string(REPLACE "\n" ";" probe "${probe}")
-foreach(line IN LISTS probe)                                    # materials, files_mb, need_mb, free_mb, rotational
+foreach(line IN LISTS probe)                        # materials, files_mb, need_mb, scratch_mb, free_mb, rotational
     string(REGEX MATCH "^([a-z_]+)=(.*)$" _ "${line}")
     set(DISK_${CMAKE_MATCH_1} "${CMAKE_MATCH_2}")
 endforeach()
@@ -121,7 +121,7 @@ endif()
 foreach(v IN ITEMS TOTAL_MB AVAILABLE_MB MEM_MB)
     memory_size(${v}_h ${${v}})
 endforeach()
-foreach(v IN ITEMS DISK_free_mb DISK_need_mb DISK_files_mb)
+foreach(v IN ITEMS DISK_free_mb DISK_need_mb DISK_files_mb DISK_scratch_mb)
     disk_size(${v}_h ${${v}})
 endforeach()
 message(STATUS "egdb 6x6: ${BUILDER}, ${PIECES} pieces, ${DISK_materials} materials, metrics ${METRICS}, granularity ${GRANULARITY}")
@@ -129,13 +129,13 @@ message(STATUS "  cores: ${PHYSICAL_CORES} physical, ${LOGICAL_CORES} logical; j
 message(STATUS "  memory: ${TOTAL_MB_h}, ${AVAILABLE_MB_h} available; budget ${MEM_MB_h} (sink ${SINK})")
 message(STATUS "  disk: ${DATA_DIR}")
 message(STATUS "    ${DISK_free_mb_h} free, ${DISK_KIND}")
-message(STATUS "    needs ${DISK_need_mb_h} (${DISK_files_mb_h} of files, the rest while the largest material is written)")
+message(STATUS "    needs ${DISK_need_mb_h}: ${DISK_files_mb_h} of files (cumulative, permanent) and ${DISK_scratch_mb_h} of scratch (up to ${CORES} jobs writing side by side)")
 if(DISK_need_mb GREATER DISK_free_mb)
     message(FATAL_ERROR "not enough disk: ${DISK_need_mb_h} needed, ${DISK_free_mb_h} free in ${DATA_DIR} "
                         "(choose another -DDATA_DIR, fewer -DMETRICS or -DPIECES)")
 endif()
 execute_process(                                                # the checks passed: the tree of subdivisions
-    COMMAND "${Python3_EXECUTABLE}" -I "${REPO}/src/egdb_configure.py" "${BUILDER}" "${PIECES}" "${METRICS}" "${DATA_DIR}" tree
+    COMMAND "${Python3_EXECUTABLE}" -I "${REPO}/src/egdb_configure.py" "${BUILDER}" "${PIECES}" "${METRICS}" "${DATA_DIR}" "${CORES}" tree
     COMMAND_ERROR_IS_FATAL ANY)
 file(WRITE "${CMAKE_BINARY_DIR}/machine.yaml"
 "# written by the configure step of databases/CMakeLists.txt (synthesis 7.3)
@@ -147,6 +147,7 @@ data_dir: ${DATA_DIR}
 disk_free_mb: ${DISK_free_mb}
 disk_rotational: ${DISK_rotational}
 disk_need_mb: ${DISK_need_mb}
+disk_scratch_mb: ${DISK_scratch_mb}
 ")
 
 # ---------------------------------------------------------------- the engine

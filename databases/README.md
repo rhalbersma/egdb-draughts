@@ -48,9 +48,12 @@ ones, MB, GB or TB (a "1 TB" disk is 10¹² bytes; `df -H`), e.g. "memory: 15.7 
 **A build fails when the machine provides less than it requires:**
 
 * **disk**, at configure time, exactly. Every file's size follows from its slot count, a product of four binomials, so
-  no engine is needed. The need is the raw size: all files uncompressed, plus the temporary copies while the largest
-  material is written.
-* **memory**, when Snakemake reads the workflow, before any job runs. The engine's `plan` gives every material's need
+  no engine is needed. Disk is cumulative: the need is every file of every metric (the databases are permanent, raw:
+  uncompressed), plus the scratch of the `CORES` largest materials written side by side (their files under temporary
+  names and the depth sink's group-order files).
+* **memory**, when Snakemake reads the workflow, before any job runs. Memory is scratch only: a job's working set and
+  the touched pages of the finished files it maps, freed when the job ends; Snakemake keeps the claims of the jobs side
+  by side within `MEM_MB`. The engine's `plan` gives every material's need
   per rung; if one needs more than `MEM_MB` even at its lowest rung, the workflow stops and names the largest. Give
   more memory, a finer granularity, or `config mem_check=0` to run over the budget anyway. This check lives in the
   Snakefiles (`check_budget` in `src/snakemake_plan.py`), so it also applies without CMake.

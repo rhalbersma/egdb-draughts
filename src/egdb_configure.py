@@ -5,10 +5,12 @@
 
 """The configure step of databases/CMakeLists.txt (synthesis section 7.3): what a build will write, and where.
 
-    egdb_configure.py <builder> <pieces> <metrics> <data_dir> [tree]
+    egdb_configure.py <builder> <pieces> <metrics> <data_dir> <jobs> [tree]
 
   - computes the disk a build needs, exactly, from the slot counts (a product of four binomials per material): the
-    files of every material, plus the largest material's temporary copies while it is being written;
+    files of every material (cumulative: they are permanent), plus the scratch of the materials being written side by
+    side (their files under temporary names and the depth sink's group-order files), at most <jobs> of them, the
+    largest;
   - probes the disk of <data_dir>: free bytes, and whether it is rotational (an HDD) or not (SSD, NVMe, RAM disk);
   - with `tree` (once the checks have passed): creates the tree of subdivisions for every metric,
     <data_dir>/<metric>/6x6/<np>/<wp>-<bp>/.
@@ -76,18 +78,19 @@ def rotational(path):
 
 
 def main():
-    builder, n, metrics, data_dir = sys.argv[1], int(sys.argv[2]), sys.argv[3].split(';'), sys.argv[4]
+    builder, n, metrics, data_dir, jobs = sys.argv[1], int(sys.argv[2]), sys.argv[3].split(';'), sys.argv[4], int(sys.argv[5])
     ms = materials(n, builder)
-    if sys.argv[5:] == ['tree']:
+    if sys.argv[6:] == ['tree']:
         for metric in metrics:
             for m in ms:
                 os.makedirs(os.path.join(data_dir, metric, tree(m)), exist_ok=True)
         return
     files = sum(material_bytes(m, builder) for m in ms)
-    temp = max(build_temp_bytes(m, builder) for m in ms)
+    temp = sum(sorted((build_temp_bytes(m, builder) for m in ms), reverse=True)[:jobs])
     print(f'materials={len(ms)}')
     print(f'files_mb={len(metrics) * files / 2**20:.0f}')
     print(f'need_mb={(len(metrics) * files + temp) / 2**20:.0f}')
+    print(f'scratch_mb={temp / 2**20:.0f}')
     print(f'free_mb={shutil.disk_usage(data_dir).free / 2**20:.0f}')
     print(f'rotational={rotational(data_dir)}')
 

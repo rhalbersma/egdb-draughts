@@ -32,6 +32,7 @@ D = f'{BASE}/{METRIC}'
 STYLE = str(config.get('style', '86'))
 SINK = config.get('sink', 'auto')          # the depth sink: auto (by the claim), groups (per-group files), array (RAM)
 POLICY = config.get('policy', 'seq')       # every pass a std::for_each: seq, or par within each build
+GRANULARITY = config.get('granularity', '')  # class, layer, cell or slice (default: slice for style 86, class for 96)
 THREADS = int(config.get('threads', 4))
 
 MATERIALS = [(wm, wk, bm, bk)
@@ -75,7 +76,7 @@ sys.path.insert(0, os.path.join(workflow.basedir, '..', 'src'))
 from snakemake_plan import memory_budget_mb, load_plan, claim_mb, priorities, report  # noqa: E402
 
 MEM = memory_budget_mb(workflow, config)
-PLAN = load_plan([ENGINE, 'plan', str(N), METRIC, STYLE])
+PLAN = load_plan([ENGINE, 'plan', str(N), METRIC, STYLE] + ([GRANULARITY] if GRANULARITY else []))
 PRIO = priorities(PLAN, {name(m): [name(d) for d in deps(m)] for m in MATERIALS})
 print(report(PLAN, MEM, lambda p: claim_mb(p, MEM)), file=sys.stderr)
 
@@ -109,7 +110,7 @@ for _m in MATERIALS:
         params: m=_n.replace('-', ' ')
         resources: mem_mb=claim_mb(PLAN[_n], MEM)
         priority: PRIO[_n]
-        shell: '{ENGINE} build {D} {params.m} {METRIC} {STYLE} {SINK} {POLICY} mem={resources.mem_mb} > {log} 2>&1'
+        shell: '{ENGINE} build {D} {params.m} {METRIC} {STYLE} {SINK} {POLICY} {GRANULARITY} mem={resources.mem_mb} > {log} 2>&1'
 
 
 rule check:

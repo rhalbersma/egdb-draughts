@@ -18,6 +18,7 @@
 #include <execution>
 #include <map>
 #include <string>
+#include <tuple>
 #include <unordered_map>
 #include <vector>
 
@@ -45,7 +46,41 @@ void init_cc()
 
 enum class Metric { dtm, dtc, dtz };
 Metric g_metric = Metric::dtm;
-bool g_waves = false;                                   // the 1996 style
+[[maybe_unused]] bool g_waves = false;                                   // thompson86's 1996 pass style (masked late)
+
+// ---------------------------------------------------------------- granularity: how finely a material class is cut into groups
+//
+//   class   the whole material class, king and man moves inside (dtz: one layer at a time, a man move ending the count)
+//   layer   one total tempo (the men's distance to promotion, summed over both colours), king moves inside
+//   cell    one (White distance, Black distance) cell of the tempo grid, king moves inside
+//   slice   one full configuration of the men, king moves inside
+// Below class granularity every man move is an exit, into a group solved earlier (it lowers its colour's distance).
+enum class Granularity { klass, layer, cell, slice };
+Granularity g_granularity = Granularity::slice;
+
+bool parse_granularity(std::string const& s)
+{
+        if (s == "class") g_granularity = Granularity::klass;
+        else if (s == "layer") g_granularity = Granularity::layer;
+        else if (s == "cell") g_granularity = Granularity::cell;
+        else if (s == "slice") g_granularity = Granularity::slice;
+        else return false;
+        return true;
+}
+
+[[maybe_unused]] char const* granularity_name()
+{
+        switch (g_granularity) {
+        case Granularity::klass: return "class";
+        case Granularity::layer: return "layer";
+        case Granularity::cell: return "cell";
+        case Granularity::slice: return "slice";
+        }
+        return "?";
+}
+
+// man moves stay inside a group only at class granularity, and not in dtz (a man move ends the count there)
+bool men_inside() { return g_granularity == Granularity::klass && g_metric != Metric::dtz; }
 
 bool parse_metric(std::string const& s)
 {
@@ -76,7 +111,7 @@ bool inside(Pos const& p, Move const& mv)
 {
         if (is_capture(mv) || is_promotion(p, mv)) return false;
         if (!is_man_move(p, mv)) return true;                          // a king move without capture
-        return g_waves && g_metric != Metric::dtz;                      // a man move: inside a wave, unless it ends the count
+        return men_inside();                                            // a man move: inside only at class granularity
 }
 
 // ---------------------------------------------------------------- materials and their index
@@ -239,7 +274,7 @@ void for_each_inside_predecessor(Group const& g, Pos const& q, F&& f)
                                 pr.stm = mover;
                                 f(g.index(pr));
                         }
-        if (!g_waves || g_metric == Metric::dtz) return;
+        if (!men_inside()) return;
         for (auto const t : q.m[mover])
                 for (int d = mover == 0 ? 2 : 0; d < (mover == 0 ? 4 : 2); ++d) {     // a man came from behind
                         auto const& ray = rays[std::size_t(t)][std::size_t(d)];
@@ -256,7 +291,8 @@ void for_each_inside_predecessor(Group const& g, Pos const& q, F&& f)
 
 std::vector<Group> groups_of(Material c)
 {
-        std::vector<std::pair<std::pair<int, std::uint64_t>, Meta>> units;     // (distance, key): the slices of the material
+        struct SliceUnit { int distance, white; std::uint64_t key; Meta meta; };      // a slice, with its distances
+        std::vector<SliceUnit> units;
         for (std::uint32_t w = u32(DOM_WM);; w = (w - 1) & u32(DOM_WM)) {
                 bitboard const wm = bb_of(w);
                 if (int(wm.size()) == c.wm) {
@@ -266,20 +302,30 @@ std::vector<Group> groups_of(Material c)
                                 if (int(bm.size()) == c.bm) {
                                         Key const k{ wm, bm, c.wk, c.bk };
                                         Meta const m = meta_of(k);
-                                        if (m.P != 0) units.push_back({ { distance(k), k.pack() }, m });
+                                        int white = 0;
+                                        for (auto const sq : wm) white += int(sq) / 3;
+                                        if (m.P != 0) units.push_back({ distance(k), white, k.pack(), m });
                                 }
                                 if (b == 0) break;
                         }
                 }
                 if (w == 0) break;
         }
-        std::ranges::sort(units, {}, [](auto const& u) { return u.first; });
-        // 1986: one slice per group; 1996: the whole material as one wave (dtz: one wave per distance)
-        auto wave = [](std::pair<int, std::uint64_t> const& k) { return g_metric == Metric::dtz ? k.first : 0; };
+        // in dependency order: a man move lowers the total distance (and its colour's), so smaller totals come first
+        std::ranges::sort(units, {}, [](SliceUnit const& u) { return std::tuple(u.distance, u.white, u.key); });
+        auto const group_key = [](SliceUnit const& u) -> std::uint64_t {    // a new group whenever this changes
+                switch (g_granularity) {
+                case Granularity::klass: return g_metric == Metric::dtz ? std::uint64_t(u.distance) : 0;
+                case Granularity::layer: return std::uint64_t(u.distance);
+                case Granularity::cell: return std::uint64_t(u.distance) << 32 | std::uint64_t(u.white);
+                case Granularity::slice: return u.key;
+                }
+                return u.key;
+        };
         std::vector<Group> out;
         for (std::size_t i = 0; i < units.size(); ++i) {
-                if (out.empty() || !g_waves || wave(units[i].first) != wave(units[i - 1].first)) out.emplace_back();
-                out.back().add(units[i].second);
+                if (out.empty() || group_key(units[i]) != group_key(units[i - 1])) out.emplace_back();
+                out.back().add(units[i].meta);
         }
         return out;
 }
@@ -464,7 +510,7 @@ public:
 // (and into other classes by captures and promotions): built layer by layer, only two adjacent layers are ever live.
 struct Layer { int distance = 0; std::uint64_t slices = 0, positions = 0; };   // positions per side to move
 
-std::vector<Layer> layers_of(Material c)
+[[maybe_unused]] std::vector<Layer> layers_of(Material c)
 {
         std::map<int, Layer> by;
         for (std::uint32_t w = u32(DOM_WM);; w = (w - 1) & u32(DOM_WM)) {

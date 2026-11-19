@@ -53,6 +53,12 @@ side, is a lookup into the files of the material it leads into: virtual addressi
 copies parked inside a bigger run. The files form a DAG through captures and promotions, which Snakemake builds in
 order; a capture of a side's last piece ends the game and needs no file.
 
+**Granularity** (`granularity=class|layer|cell|slice`, shared with `syzygy`, synthesis §1.1): how finely a material
+class is cut into groups. The style sets the default (1986: `slice`, 1996: `class`); any granularity works with either
+style's passes, and below `class` every man move is an exit into an earlier group. `cell`, one (White tempo, Black
+tempo) cell of the tempo grid, gives the smallest largest group: rung 0 at most 49 MB at 6 pieces (1996 style),
+against 95 MB at `class` or `slice`.
+
 **Two styles**, the same results byte for byte:
 
 | | 1986 (`style=86`) | 1996 (`style=96`) |

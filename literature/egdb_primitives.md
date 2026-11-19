@@ -91,13 +91,23 @@ were subdivisions.
 
 **A group** must be closed under the moves the rounds treat as inside; every other move is an exit into a group or
 material class already finished, looked up in pass 0. King moves never leave a slice, man moves connect the slices
-of a material class, so the grouping follows from whether man moves count as inside:
+of a material class. The **granularity** says how finely a material class is cut into groups (`granularity=` in both
+builders):
 
-| builder and style | moves inside | so a group is |
-|---|---|---|
-| `thompson86` 1986 style, `syzygy` `grouping=slices`, `egdb_6x6` | king moves | one slice |
-| `thompson86` 1996 style dtm and dtc; `syzygy` dtm and dtc | king and man moves | the whole material class |
-| `thompson86` 1996 style dtz; `syzygy` dtz | king moves (a man move ends the count, so it is an exit) | all slices of one distance (one wave) |
+| granularity | a group is | moves inside | default for |
+|---|---|---|---|
+| `class` | the whole material class (dtz: one layer at a time, since a man move ends the count) | king and man moves | `syzygy`, `thompson86` 1996 style |
+| `layer` | one total tempo: the men's distance to promotion summed over both colours, an anti-diagonal of the tempo grid | king moves | |
+| `cell` | one (White distance, Black distance) cell of the tempo grid | king moves | |
+| `slice` | one full configuration | king moves | `thompson86` 1986 style, `egdb_6x6` |
+
+Below `class` every man move is an exit: it lowers its colour's distance, into a group solved earlier, so the rounds
+need no man unmoves and no man move has to be classified (unlike leading-rank slices, where a rear man's move stays
+inside, the leading man's leaves, and a rear man overtaking the leading rank changes the slice). The tempi factorize by
+colour: a white man move goes from cell (dw, db) to (dw − 1, db), a black one to (dw, db − 1), so the cells of one
+layer never lead into each other. For 03-03-03-03 that is 25 layers and 167 non-empty cells of the 13 × 13 grid,
+against 118,587 one-position slices; at 6 pieces `cell` gives the smallest largest group in both builders (rung 0 at
+most 58 MB in `syzygy`, 49 MB in `thompson86`, against 94–103 MB at `class` or `slice`).
 
 A build solves the groups of its material class one after another in dependency order, later groups looking up earlier
 ones through the depth sink.
@@ -535,7 +545,7 @@ group-order files, `sink=auto` by the job's claim). `syzygy` first had to split 
 depth store and cumulative state (about 7.5 bytes per position and side to move against rtbgen's 1 byte), into
 cumulative bit planes for the state and write-only values in the sink; its frontier rounds now hold about 9 bit planes
 and the level lists, its scan mode (rtbgen's) still the value array, which its frontier scans. Both also offer slice
-groups (`thompson86` 1986 style, `syzygy` `grouping=slices`), rung 2.
+groups (`granularity=layer|cell|slice` in both builders), rung 2.
 
 ### 7.3 Choosing by machine
 
@@ -593,7 +603,7 @@ byte; the previous metric's build gives a better estimate).
 
 **The decisions, in order:**
 
-1. **Grouping.** The knob that sets everything else: fine enough that a group fits its claim at a high rung, coarse
+1. **Granularity.** The knob that sets everything else: fine enough that a group fits its claim at a high rung, coarse
    enough that per-group overhead (files, maps, metadata, thread-pool start-up) stays small. Gilbert cut by piece
    counts and leading ranks, then by the configuration of the leading rank, then by the rank of the penultimate
    checker, but only above a 900 MB threshold: 64,369 subdivisions instead of almost 3 million, some 20 million files,

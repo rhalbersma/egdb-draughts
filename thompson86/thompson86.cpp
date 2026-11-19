@@ -52,15 +52,17 @@
 //
 // build: g++-14 -std=c++23 -O2 -march=native -fopenmp -I<xstd-bits>/include -I<xstd-ints>/include
 //        -I<xstd-misc>/include thompson86/thompson86.cpp -lzstd -ltbb -o thompson86
-// usage: thompson86 build <dir> wp bp wm bm <metric> <style> [groups|array|auto] [seq|par] [mem=MB]
+// usage: thompson86 build <dir> wp bp wm bm <metric> <style> [groups|array|auto] [seq|par] [class|layer|cell|slice] [mem=MB]
 //                                                               build one material (its captures and promotions must exist);
 //                                                               the depth sink: per-group files (default) or the array;
 //                                                               every pass a std::for_each, seq (default) or par;
+//                                                               the granularity of the groups (default: slice for 86,
+//                                                               class for 96);
 //                                                               auto: the array if rung 0 fits the claim mem=MB, else
 //                                                               the group files
 //        thompson86 layers n                                    per material class with at most n pieces, the layers of its
 //                                                               configuration DAG: distance, slices, positions per side
-//        thompson86 plan n <metric> <style>                     per material with at most n pieces: slots, positions,
+//        thompson86 plan n <metric> <style> [granularity]       per material with at most n pieces: slots, positions,
 //                                                               groups, the largest group, and the MB needed at rung 0
 //                                                               (array) and rung 1 (group files), tab-separated
 //        thompson86 checkall <dir> n <metric> [threads]         every material of at most n pieces against egdb_6x6 (built in
@@ -483,7 +485,7 @@ bool build_material(std::string const& dir, Material c)
         g_sink = nullptr;
         g_frozen = false;
         double const sec = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-        std::cout << "material " << c.name() << " " << metric_name() << (g_waves ? " 1996" : " 1986")
+        std::cout << "material " << c.name() << " " << metric_name() << (g_waves ? " 1996" : " 1986") << " " << granularity_name()
                   << (g_group_files ? " group files" : " array") << ": " << groups.size() << " groups, " << positions
                   << " positions, " << mi.size << " slots, " << wins << " White wins, longest " << longest << " plies, "
                   << losses << " Black losses, longest " << longest_loss << " plies, peak RSS " << peak_rss_mb() << " MB, "
@@ -584,19 +586,23 @@ int main(int argc, char* argv[])
                                 std::cout << c.name() << '\t' << l.distance << '\t' << l.slices << '\t' << l.positions << '\n';
                 return 0;
         }
-        if (a.size() == 4 && a[0] == "plan" && parse_metric(a[2]) && (a[3] == "86" || a[3] == "96")) {
+        if ((a.size() == 4 || a.size() == 5) && a[0] == "plan" && parse_metric(a[2]) && (a[3] == "86" || a[3] == "96")) {
                 g_waves = a[3] == "96";
+                g_granularity = g_waves ? Granularity::klass : Granularity::slice;     // the style's default
+                if (a.size() == 5 && !parse_granularity(a[4])) { std::cerr << "granularity: class, layer, cell or slice" << std::endl; return 2; }
                 print_plan_header();
                 for (Material const c : materials_up_to(std::stoi(a[1]))) print_plan_row(c, memory_need(c));
                 return 0;
         }
-        if (a.size() >= 8 && a.size() <= 11 && a[0] == "build" && parse_metric(a[6]) && (a[7] == "86" || a[7] == "96")) {
+        if (a.size() >= 8 && a.size() <= 12 && a[0] == "build" && parse_metric(a[6]) && (a[7] == "86" || a[7] == "96")) {
                 g_waves = a[7] == "96";
+                g_granularity = g_waves ? Granularity::klass : Granularity::slice;     // the style's default
                 for (std::size_t i = 8; i < a.size(); ++i) {
                         if (a[i] == "groups" || a[i] == "array") { g_group_files = a[i] == "groups"; g_sink_auto = false; }
                         else if (a[i] == "auto") g_sink_auto = true;
                         else if (a[i] == "seq" || a[i] == "par") g_par = a[i] == "par";
                         else if (a[i].starts_with("mem=")) g_mem_mb = std::stoull(a[i].substr(4));
+                        else if (parse_granularity(a[i])) {}
                         else { std::cerr << "unknown option " << a[i] << std::endl; return 2; }
                 }
                 return build_material(a[1], mat_at(2)) ? 0 : 1;
@@ -605,7 +611,7 @@ int main(int argc, char* argv[])
                 return check_all(a[1], std::stoi(a[2]), a.size() == 5 ? std::stoi(a[4]) : 4) ? 0 : 1;
         if (a.size() == 5 && a[0] == "order") return check_order(a[1], a[2], a[3], std::stoi(a[4])) ? 0 : 1;
         if (a.size() == 5 && a[0] == "size") { std::cout << MatIndex(mat_at(1)).size << std::endl; return 0; }
-        std::cerr << "usage: thompson86 build <dir> wp bp wm bm dtm|dtc|dtz 86|96 [groups|array|auto] [seq|par] [mem=MB] | layers n | plan n dtm|dtc|dtz 86|96 | checkall <dir> n dtm|dtc|dtz [threads]"
+        std::cerr << "usage: thompson86 build <dir> wp bp wm bm dtm|dtc|dtz 86|96 [groups|array|auto] [seq|par] [class|layer|cell|slice] [mem=MB] | layers n | plan n dtm|dtc|dtz 86|96 [granularity] | checkall <dir> n dtm|dtc|dtz [threads]"
                      " | order <dir_dtz> <dir_dtc> <dir_dtm> n | size wp bp wm bm" << std::endl;
         return 2;
 }

@@ -39,6 +39,42 @@ Notes marked **[my analysis]** are my inferences for the `std::for_each` mapping
 
 ---
 
+## 2005-web-Gilbert, "Building the 10-piece database" (edgilbert.org/EnglishCheckers/10-pieceBuild.htm)
+
+Read through a summarising web fetch, not verbatim; numbers as the summary gave them.
+
+1. **Scope**: the 10-piece English checkers database, started 2 August 2004, finished 17 July 2005 (the 5-vs-5
+   checkers slice last): 11.5 months of calendar time, 4.2 years of computer time; the 9-piece database had taken
+   6 computer-months in 2003, the 10-piece one has 4.3 times as many positions.
+2. **Hardware**: five PCs (2.4 and 3.2 GHz P4, Athlon XP 2800+ and 2600+, a fifth with 1 GB), 2 GB of RAM each except
+   that one, 120 GB disk pairs and a 250 GB disk, a 100 Mbit LAN; near 100 % occupied at low priority.
+3. **Subdivision**: the Chinook scheme (piece counts and leading ranks), refined in three tiers: leading rank; the
+   configuration of the checkers on the leading rank (70 for 2 men of one colour, 4,900 for 2 of each); the rank of the
+   penultimate checker (up to 36 pieces). Tiers 2 and 3 only above a 900 MB threshold: 64,369 subdivisions instead of
+   almost 3 million (about 20 million files). For 9 pieces, indexing by the leading square gave 71,168 subdivisions and
+   about half a million files, under 2^32 positions each. "With these 3 tiers just about everything can be built with
+   2gb of ram and 32-bit indices"; "most of the 10-piece database can be built efficiently using only 1gb ram", but at
+   least one machine needs 2 GB.
+4. **The all-kings slice**: almost 4 GB of buffer and more than 2^32 positions; halved by mirror symmetry along the
+   double-corner diagonal to fit 2 GB, built with 64-bit indices, then split into pieces below 2^32.
+5. **Memory beyond RAM**: for the largest slices "complex disk caching schemes must then be used, else accessing the
+   data on disk becomes horribly slow"; caching is less effective at every level (CPU, operating system, program) with
+   larger data; 64-bit arithmetic through library calls slows iteration.
+6. **Storage**: WDL data and index files per colour, moves-to-conversion in four more files per subdivision; for use,
+   slices re-indexed into single subdivisions in chunks of 2^31 positions (re-indexing 12–15× faster than building);
+   Schaeffer's RLE without capture and threatened-capture positions, Fierz's 4 positions per byte with spare codes for
+   runs.
+7. **Parallelism**: subdivisions with the same leading-rank counts in one tier are independent; about 50 buildable at
+   a time on average (over 100 mid-build, under 20 at start and end).
+8. **Verification**: the self-consistency check "adds about 40% to the total build time" and was skipped; per-slice
+   WDL counts were compared with Schaeffer's independent build instead, which found one wrong subdivision (one win too
+   many), traced to a compression pass on one machine; a later self-consistency check detected it.
+9. **Lessons**: verify (random errors in compression, file transfers and RAM propagate); keep subdivisions within RAM
+   and 32-bit indices but avoid too many files (browsing the 9-piece tree froze the file manager for minutes).
+10. **Synthesis**: §7.3.
+
+---
+
 ## 1994-ACC-07-Lake-Schaeffer-Lu.pdf
 
 1. **Citation**: R. Lake, J. Schaeffer, P. Lu, "Solving Large Retrograde Analysis Problems Using a Network of Workstations", *Advances in Computer Chess 7*, 1994, pp. 135–162.

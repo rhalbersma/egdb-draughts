@@ -486,6 +486,78 @@ the depth bytes of the whole material in RAM even when its groups are single sli
 `syzygy`'s 16-bit value array is both depth store and cumulative state (about 7.5 bytes per position and side to
 move against rtbgen's 1 byte), so it needs cumulative bit planes before it can climb at all.
 
+### 7.3 Choosing by machine
+
+A build is bound by CPU, RAM and I/O at once, and which of them binds depends on the group as much as on the machine.
+Chinook's network-of-workstations build (Lake–Schaeffer–Lu 1994) ran workers of 8–15 MB with a 3–4 MB working set of
+8 KB pages under LRU, chose forward sweeps *because* their writes stay local, ran the backward queue sequentially for
+lack of locality, and made up 75 % of the department's network traffic; its 2003 successor reports the capture,
+lookup and verification passes I/O-bound and the non-capture iteration CPU-bound. Gilbert's 10-piece English checkers
+build (2005, `edgilbert.org`) is the small-memory extreme: five PCs with 1–2 GB of RAM, 120–250 GB disks and a
+100 Mbit LAN, 4.2 computer-years in 11.5 months, every subdivision cut until it fitted a 2 GB buffer and 32-bit
+indices. So the choices of §7.1–7.2 and of `seq` or `par` should not be made by hand per build, but by a planner
+from a description of the machine and the sizes known before the build.
+
+**The machine**, a small description file:
+
+| quantity | used for |
+|---|---|
+| cores | `par` within a group against more jobs side by side |
+| RAM, minus a reserve for the page cache of finished files | the job claims and the rung per group |
+| per storage tier (RAM, SSD, HDD, network): sequential bandwidth, random-read latency, whether scattered writes are allowed | where temporary files, lists and finished files go; whether random reads into finished files are cheap; which rungs are affordable |
+
+Scattered writes are allowed only in RAM (rule 6): on an SSD every one rewrites a 4 KiB page and wears the drive, on
+an HDD every one costs a seek. Random reads are cheap from RAM and the page cache, tolerable from an SSD, expensive
+from an HDD.
+
+**Known before the build**, from the slice sizes (`Meta.P`) and the DAG: positions per group and per material, the
+sizes of the finished files a material reads, the number of groups, and roughly the number of levels (bounded by the
+byte; the previous metric's build gives a better estimate).
+
+**Cost per pass, and the constants measured so far** (6 pieces, 4 cores, this machine):
+
+| pass or choice | work | access | measured |
+|---|---|---|---|
+| whole build, `seq` | about 2P positions per group, moves generated, exits looked up | CPU, random reads into finished files | `thompson86` 0.35 µs per position; frontier `syzygy` 0.34 µs (dtm) and 0.26 µs (dtz) per settled cell |
+| pass 0 lookups into finished files | a few per position | random reads | page cache: part of the above; cold memory map: 3–8 µs per lookup (§7, rule 6), so pass 0 explodes once the inputs fall out of the cache |
+| rounds by full scans instead of frontiers | 2 × 2P per round, L rounds | sequential reads of the group | `syzygy` dtm +46 % (53.1 s against 36.4 s), dtz +14 % |
+| depth sink, group-order files instead of the array | the gathering pass, slice lookups | sequential writes, random reads in RAM | +10–15 % CPU; the largest material's peak memory 19.3 MB instead of 24.9 MB |
+| `par` within a group | the same work, split in blocks of 4096 positions | | whole-material groups: 2.0× on 4 cores (43.0 s → 21.1 s); single-slice groups: none, only thread-pool overhead |
+| scattered updates on disk | one per update | random against sorted | Wu–Liu–Hsu 2004: 10^6 updates 3787 s random against 6.5 s sorted |
+
+**The decisions, in order:**
+
+1. **Grouping.** The knob that sets everything else: fine enough that a group fits its claim at a high rung, coarse
+   enough that per-group overhead (files, maps, metadata, thread-pool start-up) stays small. Gilbert cut by piece
+   counts and leading ranks, then by the configuration of the leading rank, then by the rank of the penultimate
+   checker, but only above a 900 MB threshold: 64,369 subdivisions instead of almost 3 million, which would have been
+   some 20 million files; our first group-file sink hit the kernel's 65,530 memory maps for the same reason.
+2. **The rung per group**, the highest that fits the job's claim (§7.2).
+3. **The policy per group**: `par` when the group has several blocks per core, `seq` otherwise, with the parallelism
+   taken from jobs side by side or from independent groups of one wave.
+4. **Jobs side by side**: Snakemake with `--cores` and `--resources mem_mb=` (RAM minus the page-cache reserve), each
+   job claiming its rung-0 need capped at that, so a big material waits for the whole machine instead of four jobs
+   squeezing each other down a rung; priorities by the critical path of the DAG.
+5. **Placement**: temporary group-order files and frontier lists on a tier with fast sequential writes; finished files
+   where random reads are cheap. On an HDD, pass 0 sorts its lookups per finished file, turning them into a
+   sequential read; for dtc and dtz the outcome files (8× or 4× smaller than the bytes) are what must stay cached.
+
+**Which resource binds, and the response:**
+
+| regime | binds | response |
+|---|---|---|
+| small groups, inputs cached | CPU (move generation) | more jobs side by side |
+| a big group in RAM | CPU | `par` within the group |
+| inputs larger than the page cache | random reads | sort the lookups per file; keep the outcome files cached; SSD rather than HDD |
+| a group larger than its claim | RAM | a lower rung (§7.2) |
+| at the bit-in-RAM rungs | sequential bandwidth: a few full streams per level | fewer levels per stream (Wu–Beal's spare bitmaps), faster tier |
+| on an HDD | anything random | only the sequential rungs; sorted batches |
+
+**To build**: the machine file; a planner (an extension of `strongly_solving_6x6/materials/materials.py`, which
+already computes sizes and critical-path priorities) that assigns each job its claim, priority and policy and each
+group its rung; engines that take those decisions as arguments and report, per pass, the measured time per position,
+lookups per position and cache misses, so the constants above are calibrated per machine rather than assumed.
+
 ## 8. Best of breed for draughts
 
 Take from syzygy: the metric split (WDL + DTZ), one value cell with codes, the fused round, level synchrony.

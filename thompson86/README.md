@@ -18,7 +18,7 @@ and unmoves are in `src/materials_6x6.hpp`, shared with the two-sided [`syzygy`]
 moves, Thompson's "win in k": up to 509 plies in a byte. In dtc and dtz a goal move by the losing side (Black's forced
 capture) can end a White win on an even ply, so they store plies. The build works in plies; only the files differ.
 
-The notation, shared with [`syzygy`](../syzygy/): a file is `6x6/np/wp-bp/6x6-np-wp-bp-wm-bm-<kind>-<side to move>`. A **full result**
+The notation, shared with [`syzygy`](../syzygy/): a file is `6x6/np/wp-bp/wm-bm-<kind>-<side to move>`. A **full result**
 holds win, draw and loss: `dtm` (with depth) or `wdl` (outcome only). A **half result** holds one of them: `dmW`,
 `dmL` (with depth), `isW`, `isL` (outcome only, one bit). The same for dtc and dtz (`dcW`, `dcL`, `dzW`, `dzL`); the bit files carry no
 metric, since they are the same for all three, so the files of each metric go into a directory of their own,
@@ -45,7 +45,7 @@ the moves that end the count (by either side, as long as the win is kept):
 A White win can end with Black's forced capture, so in dtc and dtz a win can take an even number of plies.
 
 **One file pair per material.** A material is named wp-bp-wm-bm (white pieces, black pieces, white men, black men,
-two digits each, as in `egdb_6x6`'s material mode); its files are `6x6/np/wp-bp/6x6-np-wp-bp-wm-bm-dmW-wtm` and so on (np: the number of pieces), indexed by a
+two digits each, as in `egdb_6x6`'s material mode); its files are `6x6/np/wp-bp/wm-bm-dmW-wtm` and so on (np: the number of pieces), indexed by a
 product of four colex ranks, one per colour and type: the men over the 15 squares a man may stand on, the kings over
 all 18 squares. Pieces of one colour and type never share a square, the two colours may (those slots are illegal and
 never visited), as in Thompson's 462 × 64ⁿ. Every move that leaves the material, a capture or a promotion of either

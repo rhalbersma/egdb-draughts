@@ -4,7 +4,7 @@
 //          http://www.boost.org/LICENSE_1_0.txt)
 
 // Thompson style builds (1986 and 1996) for 6x6 international draughts, for three metrics. One-sided: half results,
-// White's wins and Black's losses. Per material four files, 6x6/np/wp-bp/6x6-np-wp-bp-wm-bm-<kind>-<side to move> (for dtm; dtc and dtz
+// White's wins and Black's losses. Per material four files, 6x6/np/wp-bp/wm-bm-<kind>-<side to move> (for dtm; dtc and dtz
 // alike):
 //   dmW-wtm   one byte: k for a White win in 2k - 1 plies, 0 for "not a win" (draw, loss, illegal slot); dcW, dzW
 //               store the plies n (their wins can take an even number of plies)
@@ -23,7 +23,7 @@
 //
 // Materials. A material is named wp-bp-wm-bm (white pieces, black pieces, white men, black men, two digits each, as
 // in egdb_6x6's material mode); every material with a piece on each side is built once, into files of its own,
-// 6x6/np/wp-bp/6x6-np-wp-bp-wm-bm-d<m|c|z>W-wtm and so on. Its index: per colour and type the colex rank over the squares where such a
+// 6x6/np/wp-bp/wm-bm-d<m|c|z>W-wtm and so on. Its index: per colour and type the colex rank over the squares where such a
 // piece may stand (15 for men, 18 for kings),
 //   index = ((rank_wm * C(15, bm) + rank_bm) * C(18, wp - wm) + rank_wk) * C(18, bp - bm) + rank_bk
 // Slots where pieces of different colours or types share a square are never written (0). A move into another

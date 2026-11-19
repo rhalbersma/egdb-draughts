@@ -9,7 +9,7 @@
 # every material one move can lead into: a promotion (a man of either side becomes a king), a capture of one or more
 # pieces of either side (the capturing man possibly promoting). A capture of a side's last piece ends the game and
 # needs no file. Every material with at most n pieces and a piece on each side is built, into four files of half
-# results, 6x6-np-wp-bp-wm-bm-<kind>-<side to move> (np: the number of pieces): d<m|c|z>W-wtm (plies to a White win)
+# results, 6x6/np/wp-bp/wm-bm-<kind>-<side to move> (np: the number of pieces): d<m|c|z>W-wtm (plies to a White win)
 # and d<m|c|z>L-btm (1 + plies to Black's loss), one byte per slot, and isW-wtm, isL-btm (won, lost), one bit per slot. A dtm build reads the
 # bytes of the materials it leads into, a dtc or dtz build only their bits (every move out of a material is a goal move
 # there). The files of a metric go into <dir>/<metric>: the bit files are the same for all three.
@@ -89,9 +89,9 @@ rule all:
     input: f'{D}/check-{N}.{METRIC}.ok'
 
 
-def sub(n):                                                            # wp-bp-wm-bm -> db/np/wp-bp/db-np-wp-bp-wm-bm
-    wp, bp = map(int, n.split('-')[:2])
-    return f'6x6/{wp + bp:02}/{wp:02}-{bp:02}/6x6-{wp + bp:02}-{n}'
+def sub(n):                                                            # wp-bp-wm-bm -> db/np/wp-bp/wm-bm
+    wp, bp, wm, bm = map(int, n.split('-'))
+    return f'6x6/{wp + bp:02}/{wp:02}-{bp:02}/{wm:02}-{bm:02}'
 
 
 DEPTH = 'd' + METRIC[2]                                                # dm, dc or dz

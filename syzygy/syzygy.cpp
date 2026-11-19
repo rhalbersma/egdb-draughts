@@ -16,7 +16,7 @@
 //
 // Materials. Two-sided: both sides to move, wins and losses, so only one of each pair of a material and its colour
 // mirror is built (the same 82 materials up to 6 pieces as strongly_solving_6x6/materials); a position in the other
-// one is looked up as its mirror image. Full results; per material four files, 6x6/np/wp-bp/6x6-np-wp-bp-wm-bm-<kind>-<side to move>
+// one is looked up as its mirror image. Full results; per material four files, 6x6/np/wp-bp/wm-bm-<kind>-<side to move>
 // (for dtm; dtc and dtz alike):
 //   dtm-wtm   one byte per slot, White to move: the unsigned depth, k for a win in 2k - 1 or a loss in 2k plies
 //             (dtc, dtz: n plies); the sign is in wdl-wtm

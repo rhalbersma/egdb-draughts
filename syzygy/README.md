@@ -16,14 +16,15 @@ passes.
 
 ## What is stored
 
-Per material, named wp-bp-wm-bm (white pieces, black pieces, white men, black men, two digits each):
+Per material, named wp-bp-wm-bm (white pieces, black pieces, white men, black men, two digits each), in the directory
+of its subdivisions `6x6/np/wp-bp/` (np: the number of pieces), e.g. `6x6/06/04-02/02-01-dtm-wtm`:
 
 | file | contents |
 |---|---|
-| `6x6-np-wp-bp-wm-bm-dtm-wtm` | one byte per slot, White to move: the unsigned depth |
-| `6x6-np-wp-bp-wm-bm-dtm-btm` | one byte per slot, Black to move: the unsigned depth |
-| `6x6-np-wp-bp-wm-bm-wdl-wtm` | two bits per slot (0 draw, 1 loss, 2 win), White to move |
-| `6x6-np-wp-bp-wm-bm-wdl-btm` | two bits per slot, Black to move |
+| `wm-bm-dtm-wtm` | one byte per slot, White to move: the unsigned depth |
+| `wm-bm-dtm-btm` | one byte per slot, Black to move: the unsigned depth |
+| `wm-bm-wdl-wtm` | two bits per slot (0 draw, 1 loss, 2 win), White to move |
+| `wm-bm-wdl-btm` | two bits per slot, Black to move |
 
 Shown for dtm; dtc and dtz alike (`dtc-wtm`, ...). These are **full results** (win, draw and loss), where
 `thompson86` stores **half results** (`dmW`, `dmL`, `isW`, `isL`). The `wdl` files carry no metric: they are

@@ -63,19 +63,17 @@ Two kinds of unit, by the kind of irreversible move that separates them.
 | pieces per side | white pieces and black pieces | 4 against 2 |
 | **material class** ("material" for short) | white men, white kings, black men, black kings | 03-02-02-01 in wp-bp-wm-bm (white pieces, black pieces, white men, black men): White 2 men and 1 king, Black 1 man and 1 king |
 
-The material class is the unit of the files (`6x6/np/wp-bp/6x6-np-wp-bp-wm-bm-*`, every position at its index of four colex ranks);
+The material class is the unit of the files (`6x6/np/wp-bp/wm-bm-*`, every position at its index of four colex ranks);
 the material classes form a DAG through captures and promotions.
 
-**Names follow the subdivisions.** A file is `db-np-wp-bp-wm-bm-<kind>-<side>`, for example
-`6x6-06-04-02-02-01-dmW-wtm`: the database, the number of pieces, pieces per side, men per side, then a kind of three
-characters (`dtm`, `dtc`, `dtz`, `wdl` for full results; `dmW`, `dmL`, `dcW`, ... and `isW`, `isL` for half results)
-and the side to move. Every subdivision is a prefix of the name and a directory of the tree,
-`6x6/06/04-02/6x6-06-04-02-02-01-dmW-wtm`, which shows the dependencies: a capture always leads into a lower `np`
-directory, a promotion keeps the piece counts and stays inside its `wp-bp` directory. The file name stays complete, so
-a file taken out of the tree still says what it is. These files are permanent; a later compression may pack a
-directory into one file of a coarser granularity. A slice adds its tempi, `<name>-wt-bt` (e.g.
-`6x6-06-04-02-02-01-dmW-wtm-03-01`): a temporary file, consolidated into the material class's file as soon as the class
-is resolved.
+**Names follow the subdivisions.** The subdivisions are the directories of a tree, `db/np/wp-bp/` (the database, the
+number of pieces, pieces per side), and a material class's files are named by what is left: men per side, a kind of
+three characters (`dtm`, `dtc`, `dtz`, `wdl` for full results; `dmW`, `dmL`, `dcW`, ... and `isW`, `isL` for half
+results) and the side to move: `6x6/06/04-02/02-01-dmW-wtm`. The tree shows the dependencies: a capture always leads
+into a lower `np` directory, a promotion keeps the piece counts and stays inside its `wp-bp` directory. These files
+are permanent; a later compression may pack a directory into one file of a coarser granularity. A slice adds its
+tempi, `wm-bm-<kind>-<side>-wt-bt` (e.g. `6x6/06/04-02/02-01-dmW-wtm-03-01`): a temporary file, consolidated into the
+material class's file as soon as the class is resolved.
 
 **Slices** split a material class by the configuration of its irreversibly moving pieces (draughts and checkers men,
 chess pawns); a man's or pawn's advance leads from one slice to another, so the slices of a material class form a DAG

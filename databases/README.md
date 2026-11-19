@@ -41,8 +41,9 @@ cmake --build build/syzygy-6 --target dtm
 | `MEM_MB` | 75 % of physical memory | the memory budget of the jobs together, in MiB |
 | `SNAKEMAKE_EXECUTABLE` | found on the `PATH` | Snakemake 8 |
 
-Sizes are MiB (2²⁰ bytes) throughout, as Snakemake's `mem_mb` and the engines' `plan`; the configure step prints them
-scaled to MiB, GiB or TiB, e.g. "needs 96.6 GiB (91.2 GiB of files, ...)".
+Inputs and checks are in MiB (2²⁰ bytes), as Snakemake's `mem_mb` and the engines' `plan`. The configure step reports
+sizes as they are sold: memory in binary units, MiB or GiB (a "16 GB" module is 16 GiB; `free -h`), disk in decimal
+ones, MB, GB or TB (a "1 TB" disk is 10¹² bytes; `df -H`), e.g. "memory: 15.7 GiB" and "needs 103.8 GB".
 
 **A build fails when the machine provides less than it requires:**
 

@@ -16,6 +16,10 @@ independent of each other too). A configuration's positions are its king
 placements, the same for every configuration of a material: a configuration that does not fit (a kings-only material
 is a single one) needs a lower rung, symmetry (--kings-symmetry) or a bigger machine, and is reported as such.
 
+Comfortable: with RAM for 1 depth byte and 4 bit planes per position and side, both sides, of the largest
+configuration (kings-only materials by their symmetry), every group can stay at rungs 0-2: granularity alone makes the
+rest fit, and the I/O is the files once and the inputs.
+
 The floor: no build needs less than 1 bit per position (and side to move) of one configuration of men with all its
 king placements, the largest configuration over the materials; reported with and without the kings-only materials. A
 kings-only position has the symmetry of the playable squares (the two diagonals and the half turn), so a kings-only
@@ -34,6 +38,7 @@ squares), the disjoint index; --cost gives the RAM per position of a group (both
     gilbert2005   0.25 B   2 bits per position: Gilbert's all-kings 5v5 slice, 16.3 G positions, "almost 4 GB of buffer"
     wdl           0.5 B    2 bits per position and side to move, both in RAM (Chinook: slice and mirror together)
     bit           0.25 B   1 bit per position and side (rung 3: Wu-Beal, Lincke)
+    byte          3 B      1 depth byte and 4 bit planes per position and side, both in RAM (rungs 0-2: "comfortable")
     thompson86    27.4 B   11 bit planes, seed lists at their worst-case bound (24 B), depth bytes (rung 1)
     syzygy        30.3 B   9 bit planes per side, level lists at their bound, 16-bit values (rung 1)
     or a number of bytes per position.
@@ -48,7 +53,7 @@ from collections import defaultdict
 
 C = math.comb
 BOARDS = {'6x6': (6, 3), '8x8': (8, 4), '10x10': (10, 5)}       # rows, playable squares per row
-COSTS = {'gilbert2005': 0.25, 'wdl': 0.5, 'bit': 0.25, 'thompson86': 11 / 8 + 24 + 2, 'syzygy': 9 * 2 / 8 + 24 + 4}
+COSTS = {'gilbert2005': 0.25, 'wdl': 0.5, 'bit': 0.25, 'byte': 2 * (1 + 4 / 8), 'thompson86': 11 / 8 + 24 + 2, 'syzygy': 9 * 2 / 8 + 24 + 4}
 
 
 def parse_bytes(s):
@@ -253,6 +258,8 @@ def main():
     print(f'  floor         1 bit per position of the largest configuration: {size(floor_all / 8)} '
           f'({count(floor_all)} positions)' + (f'; {size(floor_men / 8)} without the kings-only materials'
                                                   if men and floor_men != floor_all else ''))
+    print(f'  comfortable   1 byte + 4 bit planes per position and side, both sides, for the largest configuration: '
+          f'{size(floor_all * COSTS["byte"])}; with this much RAM no group ever leaves rungs 0-2')
     w = [width[i] for i in range(levels)]
     print(f'DAG: {levels} levels (the critical path in groups), width max {max(w):,}, mean {total_groups / levels:,.0f}')
     marks = sorted({0, levels // 4, levels // 2, 3 * levels // 4, levels - 1})

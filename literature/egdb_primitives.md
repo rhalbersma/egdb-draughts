@@ -753,6 +753,23 @@ bound: the random stream's misses, three in four, dominated ("CPU gained 150× b
 floor did not fit, so his design (bitmaps on disk, RAM caching the single random stream) was the only one possible;
 `thompson86` at rung 1 would have needed 3.3 GB in 1986 and 212 GB in 1996.
 
+**A comfortable machine** holds the largest group, one configuration of men with all its king placements (kings-only
+materials divided by their 4-fold symmetry), at 1 depth byte and 4 bit planes per position and side, both sides in
+RAM: then every group stays at rungs 0–2 (granularity makes the rest fit), and the I/O is its minimum, the files once
+and the inputs. `src/egdb_layout.py` reports it next to the 1-bit floor:
+
+| | largest configuration (per side) | floor: 1 bit | comfortable: 1 byte + 4 planes, both sides |
+|---|---|---|---|
+| 6×6, 6 pieces | 93 k | 11 KiB | 272 KiB |
+| 8×8 checkers, 10 pieces | all-kings 5v5 ÷ 4: 4.1 G | 485 MiB | 11.4 GiB: a 16 GB desktop |
+| 10×10 draughts, 8 pieces | all-kings 4v4 ÷ 4: 9.4 G | 1.1 GiB | 26.3 GiB: a 32 GB machine |
+| 10×10 draughts, 9 pieces | all-kings 5v4 ÷ 4: 78.9 G | 9.2 GiB | 220 GiB |
+
+Gilbert's 2005 checkers build ran on 2 GB machines (rung 4 and half the symmetry for the all-kings slice), his 2009
+8-piece draughts build four instances on 8 GB; both databases are now comfortable on a desktop, CPU-bound, at
+minimal I/O. At 10×10 and 9 pieces, the 16 kings-heavy materials that do not fit 32 GB take rung 3 or a coalescing
+cache.
+
 **What the plan budgets.** Not only disk space (cumulative files plus the scratch of the jobs side by side) but the
 I/O: the configure step of `databases/` reports, for rungs 0–2,
 

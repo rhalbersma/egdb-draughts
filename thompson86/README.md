@@ -61,11 +61,23 @@ move is an exit into an earlier group. `tempi` gives the smallest largest group:
 (1996 style, 4,897 groups), against 95 MB at `material` (155) or `configuration` (830,793). `thompson86 tempi n`
 prints every material class's tempi cells with their configurations and positions.
 
+**Thompson's own granularity was coarser: a run.** Both papers index a material together with all its subsets: in 1986
+a captured piece is encoded on the White king's square, an otherwise illegal slot; in 1996 a piece can be GONE, and
+the unmove code has explicit uncapture branches. So captures stay inside the bitmaps, as uncaptures. In 1986 dtm is
+one pass over the whole run, every subset at once, since a capture does not end the count; dtc ("max to win") takes
+two passes, the subsets first, then the full material seeded with the conversions. In 1996 dtc goes in waves by number
+of pieces (3, 4, 5, 6), each seeded from the previous wave (his Figures 13 and 14). Only the pawn endgames of 1986 were
+sliced, one pawn rank at a time, after the promotion subgames; with a single pawn the rank is its tempo, so that is
+`granularity=tempi`. This builder first built runs too (captured pieces parked on graveyard squares, see "Per material
+against runs" below), then moved to per-material files with virtual addressing: every position computed once instead
+of 1.43 times. The styles below are Thompson's passes; the granularities are ours.
+
 **Two styles**, the same results byte for byte:
 
 | | 1986 (`style=86`) | 1996 (`style=96`) |
 |---|---|---|
 | group solved together (default granularity) | one configuration of the men (a slice of `egdb_6x6`), in order of total tempo | the whole material class (for dtz one total tempo at a time, since a man move ends the count there) |
+| Thompson's own | a run: the material and all its subsets, dtm in one pass | a run, dtc in waves by number of pieces |
 | moves inside the group | king moves without capture | king moves and man moves without capture or promotion (dtz: king moves only) |
 | unmoves in the rounds | king unmoves | king unmoves and man unmoves |
 | passes | each pass tests its target at once | masked late, as in Thompson's I/O-enhanced algorithm: P2 writes a superset, P3 and P4 mask it with `~won`, `~lost` |

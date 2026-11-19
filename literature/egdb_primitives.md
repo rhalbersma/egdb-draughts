@@ -105,9 +105,18 @@ builders):
 
 | granularity | a group is | moves inside | default for |
 |---|---|---|---|
+| (run) | a material class and all its subsets (Thompson 1986, 1996; not offered) | king and man moves, captures as uncaptures | |
 | `material` | the whole material class (dtz: one total tempo at a time, since a man move ends the count) | king and man moves | `syzygy`, `thompson86` 1996 style |
 | `tempi` | one (White tempo, Black tempo) cell | king moves | |
 | `configuration` | one configuration of the men | king moves | `thompson86` 1986 style, `egdb_6x6` |
+
+Above `material` there is one coarser granularity, which we do not offer: Thompson's **run**, a material class with all
+its subsets in one index (1986: a captured piece on the White king's square; 1996: a GONE piece), captures inside as
+uncaptures. His 1986 dtm is one pass over the whole run, every subset at once (dtm does not stop at a capture: depth
+outer, material inner), his dtc two passes (subsets first) and his 1996 dtc waves by number of pieces. A run computes
+every subset again inside each run whose captures reach it (1.43× the positions in `thompson86`'s first version), so we
+take material outer, depth inner, and look the subsets up in their finished files. His 1986 pawn endgames were sliced
+by the pawn's rank, which for a single pawn is its tempo.
 
 Below `material` every man move is an exit into a group solved earlier (it lowers its colour's tempo), looked up in
 pass 0 like a capture. At 6 pieces `tempi` gives the smallest largest group in both builders: rung 0 at most 58 MB in

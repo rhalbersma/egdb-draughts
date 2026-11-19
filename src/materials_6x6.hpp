@@ -124,6 +124,10 @@ struct Material {
         {
                 return std::format("{:02}-{:02}-{:02}-{:02}", wp(), bp(), wm, bm);
         }
+        std::string sub() const                         // the subdivision prefix of its files: db-np-wp-bp-wm-bm
+        {
+                return std::format("6x6-{:02}-", pieces()) + name();
+        }
 };
 
 Material material_of(Pos const& p)
@@ -431,7 +435,7 @@ public:
                         total_ += groups[k].P;
                 }
                 for (int side : { 0, 1 }) {     // one file per side, in group order, sized up front, mapped once read-only
-                        path_[std::size_t(side)] = dir + "/tmp-6x6-" + c.name() + "." + metric_name() + (side == 0 ? ".wtm" : ".btm");
+                        path_[std::size_t(side)] = dir + "/tmp-" + c.sub() + "-" + metric_name() + (side == 0 ? "-wtm" : "-btm");
                         int const fd = ::open(path_[std::size_t(side)].c_str(), O_RDWR | O_CREAT | O_TRUNC, 0644);
                         if (fd < 0 || ::ftruncate(fd, off_t(total_ * sizeof(V))) != 0) { std::cerr << "cannot create " << path_[std::size_t(side)] << std::endl; std::exit(1); }
                         fd_[std::size_t(side)] = fd;

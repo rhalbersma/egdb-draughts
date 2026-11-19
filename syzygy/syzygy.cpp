@@ -112,13 +112,13 @@ void store(std::uint16_t& x, std::uint16_t v) { std::atomic_ref<std::uint16_t>(x
 // one of each pair of a material and its colour mirror, as in egdb_6x6 and strongly_solving_6x6/materials
 bool stored(Material m) { return !(std::tuple(m.bm, m.wm, m.bk, m.wk) < std::tuple(m.wm, m.bm, m.wk, m.bk)); }
 
-// kind 0: wtm.<metric>, 1: btm.<metric> (one byte per slot); 2: wtm.wdl, 3: btm.wdl (two bits per slot); kind = side to
+// kind 0: <metric>-wtm, 1: <metric>-btm (one byte per slot); 2: wdl-wtm, 3: wdl-btm (two bits per slot); kind = side to
 // move + 2 * wdl. The wdl files carry no metric: they are the same for all three
 enum : int { BYTES = 0, WDL = 2 };
 
 std::string mat_path(std::string const& dir, Material m, int kind)
 {
-        return dir + "/6x6-" + m.name() + (kind % 2 == 0 ? ".wtm." : ".btm.") + (kind >= WDL ? std::string("wdl") : std::string(metric_name()));
+        return dir + "/" + m.sub() + "-" + (kind >= WDL ? std::string("wdl") : std::string(metric_name())) + (kind % 2 == 0 ? "-wtm" : "-btm");
 }
 
 std::uint64_t file_size(Material m, int kind) { return kind < WDL ? mat_index(m).size : (mat_index(m).size + 3) / 4; }
@@ -561,7 +561,7 @@ bool check_all(std::string const& dir, int n, int threads)
         return ok;
 }
 
-// thompson86 (one-sided, every material): wtm.<metric>-W = the plies of a White-to-move win, btm.<metric>-L = 1 + the
+// thompson86 (one-sided, every material): d<m|c|z>W-wtm = the plies of a White-to-move win, d<m|c|z>L-btm = 1 + the
 // plies of a Black-to-move loss; here both from the two-sided values, a material's mirror read as its mirror image
 bool compare_thompson86(std::string const& dir, std::string const& dir86, int n)
 {
@@ -569,9 +569,9 @@ bool compare_thompson86(std::string const& dir, std::string const& dir86, int n)
         std::uint64_t checked = 0, bad = 0;
         for (Material const c : materials_up_to(n)) {
                 MatIndex const& mi = mat_index(c);
-                std::string const base = dir86 + "/6x6-" + c.name();
-                std::uint8_t const* w = map_file(base + ".wtm." + metric_name() + "-W", mi.size);
-                std::uint8_t const* l = map_file(base + ".btm." + metric_name() + "-L", mi.size);
+                std::string const base = dir86 + "/" + c.sub() + "-d" + metric_name()[2];
+                std::uint8_t const* w = map_file(base + "W-wtm", mi.size);
+                std::uint8_t const* l = map_file(base + "L-btm", mi.size);
                 for (auto const& g : groups_of(c))
                         for (std::uint64_t i = 0; i < g.P; ++i) {
                                 Pos const pw = g.pos(i, 0), pb = g.pos(i, 1);

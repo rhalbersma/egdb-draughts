@@ -86,14 +86,14 @@
 
 namespace {
 
-// kind 0: wtm.<metric>-W, 1: btm.<metric>-L, one byte per slot; 2: wtm.bit-W, 3: btm.bit-L, one bit per slot (won,
-// lost); kind = side to move + 2 * bit. The bit files carry no metric: they are the same for all three
+// kind 0: d<m|c|z>W-wtm, 1: d<m|c|z>L-btm, one byte per slot; 2: isW-wtm, 3: isL-btm, one bit per slot (won, lost);
+// kind = side to move + 2 * bit. The bit files carry no metric: they are the same for all three
 enum : int { BYTES = 0, BITS = 2 };
 
 std::string mat_path(std::string const& dir, Material m, int kind)
 {
-        std::string const stm = kind % 2 == 0 ? ".wtm." : ".btm.", half = kind % 2 == 0 ? "-W" : "-L";
-        return dir + "/6x6-" + m.name() + stm + (kind >= BITS ? std::string("bit") : std::string(metric_name())) + half;
+        std::string const half = kind % 2 == 0 ? "W-wtm" : "L-btm";
+        return dir + "/" + m.sub() + "-" + (kind >= BITS ? std::string("is") : std::string("d") + metric_name()[2]) + half;
 }
 
 std::uint64_t file_size(Material m, int kind) { return kind < BITS ? mat_index(m).size : (mat_index(m).size + 7) / 8; }

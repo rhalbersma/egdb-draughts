@@ -7,9 +7,9 @@
 # colour mirror (the 82 materials up to 6 pieces of strongly_solving_6x6/materials), built in the order of the DAG of
 # captures and promotions. A material is named wp-bp-wm-bm (white pieces, black pieces, white men, black men, two
 # digits each); inside, a tuple (wm, wk, bm, bk) with kings. Per material four files of full results,
-# 6x6-wp-bp-wm-bm.<side to move>.<kind>: wtm.<metric>, btm.<metric> (one byte per slot) and wtm.wdl, btm.wdl (two bits
-# per slot). The depth bytes are unsigned: their signs are in the wdl files. A dtm build reads wtm.dtm and btm.dtm of
-# the materials it leads into, with their wdl files; a dtc or dtz build only their wdl
+# 6x6-np-wp-bp-wm-bm-<kind>-<side to move> (np: the number of pieces): <metric>-wtm, <metric>-btm (one byte per slot)
+# and wdl-wtm, wdl-btm (two bits per slot). The depth bytes are unsigned: their signs are in the wdl files. A dtm build
+# reads dtm-wtm and dtm-btm of the materials it leads into, with their wdl files; a dtc or dtz build only their wdl
 # files (every move out of a material is a goal move there). The files of a metric go into <dir>/<metric>: the wdl
 # files are the same for all three.
 #
@@ -79,13 +79,18 @@ def deps(m):
     return sorted({canonical(d) for d in out} - {m})
 
 
+def sub(n):                                                            # wp-bp-wm-bm -> db-np-wp-bp-wm-bm
+    wp, bp = map(int, n.split('-')[:2])
+    return f'6x6-{wp + bp:02}-{n}'
+
+
 def files(m):
-    return [f'{D}/6x6-{m}.{k}' for k in (f'wtm.{METRIC}', f'btm.{METRIC}', 'wtm.wdl', 'btm.wdl')]
+    return [f'{D}/{sub(m)}-{k}' for k in (f'{METRIC}-wtm', f'{METRIC}-btm', 'wdl-wtm', 'wdl-btm')]
 
 
 def inputs(m):
-    kinds = ('wtm.dtm', 'btm.dtm', 'wtm.wdl', 'btm.wdl') if METRIC == 'dtm' else ('wtm.wdl', 'btm.wdl')
-    return [f'{D}/6x6-{name(d)}.{k}' for d in deps(m) for k in kinds]
+    kinds = ('dtm-wtm', 'dtm-btm', 'wdl-wtm', 'wdl-btm') if METRIC == 'dtm' else ('wdl-wtm', 'wdl-btm')
+    return [f'{D}/{sub(name(d))}-{k}' for d in deps(m) for k in kinds]
 
 
 # the plan (src/snakemake_plan.py): memory budget, per-job claims from the engine's estimates, critical-path priorities
@@ -116,7 +121,7 @@ for _m in MATERIALS:
         name: f'build_{_n}'
         input: inputs(_m)
         output: files(_n)
-        log: f'{D}/6x6-{_n}.{METRIC}.log'
+        log: f'{D}/{sub(_n)}-{METRIC}.log'
         params: m=_n.replace('-', ' ')
         resources: mem_mb=claim_mb(PLAN[_n], MEM)
         priority: PRIO[_n]

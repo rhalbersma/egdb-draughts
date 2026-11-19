@@ -9,8 +9,8 @@
 # every material one move can lead into: a promotion (a man of either side becomes a king), a capture of one or more
 # pieces of either side (the capturing man possibly promoting). A capture of a side's last piece ends the game and
 # needs no file. Every material with at most n pieces and a piece on each side is built, into four files of half
-# results, 6x6-wp-bp-wm-bm.<side to move>.<kind>: wtm.<metric>-W (plies to a White win) and btm.<metric>-L (1 + plies
-# to Black's loss), one byte per slot, and wtm.bit-W, btm.bit-L (won, lost), one bit per slot. A dtm build reads the
+# results, 6x6-np-wp-bp-wm-bm-<kind>-<side to move> (np: the number of pieces): d<m|c|z>W-wtm (plies to a White win)
+# and d<m|c|z>L-btm (1 + plies to Black's loss), one byte per slot, and isW-wtm, isL-btm (won, lost), one bit per slot. A dtm build reads the
 # bytes of the materials it leads into, a dtc or dtz build only their bits (every move out of a material is a goal move
 # there). The files of a metric go into <dir>/<metric>: the bit files are the same for all three.
 #
@@ -89,13 +89,21 @@ rule all:
     input: f'{D}/check-{N}.{METRIC}.ok'
 
 
+def sub(n):                                                            # wp-bp-wm-bm -> db-np-wp-bp-wm-bm
+    wp, bp = map(int, n.split('-')[:2])
+    return f'6x6-{wp + bp:02}-{n}'
+
+
+DEPTH = 'd' + METRIC[2]                                                # dm, dc or dz
+
+
 def files(m):
-    return [f'{D}/6x6-{m}.{k}' for k in (f'wtm.{METRIC}-W', f'btm.{METRIC}-L', 'wtm.bit-W', 'btm.bit-L')]
+    return [f'{D}/{sub(m)}-{k}' for k in (f'{DEPTH}W-wtm', f'{DEPTH}L-btm', 'isW-wtm', 'isL-btm')]
 
 
 def inputs(m):
-    kinds = (f'wtm.{METRIC}-W', f'btm.{METRIC}-L') if METRIC == 'dtm' else ('wtm.bit-W', 'btm.bit-L')
-    return [f'{D}/6x6-{name(d)}.{k}' for d in deps(m) for k in kinds]
+    kinds = (f'{DEPTH}W-wtm', f'{DEPTH}L-btm') if METRIC == 'dtm' else ('isW-wtm', 'isL-btm')
+    return [f'{D}/{sub(name(d))}-{k}' for d in deps(m) for k in kinds]
 
 
 # one build rule per material: Snakemake (8.30) accepts only constant priorities, so each material gets its own rule
@@ -106,7 +114,7 @@ for _m in MATERIALS:
         name: f'build_{_n}'
         input: inputs(_m)
         output: files(_n)
-        log: f'{D}/6x6-{_n}.{METRIC}.log'
+        log: f'{D}/{sub(_n)}-{METRIC}.log'
         params: m=_n.replace('-', ' ')
         resources: mem_mb=claim_mb(PLAN[_n], MEM)
         priority: PRIO[_n]

@@ -75,6 +75,28 @@ material, so the grouping follows from whether man moves count as inside:
 A build solves the groups of its material one after another in dependency order, later groups looking up earlier
 ones (through the depth sink in `thompson86`, through its value array in `syzygy`).
 
+**The same levels in Chinook's and Gilbert's words** (read verbatim; the words shift from paper to paper):
+
+| level | ours | Chinook 1994 (Lake–Schaeffer–Lu) | Chinook 2003 (Schaeffer et al., 10 pieces) | Gilbert 2005 (10-piece checkers) | Gilbert 2009 (8-piece draughts) |
+|---|---|---|---|---|---|
+| n pieces | — | "the 8-piece database" | "the N-piece database" ("by pieces") | "the 10-piece database" | "the 8 piece database" |
+| pieces per side | — (in the material's name) | "subsets, such as 6b versus 2w"; a "graph" holds "all positions composed of b black pieces and w white pieces" | **"by material"**: "subsets with a different number of pieces per side", "8 pieces versus 1, 7 versus 2" | — | "4x4 and 5x3 positions" |
+| men and kings per colour | **material** `wp-bp-wm-bm` | a **"node"** of the graph, a "subdatabase" named by four digits (black kings, white kings, black checkers, white checkers, e.g. 3212); "subdatabases according to the material, the number of checkers and kings" | "by number of kings": a "sub-database" or "subset", Table 1's "Database" column in "bk wk bc wc" notation (e.g. 3223; "the 1045 database") | a **"slice"** ("the slice with 2 black men, 3 black kings, 2 white men, and 3 white kings") | the "first subdivision", "by man and king counts" ("the subset of 1bm 3bk 2wm 2wk") |
+| leading man's rank per colour | — | a **"slice"**, e.g. 3212.53 (49 per node; kings-only nodes unsliced) | "by leading rank": a **"slice"**, "bk wk bc wc. br wr", e.g. 3223.77 ("the symmetric database 2233.77") | tier 1, "piece counts and leading ranks" (9 pieces: the leading *square*) | the "second subdivision", "the row of the most advanced black and white man" |
+| men on the leading rank | — | — | "slices can be further sub-divided" (Dodgen–Trice: "the configuration of checkers on the first rank"), not used | tier 2, "configuration of the checkers on the leading rank" | the "third subdivision" |
+| penultimate man's rank | — | — | — | tier 3, "the penultimate rank of checkers" | — |
+| every man's square | **slice** (`egdb_6x6`) | — | — | — | — |
+| one solve | **group** | a slice with its mirror | a slice: "A portion of the endgame database (a slice) is computed by resolving all positions" | a "subdivision" (tiers 2 and 3 only above 900 MB; 64,369) | a "subdivision" (about 200K) |
+| a parallel index range | a block of 4096 positions | a **"mini-slice"**: page-aligned, about 10 million positions | POSIX threads dividing "the range of positions" equally | — | — |
+| the other colour | syzygy: one of each mirror pair; thompson86: both | the **"mirror"** node (4112 ↔ 1421) | "its mirror database 2332.77 with white to move" | — | — |
+
+Our *material* is Chinook's node (1994) or sub-database (2003) and Gilbert's 2005 *slice*; Chinook 2003's *material* is
+pieces per side. *Slice* means three things: Gilbert 2005's material, Chinook's node cut by the two leading ranks, and
+`egdb_6x6`'s fixed placement of every man, the finest of the three (Chinook's slice is a union of ours). Chinook and
+Gilbert subdivide from coarse to fine until a piece fits memory; we start from the finest cut and merge slices back into
+groups. All cut along irreversible moves (captures, promotions, a man's advance), which is what makes every scheme a
+DAG.
+
 **The job is one material**: one command lists the material's groups, solves them in order and writes its files;
 Snakemake runs materials in parallel when none needs another, in the order of the DAG. Jobs are not smaller because
 the groups of a material depend on each other densely and most are tiny (a 1986-style material can have tens of
@@ -492,7 +514,10 @@ A build is bound by CPU, RAM and I/O at once, and which of them binds depends on
 Chinook's network-of-workstations build (Lake–Schaeffer–Lu 1994) ran workers of 8–15 MB with a 3–4 MB working set of
 8 KB pages under LRU, chose forward sweeps *because* their writes stay local, ran the backward queue sequentially for
 lack of locality, and made up 75 % of the department's network traffic; its 2003 successor reports the capture,
-lookup and verification passes I/O-bound and the non-capture iteration CPU-bound. Ed Gilbert's two builds bracket
+lookup and verification passes I/O-bound and the non-capture iteration CPU-bound, and notes that the binding resource
+moved in a decade: "Some parts of the program that were previously I/O bound are now CPU bound (more memory to
+eliminate costly I/O), while other parts that were CPU bound are now I/O bound (CPU speed has improved more than disk
+speed). This meant that we had to re-profile the program". Ed Gilbert's two builds bracket
 the range (`edgilbert.org`, notes in [`papers/3_checkers.md`](papers/3_checkers.md)):
 
 * **10-piece English checkers (2005), RAM-bound**: five PCs with 1–2 GB of RAM, 120–250 GB disks, a 100 Mbit LAN;
@@ -586,6 +611,13 @@ share one big slice (disjoint, page-aligned write intervals, made possible by fo
 cross-machine dependencies between passes. Our job is a whole material on one machine, with the parallelism inside it
 from `par` and across it from the DAG; splitting a material across machines would bring Chinook's pass-level jobs
 back.
+
+Chinook 2003 automated the dependencies and the hardware specialisation with TrellisDAG ("run I/O-intensive jobs on
+machines with fast disks; run CPU-intensive jobs on machines with fast processors"), but not the data: "managing the
+data turned out to be labour intensive and a source of potential errors. We were unable to find or build a usable tool
+that could properly manage the data file dependencies, taking into account disk space constraints, in such a way as to
+maximize throughput." File dependencies are what Snakemake is built on; disk space can be declared as a resource and
+intermediate files marked temporary.
 
 **To build**: the machine file; a planner (an extension of `strongly_solving_6x6/materials/materials.py`, which
 already computes sizes and critical-path priorities) that assigns each job its claim, priority and policy and each

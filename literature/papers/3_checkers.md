@@ -289,6 +289,46 @@ Read verbatim (HTML fetched and converted to text).
 
 ---
 
+**Reread verbatim (2026-11-19), additions to the above:**
+- **Terminology**: "A portion of the endgame database (a slice) is computed by resolving all positions as wins, losses or
+  draws." The breakdown: "By pieces" (the N-piece database); "**By material**: An N-piece database is further divided so
+  that subsets with a different number of pieces per side can be computed in parallel", e.g. "8 pieces versus 1, 7
+  versus 2, 6 versus 3, and 5 versus 4"; "By number of kings: The material division is further broken down by the number
+  of kings for each side"; "By leading rank: A sub-database is further sliced into pieces" (ranks 1 to 7, 49 slices).
+  Table 1's first column is headed "Database", in "bk wk bc wc" notation; 5v5 has "21 subsets based on the number of
+  kings and checkers" and 630 slices; slices are "bk wk bc wc. br wr"; "the symmetric database 2233.77", "its mirror
+  database 2332.77 with white to move". So "material" here is pieces per side, unlike 1994 ("subdatabases according to
+  the material, the number of checkers and kings").
+- **Bottlenecks**: "The captures, lookups, and verification phases are I/O bound. These phases need to be run on
+  machines with a minimum of 300 GB of disk storage, and they benefit from the fastest possible disk drives. The
+  non-capture phase is compute bound and should be run on the fastest available processor." And the shift since the
+  1990s: "Some parts of the program that were previously I/O bound are now CPU bound (more memory to eliminate costly
+  I/O), while other parts that were CPU bound are now I/O bound (CPU speed has improved more than disk speed). This
+  meant that we had to re-profile the program and use additional optimization techniques."
+- **Paging**: own disk paging with 200 MB of page buffers, "one disk I/O for an average of 500 database position value
+  requests"; slices that lead into one another placed close together in the file; the non-capture phase on files "as
+  large as 25 GB in only a few days" with that 200 MB.
+- **Lookups from compressed data**: captures, lookups and verification read the *compressed* databases (capture and
+  threatened-capture positions removed), so each may need a small search; the uncompressed data was not used because
+  it is not yet verified. Over 60 % of positions resolve in the captures phase (slightly more than one capture each);
+  lookups average about 3 leading-checker moves each and resolve 10–15 %.
+- **Selective slicing**: "I/O could be significantly reduced if the database construction program used slices
+  selectively", e.g. the 1045 database (45 billion positions, about 10.5 GB) in one computation instead of 42 slices;
+  "This has not been done."
+- **Errors and safeguards**: all calculations logged; CRC on every network copy (a mismatch "at least once a month");
+  a 32-bit CRC per 1024-byte block checked on every read; everything archived to tape (needed once); faults met: "a
+  faulty CPU, bad memory, a disk crash, network errors and operator errors"; the 1993 7-piece databases were wrong in a
+  few thousand positions yet "still passed all our verification tests".
+- **System issues**: TrellisDAG automated the dependencies and hardware specialisation, but "managing the data turned
+  out to be labour intensive and a source of potential errors. We were unable to find or build a usable tool that could
+  properly manage the data file dependencies, taking into account disk space constraints".
+- **Hardware and effort**: mostly dual-processor AMD machines with 1–4 GB; older 800 MHz machines precomputed captures;
+  lookups, non-captures and verification on an average of 3 machines at 1.5 GHz; the SGI Origin 3000 (64 × 500 MHz,
+  32 GB) for the largest non-capture phases, threads dividing the position range; about 15 CPU-years normalised to
+  1.5 GHz; 18 months (November 2001 to June 2003).
+
+---
+
 ## 2003-ACG-10-Trice-Dodgen.pdf
 
 1. **Citation**: E. Trice, G. Dodgen, "The 7-Piece Perfect Play Lookup Database for the Game of Checkers", *Advances in Computer Games 10*, 2003/2004, pp. 211–230.

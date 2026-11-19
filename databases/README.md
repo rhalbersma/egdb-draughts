@@ -38,8 +38,11 @@ cmake --build build/syzygy-6 --target dtm
 | `ROUNDS` | `frontier` | syzygy only: `frontier` or `scan` |
 | `DATA_DIR` | `<build>/data` | where the databases go |
 | `CORES` | the logical cores | Snakemake's `--cores`: jobs side by side |
-| `MEM_MB` | 75 % of physical memory | the memory budget of the jobs together |
+| `MEM_MB` | 75 % of physical memory | the memory budget of the jobs together, in MiB |
 | `SNAKEMAKE_EXECUTABLE` | found on the `PATH` | Snakemake 8 |
+
+Sizes are MiB (2²⁰ bytes) throughout, as Snakemake's `mem_mb` and the engines' `plan`; the configure step prints them
+scaled to MiB, GiB or TiB, e.g. "needs 96.6 GiB (91.2 GiB of files, ...)".
 
 **A build fails when the machine provides less than it requires:**
 

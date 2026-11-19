@@ -46,6 +46,24 @@ endforeach()
 
 # ---------------------------------------------------------------- the machine
 
+# a size in MiB (2^20 bytes), the unit of every check here, as people read it: MiB, GiB or TiB with one decimal
+function(human_size out mib)
+    if(mib GREATER_EQUAL 1048576)
+        math(EXPR tenths "(${mib} * 10 + 524288) / 1048576")
+        set(unit TiB)
+    elseif(mib GREATER_EQUAL 1024)
+        math(EXPR tenths "(${mib} * 10 + 512) / 1024")
+        set(unit GiB)
+    else()
+        set(${out} "${mib} MiB" PARENT_SCOPE)
+        return()
+    endif()
+    math(EXPR whole "${tenths} / 10")
+    math(EXPR frac "${tenths} % 10")
+    set(${out} "${whole}.${frac} ${unit}" PARENT_SCOPE)
+endfunction()
+
+
 cmake_host_system_information(RESULT LOGICAL_CORES QUERY NUMBER_OF_LOGICAL_CORES)
 cmake_host_system_information(RESULT PHYSICAL_CORES QUERY NUMBER_OF_PHYSICAL_CORES)
 cmake_host_system_information(RESULT TOTAL_MB QUERY TOTAL_PHYSICAL_MEMORY)
@@ -53,9 +71,9 @@ cmake_host_system_information(RESULT AVAILABLE_MB QUERY AVAILABLE_PHYSICAL_MEMOR
 math(EXPR DEFAULT_MEM_MB "${TOTAL_MB} * 3 / 4")
 set(CORES "${LOGICAL_CORES}" CACHE STRING "Snakemake's --cores: the jobs side by side (default: the logical cores)")
 set(MEM_MB "${DEFAULT_MEM_MB}" CACHE STRING
-    "the memory budget of the jobs together, MB (default: 75 % of physical memory, the rest for the page cache)")
+    "the memory budget of the jobs together, MiB (default: 75 % of physical memory, the rest for the page cache)")
 if(MEM_MB GREATER TOTAL_MB)
-    message(WARNING "MEM_MB=${MEM_MB} is more than the physical memory (${TOTAL_MB} MB)")
+    message(WARNING "MEM_MB=${MEM_MB} is more than the physical memory (${TOTAL_MB} MiB)")
 endif()
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
@@ -79,17 +97,19 @@ else()
     set(DISK_KIND "unknown")
 endif()
 
+foreach(v IN ITEMS TOTAL_MB AVAILABLE_MB MEM_MB DISK_free_mb DISK_need_mb DISK_files_mb)
+    human_size(${v}_h ${${v}})
+endforeach()
 message(STATUS "egdb 6x6: ${BUILDER}, ${PIECES} pieces, ${DISK_materials} materials, metrics ${METRICS}, granularity ${GRANULARITY}")
 message(STATUS "  cores: ${PHYSICAL_CORES} physical, ${LOGICAL_CORES} logical; jobs side by side: ${CORES}, policy ${POLICY}")
-message(STATUS "  memory: ${TOTAL_MB} MB, ${AVAILABLE_MB} MB available; budget ${MEM_MB} MB (sink ${SINK})")
+message(STATUS "  memory: ${TOTAL_MB_h}, ${AVAILABLE_MB_h} available; budget ${MEM_MB_h} (sink ${SINK})")
 message(STATUS "  disk: ${DATA_DIR}")
-message(STATUS "    ${DISK_free_mb} MB free, ${DISK_KIND}")
-message(STATUS "    needs ${DISK_need_mb} MB (${DISK_files_mb} MB of files, the rest while the largest material is written)")
+message(STATUS "    ${DISK_free_mb_h} free, ${DISK_KIND}")
+message(STATUS "    needs ${DISK_need_mb_h} (${DISK_files_mb_h} of files, the rest while the largest material is written)")
 if(DISK_need_mb GREATER DISK_free_mb)
-    message(FATAL_ERROR "not enough disk: ${DISK_need_mb} MB needed, ${DISK_free_mb} MB free in ${DATA_DIR} "
+    message(FATAL_ERROR "not enough disk: ${DISK_need_mb_h} needed, ${DISK_free_mb_h} free in ${DATA_DIR} "
                         "(choose another -DDATA_DIR, fewer -DMETRICS or -DPIECES)")
 endif()
-
 execute_process(                                                # the checks passed: the tree of subdivisions
     COMMAND "${Python3_EXECUTABLE}" -I "${REPO}/src/egdb_configure.py" "${BUILDER}" "${PIECES}" "${METRICS}" "${DATA_DIR}" tree
     COMMAND_ERROR_IS_FATAL ANY)

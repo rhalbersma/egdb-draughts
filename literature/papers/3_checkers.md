@@ -107,7 +107,10 @@ Read verbatim (HTML fetched and converted to text).
    CPU 179,584 positions/s; longest MTC 149 plies (B:WK1,K7,48:BK8,15,K18,22,K33).
 3. **Hardware**: first a 2.4 GHz quad-core with 8 GB of RAM running 4 instances; at 14 % done (mid-January) an 8-core
    dual Xeon (two 2.5 GHz quad-cores) for 8 more instances. For most of the build 10 cores built and verified, 2
-   re-indexed.
+   re-indexed. The page gives no RAM figure for the Xeon, no memory per instance or per subdivision, and
+   does not mention the all-kings subdivisions, symmetry, 64-bit indices or how WDL values are held during the build
+   (reread 2026: only "the WLD values of positions within a subdivision are computed only once, and then they are
+   available for the remaining time of building that subdivision").
 4. **CPU-bound**: "It is clear from the above statistics that parallelizing the build is critical to getting the 8
    piece database built in a reasonable period of time." Three subdivisions: man and king counts; the rows of the most
    advanced black and white man; the configuration of the men on the leading rank (for example 5 × 10 = 50 independent

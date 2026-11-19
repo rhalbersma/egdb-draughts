@@ -29,6 +29,7 @@ METRIC = config.get('metric', 'dtm')
 D = f'{BASE}/{METRIC}'
 POLICY = config.get('policy', 'seq')
 ROUNDS = config.get('rounds', 'frontier')
+SINK = config.get('sink', 'auto')          # the depth sink: auto (by the claim), groups (group files), array (RAM)
 THREADS = int(config.get('threads', 4))
 
 
@@ -117,7 +118,7 @@ for _m in MATERIALS:
         params: m=_n.replace('-', ' ')
         resources: mem_mb=claim_mb(PLAN[_n], MEM)
         priority: PRIO[_n]
-        shell: '{ENGINE} build {D} {params.m} {METRIC} {POLICY} {ROUNDS} mem={resources.mem_mb} > {log} 2>&1'
+        shell: '{ENGINE} build {D} {params.m} {METRIC} {POLICY} {ROUNDS} {SINK} mem={resources.mem_mb} > {log} 2>&1'
 
 
 rule check:

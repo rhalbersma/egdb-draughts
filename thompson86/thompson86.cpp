@@ -138,153 +138,7 @@ std::uint8_t store_byte(int side, int plies)
         return std::uint8_t(s);
 }
 
-// ---------------------------------------------------------------- depth sinks: where the depth bytes of the material being built go
-//
-// The rounds only put depth bytes (dtm-W with White to move, dtm-L with Black to move) and never read them back for
-// their own group; moves out of a group read the bytes of earlier, finished groups of the same material. Two backends:
-//   array    the whole material's bytes in RAM, indexed like its files (rung 0)
-//   groups   only the current group's bytes in RAM; each finished group is appended to one file per side in group
-//            order (strictly sequential writes), mapped once read-only for the lookups: a finished group is an input
-//            like a finished material. (A file per group would need two memory maps per group, and the 1986 style has
-//            tens of thousands of groups per material, more than the kernel's map limit.)
-// Either way the material's files are written by one sequential pass in index order that gathers each slot's byte.
-class DepthSink
-{
-public:
-        virtual ~DepthSink() = default;
-        virtual void begin_group(std::size_t k, Group const& g) = 0;
-        virtual void put(int side, std::uint64_t local, Pos const& p, std::uint8_t byte) = 0;      // local: index in the group
-        virtual void end_group() = 0;
-        virtual std::uint8_t read(int side, Pos const& p) const = 0;            // a finished group's byte, else 0
-        virtual std::uint8_t at(int side, std::uint64_t slot) const = 0;        // the byte of a slot of the material
-};
-
-class ArraySink final : public DepthSink
-{
-        MatIndex const& mi_;
-        std::array<std::vector<std::uint8_t>, 2> res_;
-
-public:
-        explicit ArraySink(MatIndex const& mi) : mi_(mi) { for (auto& r : res_) r.assign(mi.size, 0); }
-        void begin_group(std::size_t, Group const&) override {}
-        void put(int side, std::uint64_t, Pos const& p, std::uint8_t byte) override { res_[std::size_t(side)][mi_.index(p)] = byte; }
-        void end_group() override {}
-        std::uint8_t read(int side, Pos const& p) const override { return res_[std::size_t(side)][mi_.index(p)]; }
-        std::uint8_t at(int side, std::uint64_t slot) const override { return res_[std::size_t(side)][slot]; }
-};
-
-class GroupSink final : public DepthSink
-{
-        struct Slice { std::uint64_t offset; Meta const* meta; std::size_t group; };
-
-        Material c_;
-        MatIndex const& mi_;
-        std::vector<Group> const& groups_;
-        std::vector<std::uint64_t> gbase_;                              // offset of each group in the group-order files
-        std::unordered_map<std::uint64_t, Slice> slice_;                // slice key -> where its positions are
-        std::vector<char> done_;                                        // finished groups
-        std::array<std::string, 2> path_;
-        std::array<int, 2> fd_{ -1, -1 };
-        std::array<std::uint8_t const*, 2> map_{ nullptr, nullptr };
-        std::uint64_t total_ = 0;
-        std::size_t k_ = 0;
-        std::array<std::vector<std::uint8_t>, 2> buf_;                  // the current group, both sides to move
-
-        Slice const* find(Pos const& p) const           // with the last slice cached per thread
-        {
-                thread_local GroupSink const* owner = nullptr;
-                thread_local std::uint64_t last_key = 0;
-                thread_local Slice const* last = nullptr;
-                std::uint64_t const key = key_of(p).pack();
-                if (owner != this || key != last_key) {
-                        auto const it = slice_.find(key);
-                        last = it == slice_.end() ? nullptr : &it->second;
-                        owner = this;
-                        last_key = key;
-                }
-                return last;
-        }
-
-public:
-        GroupSink(std::string const& dir, Material c, MatIndex const& mi, std::vector<Group> const& groups)
-        :
-                c_(c), mi_(mi), groups_(groups), done_(groups.size(), 0)
-        {
-                for (std::size_t k = 0; k < groups.size(); ++k) {
-                        gbase_.push_back(total_);
-                        for (std::size_t u = 0; u < groups[k].units.size(); ++u)
-                                slice_[groups[k].units[u].key.pack()] = { total_ + groups[k].base[u], &groups[k].units[u], k };
-                        total_ += groups[k].P;
-                }
-                for (int side : { 0, 1 }) {     // one file per side, in group order, sized up front, mapped once read-only
-                        path_[std::size_t(side)] = dir + "/tmp-6x6-" + c.name() + "." + metric_name() + (side == 0 ? ".wtm" : ".btm");
-                        int const fd = ::open(path_[std::size_t(side)].c_str(), O_RDWR | O_CREAT | O_TRUNC, 0644);
-                        if (fd < 0 || ::ftruncate(fd, off_t(total_)) != 0) { std::cerr << "cannot create " << path_[std::size_t(side)] << std::endl; std::exit(1); }
-                        fd_[std::size_t(side)] = fd;
-                        if (total_ == 0) continue;
-                        void* m = ::mmap(nullptr, total_, PROT_READ, MAP_SHARED, fd, 0);
-                        if (m == MAP_FAILED) { std::cerr << "mmap failed " << path_[std::size_t(side)] << std::endl; std::exit(1); }
-                        map_[std::size_t(side)] = static_cast<std::uint8_t const*>(m);
-                }
-        }
-
-        ~GroupSink() override
-        {
-                for (int side : { 0, 1 }) {
-                        if (map_[std::size_t(side)]) ::munmap(const_cast<std::uint8_t*>(map_[std::size_t(side)]), total_);
-                        if (fd_[std::size_t(side)] >= 0) ::close(fd_[std::size_t(side)]);
-                        std::filesystem::remove(path_[std::size_t(side)]);
-                }
-        }
-
-        void begin_group(std::size_t k, Group const& g) override
-        {
-                k_ = k;
-                for (auto& b : buf_) b.assign(g.P, 0);
-        }
-
-        void put(int side, std::uint64_t local, Pos const&, std::uint8_t byte) override { buf_[std::size_t(side)][local] = byte; }
-
-        void end_group() override                                       // append the group: the writes go in group order
-        {
-                for (int side : { 0, 1 }) {
-                        auto const& b = buf_[std::size_t(side)];
-                        for (std::uint64_t done = 0; done < b.size();) {
-                                ssize_t const n = ::pwrite(fd_[std::size_t(side)], b.data() + done, b.size() - done, off_t(gbase_[k_] + done));
-                                if (n <= 0) { std::cerr << "write failed " << path_[std::size_t(side)] << std::endl; std::exit(1); }
-                                done += std::uint64_t(n);
-                        }
-                        std::vector<std::uint8_t>().swap(buf_[std::size_t(side)]);
-                }
-                done_[k_] = 1;
-        }
-
-        std::uint8_t read(int side, Pos const& p) const override
-        {
-                Slice const* s = find(p);
-                if (!s || !done_[s->group]) return 0;
-                return map_[std::size_t(side)][s->offset + index_of(*s->meta, p)];
-        }
-
-        std::uint8_t at(int side, std::uint64_t slot) const override  // un-rank the slot, then read its group
-        {
-                std::uint64_t const rbk = slot % mi_.sbk, t1 = slot / mi_.sbk, rwk = t1 % mi_.swk, t2 = t1 / mi_.swk;
-                std::uint64_t const rbm = t2 % mi_.sbm, rwm = t2 / mi_.sbm;
-                Pos p;
-                p.m[0] = unrank_in(rwm, c_.wm, DOM_WM);
-                p.m[1] = unrank_in(rbm, c_.bm, DOM_BM);
-                p.k[0] = unrank_in(rwk, c_.wk, FULL);
-                p.k[1] = unrank_in(rbk, c_.bk, FULL);
-                p.stm = side;
-                bitboard const pieces[] = { p.m[0], p.m[1], p.k[0], p.k[1] };
-                for (int i = 0; i < 4; ++i)
-                        for (int j = i + 1; j < 4; ++j)
-                                if (!(pieces[i] & pieces[j]).empty()) return 0;         // an illegal slot
-                return read(side, p);
-        }
-};
-
-DepthSink* g_sink = nullptr;                                    // of the material being built
+DepthSink<std::uint8_t>* g_sink = nullptr;                                    // of the material being built
 
 std::uint8_t mat_byte(Material m, int side, Pos const& p)       // the stored byte (dtm-W, dtm-L)
 {
@@ -380,7 +234,7 @@ struct Seed { int level; std::uint32_t idx; };
 // Every pass is one std::for_each over blocks (for_blocks, seq or par). Writes are race-free: in pass 0 a block owns
 // the words of its positions; the pushes (P2, P3) and the seeds set bits with an atomic OR (idempotent); verification
 // (P4) and the commit iterate whole words of the planes they write; the sink is written at distinct positions.
-void solve_group(Group const& g, DepthSink& sink)
+void solve_group(Group const& g, DepthSink<std::uint8_t>& sink)
 {
         std::uint64_t const P = g.P;
         Plane open_w(P), open_b(P), lossable(P), exits_done(P), won(P), lost(P);
@@ -571,9 +425,9 @@ bool build_material(std::string const& dir, Material c)
         }
         open_successors(c);
         g_frozen = true;
-        std::unique_ptr<DepthSink> sink;
-        if (g_group_files) sink = std::make_unique<GroupSink>(dir, c, mi, groups);
-        else sink = std::make_unique<ArraySink>(mi);
+        std::unique_ptr<DepthSink<std::uint8_t>> sink;
+        if (g_group_files) sink = std::make_unique<GroupSink<std::uint8_t>>(dir, c, mi, groups);
+        else sink = std::make_unique<ArraySink<std::uint8_t>>(mi);
         g_sink = sink.get();
         auto const t0 = std::chrono::steady_clock::now();
         std::uint64_t positions = 0;

@@ -51,58 +51,82 @@ Wu-Liu-Hsu (2004) classify retrograde algorithms in four categories, a useful sh
 **I** forward scan to a fixpoint (Chinook, Nalimov); **II** layered push plus verification (Thompson, Wu-Beal,
 syzygy); **III** queue plus counting (Gasser 1996, Fang 2000); **IV** layered plus counting (Bal-Allis, Wirth).
 
-### 1.1 Units of a build: material, slice, group, job
+### 1.1 Units of a build: subdivisions, slices, groups, jobs
 
-Four levels, each inside the one before:
+Two kinds of unit, by the kind of irreversible move that separates them.
 
-| level | fixed | varies inside it | example | role |
-|---|---|---|---|---|
-| **material** | the number of pieces of each kind: wp-bp-wm-bm (white pieces, black pieces, white men, black men) | where they stand, and the side to move | 03-02-02-01: White 2 men and 1 king, Black 1 man and 1 king | the unit of the files: `6x6-wp-bp-wm-bm.*`, every position at its index (four colex ranks); captures and promotions lead from one material to another, so the materials form a DAG |
-| **slice** | in addition, the squares of all the men | where the kings stand, and the side to move | White men on 13 and 17, the black man on 4, one king each, anywhere free | `egdb_6x6`'s unit. A king move never leaves its slice; a man move stays in the material but leads to a slice with that man further advanced (smaller distance to promotion), so the slices of a material are ordered too. A kings-only material is one slice |
-| **group** | a set of slices of one material that a build solves together | | depends on the builder (below) | the unit of one solve: its rounds share bit planes and frontiers |
-| **job** | one material | | `thompson86 build <dir> wp bp wm bm ...` | the unit of Snakemake |
+**Subdivisions** fix piece counts; captures and promotions lead from one to another:
+
+| subdivision | fixed | example |
+|---|---|---|
+| n pieces | the total number of pieces | the 6-piece positions |
+| pieces per side | white pieces and black pieces | 4 against 2 |
+| **material class** ("material" for short) | white men, white kings, black men, black kings | 03-02-02-01 in wp-bp-wm-bm (white pieces, black pieces, white men, black men): White 2 men and 1 king, Black 1 man and 1 king |
+
+The material class is the unit of the files (`6x6-wp-bp-wm-bm.*`, every position at its index of four colex ranks) and
+of a Snakemake job; the material classes form a DAG through captures and promotions.
+
+**Slices** split a material class by the configuration of its irreversibly moving pieces (draughts and checkers men,
+chess pawns); a man's or pawn's advance leads from one slice to another, so the slices of a material class form a DAG
+too. They come in granularities, each a union of the finer ones:
+
+| slice, labelled by | used by |
+|---|---|
+| the leading rank: each colour's most advanced man | Chinook's "slice" (3212.53); Gilbert's tier 1 (2005), "second subdivision" (2009) |
+| the leading-rank configuration: in addition, the men on that rank | Dodgen–Trice; Gilbert's tier 2 (2005), "third subdivision" (2009) |
+| the penultimate rank: in addition, the most advanced man not on the leading rank | Gilbert's tier 3 (2005) |
+| the full configuration: every man's square | `egdb_6x6`, `thompson86`, `syzygy` (where "slice" means this one) |
+
+A kings-only material class is a single slice at every granularity.
+
+**The metrics count inside these units.** DTC counts the moves inside a material class: the count ends at a capture
+or a promotion, the moves that leave it. DTZ counts the moves inside a full-configuration slice: the count also ends at
+a man move, the move that leaves the slice. DTM counts to the end of the game, across all of them.
+
+**A group** is a set of full-configuration slices of one material class that a build solves together: the unit of one
+solve, whose rounds share bit planes and frontiers. **A job** is one material class: one command lists its groups,
+solves them in dependency order and writes its files.
 
 **A group** must be closed under the moves the rounds treat as inside; every other move is an exit into a group or
-material already finished, looked up in pass 0. King moves never leave a slice, man moves connect the slices of a
-material, so the grouping follows from whether man moves count as inside:
+material class already finished, looked up in pass 0. King moves never leave a slice, man moves connect the slices
+of a material class, so the grouping follows from whether man moves count as inside:
 
 | builder and style | moves inside | so a group is |
 |---|---|---|
-| `thompson86` 1986 style, `egdb_6x6` | king moves | one slice |
-| `thompson86` 1996 style dtm and dtc; `syzygy` dtm and dtc | king and man moves | the whole material |
+| `thompson86` 1986 style, `syzygy` `grouping=slices`, `egdb_6x6` | king moves | one slice |
+| `thompson86` 1996 style dtm and dtc; `syzygy` dtm and dtc | king and man moves | the whole material class |
 | `thompson86` 1996 style dtz; `syzygy` dtz | king moves (a man move ends the count, so it is an exit) | all slices of one distance (one wave) |
 
-A build solves the groups of its material one after another in dependency order, later groups looking up earlier
-ones (through the depth sink in `thompson86`, through its value array in `syzygy`).
+A build solves the groups of its material class one after another in dependency order, later groups looking up earlier
+ones through the depth sink.
 
 **The same levels in Chinook's and Gilbert's words** (read verbatim; the words shift from paper to paper):
 
 | level | ours | Chinook 1994 (Lake–Schaeffer–Lu) | Chinook 2003 (Schaeffer et al., 10 pieces) | Gilbert 2005 (10-piece checkers) | Gilbert 2009 (8-piece draughts) |
 |---|---|---|---|---|---|
-| n pieces | — | "the 8-piece database" | "the N-piece database" ("by pieces") | "the 10-piece database" | "the 8 piece database" |
-| pieces per side | — (in the material's name) | "subsets, such as 6b versus 2w"; a "graph" holds "all positions composed of b black pieces and w white pieces" | **"by material"**: "subsets with a different number of pieces per side", "8 pieces versus 1, 7 versus 2" | — | "4x4 and 5x3 positions" |
-| men and kings per colour | **material** `wp-bp-wm-bm` | a **"node"** of the graph, a "subdatabase" named by four digits (black kings, white kings, black checkers, white checkers, e.g. 3212); "subdatabases according to the material, the number of checkers and kings" | "by number of kings": a "sub-database" or "subset", Table 1's "Database" column in "bk wk bc wc" notation (e.g. 3223; "the 1045 database") | a **"slice"** ("the slice with 2 black men, 3 black kings, 2 white men, and 3 white kings") | the "first subdivision", "by man and king counts" ("the subset of 1bm 3bk 2wm 2wk") |
-| leading man's rank per colour | — | a **"slice"**, e.g. 3212.53 (49 per node; kings-only nodes unsliced) | "by leading rank": a **"slice"**, "bk wk bc wc. br wr", e.g. 3223.77 ("the symmetric database 2233.77") | tier 1, "piece counts and leading ranks" (9 pieces: the leading *square*) | the "second subdivision", "the row of the most advanced black and white man" |
-| men on the leading rank | — | — | "slices can be further sub-divided" (Dodgen–Trice: "the configuration of checkers on the first rank"), not used | tier 2, "configuration of the checkers on the leading rank" | the "third subdivision" |
-| penultimate man's rank | — | — | — | tier 3, "the penultimate rank of checkers" | — |
-| every man's square | **slice** (`egdb_6x6`) | — | — | — | — |
+| subdivision: n pieces | subdivision | "the 8-piece database" | "the N-piece database" ("by pieces") | "the 10-piece database" | "the 8 piece database" |
+| subdivision: pieces per side | subdivision (in the material class's name) | "subsets, such as 6b versus 2w"; a "graph" holds "all positions composed of b black pieces and w white pieces" | **"by material"**: "subsets with a different number of pieces per side", "8 pieces versus 1, 7 versus 2" | — | "4x4 and 5x3 positions" |
+| subdivision: material class | **material class** `wp-bp-wm-bm` | a **"node"** of the graph, a "subdatabase" named by four digits (black kings, white kings, black checkers, white checkers, e.g. 3212); "subdatabases according to the material, the number of checkers and kings" | "by number of kings": a "sub-database" or "subset", Table 1's "Database" column in "bk wk bc wc" notation (e.g. 3223; "the 1045 database") | a **"slice"** ("the slice with 2 black men, 3 black kings, 2 white men, and 3 white kings") | the "first subdivision", "by man and king counts" ("the subset of 1bm 3bk 2wm 2wk") |
+| slice: leading rank | slice (a union of full-configuration slices) | a **"slice"**, e.g. 3212.53 (49 per node; kings-only nodes unsliced) | "by leading rank": a **"slice"**, "bk wk bc wc. br wr", e.g. 3223.77 ("the symmetric database 2233.77") | tier 1, "piece counts and leading ranks" (9 pieces: the leading *square*) | the "second subdivision", "the row of the most advanced black and white man" |
+| slice: leading-rank configuration | slice (a union) | — | "slices can be further sub-divided" (Dodgen–Trice: "the configuration of checkers on the first rank"), not used | tier 2, "configuration of the checkers on the leading rank" | the "third subdivision" |
+| slice: penultimate rank | slice (a union) | — | — | tier 3, "the penultimate rank of checkers" | — |
+| slice: full configuration | **slice** (`egdb_6x6`, our builders) | — | — | — | — |
 | one solve | **group** | a slice with its mirror | a slice: "A portion of the endgame database (a slice) is computed by resolving all positions" | a "subdivision" (tiers 2 and 3 only above 900 MB; 64,369) | a "subdivision" (about 200K) |
 | a parallel index range | a block of 4096 positions | a **"mini-slice"**: page-aligned, about 10 million positions | POSIX threads dividing "the range of positions" equally | — | — |
 | the other colour | syzygy: one of each mirror pair; thompson86: both | the **"mirror"** node (4112 ↔ 1421) | "its mirror database 2332.77 with white to move" | — | — |
 
-Our *material* is Chinook's node (1994) or sub-database (2003) and Gilbert's 2005 *slice*; Chinook 2003's *material* is
-pieces per side. *Slice* means three things: Gilbert 2005's material, Chinook's node cut by the two leading ranks, and
-`egdb_6x6`'s fixed placement of every man, the finest of the three (Chinook's slice is a union of ours). Chinook and
-Gilbert subdivide from coarse to fine until a piece fits memory; we start from the finest cut and merge slices back into
-groups. All cut along irreversible moves (captures, promotions, a man's advance), which is what makes every scheme a
-DAG.
+In this vocabulary: Chinook's node (1994) or sub-database (2003) and Gilbert's 2005 "slice" are material classes;
+Chinook 2003's "material" is the pieces-per-side subdivision; Chinook's "slice" is a leading-rank slice; Gilbert's
+"subdivision" is whatever his tiers produced, a material class or a slice of some granularity; `egdb_6x6`'s slice is the
+full-configuration slice. Chinook and Gilbert slice from coarse to fine until a piece fits memory; we start from the
+full configuration and merge slices back into groups. All cut along irreversible moves (captures and promotions between
+subdivisions, a man's advance between slices), which is what makes every scheme a DAG.
 
-**The job is one material**: one command lists the material's groups, solves them in order and writes its files;
-Snakemake runs materials in parallel when none needs another, in the order of the DAG. Jobs are not smaller because
-the groups of a material depend on each other densely and most are tiny (a 1986-style material can have tens of
-thousands of slice groups): a job per group would be far too fine-grained, and every job would open the same files
-again. The memory ladder (§7.2) follows the same split: the job's memory claim is per material, the rung is chosen
-per group inside it.
+**The job is one material class**: Snakemake runs material classes in parallel when none needs another, in the order
+of the DAG. Jobs are not smaller because the groups of a material class depend on each other densely and most are tiny
+(a 1986-style material class can have tens of thousands of slice groups): a job per group would be far too
+fine-grained, and every job would open the same files again. The memory ladder (§7.2) follows the same split: the
+job's memory claim is per material class, the rung is chosen per group inside it.
 
 ## 2. The two lineages
 

@@ -12,6 +12,7 @@
 #pragma once
 
 #include <algorithm>
+#include <chrono>
 #include <array>
 #include <atomic>
 #include <filesystem>
@@ -599,3 +600,55 @@ std::vector<Material> materials_up_to(int n)
 }
 
 } // namespace
+
+// ---------------------------------------------------------------- bench: what the rules cost per position (synthesis 7.4)
+//
+// The cost of a build per position depends on the game: the move generator (flying kings, long captures, how many
+// moves), the branching factor, and how many moves leave the material (captures and promotions, each a lookup into
+// another material's files). Per material, a uniform sample of its positions (both sides to move): the time of one
+// move generation, the moves per position, and the share of captures and promotions among them; the last line is the
+// average over all materials weighted by their positions. egdb_layout.py turns the weighted time into a cost per
+// position with a ratio fixed by the measured 6x6 builds (--calibration).
+inline void run_bench(int n, int samples)
+{
+        Granularity const keep = g_granularity;
+        g_granularity = Granularity::material;                  // one group per material: uniform indices
+        std::cout << "#material\tpositions\tsamples\tus_per_movegen\tmoves\tcapture_share\tpromotion_share\n";
+        double tw = 0, tus = 0, tmoves = 0, tcap = 0, tpro = 0;
+        std::uint64_t state = 0x9e3779b97f4a7c15ull;
+        for (Material const c : materials_up_to(n)) {
+                auto const groups = groups_of(c);
+                if (groups.empty()) continue;
+                Group const& g = groups[0];
+                std::uint64_t const total = 2 * g.P;
+                int const k = int(std::min<std::uint64_t>(std::uint64_t(samples), total));
+                std::vector<Pos> sample;
+                for (int i = 0; i < k; ++i) {
+                        state ^= state << 13; state ^= state >> 7; state ^= state << 17;
+                        std::uint64_t const r = state % total;
+                        sample.push_back(g.pos(r % g.P, int(r / g.P)));
+                }
+                std::uint64_t moves_n = 0, caps = 0, pros = 0, sink = 0;
+                for (Pos const& p : sample)
+                        for (auto const& mv : moves(p)) {
+                                ++moves_n;
+                                caps += is_capture(mv);
+                                pros += is_promotion(p, mv);
+                        }
+                int const reps = std::max(1, 200000 / std::max(k, 1));
+                auto const t0 = std::chrono::steady_clock::now();
+                for (int r = 0; r < reps; ++r)
+                        for (Pos const& p : sample) sink += moves(p).n;
+                double const us = std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - t0).count()
+                                / double(reps) / double(k);
+                if (sink == 42) std::cout << "";                // keep the timed loop
+                double const mv = double(moves_n) / k, cs = moves_n ? double(caps) / double(moves_n) : 0,
+                             ps = moves_n ? double(pros) / double(moves_n) : 0;
+                std::cout << c.name() << '\t' << total << '\t' << k << '\t' << us << '\t' << mv << '\t' << cs << '\t' << ps << '\n';
+                double const w = double(total);
+                tw += w; tus += w * us; tmoves += w * mv; tcap += w * cs; tpro += w * ps;
+        }
+        std::cout << "all\t" << std::uint64_t(tw) << "\t-\t" << tus / tw << '\t' << tmoves / tw << '\t' << tcap / tw << '\t'
+                  << tpro / tw << '\n';
+        g_granularity = keep;
+}

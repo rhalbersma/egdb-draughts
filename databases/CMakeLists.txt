@@ -243,3 +243,16 @@ foreach(metric IN LISTS METRICS)
 endforeach()
 add_custom_target(plan ${dry} DEPENDS ${BUILDER} USES_TERMINAL COMMENT "what would run")
 add_custom_target(machine COMMAND ${CMAKE_COMMAND} -E cat "${CMAKE_BINARY_DIR}/machine.yaml" USES_TERMINAL)
+
+# what the rules cost on this machine (the engine's bench: move generation, branching, captures and promotions), and
+# from it, the RAM, the cores and the disk, the estimate of space, I/O and time (src/egdb_layout.py, synthesis 7.4)
+add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/calibration.tsv"
+    COMMAND ${BUILDER} bench ${PIECES} > "${CMAKE_BINARY_DIR}/calibration.tsv"
+    DEPENDS ${BUILDER} COMMENT "bench: move generation, branching, captures, promotions" VERBATIM)
+add_custom_target(calibrate DEPENDS "${CMAKE_BINARY_DIR}/calibration.tsv")
+list(LENGTH METRICS n_metrics)
+add_custom_target(estimate
+    COMMAND "${Python3_EXECUTABLE}" -I "${REPO}/src/egdb_layout.py" --board 6x6 --pieces ${PIECES} --builder ${BUILDER}
+            --metrics ${n_metrics} --ram ${MEM_MB}MiB --cores ${CORES} --kings-symmetry 1 --index overlapping
+            --calibration "${CMAKE_BINARY_DIR}/calibration.tsv" --disk ${DISK_free_mb}MiB --disk-mbps ${mbps}
+    DEPENDS "${CMAKE_BINARY_DIR}/calibration.tsv" USES_TERMINAL COMMENT "space, I/O and time on this machine" VERBATIM)

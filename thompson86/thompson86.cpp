@@ -588,6 +588,10 @@ int main(int argc, char* argv[])
                                 std::cout << c.name() << '\t' << t.white << '\t' << t.black << '\t' << t.configurations << '\t' << t.positions << '\n';
                 return 0;
         }
+        if ((a.size() == 2 || a.size() == 3) && a[0] == "bench") {   // what the rules cost per position
+                run_bench(std::stoi(a[1]), a.size() == 3 ? std::stoi(a[2]) : 2000);
+                return 0;
+        }
         if ((a.size() == 4 || a.size() == 5) && a[0] == "plan" && parse_metric(a[2]) && (a[3] == "86" || a[3] == "96")) {
                 g_waves = a[3] == "96";
                 g_granularity = Granularity::material;                  // the default, for both styles
@@ -613,7 +617,7 @@ int main(int argc, char* argv[])
                 return check_all(a[1], std::stoi(a[2]), a.size() == 5 ? std::stoi(a[4]) : 4) ? 0 : 1;
         if (a.size() == 5 && a[0] == "order") return check_order(a[1], a[2], a[3], std::stoi(a[4])) ? 0 : 1;
         if (a.size() == 5 && a[0] == "size") { std::cout << MatIndex(mat_at(1)).size << std::endl; return 0; }
-        std::cerr << "usage: thompson86 build <dir> wp bp wm bm dtm|dtc|dtz 86|96 [groups|array|auto] [seq|par] [material|tempi|configuration] [mem=MB] | tempi n | plan n dtm|dtc|dtz 86|96 [granularity] | checkall <dir> n dtm|dtc|dtz [threads]"
+        std::cerr << "usage: thompson86 build <dir> wp bp wm bm dtm|dtc|dtz 86|96 [groups|array|auto] [seq|par] [material|tempi|configuration] [mem=MB] | bench n [samples] | tempi n | plan n dtm|dtc|dtz 86|96 [granularity] | checkall <dir> n dtm|dtc|dtz [threads]"
                      " | order <dir_dtz> <dir_dtc> <dir_dtm> n | size wp bp wm bm" << std::endl;
         return 2;
 }

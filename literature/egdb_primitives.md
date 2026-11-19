@@ -790,6 +790,15 @@ the cores busy: there, memory was what bound. Both databases are now comfortable
 I/O. At 10×10 and 9 pieces, the 16 kings-heavy materials that do not fit 32 GB take rung 3 or a coalescing
 cache.
 
+**The cost per position depends on the game**, so the plan measures it rather than carry a constant over: the
+engine's `bench` samples every material and times the move generator (the core of every pass), with the branching
+factor and the shares of captures and promotions (pass 0's lookups into other materials). One ratio, fixed by the
+measured builds (thompson86 1.23, syzygy 2.39 move generations per position and side), turns a bench of any rules into
+a cost per position. On the same 6×6 board, engine and machine, international draughts costs 0.284 µs per move
+generation with 4.07 moves (24.5 % captures, 5.3 % promotions), English checkers 0.153 µs with 3.44 (15.2 %, 8.4 %):
+flying kings, long captures and men capturing backwards make the first nearly twice as dear. Larger boards cost more
+per position again (longer rays, more pieces to scan), so a build on another board needs a bench of an engine for it.
+
 **What the plan budgets.** Not only disk space (cumulative files plus the scratch of the jobs side by side) but the
 I/O: the configure step of `databases/` reports, for rungs 0–2,
 

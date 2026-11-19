@@ -62,12 +62,33 @@ COSTS = {'gilbert2005': 0.25, 'wdl': 0.5, 'bit': 0.25, 'byte': 2 * (1 + 4 / 8), 
 
 # the builders: RAM per position of a group (both sides to move), file bytes per position and side (depth, outcome),
 # CPU per position and side to move, measured at 6x6 on a 2.1 GHz Xeon (dtm; larger boards cost more per position)
+# movegen: move generations per position and side, the build's cost over the bench's (the measured builds over the
+# bench of the same rules, international draughts on 6x6: 0.284 us per move generation), so that a bench of other rules
+# (--calibration, `<engine> bench n`) gives their cost per position
 BUILDERS = {
-    'thompson86': dict(cost=COSTS['thompson86'], depth=1, outcome=1 / 8, us=0.35, two_sided=False),
-    'syzygy': dict(cost=COSTS['syzygy'], depth=1, outcome=2 / 8, us=0.68, two_sided=True),
-    'wdl': dict(cost=COSTS['wdl'], depth=0, outcome=2 / 8, us=0.52, two_sided=True),
+    'thompson86': dict(cost=COSTS['thompson86'], depth=1, outcome=1 / 8, us=0.35, two_sided=False, movegen=0.35 / 0.284),
+    'syzygy': dict(cost=COSTS['syzygy'], depth=1, outcome=2 / 8, us=0.68, two_sided=True, movegen=0.68 / 0.284),
+    'wdl': dict(cost=COSTS['wdl'], depth=0, outcome=2 / 8, us=0.52, two_sided=True, movegen=0.52 / 0.284),
 }
 REF_GHZ = 2.1
+
+
+def this_ghz():
+    try:
+        with open('/proc/cpuinfo') as f:
+            return next(float(l.split(':')[1]) / 1000 for l in f if l.startswith('cpu MHz'))
+    except (OSError, StopIteration, ValueError):
+        return REF_GHZ
+
+
+def read_bench(path):
+    """the weighted line of `<engine> bench n`: us per move generation, moves, capture and promotion shares"""
+    with open(path) as f:
+        for line in f:
+            x = line.rstrip('\n').split('\t')
+            if x[0] == 'all':
+                return dict(us=float(x[3]), moves=float(x[4]), captures=float(x[5]), promotions=float(x[6]))
+    raise SystemExit(f'{path}: no "all" line (the output of <engine> bench n)')
 
 
 def parse_bytes(s):
@@ -277,6 +298,9 @@ def main():
     ap.add_argument('--ghz', type=float, default=REF_GHZ, help=f'with --builder: the clock (calibrated at {REF_GHZ} GHz)')
     ap.add_argument('--us', type=float, help='with --builder: microseconds per position and side to move at --ghz, '
                     'instead of the 6x6 calibration (Gilbert 2009, 10x10: about 5.1 at 2.4 GHz)')
+    ap.add_argument('--calibration', help='with --builder: the output of `<engine> bench n` for the rules to build '
+                    '(measured on this machine): the cost per position follows from its move generation')
+    ap.add_argument('--bench-ghz', type=float, help='the clock of the machine the bench ran on (default: this one)')
     ap.add_argument('--disk', type=parse_bytes, help='with --builder: the SSD (or disk) size, e.g. 4TB')
     ap.add_argument('--disk-mbps', type=float, default=500, help='with --builder: sequential MB/s (default 500, a SATA SSD)')
     ap.add_argument('--tbw', type=float, help='with --builder: the SSD\'s endurance in TB written')
@@ -438,7 +462,16 @@ def estimate(a, b, board, ms, plan, positions, canon, refine, max_pos, cost):
     mbps = a.disk_mbps * 1e6
     io_lo = (writes + reads_lo + streams) / mbps
     io_hi = (writes + reads_hi + streams) / mbps
-    us = (a.us if a.us else b['us'] * REF_GHZ / a.ghz) * 1e-6
+    bench = read_bench(a.calibration) if a.calibration else None
+    if a.us:
+        us, source = a.us, 'given'
+    elif bench:
+        us = b['movegen'] * bench['us'] * (a.bench_ghz or this_ghz()) / a.ghz
+        source = (f'bench: {bench["us"]:.3f} us per move generation x {b["movegen"]:.2f}, {bench["moves"]:.2f} moves, '
+                  f'{bench["captures"]:.0%} captures, {bench["promotions"]:.0%} promotions')
+    else:
+        us, source = b['us'] * REF_GHZ / a.ghz, '6x6 calibration scaled by clock'
+    us *= 1e-6
     span_, work, path = refine[-1][2], refine[-1][2] * 0 + sum(sum(sum(v) for v in p_[1].values()) for p_ in plan.values()), refine[-1][4]
     cpu = span_ * 2 * us * n                                    # both sides to move, one metric after another
     def t(sec):
@@ -455,10 +488,14 @@ def estimate(a, b, board, ms, plan, positions, canon, refine, max_pos, cost):
           + (f', rung-3 streams {size(streams, False)} ({len(big)} groups over the RAM, {a.levels} levels each)' if big else '')
           + f': {t(io_lo)} to {t(io_hi)} of disk time'
           + (f'; {writes / (a.tbw * 1e12):.2%} of {a.tbw:g} TBW' if a.tbw else ''))
-    print(f'  time    CPU {t(cpu)} on {a.cores} cores ({us * 1e6:.2f} µs per position and side, '
-          f'{"given" if a.us else "6x6 calibration scaled by clock"}; critical path {t(path * 2 * us * n)}); '
+    if bench:                                                   # pass 0's lookups into other materials
+        look = 2 * P * bench['moves'] * (bench['captures'] + bench['promotions']) * n
+        print(f'  lookups {count(look)} into other materials\' files ({bench["moves"] * (bench["captures"] + bench["promotions"]):.2f} '
+              f'per position): random reads, cheap while the inputs stay in the page cache')
+    print(f'  time    CPU {t(cpu)} on {a.cores} cores ({us * 1e6:.2f} µs per position and side, {source}; '
+          f'critical path {t(path * 2 * us * n)}); '
           f'with the disk time: {t(max(cpu, io_lo))} (overlapped) to {t(cpu + io_hi)}')
-    if a.board != '6x6' and not a.us:
+    if a.board != '6x6' and not a.us and not bench:
         print('          the 6x6 calibration is a floor for larger boards (longer rays, flying kings, inputs out of cache): pass --us')
 
 

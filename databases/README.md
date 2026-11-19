@@ -23,6 +23,8 @@ cmake --build build/syzygy-6 --target dtm
 | `--target dtm` (or `dtc`, `dtz`) | one metric |
 | `--target plan` | Snakemake's dry run: the memory plan and the jobs that would run |
 | `--target machine` | prints `machine.yaml` |
+| `--target calibrate` | the engine's bench on this machine: per material, the time of a move generation, the moves per position, the shares of captures and promotions (`calibration.tsv`) |
+| `--target estimate` | space, I/O and time of the configured build on this machine, from the bench, the RAM, the cores and the disk (`src/egdb_layout.py`) |
 
 **Options** (`-D<name>=<value>`):
 
@@ -138,3 +140,18 @@ on 2.4 GHz cores, and with that `--us` the estimate gives about 114 days on 10 c
 ```bash
 python3 src/egdb_layout.py --board 8x8 --pieces 10 --ram 16GiB --builder wdl --cores 8 --ghz 4 --disk 4TB --disk-mbps 3000 --tbw 2400
 ```
+
+**The cost per position depends on the game**, so the estimate measures it: `<engine> bench n` samples every material
+and times the move generator, with the branching factor and the shares of captures and promotions (each a lookup into
+another material's files). The measured builds fix the ratio of build cost to move generation (thompson86 1.23, syzygy
+2.39 move generations per position and side), so a bench of other rules gives their cost. Same engine, same board, same
+machine:
+
+| 6×6, ≤ 6 pieces | international draughts | English checkers (`-DEGDB_6X6_CHECKERS=1`) |
+|---|---|---|
+| one move generation | 0.284 µs | 0.153 µs |
+| moves per position | 4.07 | 3.44 |
+| captures, promotions among them | 24.5 %, 5.3 % | 15.2 %, 8.4 % |
+| thompson86, three metrics, 4 cores | 24 s | 14 s (a prediction: the unmoves still assume flying kings) |
+
+`cmake --build <build> --target estimate` runs the bench and the estimate for the configured build.

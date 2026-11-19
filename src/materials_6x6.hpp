@@ -50,20 +50,19 @@ Metric g_metric = Metric::dtm;
 
 // ---------------------------------------------------------------- granularity: how finely a material class is cut into groups
 //
-//   class   the whole material class, king and man moves inside (dtz: one layer at a time, a man move ending the count)
-//   layer   one total tempo (the men's distance to promotion, summed over both colours), king moves inside
-//   cell    one (White distance, Black distance) cell of the tempo grid, king moves inside
-//   slice   one full configuration of the men, king moves inside
-// Below class granularity every man move is an exit, into a group solved earlier (it lowers its colour's distance).
-enum class Granularity { klass, layer, cell, slice };
-Granularity g_granularity = Granularity::slice;
+//   material        the whole material class, king and man moves inside (dtz: one total tempo at a time, since a man
+//                   move ends the count there)
+//   tempi           one (White tempo, Black tempo) pair: each colour's men's distance to promotion, king moves inside
+//   configuration   one full configuration of the men, king moves inside
+// Below material granularity every man move is an exit, into a group solved earlier (it lowers its colour's tempo).
+enum class Granularity { material, tempi, configuration };
+Granularity g_granularity = Granularity::configuration;
 
 bool parse_granularity(std::string const& s)
 {
-        if (s == "class") g_granularity = Granularity::klass;
-        else if (s == "layer") g_granularity = Granularity::layer;
-        else if (s == "cell") g_granularity = Granularity::cell;
-        else if (s == "slice") g_granularity = Granularity::slice;
+        if (s == "material") g_granularity = Granularity::material;
+        else if (s == "tempi") g_granularity = Granularity::tempi;
+        else if (s == "configuration") g_granularity = Granularity::configuration;
         else return false;
         return true;
 }
@@ -71,16 +70,15 @@ bool parse_granularity(std::string const& s)
 [[maybe_unused]] char const* granularity_name()
 {
         switch (g_granularity) {
-        case Granularity::klass: return "class";
-        case Granularity::layer: return "layer";
-        case Granularity::cell: return "cell";
-        case Granularity::slice: return "slice";
+        case Granularity::material: return "material";
+        case Granularity::tempi: return "tempi";
+        case Granularity::configuration: return "configuration";
         }
         return "?";
 }
 
-// man moves stay inside a group only at class granularity, and not in dtz (a man move ends the count there)
-bool men_inside() { return g_granularity == Granularity::klass && g_metric != Metric::dtz; }
+// man moves stay inside a group only at material granularity, and not in dtz (a man move ends the count there)
+bool men_inside() { return g_granularity == Granularity::material && g_metric != Metric::dtz; }
 
 bool parse_metric(std::string const& s)
 {
@@ -111,7 +109,7 @@ bool inside(Pos const& p, Move const& mv)
 {
         if (is_capture(mv) || is_promotion(p, mv)) return false;
         if (!is_man_move(p, mv)) return true;                          // a king move without capture
-        return men_inside();                                            // a man move: inside only at class granularity
+        return men_inside();                                            // a man move: inside only at material granularity
 }
 
 // ---------------------------------------------------------------- materials and their index
@@ -291,7 +289,7 @@ void for_each_inside_predecessor(Group const& g, Pos const& q, F&& f)
 
 std::vector<Group> groups_of(Material c)
 {
-        struct SliceUnit { int distance, white; std::uint64_t key; Meta meta; };      // a slice, with its distances
+        struct SliceUnit { int distance, white; std::uint64_t key; Meta meta; };      // a configuration, with its tempi
         std::vector<SliceUnit> units;
         for (std::uint32_t w = u32(DOM_WM);; w = (w - 1) & u32(DOM_WM)) {
                 bitboard const wm = bb_of(w);
@@ -311,14 +309,13 @@ std::vector<Group> groups_of(Material c)
                 }
                 if (w == 0) break;
         }
-        // in dependency order: a man move lowers the total distance (and its colour's), so smaller totals come first
+        // in dependency order: a man move lowers its colour's tempo (and the total), so smaller totals come first
         std::ranges::sort(units, {}, [](SliceUnit const& u) { return std::tuple(u.distance, u.white, u.key); });
         auto const group_key = [](SliceUnit const& u) -> std::uint64_t {    // a new group whenever this changes
                 switch (g_granularity) {
-                case Granularity::klass: return g_metric == Metric::dtz ? std::uint64_t(u.distance) : 0;
-                case Granularity::layer: return std::uint64_t(u.distance);
-                case Granularity::cell: return std::uint64_t(u.distance) << 32 | std::uint64_t(u.white);
-                case Granularity::slice: return u.key;
+                case Granularity::material: return g_metric == Metric::dtz ? std::uint64_t(u.distance) : 0;
+                case Granularity::tempi: return std::uint64_t(u.distance) << 32 | std::uint64_t(u.white);
+                case Granularity::configuration: return u.key;
                 }
                 return u.key;
         };
@@ -503,16 +500,17 @@ public:
         }
 };
 
-// ---------------------------------------------------------------- the layers of a material class's configuration DAG
+// ---------------------------------------------------------------- the tempi of a material class
 //
-// The full-configuration slices of a material class, by distance (the rows its men still have to go, summed over both
-// colours). Every man move lowers the distance by exactly one, so layer d leads only into layer d - 1 of the same class
-// (and into other classes by captures and promotions): built layer by layer, only two adjacent layers are ever live.
-struct Layer { int distance = 0; std::uint64_t slices = 0, positions = 0; };   // positions per side to move
+// The configurations of a material class's men, by tempi: White's tempo (the rows its men still have to go) and
+// Black's. The tempi factorize by colour: a white man move goes from (tw, tb) to (tw - 1, tb), a black one to
+// (tw, tb - 1), so the pairs with the same total tw + tb never lead into each other, and building in order of the total
+// keeps at most two adjacent totals live (other material classes are reached by captures and promotions).
+struct Tempi { int white = 0, black = 0; std::uint64_t configurations = 0, positions = 0; };   // positions per side to move
 
-[[maybe_unused]] std::vector<Layer> layers_of(Material c)
+[[maybe_unused]] std::vector<Tempi> tempi_of(Material c)
 {
-        std::map<int, Layer> by;
+        std::map<std::pair<int, int>, Tempi> by;                        // by (total, white)
         for (std::uint32_t w = u32(DOM_WM);; w = (w - 1) & u32(DOM_WM)) {
                 bitboard const wm = bb_of(w);
                 if (int(wm.size()) == c.wm) {
@@ -523,10 +521,13 @@ struct Layer { int distance = 0; std::uint64_t slices = 0, positions = 0; };   /
                                         Key const k{ wm, bm, c.wk, c.bk };
                                         Meta const m = meta_of(k);
                                         if (m.P != 0) {
-                                                Layer& l = by[distance(k)];
-                                                l.distance = distance(k);
-                                                ++l.slices;
-                                                l.positions += m.P;
+                                                int white = 0;
+                                                for (auto const sq : wm) white += int(sq) / 3;
+                                                Tempi& t = by[{ distance(k), white }];
+                                                t.white = white;
+                                                t.black = distance(k) - white;
+                                                ++t.configurations;
+                                                t.positions += m.P;
                                         }
                                 }
                                 if (b == 0) break;
@@ -534,8 +535,8 @@ struct Layer { int distance = 0; std::uint64_t slices = 0, positions = 0; };   /
                 }
                 if (w == 0) break;
         }
-        std::vector<Layer> out;
-        for (auto const& [d, l] : by) out.push_back(l);
+        std::vector<Tempi> out;
+        for (auto const& [key, t] : by) out.push_back(t);
         return out;
 }
 

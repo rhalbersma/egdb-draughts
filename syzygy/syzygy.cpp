@@ -52,11 +52,12 @@
 //
 // build: g++-14 -std=c++23 -O2 -march=native -fopenmp -I<xstd-bits>/include -I<xstd-ints>/include
 //        -I<xstd-misc>/include syzygy/syzygy.cpp -lzstd -ltbb -o syzygy
-// usage: syzygy build <dir> wp bp wm bm <metric> [seq|par] [frontier|scan] [auto|groups|array] [class|layer|cell|slice] [mem=MB]
+// usage: syzygy build <dir> wp bp wm bm <metric> [seq|par] [frontier|scan] [auto|groups|array] [material|tempi|configuration] [mem=MB]
 //                                                            build one material (its captures and promotions must exist);
 //                                                            the depth sink by the claim mem=MB (auto: the array if rung 0
 //                                                            fits, else group files), or as given; the granularity of
-//                                                            the groups (default class; below it man moves are exits)
+//                                                            the groups (default material; below it man moves are
+//                                                            exits)
 //        syzygy plan n <metric> [granularity]                per stored material with at most n pieces: slots,
 //                                                            positions, groups, the largest group, MB needed (rung 0)
 //        syzygy checkall <dir> n <metric> [threads]          every material of at most n pieces against egdb_6x6
@@ -629,7 +630,7 @@ int main(int argc, char* argv[])
 {
         init_tables();
         init_cc();
-        g_granularity = Granularity::klass;             // syzygy's default: the whole material class (dtz: by layer)
+        g_granularity = Granularity::material;             // syzygy's default: the whole material class (dtz: by total tempo)
         std::vector<std::string> const a(argv + 1, argv + argc);
         auto mat_at = [&](std::size_t i) {                             // wp bp wm bm
                 int const wp = std::stoi(a[i]), bp = std::stoi(a[i + 1]), wm = std::stoi(a[i + 2]), bm = std::stoi(a[i + 3]);
@@ -637,7 +638,7 @@ int main(int argc, char* argv[])
                 return Material{ wm, wp - wm, bm, bp - bm };
         };
         if ((a.size() == 3 || a.size() == 4) && a[0] == "plan" && parse_metric(a[2])) {
-                if (a.size() == 4 && !parse_granularity(a[3])) { std::cerr << "granularity: class, layer, cell or slice" << std::endl; return 2; }
+                if (a.size() == 4 && !parse_granularity(a[3])) { std::cerr << "granularity: material, tempi or configuration" << std::endl; return 2; }
                 print_plan_header();
                 for (Material const c : stored_materials_up_to(std::stoi(a[1]))) print_plan_row(c, memory_need(c));
                 return 0;
@@ -658,7 +659,7 @@ int main(int argc, char* argv[])
                 return check_all(a[1], std::stoi(a[2]), a.size() == 5 ? std::stoi(a[4]) : 4) ? 0 : 1;
         if (a.size() == 5 && a[0] == "cmp86" && parse_metric(a[4])) return compare_thompson86(a[1], a[2], std::stoi(a[3])) ? 0 : 1;
         if (a.size() == 5 && a[0] == "order") return check_order(a[1], a[2], a[3], std::stoi(a[4])) ? 0 : 1;
-        std::cerr << "usage: syzygy build <dir> wp bp wm bm dtm|dtc|dtz [seq|par] [frontier|scan] [auto|groups|array] [class|layer|cell|slice] [mem=MB] | plan n dtm|dtc|dtz [granularity] | checkall <dir> n dtm|dtc|dtz [threads]"
+        std::cerr << "usage: syzygy build <dir> wp bp wm bm dtm|dtc|dtz [seq|par] [frontier|scan] [auto|groups|array] [material|tempi|configuration] [mem=MB] | plan n dtm|dtc|dtz [granularity] | checkall <dir> n dtm|dtc|dtz [threads]"
                      " | cmp86 <dir> <dir_thompson86> n dtm|dtc|dtz | order <dir_dtz> <dir_dtc> <dir_dtm> n" << std::endl;
         return 2;
 }

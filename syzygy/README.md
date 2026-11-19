@@ -58,8 +58,8 @@ and `btm.dtm`, because it needs the depths. A dtz build gives WDL and DTZ togeth
 ## Passes
 
 Captures and promotions (and in dtz man moves, which end the count) are looked up forward in pass 0, in finished
-files: no uncaptures. A dtm or dtc material is one group, with king moves and man moves inside; a dtz material is
-solved one distance at a time (as `thompson86`'s 1996 style), with only king moves inside.
+files: no uncaptures. At the default granularity a dtm or dtc material is one group, with king moves and man moves
+inside; a dtz material is solved one total tempo at a time (as `thompson86`'s 1996 style), with only king moves inside.
 
 * **pass 0**: every position looks up its moves out of the group. Without a move inside it is decided at once
   (captures are compulsory); otherwise it keeps its fastest win and its slowest loss through an exit (no loss if an
@@ -119,19 +119,19 @@ move: dtm exactly, dtc and dtz their wins and losses; every value against its re
   only the current group's, each finished group appended to a group-order file and mapped read-only for the lookups
   into earlier groups (`groups`, rung 1); `auto` takes the array if rung 0 fits the job's claim. The material's files are
   gathered from the sink in one sequential pass.
-* **granularity** (`granularity=class|layer|cell|slice`, shared with `thompson86`): the whole material class (the
-  default), one total tempo, one (White tempo, Black tempo) cell, or one full configuration per group; below `class`
-  every man move is an exit into an earlier group (rung 2). `cell` gives the smallest largest group (rung 0 at most
-  58 MB at 6 pieces, against 103 MB at `class` and 94 MB at `slice`, where the all-men materials' ~100,000
-  one-position slices dominate by their metadata).
+* **granularity** (`granularity=material|tempi|configuration`, shared with `thompson86`, synthesis §1.1): the whole
+  material class (the default), one (White tempo, Black tempo) cell, or one configuration of the men per group; below
+  `material` every man move is an exit into an earlier group (rung 2). `tempi` gives the smallest largest group (rung 0
+  at most 58 MB at 6 pieces, 2,652 groups, against 103 MB at `material` and 94 MB at `configuration`, where the
+  all-men materials' ~100,000 one-position configurations dominate by their metadata).
 * **memory-aware scheduling** (synthesis §7.3): `syzygy plan n <metric> [granularity]` prints each stored material's
   sizes and its MB at rung 0 and rung 1, counting the memory-mapped inputs and group-order files whose touched pages
   are resident; the Snakefile turns it into claims (`resources: mem_mb`) and critical-path priorities. Over 1,736
   logged 6-piece builds (both builders, granularities, sinks and modes) no peak exceeded its estimate, which averages
   about twice the peak (worst-case bounds for the lists and the inputs).
 
-At 6 pieces the largest material's peak went from 69–73 MB to 49 MB (`class`, group files) or 58 MB (`class`,
-array); with `slice` groups the peak is 89 MB, set by 03-03-03-03's slice metadata, and dtm CPU drops to 37.6 s. Every step of
+At 6 pieces the largest material's peak went from 69–73 MB to 49 MB (`material`, group files) or 58 MB
+(`material`, array); with `configuration` groups the peak is 89 MB, set by 03-03-03-03's configuration metadata, and dtm CPU drops to 37.6 s. Every step of
 the change left the files byte-identical (frontier and scan, both sinks, every granularity, seq and par, 4 and 6 pieces,
 all metrics).
 

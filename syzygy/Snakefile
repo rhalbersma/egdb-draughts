@@ -16,7 +16,7 @@
 # Memory (synthesis 7.3): the engine's `plan` gives every material's need; each build claims its rung-0 need, or the
 # whole budget if that does not fit (the build then writes its depths to group files, rung 1, with sink=auto). Pass the
 # budget as --resources mem_mb=N (else config mem_mb, else 75 % of physical memory). Priorities follow the critical
-# path. granularity=class|layer|cell|slice sets the groups (cell: the smallest largest group).
+# path. granularity=material|tempi|configuration sets the groups (tempi: the smallest largest group).
 #
 # usage (from the root of the repo):
 #   snakemake -s syzygy/Snakefile --cores 4 --config engine=build/syzygy dir=data/syzygy pieces=6 metric=dtz
@@ -31,7 +31,7 @@ D = f'{BASE}/{METRIC}'
 POLICY = config.get('policy', 'seq')
 ROUNDS = config.get('rounds', 'frontier')
 SINK = config.get('sink', 'auto')          # the depth sink: auto (by the claim), groups (group files), array (RAM)
-GRANULARITY = config.get('granularity', 'class')  # class, layer, cell or slice (below class, man moves are exits)
+GRANULARITY = config.get('granularity', 'material')  # material, tempi or configuration (below material: man moves exit)
 THREADS = int(config.get('threads', 4))
 
 

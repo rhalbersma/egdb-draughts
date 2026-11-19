@@ -22,7 +22,7 @@
 # usage (from the root of the repo):
 #   snakemake -s thompson86/Snakefile --cores 4 --config engine=build/thompson86 dir=data/thompson86 pieces=6 \
 #       metric=dtm style=86
-# metric: dtm, dtc or dtz; style: 86 (one slice at a time) or 96 (waves, masked passes)
+# metric: dtm, dtc or dtz; style: 86 (test at once; one configuration at a time) or 96 (masked late; the whole material)
 
 ENGINE = config.get('engine', 'build/thompson86')
 BASE = config.get('dir', 'data/thompson86')
@@ -32,7 +32,7 @@ D = f'{BASE}/{METRIC}'
 STYLE = str(config.get('style', '86'))
 SINK = config.get('sink', 'auto')          # the depth sink: auto (by the claim), groups (per-group files), array (RAM)
 POLICY = config.get('policy', 'seq')       # every pass a std::for_each: seq, or par within each build
-GRANULARITY = config.get('granularity', '')  # class, layer, cell or slice (default: slice for style 86, class for 96)
+GRANULARITY = config.get('granularity', '')  # material, tempi or configuration (default: 86 configuration, 96 material)
 THREADS = int(config.get('threads', 4))
 
 MATERIALS = [(wm, wk, bm, bk)

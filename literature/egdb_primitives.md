@@ -68,22 +68,31 @@ the material classes form a DAG through captures and promotions.
 
 **Slices** split a material class by the configuration of its irreversibly moving pieces (draughts and checkers men,
 chess pawns); a man's or pawn's advance leads from one slice to another, so the slices of a material class form a DAG
-too. They come in granularities, each a union of the finer ones:
+too. Ours come in two granularities, the coarser a union of the finer:
 
-| slice, labelled by | used by |
+| slice, labelled by | |
 |---|---|
-| the leading rank: each colour's most advanced man | Chinook's "slice" (3212.53); Gilbert's tier 1 (2005), "second subdivision" (2009) |
-| the leading-rank configuration: in addition, the men on that rank | Dodgen–Trice; Gilbert's tier 2 (2005), "third subdivision" (2009) |
-| the penultimate rank: in addition, the most advanced man not on the leading rank | Gilbert's tier 3 (2005) |
-| the full configuration: every man's square | `egdb_6x6`, `thompson86`, `syzygy` (where "slice" means this one) |
+| the **tempi**: each colour's tempo, its men's distance to promotion summed over its men (rows still to go) | `thompson86`, `syzygy` (`granularity=tempi`) |
+| the **configuration**: every man's square | `egdb_6x6`, `thompson86`, `syzygy` (`granularity=configuration`) |
 
-A kings-only material class is a single slice at every granularity.
+The tempi factorize by colour: every man move lowers its own colour's tempo by exactly one, a white man move from
+(tw, tb) to (tw − 1, tb), a black one to (tw, tb − 1). So the tempi are a grid, every man move leads to a neighbour
+cell, and the cells on an anti-diagonal (the same total tw + tb) never lead into each other. For 03-03-03-03: 13 × 13
+cells (each colour's three men need 3 to 15 rows), 167 of them non-empty, against 118,587 configurations.
+
+Chinook and Gilbert label their slices by **leading ranks** instead: each colour's most advanced man (Chinook's
+"slice", Gilbert's first tier), refined by the men on that rank and then by the penultimate rank (Gilbert's tiers 2
+and 3; Dodgen–Trice). We do not use them: a leading-rank slice must classify every man move (a rear man's move stays
+inside, the leading man's leaves, a rear man overtaking the leading rank changes the slice), whereas every man move
+leaves its tempi, so below material granularity the rounds need no man unmoves at all.
+
+A kings-only material class is a single slice at both granularities.
 
 **The metrics count inside these units.** DTC counts the moves inside a material class: the count ends at a capture
-or a promotion, the moves that leave it. DTZ counts the moves inside a full-configuration slice: the count also ends at
-a man move, the move that leaves the slice. DTM counts to the end of the game, across all of them.
+or a promotion, the moves that leave it. DTZ counts the moves inside a configuration: the count also ends at a man move,
+the move that leaves it. DTM counts to the end of the game, across all of them.
 
-**A group** is a set of full-configuration slices of one material class that a build solves together: the unit of one
+**A group** is a set of configurations of one material class that a build solves together: the unit of one
 solve, whose rounds share bit planes and frontiers. **A job** is what the scheduler (Snakemake) schedules: one command
 with its inputs, outputs and resources. In our builders a job builds one material class (it lists the class's groups,
 solves them in dependency order and writes its files); Chinook 1994's jobs were passes over mini-slices, Gilbert's
@@ -96,18 +105,15 @@ builders):
 
 | granularity | a group is | moves inside | default for |
 |---|---|---|---|
-| `class` | the whole material class (dtz: one layer at a time, since a man move ends the count) | king and man moves | `syzygy`, `thompson86` 1996 style |
-| `layer` | one total tempo: the men's distance to promotion summed over both colours, an anti-diagonal of the tempo grid | king moves | |
-| `cell` | one (White distance, Black distance) cell of the tempo grid | king moves | |
-| `slice` | one full configuration | king moves | `thompson86` 1986 style, `egdb_6x6` |
+| `material` | the whole material class (dtz: one total tempo at a time, since a man move ends the count) | king and man moves | `syzygy`, `thompson86` 1996 style |
+| `tempi` | one (White tempo, Black tempo) cell | king moves | |
+| `configuration` | one configuration of the men | king moves | `thompson86` 1986 style, `egdb_6x6` |
 
-Below `class` every man move is an exit: it lowers its colour's distance, into a group solved earlier, so the rounds
-need no man unmoves and no man move has to be classified (unlike leading-rank slices, where a rear man's move stays
-inside, the leading man's leaves, and a rear man overtaking the leading rank changes the slice). The tempi factorize by
-colour: a white man move goes from cell (dw, db) to (dw − 1, db), a black one to (dw, db − 1), so the cells of one
-layer never lead into each other. For 03-03-03-03 that is 25 layers and 167 non-empty cells of the 13 × 13 grid,
-against 118,587 one-position slices; at 6 pieces `cell` gives the smallest largest group in both builders (rung 0 at
-most 58 MB in `syzygy`, 49 MB in `thompson86`, against 94–103 MB at `class` or `slice`).
+Below `material` every man move is an exit into a group solved earlier (it lowers its colour's tempo), looked up in
+pass 0 like a capture. At 6 pieces `tempi` gives the smallest largest group in both builders: rung 0 at most 58 MB in
+`syzygy` (2,652 groups) and 49 MB in `thompson86` (4,897), against 94–103 MB at `material` (82 and 155 groups) or at
+`configuration` (483,750 and 830,793 groups, where the metadata of the all-men materials' one-position configurations
+dominates).
 
 A build solves the groups of its material class one after another in dependency order, later groups looking up earlier
 ones through the depth sink.
@@ -119,10 +125,11 @@ ones through the depth sink.
 | subdivision: n pieces | subdivision | "the 8-piece database" | "the N-piece database" ("by pieces") | "the 10-piece database" | "the 8 piece database" |
 | subdivision: pieces per side | subdivision (in the material class's name) | "subsets, such as 6b versus 2w"; a "graph" holds "all positions composed of b black pieces and w white pieces" | **"by material"**: "subsets with a different number of pieces per side", "8 pieces versus 1, 7 versus 2" | — | "4x4 and 5x3 positions" |
 | subdivision: material class | **material class** `wp-bp-wm-bm` | a **"node"** of the graph, a "subdatabase" named by four digits (black kings, white kings, black checkers, white checkers, e.g. 3212); "subdatabases according to the material, the number of checkers and kings" | "by number of kings": a "sub-database" or "subset", Table 1's "Database" column in "bk wk bc wc" notation (e.g. 3223; "the 1045 database") | a **"slice"** ("the slice with 2 black men, 3 black kings, 2 white men, and 3 white kings") | the "first subdivision", "by man and king counts" ("the subset of 1bm 3bk 2wm 2wk") |
-| slice: leading rank | slice (a union of full-configuration slices) | a **"slice"**, e.g. 3212.53 (49 per node; kings-only nodes unsliced) | "by leading rank": a **"slice"**, "bk wk bc wc. br wr", e.g. 3223.77 ("the symmetric database 2233.77") | tier 1, "piece counts and leading ranks" (9 pieces: the leading *square*) | the "second subdivision", "the row of the most advanced black and white man" |
-| slice: leading-rank configuration | slice (a union) | — | "slices can be further sub-divided" (Dodgen–Trice: "the configuration of checkers on the first rank"), not used | tier 2, "configuration of the checkers on the leading rank" | the "third subdivision" |
-| slice: penultimate rank | slice (a union) | — | — | tier 3, "the penultimate rank of checkers" | — |
-| slice: full configuration | **slice** (`egdb_6x6`, our builders) | — | — | — | — |
+| slice: leading rank | — (we slice by tempi) | a **"slice"**, e.g. 3212.53 (49 per node; kings-only nodes unsliced) | "by leading rank": a **"slice"**, "bk wk bc wc. br wr", e.g. 3223.77 ("the symmetric database 2233.77") | tier 1, "piece counts and leading ranks" (9 pieces: the leading *square*) | the "second subdivision", "the row of the most advanced black and white man" |
+| slice: leading-rank configuration | — | — | "slices can be further sub-divided" (Dodgen–Trice: "the configuration of checkers on the first rank"), not used | tier 2, "configuration of the checkers on the leading rank" | the "third subdivision" |
+| slice: penultimate rank | — | — | — | tier 3, "the penultimate rank of checkers" | — |
+| slice: tempi | **tempi** (our builders) | — | — | — | — |
+| slice: configuration | **configuration** (`egdb_6x6`, our builders) | — | — | — | — |
 | one solve | **group** | a slice with its mirror | a slice: "A portion of the endgame database (a slice) is computed by resolving all positions" | a "subdivision" (tiers 2 and 3 only above 900 MB; 64,369) | a "subdivision" (about 200K) |
 | a job (what is scheduled) | one material class | a job queue line: one pass over a slice or mini-slice | slices (TrellisDAG) | one subdivision per program instance | one subdivision per instance |
 | a parallel index range | a block of 4096 positions | a **"mini-slice"**: page-aligned, about 10 million positions | POSIX threads dividing "the range of positions" equally | — | — |
@@ -130,14 +137,14 @@ ones through the depth sink.
 
 In this vocabulary: Chinook's node (1994) or sub-database (2003) and Gilbert's 2005 "slice" are material classes;
 Chinook 2003's "material" is the pieces-per-side subdivision; Chinook's "slice" is a leading-rank slice; Gilbert's
-"subdivision" is whatever his tiers produced, a material class or a slice of some granularity; `egdb_6x6`'s slice is the
-full-configuration slice. Chinook and Gilbert slice from coarse to fine until a piece fits memory; we start from the
-full configuration and merge slices back into groups. All cut along irreversible moves (captures and promotions between
+"subdivision" is whatever his tiers produced, a material class or a leading-rank slice of some refinement;
+`egdb_6x6`'s slice is a configuration. Chinook and Gilbert slice from coarse to fine until a piece fits memory, by
+leading ranks; we slice by tempi or configurations. All cut along irreversible moves (captures and promotions between
 subdivisions, a man's advance between slices), which is what makes every scheme a DAG.
 
 **Our jobs are material classes**: Snakemake runs them in parallel when none needs another, in the order of the DAG.
 They are not smaller because the groups of a material class depend on each other densely and most are tiny
-(a 1986-style material class can have tens of thousands of slice groups): a job per group would be far too
+(a 1986-style material class can have tens of thousands of configuration groups): a job per group would be far too
 fine-grained, and every job would open the same files again. The memory ladder (§7.2) follows the same split: the
 job's memory claim is per material class, the rung is chosen per group inside it.
 
@@ -544,8 +551,8 @@ the sizes known before the build (`Meta.P` of the slices). Both builders now rea
 group-order files, `sink=auto` by the job's claim). `syzygy` first had to split its 16-bit value array, which was both
 depth store and cumulative state (about 7.5 bytes per position and side to move against rtbgen's 1 byte), into
 cumulative bit planes for the state and write-only values in the sink; its frontier rounds now hold about 9 bit planes
-and the level lists, its scan mode (rtbgen's) still the value array, which its frontier scans. Both also offer slice
-groups (`granularity=layer|cell|slice` in both builders), rung 2.
+and the level lists, its scan mode (rtbgen's) still the value array, which its frontier scans. Both also offer groups
+finer than the material class (`granularity=tempi|configuration` in both builders), rung 2.
 
 ### 7.3 Choosing by machine
 
@@ -596,7 +603,7 @@ byte; the previous metric's build gives a better estimate).
 | pass 0 lookups into finished files | a few per position | random reads | page cache: part of the above; cold memory map: 3–8 µs per lookup (§7, rule 6), so pass 0 explodes once the inputs fall out of the cache |
 | rounds by full scans instead of frontiers | 2 × 2P per round, L rounds | sequential reads of the group | `syzygy` dtm +46 % (53.1 s against 36.4 s), dtz +14 % |
 | depth sink, group-order files instead of the array | the gathering pass, slice lookups | sequential writes, random reads in RAM | +10–15 % CPU; the largest material's peak memory 19.3 MB instead of 24.9 MB |
-| `par` within a group | the same work, split in blocks of 4096 positions | | whole-material groups: 2.0× on 4 cores (43.0 s → 21.1 s); single-slice groups: none, only thread-pool overhead |
+| `par` within a group | the same work, split in blocks of 4096 positions | | whole-material groups: 2.0× on 4 cores (43.0 s → 21.1 s); configuration groups: none, only thread-pool overhead |
 | scattered updates on disk | one per update | random against sorted | Wu–Liu–Hsu 2004: 10^6 updates 3787 s random against 6.5 s sorted |
 | a group larger than RAM, cached from disk | the same work | random reads and writes through a cache | Gilbert 2005: the all-kings slice "several weeks" against 2 days in RAM |
 | a value needed by many parents, searched each time | one search per parent | CPU | Gilbert 2009: verification slower than the build because capture successors were re-searched per parent ("would nearly double the speed" if cached); `thompson86`: storing `btm.dtm-L` cut dtm from 51.1 s to 34.3 s |
@@ -604,7 +611,7 @@ byte; the previous metric's build gives a better estimate).
 **The decisions, in order:**
 
 1. **Granularity.** The knob that sets everything else: fine enough that a group fits its claim at a high rung, coarse
-   enough that per-group overhead (files, maps, metadata, thread-pool start-up) stays small. Gilbert cut by piece
+   enough that per-group overhead (files, maps, metadata, thread-pool start-up) stays small; for us `tempi`. Gilbert cut by piece
    counts and leading ranks, then by the configuration of the leading rank, then by the rank of the penultimate
    checker, but only above a 900 MB threshold: 64,369 subdivisions instead of almost 3 million, some 20 million files,
    on which "the build program will run out of file handles and choke"; our first group-file sink hit the kernel's

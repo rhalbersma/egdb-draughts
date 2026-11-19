@@ -53,17 +53,19 @@ side, is a lookup into the files of the material it leads into: virtual addressi
 copies parked inside a bigger run. The files form a DAG through captures and promotions, which Snakemake builds in
 order; a capture of a side's last piece ends the game and needs no file.
 
-**Granularity** (`granularity=class|layer|cell|slice`, shared with `syzygy`, synthesis §1.1): how finely a material
-class is cut into groups. The style sets the default (1986: `slice`, 1996: `class`); any granularity works with either
-style's passes, and below `class` every man move is an exit into an earlier group. `cell`, one (White tempo, Black
-tempo) cell of the tempo grid, gives the smallest largest group: rung 0 at most 49 MB at 6 pieces (1996 style),
-against 95 MB at `class` or `slice`.
+**Granularity** (`granularity=material|tempi|configuration`, shared with `syzygy`, synthesis §1.1): how finely a
+material class is cut into groups: the whole material class, one (White tempo, Black tempo) cell (a colour's tempo is
+its men's distance to promotion, summed), or one configuration of the men. The style sets the default (1986:
+`configuration`, 1996: `material`); any granularity works with either style's passes, and below `material` every man
+move is an exit into an earlier group. `tempi` gives the smallest largest group: rung 0 at most 49 MB at 6 pieces
+(1996 style, 4,897 groups), against 95 MB at `material` (155) or `configuration` (830,793). `thompson86 tempi n`
+prints every material class's tempi cells with their configurations and positions.
 
 **Two styles**, the same results byte for byte:
 
 | | 1986 (`style=86`) | 1996 (`style=96`) |
 |---|---|---|
-| group solved together | one slice of `egdb_6x6` (a placement of the men and the numbers of kings), in order of pieces on the board, then distance | a wave: every slice with the same number of pieces (for dtz also the same distance, since a man move ends the count there) |
+| group solved together (default granularity) | one configuration of the men (a slice of `egdb_6x6`), in order of total tempo | the whole material class (for dtz one total tempo at a time, since a man move ends the count there) |
 | moves inside the group | king moves without capture | king moves and man moves without capture or promotion (dtz: king moves only) |
 | unmoves in the rounds | king unmoves | king unmoves and man unmoves |
 | passes | each pass tests its target at once | masked late, as in Thompson's I/O-enhanced algorithm: P2 writes a superset, P3 and P4 mask it with `~won`, `~lost` |
@@ -85,8 +87,8 @@ maps. The depth bytes of the material being built go to a **depth sink** (`sink=
 | both | | | each of the four files written once, sequentially, in index order, gathering every slot's byte (from the group-order files: un-rank the slot, find its group, read) |
 
 A file per group would need two memory maps per group, and the 1986 style has tens of thousands of groups (one per
-slice) in the largest materials: more than the kernel's limit of 65,530 maps per process. At 6 pieces both sinks give
-byte-identical files; `groups` costs 10–15 % more CPU (dtm 38.1 s against 33.8 s, 1986 style) for the slice lookups
+configuration) in the largest materials: more than the kernel's limit of 65,530 maps per process. At 6 pieces both sinks give
+byte-identical files; `groups` costs 10–15 % more CPU (dtm 38.1 s against 33.8 s, 1986 style) for the group lookups
 and the gathering pass, and the largest material (03-03-01-01, 5.27 M slots per side) peaks at 19.3 MB instead of
 24.9 MB of RSS (13.2 MB of it the program's own tables). This is rung 1 of the memory ladder in
 [`literature/egdb_primitives.md`](../literature/egdb_primitives.md) §7.2.
@@ -100,7 +102,7 @@ budget is `--resources mem_mb=N` (else `config mem_mb`, else 75 % of physical me
 the engine takes the array if rung 0 fits its claim, else the group files, and says so in its log, with its peak RSS.
 At 6 pieces with a 60 MB budget: 1996 style dtm, 149 materials on the array, 6 on group files, 5 over the budget
 even at rung 1; 1986 style, 3 all-men materials over the budget, because there the metadata of their ~100,000
-one-position slices dominates, not the depth bytes, so rung 1 cannot help. Files byte-identical to the unbudgeted
+one-position configurations dominates, not the depth bytes, so rung 1 cannot help. Files byte-identical to the unbudgeted
 builds; no build's peak above its estimate.
 
 **Every pass is one `std::for_each`** over blocks of 4096 positions (`for_blocks`, shared with `syzygy`), sequential
@@ -111,10 +113,10 @@ positions. A build opens every file it can read before the passes, so the parall
 Both policies give byte-identical files (4 pieces: both styles, both sinks, all metrics; 6 pieces: 1986 style).
 
 Where `par` pays depends on the group: a 1996-style dtm material is one group, and one build at a time takes 21.1 s
-with `par` against 43.0 s with `seq` on 4 cores. A 1986-style group is a single slice, mostly smaller than one block,
+with `par` against 43.0 s with `seq` on 4 cores. A 1986-style group is a single configuration, mostly smaller than one block,
 so `par` has nothing to split and only adds the thread pool's overhead (41.8 s against 38 s of `seq` CPU); there the
-parallelism is across materials, four `seq` builds at a time in Snakemake (12.6 s wall for dtm), or would be across
-the independent slices of a group of the same distance.
+parallelism is across materials, four `seq` builds at a time in Snakemake (12.6 s wall for dtm), or with `granularity=tempi`
+across the larger groups of a tempi cell.
 
 ## Build and run
 

@@ -37,6 +37,8 @@ cmake --build build/syzygy-6 --target dtm
 | `STYLE` | `86` | thompson86 only: `86` or `96` |
 | `ROUNDS` | `frontier` | syzygy only: `frontier` or `scan` |
 | `DATA_DIR` | `<build>/data` | where the databases go |
+| `DISK_MBPS` | 150 for an HDD, 500 otherwise | the disk's sequential speed, for the I/O time |
+| `DISK_TBW` | none | an SSD's rated endurance in TB written, to put the build's writes against |
 | `CORES` | the logical cores | Snakemake's `--cores`: jobs side by side |
 | `MEM_MB` | 75 % of physical memory | the memory budget of the jobs together, in MiB |
 | `SNAKEMAKE_EXECUTABLE` | found on the `PATH` | Snakemake 8 |
@@ -44,6 +46,13 @@ cmake --build build/syzygy-6 --target dtm
 Inputs and checks are in MiB (2²⁰ bytes), as Snakemake's `mem_mb` and the engines' `plan`. The configure step reports
 sizes as they are sold: memory in binary units, MiB or GiB (a "16 GB" module is 16 GiB; `free -h`), disk in decimal
 ones, MB, GB or TB (a "1 TB" disk is 10¹² bytes; `df -H`), e.g. "memory: 15.7 GiB" and "needs 103.8 GB".
+
+**Besides space, configure reports the I/O** (synthesis §7.4): the writes (every file once, sequentially; up to the
+depth sink's group-order files on top), the reads (each build's inputs through memory maps, at best each input once,
+at worst once per build that reads it, plus the checks), the disk time at `DISK_MBPS`, and with `DISK_TBW` the writes
+against the SSD's endurance. For `syzygy` to 6 pieces, all metrics: "writes 404 MB (all sequential; up to 1.1 GB with
+group files), reads 590 MB to 1.5 GB; at 150 MB/s: 6 to 17 s of disk time". The volumes are those of rungs 0–2, where
+the builders run; at the lower rungs the per-level streams and random accesses of §7.4 come on top.
 
 **A build fails when the machine provides less than it requires:**
 

@@ -35,6 +35,8 @@ set_property(CACHE SINK PROPERTY STRINGS auto groups array)
 set(STYLE "86" CACHE STRING "thompson86 only: 86 (test at once) or 96 (masked late)")
 set(ROUNDS "frontier" CACHE STRING "syzygy only: frontier (bit planes) or scan (rtbgen's full scans)")
 set(DATA_DIR "${CMAKE_BINARY_DIR}/data" CACHE PATH "where the databases go")
+set(DISK_MBPS "" CACHE STRING "the disk's sequential speed in MB/s, for the I/O time (default: 150 for an HDD, 500 otherwise)")
+set(DISK_TBW "" CACHE STRING "an SSD's rated endurance in TB written, to put the build's writes against (optional)")
 if(NOT BUILDER MATCHES "^(thompson86|syzygy)$")
     message(FATAL_ERROR "BUILDER must be thompson86 or syzygy, not ${BUILDER}")
 endif()
@@ -106,7 +108,7 @@ execute_process(
     OUTPUT_VARIABLE probe COMMAND_ERROR_IS_FATAL ANY)
 string(REGEX REPLACE "\n$" "" probe "${probe}")
 string(REPLACE "\n" ";" probe "${probe}")
-foreach(line IN LISTS probe)                        # materials, files_mb, need_mb, scratch_mb, free_mb, rotational
+foreach(line IN LISTS probe)    # materials, files_mb, need_mb, scratch_mb, write_mb, write_groups_mb, read_*_mb, free_mb, rotational
     string(REGEX MATCH "^([a-z_]+)=(.*)$" _ "${line}")
     set(DISK_${CMAKE_MATCH_1} "${CMAKE_MATCH_2}")
 endforeach()
@@ -121,7 +123,10 @@ endif()
 foreach(v IN ITEMS TOTAL_MB AVAILABLE_MB MEM_MB)
     memory_size(${v}_h ${${v}})
 endforeach()
-foreach(v IN ITEMS DISK_free_mb DISK_need_mb DISK_files_mb DISK_scratch_mb)
+math(EXPR DISK_write_max_mb "${DISK_write_mb} + ${DISK_write_groups_mb}")
+math(EXPR DISK_read_max_mb "${DISK_read_worst_mb} + ${DISK_write_groups_mb}")
+foreach(v IN ITEMS DISK_free_mb DISK_need_mb DISK_files_mb DISK_scratch_mb DISK_write_mb DISK_write_max_mb
+                   DISK_read_best_mb DISK_read_max_mb)
     disk_size(${v}_h ${${v}})
 endforeach()
 message(STATUS "egdb 6x6: ${BUILDER}, ${PIECES} pieces, ${DISK_materials} materials, metrics ${METRICS}, granularity ${GRANULARITY}")
@@ -130,6 +135,25 @@ message(STATUS "  memory: ${TOTAL_MB_h}, ${AVAILABLE_MB_h} available; budget ${M
 message(STATUS "  disk: ${DATA_DIR}")
 message(STATUS "    ${DISK_free_mb_h} free, ${DISK_KIND}")
 message(STATUS "    needs ${DISK_need_mb_h}: ${DISK_files_mb_h} of files (cumulative, permanent) and ${DISK_scratch_mb_h} of scratch (up to ${CORES} jobs writing side by side)")
+if(DISK_MBPS STREQUAL "")
+    if(DISK_rotational STREQUAL "1")
+        set(mbps 150)
+    else()
+        set(mbps 500)
+    endif()
+else()
+    set(mbps "${DISK_MBPS}")
+endif()
+math(EXPR io_lo_s "(${DISK_write_mb} + ${DISK_read_best_mb}) * 1048576 / (${mbps} * 1000000)")
+math(EXPR io_hi_s "(${DISK_write_max_mb} + ${DISK_read_max_mb}) * 1048576 / (${mbps} * 1000000)")
+message(STATUS "  I/O (synthesis 7.4): writes ${DISK_write_mb_h} (all sequential; up to ${DISK_write_max_mb_h} with group files), "
+               "reads ${DISK_read_best_mb_h} to ${DISK_read_max_mb_h}")
+message(STATUS "    at ${mbps} MB/s: ${io_lo_s} to ${io_hi_s} s of disk time, if every read is a sequential page-cache fill "
+               "(random reads past the page cache cost more, on an HDD far more)")
+if(NOT DISK_TBW STREQUAL "")
+    math(EXPR wear_ppm "${DISK_write_max_mb} * 1048576 / (${DISK_TBW} * 1000000)")
+    message(STATUS "    endurance: at most ${DISK_write_max_mb_h} written = ${wear_ppm} ppm of ${DISK_TBW} TBW")
+endif()
 if(DISK_need_mb GREATER DISK_free_mb)
     message(FATAL_ERROR "not enough disk: ${DISK_need_mb_h} needed, ${DISK_free_mb_h} free in ${DATA_DIR} "
                         "(choose another -DDATA_DIR, fewer -DMETRICS or -DPIECES)")
@@ -148,6 +172,10 @@ disk_free_mb: ${DISK_free_mb}
 disk_rotational: ${DISK_rotational}
 disk_need_mb: ${DISK_need_mb}
 disk_scratch_mb: ${DISK_scratch_mb}
+io_write_mb: ${DISK_write_mb}
+io_write_max_mb: ${DISK_write_max_mb}
+io_read_best_mb: ${DISK_read_best_mb}
+io_read_max_mb: ${DISK_read_max_mb}
 ")
 
 # ---------------------------------------------------------------- the engine

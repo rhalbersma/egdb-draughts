@@ -456,7 +456,8 @@ inside slices with men (2× by the mirror, at storage, as now); fold the kings-o
    index order, with no exception for writes that happen to be dense. Random writes go to RAM only, to avoid
    thrashing the SSD: every scattered write dirties a whole 4 KiB page (the drive writes 4096 bytes for one), pages
    may be flushed and rewritten repeatedly, the drive wears, and after an interruption nobody knows which scattered
-   writes reached the disk. A pass whose output is scattered therefore builds it in RAM and writes it out in order. In the passes of §8 the only scattered writes are the rounds'
+   writes reached the disk. A pass whose output is scattered therefore builds it in RAM and writes it out in order.
+   (This is the rule for SSDs; an HDD may take random writes, at a seek each, and an SSD within a write budget: §7.4.) In the passes of §8 the only scattered writes are the rounds'
    pushes into predecessors and next-frontier bits, into the slice's arrays in RAM. When a slice no longer fits in
    RAM (all-king slices on 10×10), the remedies are the 4× symmetry reduction of kings-only slices (§6), a smaller
    cell, or Wu-Liu-Hsu's batching: the round appends its updates as (target, value) pairs, sorts them by target
@@ -603,11 +604,12 @@ from a description of the machine and the sizes known before the build.
 |---|---|
 | cores | `par` within a group against more jobs side by side |
 | RAM, minus a reserve for the page cache of finished files | the job claims and the rung per group |
-| per storage tier (RAM, SSD, HDD, network): sequential bandwidth, random-read latency, whether scattered writes are allowed | where temporary files, lists and finished files go; whether random reads into finished files are cheap; which rungs are affordable |
+| per storage tier (RAM, SSD, HDD, network): sequential bandwidth, random-read and random-write latency, whether rotational, endurance (TB written) | where temporary files, lists and finished files go; whether random reads into finished files are cheap; which rungs are affordable (§7.4) |
 
-Scattered writes are allowed only in RAM (rule 6): on an SSD every one rewrites a 4 KiB page and wears the drive, on
+Scattered writes go to RAM by default (rule 6): on an SSD every one rewrites a 4 KiB page and wears the drive, on
 an HDD every one costs a seek. Random reads are cheap from RAM and the page cache, tolerable from an SSD, expensive
-from an HDD.
+from an HDD. §7.4 refines this per disk: an HDD may take random writes (a seek, no wear), an SSD within a write budget
+(its endurance), and the plan budgets the I/O as well as the space.
 
 **Known before the build**, from the slice sizes (`Meta.P`) and the DAG: positions per group and per material, the
 sizes of the finished files a material reads, the number of groups, and roughly the number of levels (bounded by the
@@ -687,6 +689,83 @@ intermediate files marked temporary.
 already computes sizes and critical-path priorities) that assigns each job its claim, priority and policy and each
 group its rung; engines that take those decisions as arguments and report, per pass, the measured time per position,
 lookups per position and cache misses, so the constants above are calibrated per machine rather than assumed.
+
+### 7.4 Disks: HDD and SSD, and the I/O a plan budgets
+
+As RAM per group drops, I/O rises, not smoothly but in steps that get steeper down the ladder of §7.2:
+
+| RAM per group | rung | I/O per build | cost |
+|---|---|---|---|
+| everything | 0 | read the inputs, write each file once, sequentially | the minimum |
+| depths out | 1 | the same, plus group-order files written once, sequentially, and read back by one gathering pass | small: +10–15 % CPU at 6×6 |
+| smaller groups | 2 | the same files; moves out of a group become lookups into finished files | small while those stay in the page cache |
+| 1 bit per position | 3 | every iteration streams the other bit planes and the depths: about a dozen plane streams per level | I/O ∝ levels × size, sequential |
+| less than 1 bit | 4 | RAM is a cache on the one randomly accessed plane; every miss goes to the disk | with RAM = r × the plane, about (1 − r) of the random accesses miss |
+| a fraction of that | 5 | the scattered updates appended, sorted, applied in one sequential pass (Wu–Liu–Hsu) | more volume, sequential again, plus the sort |
+
+Per level, `T_io ≈ S_seq / bandwidth + N_rand × (1 − r) × t_access`: S_seq the bytes streamed, N_rand the random
+accesses (about the frontier times the moves per position), r the cached fraction of the randomly accessed plane.
+Rung 3 makes the first term large, rung 4 the second. The early steps are nearly free (granularity and the depth sink
+lower RAM without touching the per-level I/O, the extra lookups going to read-only files the page cache serves well);
+the last ones are what took Thompson's and Gilbert's builds weeks to months.
+
+**The two kinds of disk differ in what is expensive:**
+
+| | random read | random write | sequential | wear |
+|---|---|---|---|---|
+| HDD | one seek, 5–10 ms (100–200 per second) | the same as a read | 100–250 MB/s | none |
+| SSD (SATA / NVMe) | 20–100 µs (50 k / 500 k+ per second) | fast, but at least a 4 KiB page rewritten per update: 32,768× amplification for one bit | 0.5 / 3–7 GB/s | rated in TB written (a consumer 1 TB drive about 600 TBW) |
+
+So rule 6 ("random writes only in RAM") is the rule for SSDs, where the limit is endurance, and a default rather than
+a law: an HDD may take random writes (they cost a seek, not wear), and an SSD may take them within a write budget.
+Per disk, the lowest rung:
+
+* **SSD, no random writes**: rung 3. In each pass only one plane is written randomly (the scatter's target: W from the
+  unmoves of B, the candidates from W; Thompson 1996's "exactly one random-access stream per pass"), so only that
+  plane needs RAM, flushed sequentially after the pass; verification writes its own bits in source order, merges are
+  sequential, depths are appended as frontier lists (§7.1), and delayed masking turns the scatter's filter into a
+  sequential AND. With the finest granularity the floor is **1 bit per position of the largest configuration of men
+  with all its king placements**, kings-only materials divided by their 4-fold symmetry: 8×8 checkers to 10 pieces,
+  485 MiB (the all-kings 5v5 ÷ 4), 303 MiB for the largest configuration with men (`src/egdb_layout.py`). Below that
+  without random writes: pull passes (W_{n+1} = "has a move into B_n", a full sweep in index order writing its own
+  bits, reading B_n randomly, syzygy's `scan` mode) or sorted batches.
+* **SSD with a write budget**: rung 4 with a write-back cache that coalesces a page's updates before writing it. The
+  writes are about the misses on the written plane × 4 KiB; 600 TBW is about 1.5 × 10^11 page writes, ample for a
+  coalescing cache, not for a small one under a large build.
+* **HDD**: rung 4 is allowed, but every miss costs a seek, so it pays only while misses are rare; below the floor the
+  better way is rung 5, whose logs, sorts and merges an HDD streams at full speed.
+
+**Thompson's machines, replayed** (his own table: 1985, 1 MIPS, 16 MB, 500 MB disk, 1 MB/s; 1996, 150 MIPS, 250 MB,
+50 GB, 10 MB/s):
+
+| | 1986: 5 pieces, pawnless (KQKBB) | 1996: 6 pieces, pawnless (KRBKBN) |
+|---|---|---|
+| index, one bitmap | 462 × 64^3 = 121 M slots (87 % legal), 15.1 MB | 462 × 64^4 = 7,751 M slots (80 % legal), 969 MB |
+| RAM | 16 MB, of which 1 MB per processor as cache (about 4 MB) | 250 MB = 0.26 bitmaps |
+| working files | W, B, W_i, B_i, J and the result bytes: 197 MB, 39 % of the disk | B, W, X, BTM, WTM and RES: 12.6 GB, 25 % of the disk |
+| rung | 4: RAM a cache on the one random stream | 4 |
+| sequential I/O per iteration | at least 424 MB, 7 min | at least 27 GB, 45 min |
+| bound for the build | 71 iterations: 0.3 days | 70 iterations: 2.2 days |
+| reported | 2–3 weeks per endgame | wave 6 about 3 months |
+
+Both ran with RAM about a quarter of one bitmap, on disks with ~10 ms seeks, and both took 40–70× their sequential
+bound: the random stream's misses, three in four, dominated ("CPU gained 150× but I/O only 10×"). Even the 1-bit
+floor did not fit, so his design (bitmaps on disk, RAM caching the single random stream) was the only one possible;
+`thompson86` at rung 1 would have needed 3.3 GB in 1986 and 212 GB in 1996.
+
+**What the plan budgets.** Not only disk space (cumulative files plus the scratch of the jobs side by side) but the
+I/O: the configure step of `databases/` reports, for rungs 0–2,
+
+* writes: every file once, sequentially; up to the group-order files on top, at rung 1, written once and read back;
+* reads: each build's inputs through memory maps, at best each input once (the page cache keeping it for every build
+  that reads it), at worst once per build that reads it; the checks read every file once;
+* the disk time at the disk's sequential speed (`DISK_MBPS`, by default 150 MB/s for an HDD, 500 MB/s otherwise), and
+  for an SSD the writes against its endurance (`DISK_TBW`).
+
+`syzygy` to 6 pieces, all three metrics: 404 MB written (1.1 GB with group files), 590 MB to 1.5 GB read, 6 to 17 s of
+disk time at 150 MB/s, 1 ppm of a 600 TBW drive. At the lower rungs the plan adds the per-level streams of rung 3 and
+the random accesses of rung 4 (frontier × moves × (1 − r) × t_access): a build whose plan shows those terms dominant is
+one to move to an SSD, to a finer granularity, or to sorted batches.
 
 ## 8. Best of breed for draughts
 

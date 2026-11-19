@@ -55,9 +55,9 @@ order; a capture of a side's last piece ends the game and needs no file.
 
 **Granularity** (`granularity=material|tempi|configuration`, shared with `syzygy`, synthesis §1.1): how finely a
 material class is cut into groups: the whole material class, one (White tempo, Black tempo) cell (a colour's tempo is
-its men's distance to promotion, summed), or one configuration of the men. The style sets the default (1986:
-`configuration`, 1996: `material`); any granularity works with either style's passes, and below `material` every man
-move is an exit into an earlier group. `tempi` gives the smallest largest group: rung 0 at most 49 MB at 6 pieces
+its men's distance to promotion, summed), or one configuration of the men. The default is `material` for both styles, the nearest to Thompson's runs (below);
+any granularity works with either style's passes, and below `material` every man move is an exit into an earlier
+group. `tempi` gives the smallest largest group: rung 0 at most 49 MB at 6 pieces
 (1996 style, 4,897 groups), against 95 MB at `material` (155) or `configuration` (830,793). `thompson86 tempi n`
 prints every material class's tempi cells with their configurations and positions.
 
@@ -76,13 +76,11 @@ of 1.43 times. The styles below are Thompson's passes; the granularities are our
 
 | | 1986 (`style=86`) | 1996 (`style=96`) |
 |---|---|---|
-| group solved together (default granularity) | one configuration of the men (a slice of `egdb_6x6`), in order of total tempo | the whole material class (for dtz one total tempo at a time, since a man move ends the count there) |
-| Thompson's own | a run: the material and all its subsets, dtm in one pass | a run, dtc in waves by number of pieces |
-| moves inside the group | king moves without capture | king moves and man moves without capture or promotion (dtz: king moves only) |
-| unmoves in the rounds | king unmoves | king unmoves and man unmoves |
+| Thompson's group | a run: the material and all its subsets, dtm in one pass | a run, dtc in waves by number of pieces |
+| our group (default) | the material class: king and man moves inside, king and man unmoves in the rounds (dtz: one total tempo at a time, king moves only) | the same |
 | passes | each pass tests its target at once | masked late, as in Thompson's I/O-enhanced algorithm: P2 writes a superset, P3 and P4 mask it with `~won`, `~lost` |
 
-In both, every move that leaves a group (captures, promotions, and in the 1986 style man moves) is looked up forward
+In both, every move that leaves a group (captures, promotions, and below `material` man moves) is looked up forward
 in pass 0, in a finished group or material file: **no uncaptures anywhere**. A position without moves inside its group is
 decided there (captures are compulsory); the others keep their exit results as seeds at their depth. The rounds run
 by ply level d: W_d from the unmoves of B_{d−1} plus exits that win in d plies; B_d from the unmoves of W_{d−1},
@@ -98,9 +96,9 @@ maps. The depth bytes of the material being built go to a **depth sink** (`sink=
 | `array` | the whole material's | read from the array | |
 | both | | | each of the four files written once, sequentially, in index order, gathering every slot's byte (from the group-order files: un-rank the slot, find its group, read) |
 
-A file per group would need two memory maps per group, and the 1986 style has tens of thousands of groups (one per
-configuration) in the largest materials: more than the kernel's limit of 65,530 maps per process. At 6 pieces both sinks give
-byte-identical files; `groups` costs 10–15 % more CPU (dtm 38.1 s against 33.8 s, 1986 style) for the group lookups
+A file per group would need two memory maps per group, and `granularity=configuration` has tens of thousands of groups
+in the largest materials: more than the kernel's limit of 65,530 maps per process. At 6 pieces both sinks give
+byte-identical files; `groups` costs 10–15 % more CPU (dtm 38.1 s against 33.8 s, 1986 style, configurations) for the group lookups
 and the gathering pass, and the largest material (03-03-01-01, 5.27 M slots per side) peaks at 19.3 MB instead of
 24.9 MB of RSS (13.2 MB of it the program's own tables). This is rung 1 of the memory ladder in
 [`literature/egdb_primitives.md`](../literature/egdb_primitives.md) §7.2.
@@ -113,7 +111,7 @@ rung-0 need, or the whole budget if that does not fit (`resources: mem_mb`), wit
 budget is `--resources mem_mb=N` (else `config mem_mb`, else 75 % of physical memory). With `sink=auto` (the default)
 the engine takes the array if rung 0 fits its claim, else the group files, and says so in its log, with its peak RSS.
 At 6 pieces with a 60 MB budget: 1996 style dtm, 149 materials on the array, 6 on group files, 5 over the budget
-even at rung 1; 1986 style, 3 all-men materials over the budget, because there the metadata of their ~100,000
+even at rung 1; at `granularity=configuration`, 3 all-men materials over the budget, because there the metadata of their ~100,000
 one-position configurations dominates, not the depth bytes, so rung 1 cannot help. Files byte-identical to the unbudgeted
 builds; no build's peak above its estimate.
 
@@ -122,10 +120,10 @@ or parallel (`policy=seq|par`, the last argument of `build`). Pass 0 gives each 
 every bit plane and its own seed lists, merged afterwards; the pushes (P2, P3) and the seeds set bits with an atomic
 OR; verification (P4) and the commit iterate whole words of the planes they write; the sink is written at distinct
 positions. A build opens every file it can read before the passes, so the parallel passes only read the shared maps.
-Both policies give byte-identical files (4 pieces: both styles, both sinks, all metrics; 6 pieces: 1986 style).
+Both policies give byte-identical files (4 pieces: both styles, both sinks, all metrics; 6 pieces: 1986 style, configurations).
 
 Where `par` pays depends on the group: a 1996-style dtm material is one group, and one build at a time takes 21.1 s
-with `par` against 43.0 s with `seq` on 4 cores. A 1986-style group is a single configuration, mostly smaller than one block,
+with `par` against 43.0 s with `seq` on 4 cores. A configuration group is mostly smaller than one block,
 so `par` has nothing to split and only adds the thread pool's overhead (41.8 s against 38 s of `seq` CPU); there the
 parallelism is across materials, four `seq` builds at a time in Snakemake (12.6 s wall for dtm), or with `granularity=tempi`
 across the larger groups of a tempi cell.
@@ -151,6 +149,8 @@ win and every Black loss, and that the bit files of the three metrics are identi
 155 materials, 97,762,498 positions (both sides to move) in 2 × 97,780,705 slots (one byte each, 97.8 MB per file
 type per metric), 20,482,891 White-to-move wins and 11,884,425 Black-to-move losses.
 
+Measured with the 1986 style at `granularity=configuration` (then its default) and the 1996 style at `material`:
+
 | style | metric | wall time, builds | CPU summed | longest win (`dtm-W`) | longest loss (`dtm-L`) |
 |---|---|---|---|---|---|
 | 1986 | dtm | 10.0 s | 34.3 s | 69 plies (04-02-04-00) | 68 plies (04-02-03-00) |
@@ -159,6 +159,16 @@ type per metric), 20,482,891 White-to-move wins and 11,884,425 Black-to-move los
 | 1996 | dtm | 10.4 s | 35.2 s | 69 plies | 68 plies |
 | 1996 | dtc | 9.4 s | 31.6 s | 43 plies | 42 plies |
 | 1996 | dtz | 10.6 s | 34.7 s | 27 plies | 28 plies |
+
+**Granularity costs little.** Timed back to back (array sink, 4 Snakemake jobs, including Snakemake and the plan at
+parse time), every combination byte-identical:
+
+| style | granularity | dtm: wall, CPU | dtc: wall, CPU | dtz: wall, CPU |
+|---|---|---|---|---|
+| 1986 | `material` (default) | 12.9 s, 45.6 s | 11.7 s, 41.8 s | 10.6 s, 38.5 s |
+| 1986 | `configuration` | 12.2 s, 43.0 s | 11.2 s, 39.6 s | 10.7 s, 38.3 s |
+| 1996 | `material` (default) | 12.6 s, 45.3 s | 11.2 s, 40.7 s | 10.6 s, 38.0 s |
+| 1996 | `configuration` | 12.7 s, 44.4 s | 10.6 s, 37.9 s | 10.8 s, 38.3 s |
 
 * **checks**: dtm equals `egdb_6x6`'s DTM in every position, both sides to move; dtc and dtz have `egdb_6x6`'s wins
   and losses; for all three metrics every `dtm-W` value equals its recomputation by one ply over `dtm-L`, and every `dtm-L`
@@ -174,7 +184,7 @@ type per metric), 20,482,891 White-to-move wins and 11,884,425 Black-to-move los
 * 3 and 4 pieces check out the same way.
 
 **Storing `dtm-L` costs a second file and saves a third of the CPU.** With only `dtm-W`, every White move out of a group
-(captures, promotions and, in the 1986 style, man moves) was looked up by one ply of Black moves over `dtm-W`; with `dtm-L`
+(captures, promotions and, in the 1986 style at configurations, man moves) was looked up by one ply of Black moves over `dtm-W`; with `dtm-L`
 it is one read. The 1986 dtm build went from 51.1 s to 34.3 s of CPU, 14.3 s to 10.0 s wall. That ply of search was
 also what the 1996 waves saved by keeping man moves inside the rounds: with `dtm-L` the two styles cost the same, within
 the noise of the timings.
@@ -203,7 +213,7 @@ no measurable difference.
 | | positions computed | CPU | per position | wall time | stored |
 |---|---|---|---|---|---|
 | `egdb_6x6 build 6` | 51,237,726 (one of each mirror pair, both sides to move) | 22.6 s | 0.44 µs | 6.6 s (4 threads) | DTM for both sides to move, 51 MB |
-| `thompson86`, 6 pieces, dtm, 1986 style | 97,762,498 | 34.3 s | 0.35 µs | 10.0 s (4 Snakemake jobs) | DTM for White to move (`dtm-W`) and Black to move (`dtm-L`), 2 × 98 MB of slots |
+| `thompson86`, 6 pieces, dtm, 1986 style, configurations | 97,762,498 | 34.3 s | 0.35 µs | 10.0 s (4 Snakemake jobs) | DTM for White to move (`dtm-W`) and Black to move (`dtm-L`), 2 × 98 MB of slots |
 
 Per position the Thompson build is now cheaper (no ply of search for lookups); it is about 1.5× slower in total
 because of **one-sidedness**: a material only finds White's wins and Black's losses, so Black's wins and White's

@@ -56,8 +56,8 @@
 //                                                               build one material (its captures and promotions must exist);
 //                                                               the depth sink: per-group files (default) or the array;
 //                                                               every pass a std::for_each, seq (default) or par;
-//                                                               the granularity of the groups (default: configuration
-//                                                               for 86, material for 96);
+//                                                               the granularity of the groups (default material, as
+//                                                               Thompson's runs: a material with its subsets);
 //                                                               auto: the array if rung 0 fits the claim mem=MB, else
 //                                                               the group files
 //        thompson86 tempi n                                     per material class with at most n pieces, its (White
@@ -589,7 +589,7 @@ int main(int argc, char* argv[])
         }
         if ((a.size() == 4 || a.size() == 5) && a[0] == "plan" && parse_metric(a[2]) && (a[3] == "86" || a[3] == "96")) {
                 g_waves = a[3] == "96";
-                g_granularity = g_waves ? Granularity::material : Granularity::configuration;     // the style's default
+                g_granularity = Granularity::material;                  // the default, for both styles
                 if (a.size() == 5 && !parse_granularity(a[4])) { std::cerr << "granularity: material, tempi or configuration" << std::endl; return 2; }
                 print_plan_header();
                 for (Material const c : materials_up_to(std::stoi(a[1]))) print_plan_row(c, memory_need(c));
@@ -597,7 +597,7 @@ int main(int argc, char* argv[])
         }
         if (a.size() >= 8 && a.size() <= 12 && a[0] == "build" && parse_metric(a[6]) && (a[7] == "86" || a[7] == "96")) {
                 g_waves = a[7] == "96";
-                g_granularity = g_waves ? Granularity::material : Granularity::configuration;     // the style's default
+                g_granularity = Granularity::material;                  // the default, for both styles
                 for (std::size_t i = 8; i < a.size(); ++i) {
                         if (a[i] == "groups" || a[i] == "array") { g_group_files = a[i] == "groups"; g_sink_auto = false; }
                         else if (a[i] == "auto") g_sink_auto = true;

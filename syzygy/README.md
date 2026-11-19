@@ -160,7 +160,7 @@ with `par` takes 13–16 s wall: the small materials do not keep four threads bu
 | | positions | CPU | per position | wall time |
 |---|---|---|---|---|
 | `egdb_6x6 build 6` (two-sided, slices, leapfrog) | 51,237,726 | 22.6 s | 0.44 µs | 6.6 s |
-| `thompson86` (one-sided, bit planes, 1986 style) | 97,762,498 | 34.3 s | 0.35 µs | 10.0 s |
+| `thompson86` (one-sided, bit planes, 1986 style, configurations) | 97,762,498 | 34.3 s | 0.35 µs | 10.0 s |
 | `syzygy`, frontier (two-sided, bit planes) | 53,366,312 | 36.4 s | 0.68 µs | 11.8 s |
 | `syzygy`, scan (two-sided, full scans) | 53,366,312 | 53.1 s | 1.00 µs | 18.0 s |
 

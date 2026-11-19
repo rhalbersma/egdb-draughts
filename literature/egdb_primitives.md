@@ -106,9 +106,9 @@ builders):
 | granularity | a group is | moves inside | default for |
 |---|---|---|---|
 | (run) | a material class and all its subsets (Thompson 1986, 1996; not offered) | king and man moves, captures as uncaptures | |
-| `material` | the whole material class (dtz: one total tempo at a time, since a man move ends the count) | king and man moves | `syzygy`, `thompson86` 1996 style |
+| `material` | the whole material class (dtz: one total tempo at a time, since a man move ends the count) | king and man moves | `syzygy`, `thompson86` (both styles) |
 | `tempi` | one (White tempo, Black tempo) cell | king moves | |
-| `configuration` | one configuration of the men | king moves | `thompson86` 1986 style, `egdb_6x6` |
+| `configuration` | one configuration of the men | king moves | `egdb_6x6` |
 
 Above `material` there is one coarser granularity, which we do not offer: Thompson's **run**, a material class with all
 its subsets in one index (1986: a captured piece on the White king's square; 1996: a GONE piece), captures inside as
@@ -153,7 +153,7 @@ subdivisions, a man's advance between slices), which is what makes every scheme 
 
 **Our jobs are material classes**: Snakemake runs them in parallel when none needs another, in the order of the DAG.
 They are not smaller because the groups of a material class depend on each other densely and most are tiny
-(a 1986-style material class can have tens of thousands of configuration groups): a job per group would be far too
+(at `granularity=configuration` a material class can have tens of thousands of groups): a job per group would be far too
 fine-grained, and every job would open the same files again. The memory ladder (§7.2) follows the same split: the
 job's memory claim is per material class, the rung is chosen per group inside it.
 
@@ -549,7 +549,7 @@ position in RAM** for that group. Taking the rungs in order as a group outgrows 
 |---|---|---|---|---|
 | 0 | everything (depth bytes, bit planes, seeds) | finished files only | exact | `thompson86`, `syzygy`, `egdb_6x6` today |
 | 1 | bit planes (cumulative W/B, frontier, candidates): a few bits | depth as appended frontier lists, one merge at the end | exact | §7.1 |
-| 2 | the same, for a smaller group: wave → slice (cheap once the half results are stored, since a move out is one read) | | exact | `thompson86` 1986 style, `egdb_6x6` |
+| 2 | the same, for a smaller group: wave → slice (cheap once the half results are stored, since a move out is one read) | | exact | `thompson86`, `syzygy` (`granularity=tempi\|configuration`), `egdb_6x6` |
 | 3 | 1 bit: the cumulative win bit; candidates and losses streamed | the byte database, merged per level (Wu–Beal), or the W/L/D/U state streamed (Lincke) | exact (Wu–Beal) or WDL (Lincke) | Wu–Beal, Lincke |
 | 4 | a cached fraction of 1 bit, dual-indexed for locality | as rung 3 | as rung 3 | Lincke |
 | 5 | sort runs only | everything; scatters as sorted batches | exact | Wu–Liu–Hsu |

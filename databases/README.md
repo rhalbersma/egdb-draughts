@@ -64,3 +64,27 @@ finds every file up to date and does nothing.
 
 The engine's header-only dependencies (xstd-bits, xstd-ints, xstd-misc) are fetched from GitHub; to use local
 checkouts, pass `-DFETCHCONTENT_SOURCE_DIR_XSTD-BITS=<path>` and likewise for the other two.
+
+## What a RAM budget does to the DAG
+
+`src/egdb_layout.py` answers "with this much RAM per group, what do the groups and their DAG look like?", for any
+board (6×6, 8×8, 10×10) and without building anything:
+
+```bash
+python3 src/egdb_layout.py --board 8x8 --pieces 10 --exact --ram 900MB --cost gilbert2005 --materials
+```
+
+Per material it takes the coarsest granularity that fits, refined only where needed: the whole material; else its tempi
+cells, packed with the other cells of the same total tempo up to the budget (they are independent); a cell that still
+does not fit becomes packs of its configurations. It reports the groups per granularity, what does not fit, the floor
+(1 bit per position of the largest configuration of men with its king placements; kings-only materials by their
+4-fold symmetry), and the DAG: levels (the critical path in groups) and width (groups that could run side by side).
+
+Ed Gilbert's 2005 build of the 10-piece English checkers database (2 GB machines, a 900 MB threshold per subdivision,
+2 bits per position) for comparison:
+
+| exactly 10 pieces, 2 bits per position | Gilbert 2005 | `egdb_layout.py --ram 900MB` |
+|---|---|---|
+| groups | 64,369 subdivisions (three leading-rank tiers) | 16,506 (packed tempi cells and configurations) |
+| buildable at once | "about 50 at a time on average, above 100 in the middle months" | mean 49, max 274 |
+| all-kings 5v5 | "almost 4 GB of buffer", halved by one diagonal to fit 2 GB | 16.3 G positions, 3.8 GiB; ÷2 1.9 GiB, ÷4 969 MiB |

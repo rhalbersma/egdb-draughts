@@ -23,8 +23,9 @@ cmake --build build/syzygy-6 --target dtm
 | `--target dtm` (or `dtc`, `dtz`) | one metric |
 | `--target plan` | Snakemake's dry run: the memory plan and the jobs that would run |
 | `--target machine` | prints `machine.yaml` |
-| `--target calibrate` | the engine's bench on this machine: per material, the time of a move generation, the moves per position, the shares of captures and promotions (`calibration.tsv`) |
-| `--target estimate` | space, I/O and time of the configured build on this machine, from the bench, the RAM, the cores and the disk (`src/egdb_layout.py`) |
+| `--target calibrate` | an instrumented build of every metric to `CALIBRATE_PIECES` (default `PIECES` − 1), as a profile-guided build: per material its positions, levels, frontier and seconds per pass, collected into `calibration.tsv` |
+| `--target estimate` | space, I/O and time of the configured build on this machine, extrapolated from the calibration, with the RAM, the cores and the disk (`src/egdb_layout.py`) |
+| `--target bench` | the quick alternative: the rules' move generation, branching, captures and promotions |
 
 **Options** (`-D<name>=<value>`):
 
@@ -155,3 +156,11 @@ machine:
 | thompson86, three metrics, 4 cores | 24 s | 14 s (a prediction: the unmoves still assume flying kings) |
 
 `cmake --build <build> --target estimate` runs the bench and the estimate for the configured build.
+
+**Every build is a calibration run.** As a profile-guided build, both engines measure themselves (a few popcounts per
+round and timers around the passes) and end each material's log with a `stats` line: positions, groups, levels,
+frontier positions summed over the rounds, seconds in pass 0, the rounds and the write. `src/egdb_calibrate.py`
+collects a build's lines; `egdb_layout.py --calibration` fits per metric the cost per position and the levels against
+the pieces, extrapolates them geometrically (cost) and linearly (levels) from the last two, and schedules each material
+at its own cost. Calibrated on the build to 5 pieces, thompson86 dtm, predicted for the 6-piece materials against the
+build to 6 pieces: 0.40 against 0.419 µs per position and side, 75 against 70 levels, about 36 against 40.5 s of CPU.

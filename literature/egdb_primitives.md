@@ -799,6 +799,15 @@ generation with 4.07 moves (24.5 % captures, 5.3 % promotions), English checkers
 flying kings, long captures and men capturing backwards make the first nearly twice as dear. Larger boards cost more
 per position again (longer rays, more pieces to scan), so a build on another board needs a bench of an engine for it.
 
+**Better still, every build is a calibration run**, as a profile-guided build: both engines time their passes and
+count their levels and frontiers (a few popcounts per round), one `stats` line per material, and the plan extrapolates
+from a small build of the same rules, engine and machine (fewer pieces) to the large one: the cost per position
+geometrically, the levels linearly, from the last two piece counts. Calibrated on thompson86's build to 5 pieces, the
+6-piece materials come out at 0.40 µs per position and side (measured 0.419), 75 levels (70) and about 36 s of CPU
+(40.5 s); syzygy's three metrics on 4 cores at 32 s, as measured (36.4 + 33.3 + 28.0 s of CPU). Gilbert's "average
+build speed per CPU, 197,529 positions/sec" (5.06 µs per position on 2.4–2.5 GHz cores) is this kind of number:
+whole-build throughput, his 16.5 T positions over 2.65 CPU-years, his passes, caching and I/O included.
+
 **What the plan budgets.** Not only disk space (cumulative files plus the scratch of the jobs side by side) but the
 I/O: the configure step of `databases/` reports, for rungs 0–2,
 

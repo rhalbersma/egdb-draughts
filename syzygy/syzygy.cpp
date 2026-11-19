@@ -260,6 +260,7 @@ void solve_group(Group const& g, DepthSink<std::uint16_t>& sink)
         std::uint64_t const nblocks = (T + 4095) / 4096;
         std::vector<std::vector<Entry>> won_b(nblocks), lost_b(nblocks), ewin_b(nblocks), eloss_b(nblocks);
         Plane openp(T), lossable(T), exits_done(T);
+        auto const t0 = std::chrono::steady_clock::now();
         for_blocks(T, [&](std::uint64_t lo, std::uint64_t hi) {
                 std::uint64_t const blk = lo / 4096;
                 for (std::uint64_t id = lo; id < hi; ++id) {
@@ -293,6 +294,8 @@ void solve_group(Group const& g, DepthSink<std::uint16_t>& sink)
         for (auto const* parts : { &won_b, &lost_b, &ewin_b, &eloss_b })
                 for (auto const& v_ : *parts)
                         for (auto const& e : v_) max_seed = std::max(max_seed, int(e.level));
+        g_stats.pass0 += seconds_since(t0);
+        auto const t1 = std::chrono::steady_clock::now();
         using List = std::vector<std::uint32_t>;
         auto const by_level = [&](std::vector<std::vector<Entry>>& parts) {    // in block order within a level
                 std::vector<List> out(std::size_t(max_seed) + 1);
@@ -350,7 +353,10 @@ void solve_group(Group const& g, DepthSink<std::uint16_t>& sink)
                                                 predecessors(q, [&](std::uint64_t id) { note(mark_win(id, n)); });
                         });
                         for_list(at(ewin_at, n), [&](std::uint64_t id) { note(mark_win(id, n)); });
-                        if (!found && n > max_seed) break;      // positions decided at max_seed are a frontier in max_seed + 1
+                        if (!found && n > max_seed) {   // positions decided at max_seed are a frontier in max_seed + 1
+                                g_stats.levels = std::max(g_stats.levels, std::uint64_t(n));
+                                break;
+                        }
                 }
                 for_blocks(T, [&](std::uint64_t lo, std::uint64_t hi) {         // hand the values to the sink
                         for (std::uint64_t id = lo; id < hi; ++id)
@@ -396,10 +402,14 @@ void solve_group(Group const& g, DepthSink<std::uint16_t>& sink)
                         std::swap(lost_prev, lost_new);
                         won_new.clear();
                         lost_new.clear();
-                        if (won_prev.empty() && lost_prev.empty() && n > max_seed) break;
+                        g_stats.frontier += won_prev.count() + lost_prev.count();
+                        if (won_prev.empty() && lost_prev.empty() && n > max_seed) {
+                                g_stats.levels = std::max(g_stats.levels, std::uint64_t(n));
+                                break;
+                        }
                 }
         }
-
+        g_stats.rounds += seconds_since(t1);
 }
 
 // ---------------------------------------------------------------- one material
@@ -468,6 +478,7 @@ bool build_material(std::string const& dir, Material c)
         if (g_group_files) sink = std::make_unique<GroupSink<std::uint16_t>>(dir, c, mi, groups);
         else sink = std::make_unique<ArraySink<std::uint16_t>>(mi);
         g_sink = sink.get();
+        g_stats = {};
         auto const t0 = std::chrono::steady_clock::now();
         std::uint64_t positions = 0;
         for (std::size_t k = 0; k < groups.size(); ++k) {
@@ -481,6 +492,7 @@ bool build_material(std::string const& dir, Material c)
         // slot, as unsigned bytes and wdl bits
         std::uint64_t wins[2]{}, losses[2]{};
         int longest = 0;
+        auto const tw = std::chrono::steady_clock::now();
         constexpr std::uint64_t chunk = std::uint64_t(1) << 20;         // slots per write, a multiple of 4
         for (int side : { 0, 1 }) {
                 std::string const pb = mat_path(dir, c, BYTES + side), pw = mat_path(dir, c, WDL + side);
@@ -511,11 +523,13 @@ bool build_material(std::string const& dir, Material c)
         }
         g_sink = nullptr;
         g_frozen = false;
+        g_stats.write = seconds_since(tw);
         double const sec = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
         std::cout << "material " << c.name() << " " << metric_name() << (g_group_files ? " group files" : " array") << ": "
                   << groups.size() << " groups, " << positions << " positions, " << mi.size << " slots, wins " << wins[0] << " / "
                   << wins[1] << ", losses " << losses[0] << " / " << losses[1] << " (White / Black to move), longest " << longest
                   << " plies, peak RSS " << peak_rss_mb() << " MB, " << sec << " s" << std::endl;
+        print_stats(c, positions, groups.size(), sec);
         return true;
 }
 

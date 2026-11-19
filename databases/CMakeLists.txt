@@ -244,12 +244,28 @@ endforeach()
 add_custom_target(plan ${dry} DEPENDS ${BUILDER} USES_TERMINAL COMMENT "what would run")
 add_custom_target(machine COMMAND ${CMAKE_COMMAND} -E cat "${CMAKE_BINARY_DIR}/machine.yaml" USES_TERMINAL)
 
-# what the rules cost on this machine (the engine's bench: move generation, branching, captures and promotions), and
-# from it, the RAM, the cores and the disk, the estimate of space, I/O and time (src/egdb_layout.py, synthesis 7.4)
+# calibration, as a profile-guided build: the same build to fewer pieces (CALIBRATE_PIECES), instrumented (every build
+# prints per material its positions, levels, frontier and seconds per pass), collected into calibration.tsv; the
+# estimate extrapolates from it to PIECES, with the RAM, the cores and the disk (src/egdb_layout.py, synthesis 7.4).
+# The bench (move generation, branching, captures and promotions of the rules) is the quick alternative.
+math(EXPR default_cal "${PIECES} - 1")
+if(default_cal LESS 3)
+    set(default_cal 3)
+endif()
+set(CALIBRATE_PIECES "${default_cal}" CACHE STRING "the pieces of the instrumented calibration build (default PIECES - 1)")
+set(cal_dir "${CMAKE_BINARY_DIR}/calibration")
+set(cal_builds)
+foreach(metric IN LISTS METRICS)
+    list(APPEND cal_builds COMMAND ${SNAKEMAKE} --config metric=${metric} pieces=${CALIBRATE_PIECES} dir=${cal_dir}
+                                   --omit-from check --quiet rules)
+endforeach()
 add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/calibration.tsv"
-    COMMAND ${BUILDER} bench ${PIECES} > "${CMAKE_BINARY_DIR}/calibration.tsv"
-    DEPENDS ${BUILDER} COMMENT "bench: move generation, branching, captures, promotions" VERBATIM)
+    ${cal_builds}
+    COMMAND "${Python3_EXECUTABLE}" -I "${REPO}/src/egdb_calibrate.py" "${cal_dir}" > "${CMAKE_BINARY_DIR}/calibration.tsv"
+    DEPENDS ${BUILDER} USES_TERMINAL COMMENT "instrumented build to ${CALIBRATE_PIECES} pieces" VERBATIM)
 add_custom_target(calibrate DEPENDS "${CMAKE_BINARY_DIR}/calibration.tsv")
+add_custom_target(bench COMMAND ${BUILDER} bench ${PIECES} DEPENDS ${BUILDER} USES_TERMINAL
+    COMMENT "bench: move generation, branching, captures, promotions" VERBATIM)
 list(LENGTH METRICS n_metrics)
 add_custom_target(estimate
     COMMAND "${Python3_EXECUTABLE}" -I "${REPO}/src/egdb_layout.py" --board 6x6 --pieces ${PIECES} --builder ${BUILDER}

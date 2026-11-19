@@ -12,6 +12,7 @@
 #pragma once
 
 #include <algorithm>
+#include <bit>
 #include <chrono>
 #include <array>
 #include <atomic>
@@ -234,6 +235,7 @@ struct Plane {
                 });
         }
         void clear() { std::ranges::fill(w, 0); }
+        std::uint64_t count() const { std::uint64_t n = 0; for (auto x : w) n += std::uint64_t(std::popcount(x)); return n; }
         bool empty() const { return std::ranges::all_of(w, [](std::uint64_t x) { return x == 0; }); }
         void mask(Plane const& keep, bool complement)   // this &= keep (or ~keep): one sequential pass
         {
@@ -600,6 +602,30 @@ std::vector<Material> materials_up_to(int n)
 }
 
 } // namespace
+
+// ---------------------------------------------------------------- instrumentation: every build is a calibration run
+//
+// As a profile-guided build, every build measures itself, at the cost of a few popcounts per round: per material its
+// positions, groups, levels (the most rounds of a group), the frontier positions summed over the rounds, and the time
+// in pass 0, in the rounds and in writing the files. One line per material ("stats", tab-separated) in the build's log;
+// src/egdb_calibrate.py collects the lines of a small build, src/egdb_layout.py --calibration extrapolates from them.
+struct BuildStats {
+        std::uint64_t frontier = 0, levels = 0;
+        double pass0 = 0, rounds = 0, write = 0;
+};
+inline BuildStats g_stats;
+
+inline double seconds_since(std::chrono::steady_clock::time_point t0)
+{
+        return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+}
+
+inline void print_stats(Material c, std::uint64_t positions, std::size_t groups, double total)
+{
+        std::cout << "stats\t" << metric_name() << '\t' << c.name() << '\t' << c.pieces() << '\t' << positions << '\t' << groups
+                  << '\t' << g_stats.levels << '\t' << g_stats.frontier << '\t' << g_stats.pass0 << '\t' << g_stats.rounds << '\t'
+                  << g_stats.write << '\t' << total << std::endl;
+}
 
 // ---------------------------------------------------------------- bench: what the rules cost per position (synthesis 7.4)
 //

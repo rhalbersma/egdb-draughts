@@ -91,6 +91,55 @@ def read_bench(path):
     raise SystemExit(f'{path}: no "all" line (the output of <engine> bench n)')
 
 
+class Profile:
+    """an instrumented build (src/egdb_calibrate.py): per metric, the cost per position and side to move and the levels
+    by number of pieces, measured up to the build's pieces and extrapolated beyond them geometrically from the last two"""
+
+    def __init__(self, path):
+        self.cost, self.levels = {}, {}
+        rows = []
+        with open(path) as f:
+            for line in f:
+                if line.startswith('#') or not line.strip():
+                    continue
+                x = line.rstrip('\n').split('\t')
+                rows.append((x[0], int(x[2]), int(x[3]), int(x[5]), float(x[10])))
+        for metric in {r[0] for r in rows}:
+            sec, pos, lev = defaultdict(float), defaultdict(int), defaultdict(int)
+            for m, n, p, l, t in rows:
+                if m == metric and n >= 3:
+                    sec[n] += t
+                    pos[n] += p
+                    lev[n] = max(lev[n], l)
+            self.cost[metric] = {n: sec[n] / pos[n] for n in sec if pos[n]}
+            self.levels[metric] = dict(lev)
+        self.measured = max(max(c) for c in self.cost.values())
+
+    def _extrapolate(self, table, n, geometric):
+        if n in table:
+            return table[n]
+        ks = sorted(table)
+        if len(ks) < 2:
+            return table[ks[-1]]
+        a, b = ks[-2], ks[-1]
+        if geometric:
+            return table[b] * (table[b] / table[a]) ** ((n - b) / (b - a))
+        return table[b] + (table[b] - table[a]) * (n - b) / (b - a)
+
+    def us(self, metric, n):                                   # microseconds per position and side to move
+        return 1e6 * self._extrapolate(self.cost[metric], n, True)
+
+    def level(self, metric, n):
+        return self._extrapolate(self.levels[metric], n, False)
+
+
+def read_calibration(path):
+    """a bench (`<engine> bench n`) or an instrumented build (src/egdb_calibrate.py)"""
+    with open(path) as f:
+        head = f.readline()
+    return Profile(path) if head.startswith('#metric') else read_bench(path)
+
+
 def parse_bytes(s):
     m = re.fullmatch(r'([\d.]+)\s*([KMGT]i?B|B)?', s.strip(), re.I)
     if not m:
@@ -228,7 +277,7 @@ def layout(board, m, max_pos, kings_symmetry, ram_pos=None):
     return gran, groups, largest, unfit
 
 
-def simulate(plan, ms, inside, cores, canon=lambda m: m):
+def simulate(plan, ms, inside, cores, canon=lambda m: m, weight=lambda m: 1.0):
     """list scheduling of the groups on `cores` workers, a group's time its positions: (makespan, total work, critical
     path). A material's first layer waits for every material it leads into, each layer for the one before; the groups
     of one layer are independent. Ready groups go by the longest remaining path (critical path first)."""
@@ -238,7 +287,7 @@ def simulate(plan, ms, inside, cores, canon=lambda m: m):
     for m in ms:
         for s in deps[m]:
             users[s].append(m)
-    stages = {m: [sorted(plan[m][1][t], reverse=True) for t in sorted(plan[m][1])] for m in ms}
+    stages = {m: [sorted((g * weight(m) for g in plan[m][1][t]), reverse=True) for t in sorted(plan[m][1])] for m in ms}
 
     @functools.lru_cache(maxsize=None)
     def tail(m):                                                # the longest path from the end of m
@@ -279,7 +328,7 @@ def simulate(plan, ms, inside, cores, canon=lambda m: m):
                     pending[u] -= 1
                     if pending[u] == 0:
                         release(u, 0)
-    work = sum(sum(sum(v) for v in plan[m][1].values()) for m in ms)
+    work = sum(sum(sum(v) for v in stages[m]) for m in ms)
     return now, work, max(head(m, 0) for m in ms)
 
 
@@ -298,8 +347,9 @@ def main():
     ap.add_argument('--ghz', type=float, default=REF_GHZ, help=f'with --builder: the clock (calibrated at {REF_GHZ} GHz)')
     ap.add_argument('--us', type=float, help='with --builder: microseconds per position and side to move at --ghz, '
                     'instead of the 6x6 calibration (Gilbert 2009, 10x10: about 5.1 at 2.4 GHz)')
-    ap.add_argument('--calibration', help='with --builder: the output of `<engine> bench n` for the rules to build '
-                    '(measured on this machine): the cost per position follows from its move generation')
+    ap.add_argument('--calibration', help='with --builder: an instrumented build (src/egdb_calibrate.py on a small build\'s '
+                    'logs: the cost per position and the levels by pieces, extrapolated) or a bench (`<engine> bench n`: '
+                    'the cost per position from the move generation)')
     ap.add_argument('--bench-ghz', type=float, help='the clock of the machine the bench ran on (default: this one)')
     ap.add_argument('--disk', type=parse_bytes, help='with --builder: the SSD (or disk) size, e.g. 4TB')
     ap.add_argument('--disk-mbps', type=float, default=500, help='with --builder: sequential MB/s (default 500, a SATA SSD)')
@@ -462,9 +512,27 @@ def estimate(a, b, board, ms, plan, positions, canon, refine, max_pos, cost):
     mbps = a.disk_mbps * 1e6
     io_lo = (writes + reads_lo + streams) / mbps
     io_hi = (writes + reads_hi + streams) / mbps
-    bench = read_bench(a.calibration) if a.calibration else None
+    cal = read_calibration(a.calibration) if a.calibration else None
+    bench = cal if isinstance(cal, dict) else None
+    profile = cal if isinstance(cal, Profile) else None
+    if profile:                                                 # the instrumented build: per material, its own cost
+        clock = (a.bench_ghz or this_ghz()) / a.ghz
+        metrics = sorted(profile.cost)
+        cpu = path_s = 0
+        for metric in metrics:
+            w = lambda m, metric=metric: 2 * profile.us(metric, sum(m)) * 1e-6 * clock
+            span_m, _, path_m = simulate(plan, ms, set(ms), a.cores, canon, w)
+            cpu += span_m
+            path_s = max(path_s, path_m)
+        cpu *= n / len(metrics) if b['depth'] else 1
+        shown = ', '.join(f'{x} {profile.us(x, a.pieces):.2f}' for x in metrics)
+        lev = ', '.join(f'{x} {profile.level(x, a.pieces):.0f}' for x in metrics)
+        profile_line = (f'  profile instrumented build to {profile.measured} pieces: at {a.pieces} pieces {shown} µs per position '
+                        f'and side' + (' (extrapolated)' if a.pieces > profile.measured else '') + f', levels {lev}')
     if a.us:
         us, source = a.us, 'given'
+    elif profile:
+        us, source = b['us'] * REF_GHZ / a.ghz, 'profile'
     elif bench:
         us = b['movegen'] * bench['us'] * (a.bench_ghz or this_ghz()) / a.ghz
         source = (f'bench: {bench["us"]:.3f} us per move generation x {b["movegen"]:.2f}, {bench["moves"]:.2f} moves, '
@@ -481,6 +549,8 @@ def estimate(a, b, board, ms, plan, positions, canon, refine, max_pos, cost):
         return f'{sec:,.0f} s'
     print(f'estimate for {a.builder} ({n} metric{"s" if n > 1 else ""}), {a.cores} cores at {a.ghz:g} GHz, '
           f'{size(a.ram)} RAM per group, disk {size(a.disk, False) if a.disk else "?"} at {a.disk_mbps:g} MB/s:')
+    if profile:
+        print(profile_line)
     print(f'  space   ({a.index} index) files {size(files, False)} (depths {size(depth, False)}, outcomes {size(outcome, False)}), '
           f'scratch {size(scratch, False)}: {size(files + scratch, False)}'
           + (f' of {size(a.disk, False)}: {"fits" if files + scratch <= a.disk else "DOES NOT FIT"}' if a.disk else ''))
@@ -492,6 +562,10 @@ def estimate(a, b, board, ms, plan, positions, canon, refine, max_pos, cost):
         look = 2 * P * bench['moves'] * (bench['captures'] + bench['promotions']) * n
         print(f'  lookups {count(look)} into other materials\' files ({bench["moves"] * (bench["captures"] + bench["promotions"]):.2f} '
               f'per position): random reads, cheap while the inputs stay in the page cache')
+    if profile:
+        print(f'  time    CPU {t(cpu)} on {a.cores} cores (each material at its own measured or extrapolated cost; '
+              f'critical path {t(path_s)}); with the disk time: {t(max(cpu, io_lo))} (overlapped) to {t(cpu + io_hi)}')
+        return
     print(f'  time    CPU {t(cpu)} on {a.cores} cores ({us * 1e6:.2f} µs per position and side, {source}; '
           f'critical path {t(path * 2 * us * n)}); '
           f'with the disk time: {t(max(cpu, io_lo))} (overlapped) to {t(cpu + io_hi)}')

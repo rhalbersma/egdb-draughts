@@ -52,8 +52,11 @@
 //
 // build: g++-14 -std=c++23 -O2 -march=native -fopenmp -I<xstd-bits>/include -I<xstd-ints>/include
 //        -I<xstd-misc>/include syzygy/syzygy.cpp -lzstd -ltbb -o syzygy
-// usage: syzygy build <dir> wp bp wm bm <metric> [seq|par] [frontier|scan]
-//                                                            build one material (its captures and promotions must exist)
+// usage: syzygy build <dir> wp bp wm bm <metric> [seq|par] [frontier|scan] [mem=MB]
+//                                                            build one material (its captures and promotions must exist);
+//                                                            mem: the job's claim, checked against the estimate
+//        syzygy plan n <metric>                              per stored material with at most n pieces: slots,
+//                                                            positions, groups, the largest group, MB needed (rung 0)
 //        syzygy checkall <dir> n <metric> [threads]          every material of at most n pieces against egdb_6x6
 //                                                            (built in memory): dtm exactly, dtc / dtz their wins and
 //                                                            losses; every value against its successors; the wdl files
@@ -376,6 +379,33 @@ void solve_group(MatIndex const& mi, Group const& g)
 
 // ---------------------------------------------------------------- one material
 
+std::uint64_t g_mem_mb = 0;                                     // the job's memory claim in MB (0: none)
+
+// the memory a build of c needs: the material's 16-bit values (both sides to move) and the largest group's value,
+// seed and flag arrays, frontier planes and level lists (a bound); only rung 0 exists, so rung 1 is the same
+MemoryNeed memory_need(Material c)
+{
+        g_waves = true;
+        MemoryNeed m;
+        MatIndex const& mi = mat_index(c);
+        auto const groups = groups_of(c);
+        m.slots = mi.size;
+        m.groups = groups.size();
+        for (auto const& g : groups) {
+                m.positions += 2 * g.P;
+                m.max_group = std::max(m.max_group, g.P);
+                m.slices += g.units.size();
+        }
+        std::uint64_t const T = 2 * m.max_group;
+        // calibrated on 6 pieces (peak RSS against these): the level lists measured at up to about 4 bytes per position
+        // and side to move; a group about 480 bytes, a slice 160
+        std::uint64_t const transient = 7 * T + 4 * ((T + 63) / 64) * 8 + 4 * T;       // v, ewin, eloss, open; planes; lists
+        std::uint64_t const meta = 160 * m.slices + 480 * m.groups;
+        std::uint64_t const writing = mi.size + (mi.size + 3) / 4;                     // one side's bytes and wdl at a time
+        m.rung0 = m.rung1 = FIXED_BYTES + meta + 4 * mi.size + std::max(transient, writing);
+        return m;
+}
+
 bool write_file(std::string const& path, std::vector<std::uint8_t> const& bytes)
 {
         std::string const tmp = path + ".tmp";
@@ -391,6 +421,11 @@ bool write_file(std::string const& path, std::vector<std::uint8_t> const& bytes)
 bool build_material(std::string const& dir, Material c)
 {
         if (!stored(c)) { std::cerr << c.name() << " is the mirror of a stored material" << std::endl; return false; }
+        if (g_mem_mb != 0) {
+                std::uint64_t const r0 = to_mb(memory_need(c).rung0);
+                std::cout << "memory: claim " << g_mem_mb << " MB, rung 0 " << r0 << " MB"
+                          << (r0 > g_mem_mb ? " (over the claim: needs a lower rung, not implemented yet)" : "") << std::endl;
+        }
         g_dir = dir;
         g_current = c;
         g_waves = true;                                 // king moves and man moves inside (dtz: king moves only)
@@ -422,7 +457,8 @@ bool build_material(std::string const& dir, Material c)
         double const sec = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
         std::cout << "material " << c.name() << " " << metric_name() << ": " << groups.size() << " groups, " << positions
                   << " positions, " << mi.size << " slots, wins " << wins[0] << " / " << wins[1] << ", losses " << losses[0]
-                  << " / " << losses[1] << " (White / Black to move), longest " << longest << " plies, " << sec << " s"
+                  << " / " << losses[1] << " (White / Black to move), longest " << longest << " plies, peak RSS " << peak_rss_mb()
+                  << " MB, " << sec << " s"
                   << std::endl;
         return true;
 }
@@ -547,10 +583,16 @@ int main(int argc, char* argv[])
                 if (wm < 0 || bm < 0 || wm > wp || bm > bp) { std::cerr << "not a material: wp bp wm bm" << std::endl; std::exit(2); }
                 return Material{ wm, wp - wm, bm, bp - bm };
         };
-        if (a.size() >= 7 && a.size() <= 9 && a[0] == "build" && parse_metric(a[6])) {
+        if (a.size() == 3 && a[0] == "plan" && parse_metric(a[2])) {
+                print_plan_header();
+                for (Material const c : stored_materials_up_to(std::stoi(a[1]))) print_plan_row(c, memory_need(c));
+                return 0;
+        }
+        if (a.size() >= 7 && a.size() <= 10 && a[0] == "build" && parse_metric(a[6])) {
                 for (std::size_t i = 7; i < a.size(); ++i) {
                         if (a[i] == "seq" || a[i] == "par") g_par = a[i] == "par";
                         else if (a[i] == "scan" || a[i] == "frontier") g_frontier = a[i] == "frontier";
+                        else if (a[i].starts_with("mem=")) g_mem_mb = std::stoull(a[i].substr(4));
                         else { std::cerr << "unknown option " << a[i] << std::endl; return 2; }
                 }
                 return build_material(a[1], mat_at(2)) ? 0 : 1;
@@ -559,7 +601,7 @@ int main(int argc, char* argv[])
                 return check_all(a[1], std::stoi(a[2]), a.size() == 5 ? std::stoi(a[4]) : 4) ? 0 : 1;
         if (a.size() == 5 && a[0] == "cmp86" && parse_metric(a[4])) return compare_thompson86(a[1], a[2], std::stoi(a[3])) ? 0 : 1;
         if (a.size() == 5 && a[0] == "order") return check_order(a[1], a[2], a[3], std::stoi(a[4])) ? 0 : 1;
-        std::cerr << "usage: syzygy build <dir> wp bp wm bm dtm|dtc|dtz [seq|par] [frontier|scan] | checkall <dir> n dtm|dtc|dtz [threads]"
+        std::cerr << "usage: syzygy build <dir> wp bp wm bm dtm|dtc|dtz [seq|par] [frontier|scan] [mem=MB] | plan n dtm|dtc|dtz | checkall <dir> n dtm|dtc|dtz [threads]"
                      " | cmp86 <dir> <dir_thompson86> n dtm|dtc|dtz | order <dir_dtz> <dir_dtc> <dir_dtm> n" << std::endl;
         return 2;
 }

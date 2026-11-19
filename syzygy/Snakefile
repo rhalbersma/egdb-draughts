@@ -13,6 +13,10 @@
 # files (every move out of a material is a goal move there). The files of a metric go into <dir>/<metric>: the wdl
 # files are the same for all three.
 #
+# Memory (synthesis 7.3): the engine's `plan` gives every material's need; each build claims it, or the whole budget if
+# it does not fit (syzygy has only rung 0, so it then runs over its claim and says so). Pass the budget as
+# --resources mem_mb=N (else config mem_mb, else 75 % of physical memory). Priorities follow the critical path.
+#
 # usage (from the root of the repo):
 #   snakemake -s syzygy/Snakefile --cores 4 --config engine=build/syzygy dir=data/syzygy pieces=6 metric=dtz
 # metric: dtm, dtc or dtz; policy=par runs each build in parallel (std::execution::par); rounds=scan finds the frontier
@@ -81,6 +85,18 @@ def inputs(m):
     return [f'{D}/6x6-{name(d)}.{k}' for d in deps(m) for k in kinds]
 
 
+# the plan (src/snakemake_plan.py): memory budget, per-job claims from the engine's estimates, critical-path priorities
+import os
+import sys
+sys.path.insert(0, os.path.join(workflow.basedir, '..', 'src'))
+from snakemake_plan import memory_budget_mb, load_plan, claim_mb, priorities, report  # noqa: E402
+
+MEM = memory_budget_mb(workflow, config)
+PLAN = load_plan([ENGINE, 'plan', str(N), METRIC])
+PRIO = priorities(PLAN, {name(m): [name(d) for d in deps(m)] for m in MATERIALS})
+print(report(PLAN, MEM, lambda p: claim_mb(p, MEM)), file=sys.stderr)
+
+
 wildcard_constraints:
     mat=r'\d\d-\d\d-\d\d-\d\d'
 
@@ -89,12 +105,19 @@ rule all:
     input: f'{D}/check-{N}.{METRIC}.ok'
 
 
-rule build:
-    input: lambda w: inputs(parse(w.mat))
-    output: files('{mat}')
-    log: f'{D}/6x6-{{mat}}.{METRIC}.log'
-    params: m=lambda w: w.mat.replace('-', ' ')
-    shell: '{ENGINE} build {D} {params.m} {METRIC} {POLICY} {ROUNDS} > {log} 2>&1'
+# one build rule per material: Snakemake (8.30) accepts only constant priorities, so each material gets its own rule
+# with its claim and its critical-path priority
+for _m in MATERIALS:
+    _n = name(_m)
+    rule:
+        name: f'build_{_n}'
+        input: inputs(_m)
+        output: files(_n)
+        log: f'{D}/6x6-{_n}.{METRIC}.log'
+        params: m=_n.replace('-', ' ')
+        resources: mem_mb=claim_mb(PLAN[_n], MEM)
+        priority: PRIO[_n]
+        shell: '{ENGINE} build {D} {params.m} {METRIC} {POLICY} {ROUNDS} mem={resources.mem_mb} > {log} 2>&1'
 
 
 rule check:

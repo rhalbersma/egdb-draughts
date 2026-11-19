@@ -21,6 +21,7 @@
 
 #include <fcntl.h>
 #include <sys/mman.h>
+#include <sys/resource.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -301,6 +302,40 @@ std::vector<Material> successor_materials(Material c)
                         }
         }
         return out;
+}
+
+// ---------------------------------------------------------------- memory: what a build needs, by rung, and its measured peak
+//
+// A build holds the program and its tables (FIXED_BYTES), the metadata of its material's groups, what persists for the
+// whole material (rung 0: its depth bytes or values), and the largest group's transient state (bit planes, seeds,
+// value arrays). Each engine estimates these from its own data structures (memory_need), the Snakefiles turn them into
+// job claims (`resources: mem_mb`), and each build logs its peak resident set so the estimates can be checked.
+constexpr std::uint64_t FIXED_BYTES = std::uint64_t(16) << 20;  // the binary and its tables: 13.2 MB measured
+
+struct MemoryNeed {
+        std::uint64_t slots = 0, positions = 0, groups = 0, slices = 0, max_group = 0;  // max_group: positions per side
+        std::uint64_t rung0 = 0, rung1 = 0;                                             // bytes
+};
+
+inline std::uint64_t to_mb(std::uint64_t bytes) { return (bytes + (std::uint64_t(1) << 20) - 1) >> 20; }
+
+inline std::uint64_t peak_rss_mb()
+{
+        rusage r{};
+        ::getrusage(RUSAGE_SELF, &r);
+        return (std::uint64_t(r.ru_maxrss) + 1023) >> 10;       // ru_maxrss in KB on Linux
+}
+
+// one row of a plan: the material, its sizes, and its memory need per rung in MB (tab-separated, for the Snakefiles)
+inline void print_plan_row(Material c, MemoryNeed const& m)
+{
+        std::cout << c.name() << '\t' << m.slots << '\t' << m.positions << '\t' << m.groups << '\t' << m.max_group << '\t'
+                  << to_mb(m.rung0) << '\t' << to_mb(m.rung1) << '\n';
+}
+
+inline void print_plan_header()
+{
+        std::cout << "#material\tslots\tpositions\tgroups\tmax_group\trung0_mb\trung1_mb\n";
 }
 
 // every material with at most n pieces, both sides with a piece

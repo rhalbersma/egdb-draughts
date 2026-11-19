@@ -52,10 +52,15 @@
 //
 // build: g++-14 -std=c++23 -O2 -march=native -fopenmp -I<xstd-bits>/include -I<xstd-ints>/include
 //        -I<xstd-misc>/include thompson86/thompson86.cpp -lzstd -ltbb -o thompson86
-// usage: thompson86 build <dir> wp bp wm bm <metric> <style> [groups|array] [seq|par]
+// usage: thompson86 build <dir> wp bp wm bm <metric> <style> [groups|array|auto] [seq|par] [mem=MB]
 //                                                               build one material (its captures and promotions must exist);
 //                                                               the depth sink: per-group files (default) or the array;
-//                                                               every pass a std::for_each, seq (default) or par
+//                                                               every pass a std::for_each, seq (default) or par;
+//                                                               auto: the array if rung 0 fits the claim mem=MB, else
+//                                                               the group files
+//        thompson86 plan n <metric> <style>                     per material with at most n pieces: slots, positions,
+//                                                               groups, the largest group, and the MB needed at rung 0
+//                                                               (array) and rung 1 (group files), tab-separated
 //        thompson86 checkall <dir> n <metric> [threads]         every material of at most n pieces against egdb_6x6 (built in
 //                                                               memory): dtm exactly, dtc / dtz their wins and losses,
 //                                                               and every value of both files recomputed from its
@@ -422,7 +427,7 @@ void solve_group(Group const& g, DepthSink& sink)
         });
         auto const merge = [](std::vector<std::vector<Seed>>& parts) {  // in block order, then stably by level
                 std::vector<Seed> out;
-                for (auto& v : parts) out.insert(out.end(), v.begin(), v.end());
+                for (auto& v : parts) { out.insert(out.end(), v.begin(), v.end()); std::vector<Seed>().swap(v); }
                 std::ranges::stable_sort(out, {}, &Seed::level);
                 return out;
         };
@@ -506,6 +511,35 @@ void solve_group(Group const& g, DepthSink& sink)
 }
 
 bool g_group_files = true;                                      // the depth sink: per-group files (false: the material array)
+bool g_sink_auto = false;                                       // choose the sink by the memory claim
+std::uint64_t g_mem_mb = 0;                                     // the job's memory claim in MB (0: none)
+
+// the memory a build of c needs (the style and metric as set): rung 0 keeps the material's depth bytes in RAM (the array
+// sink), rung 1 only the current group's (the group sink); both hold the largest group's bit planes and seed lists
+MemoryNeed memory_need(Material c)
+{
+        MemoryNeed m;
+        MatIndex const& mi = mat_index(c);
+        auto const groups = groups_of(c);
+        m.slots = mi.size;
+        m.groups = groups.size();
+        for (auto const& g : groups) {
+                m.positions += 2 * g.P;
+                m.max_group = std::max(m.max_group, g.P);
+                m.slices += g.units.size();
+        }
+        std::uint64_t const P = m.max_group;
+        // calibrated on 6 pieces (peak RSS against these): the seed lists, with their copies while merging, measured
+        // from about 4 to 21 bytes per position (8-byte entries, at most two per position, one list copied at a time:
+        // 24 at most), counted at that bound; a group costs about 480 bytes and a slice 160 (Group, its offsets and
+        // hash map); the group sink's slice map about 64 bytes per slice
+        std::uint64_t const transient = 11 * ((P + 63) / 64) * 8 + 24 * P;     // 11 bit planes, seed lists
+        std::uint64_t const meta = 160 * m.slices + 480 * m.groups;
+        std::uint64_t const writing = std::uint64_t(5) << 18;                  // the final pass's chunk buffers
+        m.rung0 = FIXED_BYTES + meta + 2 * mi.size + std::max(transient, writing);
+        m.rung1 = FIXED_BYTES + meta + 64 * m.slices + 2 * P + std::max(transient, writing);
+        return m;
+}
 
 // open every file a build of c can read, and fill the index memo, so that the parallel passes only read the maps: the
 // bytes for dtm, the bits for dtc and dtz (every move out of a material is a goal move there)
@@ -525,6 +559,16 @@ bool build_material(std::string const& dir, Material c)
         g_current = c;
         MatIndex const& mi = mat_index(c);
         auto const groups = groups_of(c);
+        if (g_mem_mb != 0 || g_sink_auto) {                     // the claim against the estimates, and the sink
+                MemoryNeed const need = memory_need(c);
+                std::uint64_t const r0 = to_mb(need.rung0), r1 = to_mb(need.rung1);
+                if (g_sink_auto) g_group_files = !(g_mem_mb == 0 || r0 <= g_mem_mb);
+                std::uint64_t const used = g_group_files ? r1 : r0;
+                std::cout << "memory: claim " << g_mem_mb << " MB, rung 0 (array) " << r0 << " MB, rung 1 (group files) " << r1
+                          << " MB: " << (g_group_files ? "group files" : "array");
+                if (g_mem_mb != 0 && used > g_mem_mb) std::cout << " (over the claim: needs a lower rung, not implemented yet)";
+                std::cout << std::endl;
+        }
         open_successors(c);
         g_frozen = true;
         std::unique_ptr<DepthSink> sink;
@@ -577,7 +621,8 @@ bool build_material(std::string const& dir, Material c)
         std::cout << "material " << c.name() << " " << metric_name() << (g_waves ? " 1996" : " 1986")
                   << (g_group_files ? " group files" : " array") << ": " << groups.size() << " groups, " << positions
                   << " positions, " << mi.size << " slots, " << wins << " White wins, longest " << longest << " plies, "
-                  << losses << " Black losses, longest " << longest_loss << " plies, " << sec << " s" << std::endl;
+                  << losses << " Black losses, longest " << longest_loss << " plies, peak RSS " << peak_rss_mb() << " MB, "
+                  << sec << " s" << std::endl;
         return true;
 }
 
@@ -667,11 +712,19 @@ int main(int argc, char* argv[])
                 if (wm < 0 || bm < 0 || wm > wp || bm > bp) { std::cerr << "not a material: wp bp wm bm" << std::endl; std::exit(2); }
                 return Material{ wm, wp - wm, bm, bp - bm };
         };
-        if (a.size() >= 8 && a.size() <= 10 && a[0] == "build" && parse_metric(a[6]) && (a[7] == "86" || a[7] == "96")) {
+        if (a.size() == 4 && a[0] == "plan" && parse_metric(a[2]) && (a[3] == "86" || a[3] == "96")) {
+                g_waves = a[3] == "96";
+                print_plan_header();
+                for (Material const c : materials_up_to(std::stoi(a[1]))) print_plan_row(c, memory_need(c));
+                return 0;
+        }
+        if (a.size() >= 8 && a.size() <= 11 && a[0] == "build" && parse_metric(a[6]) && (a[7] == "86" || a[7] == "96")) {
                 g_waves = a[7] == "96";
                 for (std::size_t i = 8; i < a.size(); ++i) {
-                        if (a[i] == "groups" || a[i] == "array") g_group_files = a[i] == "groups";
+                        if (a[i] == "groups" || a[i] == "array") { g_group_files = a[i] == "groups"; g_sink_auto = false; }
+                        else if (a[i] == "auto") g_sink_auto = true;
                         else if (a[i] == "seq" || a[i] == "par") g_par = a[i] == "par";
+                        else if (a[i].starts_with("mem=")) g_mem_mb = std::stoull(a[i].substr(4));
                         else { std::cerr << "unknown option " << a[i] << std::endl; return 2; }
                 }
                 return build_material(a[1], mat_at(2)) ? 0 : 1;
@@ -680,7 +733,7 @@ int main(int argc, char* argv[])
                 return check_all(a[1], std::stoi(a[2]), a.size() == 5 ? std::stoi(a[4]) : 4) ? 0 : 1;
         if (a.size() == 5 && a[0] == "order") return check_order(a[1], a[2], a[3], std::stoi(a[4])) ? 0 : 1;
         if (a.size() == 5 && a[0] == "size") { std::cout << MatIndex(mat_at(1)).size << std::endl; return 0; }
-        std::cerr << "usage: thompson86 build <dir> wp bp wm bm dtm|dtc|dtz 86|96 [groups|array] [seq|par] | checkall <dir> n dtm|dtc|dtz [threads]"
+        std::cerr << "usage: thompson86 build <dir> wp bp wm bm dtm|dtc|dtz 86|96 [groups|array|auto] [seq|par] [mem=MB] | plan n dtm|dtc|dtz 86|96 | checkall <dir> n dtm|dtc|dtz [threads]"
                      " | order <dir_dtz> <dir_dtc> <dir_dtm> n | size wp bp wm bm" << std::endl;
         return 2;
 }

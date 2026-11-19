@@ -108,6 +108,12 @@ move: dtm exactly, dtc and dtz their wins and losses; every value against its re
 * `syzygy order <dtz> <dtc> <dtm> n`: dtz ≤ dtc ≤ dtm for every win and every loss, and the same WDL and `wdl` files
   in all three.
 
+**Memory-aware scheduling** (synthesis §7.3, step 1): `syzygy plan n <metric>` prints each stored material's sizes and
+the MB a build needs (only rung 0 exists), calibrated against measured peaks; the Snakefile turns it into job claims
+(`resources: mem_mb`) and critical-path priorities, as in `thompson86`, and a build over its claim says so in its log,
+with its peak RSS. At 6 pieces with an 80 MB budget: 81 materials fit, 03-03-01-01 (88 MB) runs over its claim; files
+byte-identical to the unbudgeted build, no peak above its estimate.
+
 ## Results (6 pieces, 4 cores)
 
 82 materials, 53,366,312 positions (both sides to move), 2 × 53.8 MB of bytes and 2 × 13.5 MB of `wdl` per metric;

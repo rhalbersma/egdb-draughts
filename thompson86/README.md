@@ -85,6 +85,18 @@ and the gathering pass, and the largest material (03-03-01-01, 5.27 M slots per 
 24.9 MB of RSS (13.2 MB of it the program's own tables). This is rung 1 of the memory ladder in
 [`literature/egdb_primitives.md`](../literature/egdb_primitives.md) §7.2.
 
+**Memory-aware scheduling** (synthesis §7.3, step 1). `thompson86 plan n <metric> <style>` prints, per material, its
+slots, positions, groups, largest group and the MB a build needs at rung 0 (`array` sink) and rung 1 (`groups` sink),
+estimated from the engine's data structures and calibrated against measured peaks (the seed lists at their worst-case
+bound, 24 bytes per position). The Snakefile runs it at parse time (`src/snakemake_plan.py`): each build claims its
+rung-0 need, or the whole budget if that does not fit (`resources: mem_mb`), with a priority from the critical path; the
+budget is `--resources mem_mb=N` (else `config mem_mb`, else 75 % of physical memory). With `sink=auto` (the default)
+the engine takes the array if rung 0 fits its claim, else the group files, and says so in its log, with its peak RSS.
+At 6 pieces with a 60 MB budget: 1996 style dtm, 149 materials on the array, 6 on group files, 5 over the budget
+even at rung 1; 1986 style, 3 all-men materials over the budget, because there the metadata of their ~100,000
+one-position slices dominates, not the depth bytes, so rung 1 cannot help. Files byte-identical to the unbudgeted
+builds; no build's peak above its estimate.
+
 **Every pass is one `std::for_each`** over blocks of 4096 positions (`for_blocks`, shared with `syzygy`), sequential
 or parallel (`policy=seq|par`, the last argument of `build`). Pass 0 gives each block the words of its positions in
 every bit plane and its own seed lists, merged afterwards; the pushes (P2, P3) and the seeds set bits with an atomic

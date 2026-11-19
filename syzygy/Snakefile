@@ -97,12 +97,13 @@ def inputs(m):
 import os
 import sys
 sys.path.insert(0, os.path.join(workflow.basedir, '..', 'src'))
-from snakemake_plan import memory_budget_mb, load_plan, claim_mb, priorities, report  # noqa: E402
+from snakemake_plan import memory_budget_mb, load_plan, claim_mb, priorities, report, check_budget  # noqa: E402
 
 MEM = memory_budget_mb(workflow, config)
 PLAN = load_plan([ENGINE, 'plan', str(N), METRIC, GRANULARITY])
 PRIO = priorities(PLAN, {name(m): [name(d) for d in deps(m)] for m in MATERIALS})
 print(report(PLAN, MEM, lambda p: claim_mb(p, MEM)), file=sys.stderr)
+check_budget(PLAN, MEM, config)    # fail now if a material cannot fit the budget at any rung
 
 
 wildcard_constraints:

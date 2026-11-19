@@ -13,7 +13,9 @@ Each engine reports, per material, its sizes and the memory a build needs at eac
   - a job's claim: its rung-0 need if that fits the budget, else the whole budget, so that a big material waits for
     the whole machine instead of squeezing other jobs, and the engine takes the highest rung that fits its claim;
   - a job's priority: the critical path, its own work plus the longest chain of jobs that need it (0 to 1000), so that
-    the long chains of the DAG start first.
+    the long chains of the DAG start first;
+  - the check: a material that needs more than the budget even at its lowest rung fails the workflow before any job
+    runs, since it could only run over the budget (config mem_check=0 turns the check off).
 """
 
 import functools
@@ -63,6 +65,16 @@ def priorities(plan, deps):
 
     top = max((rank(m) for m in plan), default=1) or 1
     return {m: int(1000 * rank(m) / top) for m in plan}
+
+
+def check_budget(plan, budget, config):
+    """raise if any material needs more than the budget at its lowest rung (rung 1), unless config mem_check=0"""
+    over = sorted((p['rung1'], m) for m, p in plan.items() if p['rung1'] > budget)
+    if over and str(config.get('mem_check', '1')) != '0':
+        worst = ', '.join(f'{m} ({mb} MB)' for mb, m in reversed(over[-5:]))
+        raise ValueError(f'{len(over)} materials need more than the memory budget of {budget} MB even at rung 1: '
+                         f'{worst}. Give more memory (--resources mem_mb, or MEM_MB in the CMake configure step), '
+                         f'a finer granularity, or config mem_check=0 to run over the budget anyway.')
 
 
 def report(plan, budget, claim):

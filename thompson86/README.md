@@ -130,6 +130,10 @@ across the larger groups of a tempi cell.
 
 ## Build and run
 
+With CMake's two steps, which check the machine (cores, memory, disk) and write the Snakemake profile, see
+[`databases/`](../databases/): `cmake -S databases -B build/x -DBUILDER=thompson86 -DPIECES=6`, then `cmake --build build/x`.
+By hand:
+
 ```bash
 g++-14 -std=c++23 -O2 -march=native -fopenmp -I<xstd-bits>/include -I<xstd-ints>/include -I<xstd-misc>/include thompson86/thompson86.cpp -lzstd -ltbb -o build/thompson86
 ```

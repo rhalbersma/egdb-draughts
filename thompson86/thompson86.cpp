@@ -58,6 +58,8 @@
 //                                                               every pass a std::for_each, seq (default) or par;
 //                                                               auto: the array if rung 0 fits the claim mem=MB, else
 //                                                               the group files
+//        thompson86 layers n                                    per material class with at most n pieces, the layers of its
+//                                                               configuration DAG: distance, slices, positions per side
 //        thompson86 plan n <metric> <style>                     per material with at most n pieces: slots, positions,
 //                                                               groups, the largest group, and the MB needed at rung 0
 //                                                               (array) and rung 1 (group files), tab-separated
@@ -575,6 +577,13 @@ int main(int argc, char* argv[])
                 if (wm < 0 || bm < 0 || wm > wp || bm > bp) { std::cerr << "not a material: wp bp wm bm" << std::endl; std::exit(2); }
                 return Material{ wm, wp - wm, bm, bp - bm };
         };
+        if (a.size() == 2 && a[0] == "layers") {                  // the configuration DAG's layers per material class
+                std::cout << "#material\tdistance\tslices\tpositions\n";
+                for (Material const c : materials_up_to(std::stoi(a[1])))
+                        for (Layer const& l : layers_of(c))
+                                std::cout << c.name() << '\t' << l.distance << '\t' << l.slices << '\t' << l.positions << '\n';
+                return 0;
+        }
         if (a.size() == 4 && a[0] == "plan" && parse_metric(a[2]) && (a[3] == "86" || a[3] == "96")) {
                 g_waves = a[3] == "96";
                 print_plan_header();
@@ -596,7 +605,7 @@ int main(int argc, char* argv[])
                 return check_all(a[1], std::stoi(a[2]), a.size() == 5 ? std::stoi(a[4]) : 4) ? 0 : 1;
         if (a.size() == 5 && a[0] == "order") return check_order(a[1], a[2], a[3], std::stoi(a[4])) ? 0 : 1;
         if (a.size() == 5 && a[0] == "size") { std::cout << MatIndex(mat_at(1)).size << std::endl; return 0; }
-        std::cerr << "usage: thompson86 build <dir> wp bp wm bm dtm|dtc|dtz 86|96 [groups|array|auto] [seq|par] [mem=MB] | plan n dtm|dtc|dtz 86|96 | checkall <dir> n dtm|dtc|dtz [threads]"
+        std::cerr << "usage: thompson86 build <dir> wp bp wm bm dtm|dtc|dtz 86|96 [groups|array|auto] [seq|par] [mem=MB] | layers n | plan n dtm|dtc|dtz 86|96 | checkall <dir> n dtm|dtc|dtz [threads]"
                      " | order <dir_dtz> <dir_dtc> <dir_dtm> n | size wp bp wm bm" << std::endl;
         return 2;
 }

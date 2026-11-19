@@ -457,6 +457,42 @@ public:
         }
 };
 
+// ---------------------------------------------------------------- the layers of a material class's configuration DAG
+//
+// The full-configuration slices of a material class, by distance (the rows its men still have to go, summed over both
+// colours). Every man move lowers the distance by exactly one, so layer d leads only into layer d - 1 of the same class
+// (and into other classes by captures and promotions): built layer by layer, only two adjacent layers are ever live.
+struct Layer { int distance = 0; std::uint64_t slices = 0, positions = 0; };   // positions per side to move
+
+std::vector<Layer> layers_of(Material c)
+{
+        std::map<int, Layer> by;
+        for (std::uint32_t w = u32(DOM_WM);; w = (w - 1) & u32(DOM_WM)) {
+                bitboard const wm = bb_of(w);
+                if (int(wm.size()) == c.wm) {
+                        std::uint32_t const bdom = u32(DOM_BM - wm);
+                        for (std::uint32_t b = bdom;; b = (b - 1) & bdom) {
+                                bitboard const bm = bb_of(b);
+                                if (int(bm.size()) == c.bm) {
+                                        Key const k{ wm, bm, c.wk, c.bk };
+                                        Meta const m = meta_of(k);
+                                        if (m.P != 0) {
+                                                Layer& l = by[distance(k)];
+                                                l.distance = distance(k);
+                                                ++l.slices;
+                                                l.positions += m.P;
+                                        }
+                                }
+                                if (b == 0) break;
+                        }
+                }
+                if (w == 0) break;
+        }
+        std::vector<Layer> out;
+        for (auto const& [d, l] : by) out.push_back(l);
+        return out;
+}
+
 // ---------------------------------------------------------------- memory: what a build needs, by rung, and its measured peak
 //
 // A build holds the program and its tables (FIXED_BYTES), the metadata of its material's groups, what persists for the

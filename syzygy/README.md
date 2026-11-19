@@ -108,11 +108,30 @@ move: dtm exactly, dtc and dtz their wins and losses; every value against its re
 * `syzygy order <dtz> <dtc> <dtm> n`: dtz ≤ dtc ≤ dtm for every win and every loss, and the same WDL and `wdl` files
   in all three.
 
-**Memory-aware scheduling** (synthesis §7.3, step 1): `syzygy plan n <metric>` prints each stored material's sizes and
-the MB a build needs (only rung 0 exists), calibrated against measured peaks; the Snakefile turns it into job claims
-(`resources: mem_mb`) and critical-path priorities, as in `thompson86`, and a build over its claim says so in its log,
-with its peak RSS. At 6 pieces with an 80 MB budget: 81 materials fit, 03-03-01-01 (88 MB) runs over its claim; files
-byte-identical to the unbudgeted build, no peak above its estimate.
+**Scalable storage.** The algorithm is rtbgen's; the storage is `thompson86`'s, so a build can shed memory:
+
+| | state the rounds test | values | exit seeds |
+|---|---|---|---|
+| frontier mode (default) | cumulative bit planes `won`, `lost` (every position decided at a level below the round; pass-0 decisions join at their level), plus `has a move inside`, `every exit loses`, `exits lost by now` | write-only, into a **depth sink** | per-level lists from pass 0 |
+| scan mode (rtbgen) | the 16-bit value array of the group, which its frontier scans | the same array, handed to the sink per group | the same lists |
+
+* **depth sink** (`sink=auto|groups|array`, shared with `thompson86`): the material's values in RAM (`array`, rung 0) or
+  only the current group's, each finished group appended to a group-order file and mapped read-only for the lookups
+  into earlier groups (`groups`, rung 1); `auto` takes the array if rung 0 fits the job's claim. The material's files are
+  gathered from the sink in one sequential pass.
+* **grouping** (`grouping=waves|slices`): waves as before, or one slice per group, man moves then being exits into
+  earlier groups (rung 2). Slices shrink the big king materials but make the all-men materials (about 100,000
+  one-position slices) the largest, by their metadata.
+* **memory-aware scheduling** (synthesis §7.3): `syzygy plan n <metric> [waves|slices]` prints each stored material's
+  sizes and its MB at rung 0 and rung 1, counting the memory-mapped inputs and group-order files whose touched pages
+  are resident; the Snakefile turns it into claims (`resources: mem_mb`) and critical-path priorities. Over 1,736
+  logged 6-piece builds (both builders, groupings, sinks and modes) no peak exceeded its estimate, which averages
+  about twice the peak (worst-case bounds for the lists and the inputs).
+
+At 6 pieces the largest material's peak went from 69–73 MB to 49 MB (waves, group files) or 58 MB (waves, array);
+with slice groups the peak is 89 MB, set by 03-03-03-03's slice metadata, and dtm CPU drops to 37.6 s. Every step of
+the change left the files byte-identical (frontier and scan, both sinks, both groupings, seq and par, 4 and 6 pieces,
+all metrics).
 
 ## Results (6 pieces, 4 cores)
 

@@ -52,11 +52,12 @@
 //
 // build: g++-14 -std=c++23 -O2 -march=native -fopenmp -I<xstd-bits>/include -I<xstd-ints>/include
 //        -I<xstd-misc>/include syzygy/syzygy.cpp -lzstd -ltbb -o syzygy
-// usage: syzygy build <dir> wp bp wm bm <metric> [seq|par] [frontier|scan] [auto|groups|array] [mem=MB]
+// usage: syzygy build <dir> wp bp wm bm <metric> [seq|par] [frontier|scan] [auto|groups|array] [waves|slices] [mem=MB]
 //                                                            build one material (its captures and promotions must exist);
 //                                                            the depth sink by the claim mem=MB (auto: the array if rung 0
-//                                                            fits, else group files), or as given
-//        syzygy plan n <metric>                              per stored material with at most n pieces: slots,
+//                                                            fits, else group files), or as given; groups of one wave
+//                                                            (default) or of one slice (man moves then exits)
+//        syzygy plan n <metric> [waves|slices]               per stored material with at most n pieces: slots,
 //                                                            positions, groups, the largest group, MB needed (rung 0)
 //        syzygy checkall <dir> n <metric> [threads]          every material of at most n pieces against egdb_6x6
 //                                                            (built in memory): dtm exactly, dtc / dtz their wins and
@@ -405,6 +406,7 @@ void solve_group(Group const& g, DepthSink<std::uint16_t>& sink)
 std::uint64_t g_mem_mb = 0;                                     // the job's memory claim in MB (0: none)
 
 bool g_group_files = true;                                      // the depth sink: group files (false: the material array)
+bool g_slices = false;                                          // groups of one slice (false: waves)
 bool g_sink_auto = true;                                        // choose the sink by the memory claim
 
 // the memory a build of c needs. Rung 0 keeps the material's 16-bit values in RAM (the array sink, both sides to
@@ -412,7 +414,7 @@ bool g_sink_auto = true;                                        // choose the si
 // and in scan mode also its value array
 MemoryNeed memory_need(Material c)
 {
-        g_waves = true;
+        g_waves = !g_slices;
         MemoryNeed m;
         MatIndex const& mi = mat_index(c);
         auto const groups = groups_of(c);
@@ -430,8 +432,16 @@ MemoryNeed memory_need(Material c)
         std::uint64_t const transient = 9 * ((T + 63) / 64) * 8 + 12 * T + (g_frontier ? 0 : 2 * T);
         std::uint64_t const meta = 160 * m.slices + 480 * m.groups;
         std::uint64_t const writing = std::uint64_t(5) << 18;                          // the final pass's chunk buffers
-        m.rung0 = FIXED_BYTES + meta + 4 * mi.size + std::max(transient, writing);
-        m.rung1 = FIXED_BYTES + meta + 64 * m.slices + 2 * T + std::max(transient, writing);
+        // the memory-mapped files count in the resident set as their pages are touched: the inputs (the materials the
+        // moves lead into: the bytes and wdl files for dtm, the wdl files for dtc and dtz) and, at rung 1, the
+        // group-order files of the material itself (read by the lookups into earlier groups and by the final pass)
+        std::uint64_t inputs = 0;
+        for (Material const s : successors_of(c)) {
+                std::uint64_t const n = mat_index(s).size;
+                inputs += 2 * ((n + 3) / 4) + (g_metric == Metric::dtm ? 2 * n : 0);
+        }
+        m.rung0 = FIXED_BYTES + meta + inputs + 4 * mi.size + std::max(transient, writing);
+        m.rung1 = FIXED_BYTES + meta + inputs + 64 * m.slices + 2 * T + 2 * m.positions + std::max(transient, writing);
         return m;
 }
 
@@ -440,7 +450,8 @@ bool build_material(std::string const& dir, Material c)
         if (!stored(c)) { std::cerr << c.name() << " is the mirror of a stored material" << std::endl; return false; }
         g_dir = dir;
         g_current = c;
-        g_waves = true;                                 // king moves and man moves inside (dtz: king moves only)
+        g_waves = !g_slices;                            // waves: king and man moves inside (dtz: king moves only);
+                                                        // slices: king moves only, man moves exits into earlier groups
         MatIndex const& mi = mat_index(c);
         auto const groups = groups_of(c);
         if (g_mem_mb != 0 || g_sink_auto) {             // the claim against the estimates, and the sink
@@ -630,18 +641,20 @@ int main(int argc, char* argv[])
                 if (wm < 0 || bm < 0 || wm > wp || bm > bp) { std::cerr << "not a material: wp bp wm bm" << std::endl; std::exit(2); }
                 return Material{ wm, wp - wm, bm, bp - bm };
         };
-        if (a.size() == 3 && a[0] == "plan" && parse_metric(a[2])) {
+        if ((a.size() == 3 || a.size() == 4) && a[0] == "plan" && parse_metric(a[2])) {
+                g_slices = a.size() == 4 && a[3] == "slices";
                 print_plan_header();
                 for (Material const c : stored_materials_up_to(std::stoi(a[1]))) print_plan_row(c, memory_need(c));
                 return 0;
         }
-        if (a.size() >= 7 && a.size() <= 11 && a[0] == "build" && parse_metric(a[6])) {
+        if (a.size() >= 7 && a.size() <= 12 && a[0] == "build" && parse_metric(a[6])) {
                 for (std::size_t i = 7; i < a.size(); ++i) {
                         if (a[i] == "seq" || a[i] == "par") g_par = a[i] == "par";
                         else if (a[i] == "scan" || a[i] == "frontier") g_frontier = a[i] == "frontier";
                         else if (a[i].starts_with("mem=")) g_mem_mb = std::stoull(a[i].substr(4));
                         else if (a[i] == "groups" || a[i] == "array") { g_group_files = a[i] == "groups"; g_sink_auto = false; }
                         else if (a[i] == "auto") g_sink_auto = true;
+                        else if (a[i] == "slices" || a[i] == "waves") g_slices = a[i] == "slices";
                         else { std::cerr << "unknown option " << a[i] << std::endl; return 2; }
                 }
                 return build_material(a[1], mat_at(2)) ? 0 : 1;
@@ -650,7 +663,7 @@ int main(int argc, char* argv[])
                 return check_all(a[1], std::stoi(a[2]), a.size() == 5 ? std::stoi(a[4]) : 4) ? 0 : 1;
         if (a.size() == 5 && a[0] == "cmp86" && parse_metric(a[4])) return compare_thompson86(a[1], a[2], std::stoi(a[3])) ? 0 : 1;
         if (a.size() == 5 && a[0] == "order") return check_order(a[1], a[2], a[3], std::stoi(a[4])) ? 0 : 1;
-        std::cerr << "usage: syzygy build <dir> wp bp wm bm dtm|dtc|dtz [seq|par] [frontier|scan] [auto|groups|array] [mem=MB] | plan n dtm|dtc|dtz | checkall <dir> n dtm|dtc|dtz [threads]"
+        std::cerr << "usage: syzygy build <dir> wp bp wm bm dtm|dtc|dtz [seq|par] [frontier|scan] [auto|groups|array] [waves|slices] [mem=MB] | plan n dtm|dtc|dtz [waves|slices] | checkall <dir> n dtm|dtc|dtz [threads]"
                      " | cmp86 <dir> <dir_thompson86> n dtm|dtc|dtz | order <dir_dtz> <dir_dtc> <dir_dtm> n" << std::endl;
         return 2;
 }

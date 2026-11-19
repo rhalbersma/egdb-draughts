@@ -503,10 +503,12 @@ position in RAM** for that group. Taking the rungs in order as a group outgrows 
 
 Before rung 3, the 4× symmetry of kings-only slices (§6) shrinks the largest groups for free. Each rung keeps the
 pass code and changes only where its inputs and outputs live, so a memory budget can pick the rung per group from
-the sizes known before the build (`Meta.P` of the slices). The builders today sit on rung 0 only: `thompson86` keeps
-the depth bytes of the whole material in RAM even when its groups are single slices (rung 1 removes that), and
-`syzygy`'s 16-bit value array is both depth store and cumulative state (about 7.5 bytes per position and side to
-move against rtbgen's 1 byte), so it needs cumulative bit planes before it can climb at all.
+the sizes known before the build (`Meta.P` of the slices). Both builders now reach rung 1 (a depth sink with
+group-order files, `sink=auto` by the job's claim). `syzygy` first had to split its 16-bit value array, which was both
+depth store and cumulative state (about 7.5 bytes per position and side to move against rtbgen's 1 byte), into
+cumulative bit planes for the state and write-only values in the sink; its frontier rounds now hold about 9 bit planes
+and the level lists, its scan mode (rtbgen's) still the value array, which its frontier scans. Both also offer slice
+groups (`thompson86` 1986 style, `syzygy` `grouping=slices`), rung 2.
 
 ### 7.3 Choosing by machine
 

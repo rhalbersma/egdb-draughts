@@ -390,8 +390,17 @@ MemoryNeed memory_need(Material c)
         std::uint64_t const transient = 11 * ((P + 63) / 64) * 8 + 24 * P;     // 11 bit planes, seed lists
         std::uint64_t const meta = 160 * m.slices + 480 * m.groups;
         std::uint64_t const writing = std::uint64_t(5) << 18;                  // the final pass's chunk buffers
-        m.rung0 = FIXED_BYTES + meta + 2 * mi.size + std::max(transient, writing);
-        m.rung1 = FIXED_BYTES + meta + 64 * m.slices + 2 * P + std::max(transient, writing);
+        // the memory-mapped files count in the resident set as their pages are touched: the inputs (the materials the
+        // moves lead into: dtm-W and dtm-L for dtm, the bit files for dtc and dtz) and, at rung 1, the group-order files
+        // of the material itself (read by the lookups into earlier groups and by the final pass)
+        std::uint64_t inputs = 0;
+        for (Material const s : successor_materials(c)) {
+                if (s.wm + s.wk == 0 || s.bm + s.bk == 0) continue;
+                std::uint64_t const n = mat_index(s).size;
+                inputs += g_metric == Metric::dtm ? 2 * n : 2 * ((n + 7) / 8);
+        }
+        m.rung0 = FIXED_BYTES + meta + inputs + 2 * mi.size + std::max(transient, writing);
+        m.rung1 = FIXED_BYTES + meta + inputs + 64 * m.slices + 2 * P + m.positions + std::max(transient, writing);
         return m;
 }
 

@@ -16,16 +16,16 @@
 //
 // Materials. Two-sided: both sides to move, wins and losses, so only one of each pair of a material and its colour
 // mirror is built (the same 82 materials up to 6 pieces as strongly_solving_6x6/materials); a position in the other
-// one is looked up as its mirror image. Full results; per material four files, 6x6-wp-bp-wm-bm.<side to move>.<kind>
+// one is looked up as its mirror image. Full results; per material four files, 6x6/np/wp-bp/6x6-np-wp-bp-wm-bm-<kind>-<side to move>
 // (for dtm; dtc and dtz alike):
-//   wtm.dtm   one byte per slot, White to move: the unsigned depth, k for a win in 2k - 1 or a loss in 2k plies
-//             (dtc, dtz: n plies); the sign is in wtm.wdl
-//   btm.dtm   one byte per slot, Black to move
-//   wtm.wdl   two bits per slot (0 draw, 1 loss, 2 win), White to move
-//   btm.wdl   two bits per slot, Black to move
+//   dtm-wtm   one byte per slot, White to move: the unsigned depth, k for a win in 2k - 1 or a loss in 2k plies
+//             (dtc, dtz: n plies); the sign is in wdl-wtm
+//   dtm-btm   one byte per slot, Black to move
+//   wdl-wtm   two bits per slot (0 draw, 1 loss, 2 win), White to move
+//   wdl-btm   two bits per slot, Black to move
 // The wdl files are a by-product: the sign of every value, the same for all three metrics. They are all that dtc and
 // dtz need from the materials that a move leads into (every move out of a material is a goal move there), so their
-// builds read only the wdl files of their captures and promotions; dtm needs the depths and reads wtm.dtm, btm.dtm
+// builds read only the wdl files of their captures and promotions; dtm needs the depths and reads dtm-wtm, dtm-btm
 // with the wdl files for their signs.
 //
 // Groups. Captures and promotions (and in dtz man moves, which end the count) are looked up forward in pass 0, in
@@ -64,7 +64,7 @@
 //                                                            (built in memory): dtm exactly, dtc / dtz their wins and
 //                                                            losses; every value against its successors; the wdl files
 //                                                            against the values
-//        syzygy cmp86 <dir> <dir_thompson86> n <metric>      the same half results (dtm-W, dtm-L) as thompson86, for every
+//        syzygy cmp86 <dir> <dir_thompson86> n <metric>      the same half results (dmW, dmL) as thompson86, for every
 //                                                            material of at most n pieces, both colours
 //        syzygy order <dir_dtz> <dir_dtc> <dir_dtm> n         dtz <= dtc <= dtm for every win and loss, the same WDL
 // metric: dtm, dtc, dtz
@@ -118,7 +118,7 @@ enum : int { BYTES = 0, WDL = 2 };
 
 std::string mat_path(std::string const& dir, Material m, int kind)
 {
-        return dir + "/" + m.sub() + "-" + (kind >= WDL ? std::string("wdl") : std::string(metric_name())) + (kind % 2 == 0 ? "-wtm" : "-btm");
+        return m.path(dir) + "-" + (kind >= WDL ? std::string("wdl") : std::string(metric_name())) + (kind % 2 == 0 ? "-wtm" : "-btm");
 }
 
 std::uint64_t file_size(Material m, int kind) { return kind < WDL ? mat_index(m).size : (mat_index(m).size + 3) / 4; }
@@ -447,6 +447,7 @@ MemoryNeed memory_need(Material c)
 bool build_material(std::string const& dir, Material c)
 {
         if (!stored(c)) { std::cerr << c.name() << " is the mirror of a stored material" << std::endl; return false; }
+        std::filesystem::create_directories(dir + "/" + c.tree());
         g_dir = dir;
         g_current = c;
         MatIndex const& mi = mat_index(c);
@@ -569,7 +570,7 @@ bool compare_thompson86(std::string const& dir, std::string const& dir86, int n)
         std::uint64_t checked = 0, bad = 0;
         for (Material const c : materials_up_to(n)) {
                 MatIndex const& mi = mat_index(c);
-                std::string const base = dir86 + "/" + c.sub() + "-d" + metric_name()[2];
+                std::string const base = c.path(dir86) + "-d" + metric_name()[2];
                 std::uint8_t const* w = map_file(base + "W-wtm", mi.size);
                 std::uint8_t const* l = map_file(base + "L-btm", mi.size);
                 for (auto const& g : groups_of(c))

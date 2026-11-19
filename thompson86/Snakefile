@@ -89,9 +89,9 @@ rule all:
     input: f'{D}/check-{N}.{METRIC}.ok'
 
 
-def sub(n):                                                            # wp-bp-wm-bm -> db-np-wp-bp-wm-bm
+def sub(n):                                                            # wp-bp-wm-bm -> db/np/wp-bp/db-np-wp-bp-wm-bm
     wp, bp = map(int, n.split('-')[:2])
-    return f'6x6-{wp + bp:02}-{n}'
+    return f'6x6/{wp + bp:02}/{wp:02}-{bp:02}/6x6-{wp + bp:02}-{n}'
 
 
 DEPTH = 'd' + METRIC[2]                                                # dm, dc or dz

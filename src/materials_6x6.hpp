@@ -128,6 +128,14 @@ struct Material {
         {
                 return std::format("6x6-{:02}-", pieces()) + name();
         }
+        std::string tree() const                        // its directory, the subdivisions above it: db/np/wp-bp/
+        {
+                return std::format("6x6/{:02}/{:02}-{:02}/", pieces(), wp(), bp());
+        }
+        std::string path(std::string const& dir) const  // dir/db/np/wp-bp/db-np-wp-bp-wm-bm, to append -<kind>-<side>
+        {
+                return dir + "/" + tree() + sub();
+        }
 };
 
 Material material_of(Pos const& p)
@@ -435,7 +443,7 @@ public:
                         total_ += groups[k].P;
                 }
                 for (int side : { 0, 1 }) {     // one file per side, in group order, sized up front, mapped once read-only
-                        path_[std::size_t(side)] = dir + "/tmp-" + c.sub() + "-" + metric_name() + (side == 0 ? "-wtm" : "-btm");
+                        path_[std::size_t(side)] = dir + "/" + c.tree() + "tmp-" + c.sub() + "-" + metric_name() + (side == 0 ? "-wtm" : "-btm");
                         int const fd = ::open(path_[std::size_t(side)].c_str(), O_RDWR | O_CREAT | O_TRUNC, 0644);
                         if (fd < 0 || ::ftruncate(fd, off_t(total_ * sizeof(V))) != 0) { std::cerr << "cannot create " << path_[std::size_t(side)] << std::endl; std::exit(1); }
                         fd_[std::size_t(side)] = fd;

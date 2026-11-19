@@ -9,31 +9,31 @@ and unmoves are in `src/materials_6x6.hpp`, shared with the two-sided [`syzygy`]
 
 | file | side to move | per position | value | 0 means |
 |---|---|---|---|---|
-| `wtm.dtm-W` | White | one byte | k: a White win in 2k − 1 plies (dtc-W, dtz-W: n, a win in n plies) | not a win (draw, loss or illegal slot) |
-| `btm.dtm-L` | Black | one byte | k: Black lost in 2(k − 1) plies (dtc-L, dtz-L: n + 1, lost in n plies; a loss can take 0 plies: Black has no move) | not lost |
-| `wtm.bit-W` | White | one bit | 1: White wins | not a win |
-| `btm.bit-L` | Black | one bit | 1: Black is lost | not lost |
+| `dmW-wtm` | White | one byte | k: a White win in 2k − 1 plies (dcW, dzW: n, a win in n plies) | not a win (draw, loss or illegal slot) |
+| `dmL-btm` | Black | one byte | k: Black lost in 2(k − 1) plies (dcL, dzL: n + 1, lost in n plies; a loss can take 0 plies: Black has no move) | not lost |
+| `isW-wtm` | White | one bit | 1: White wins | not a win |
+| `isL-btm` | Black | one bit | 1: Black is lost | not lost |
 
 **Exact plies, compactly.** A dtm win always takes an odd number of plies and a dtm loss an even number, so dtm stores
 moves, Thompson's "win in k": up to 509 plies in a byte. In dtc and dtz a goal move by the losing side (Black's forced
 capture) can end a White win on an even ply, so they store plies. The build works in plies; only the files differ.
 
-The notation, shared with [`syzygy`](../syzygy/): a file is `6x6-wp-bp-wm-bm.<side to move>.<kind>`. A **full result**
-holds win, draw and loss: `dtm` (with depth) or `wdl` (outcome only). A **half result** holds one of them: `dtm-W`,
-`dtm-L` (with depth), `bit-W`, `bit-L` (outcome only, one bit). The same for `dtc` and `dtz`; the bit files carry no
+The notation, shared with [`syzygy`](../syzygy/): a file is `6x6/np/wp-bp/6x6-np-wp-bp-wm-bm-<kind>-<side to move>`. A **full result**
+holds win, draw and loss: `dtm` (with depth) or `wdl` (outcome only). A **half result** holds one of them: `dmW`,
+`dmL` (with depth), `isW`, `isL` (outcome only, one bit). The same for dtc and dtz (`dcW`, `dcL`, `dzW`, `dzL`); the bit files carry no
 metric, since they are the same for all three, so the files of each metric go into a directory of their own,
 `<dir>/<metric>`. A one-sided build stores half results: White's wins with White to move, Black's losses with Black to
 move.
 
-**Why depths, and why bits.** `dtm-W` is the database: the dtm, dtc or dtz of every White-to-move win, which you need to
-play the win out. `dtm-L` holds the Black-to-move loss depths, which a dtm build needs (a White capture wins in 1 + the
+**Why depths, and why bits.** `dmW` is the database: the dtm, dtc or dtz of every White-to-move win, which you need to
+play the win out. `dmL` holds the Black-to-move loss depths, which a dtm build needs (a White capture wins in 1 + the
 loss depth of the position it leads to) and which you need to play the defence. The bit files are the one-sided WDL,
 a by-product of the bytes. They are all that dtc and dtz need from the materials that a move leads into: every move
 out of a material is a goal move there, after which only the outcome counts. So the dtc and dtz Snakemake rules read
 only the bit files of the captures and promotions; dtm reads the bytes.
 
-The `dtm-L` file is Thompson 1996's RES, the Black-to-move loss distances. With it every lookup is a single read: after
-a White move into `dtm-L`, after a Black move into `dtm-W`, without a ply of search. Three metrics, which differ only in
+The `dmL` file is Thompson 1996's RES, the Black-to-move loss distances. With it every lookup is a single read: after
+a White move into `dmL`, after a Black move into `dmW`, without a ply of search. Three metrics, which differ only in
 the moves that end the count (by either side, as long as the win is kept):
 
 | metric | the count ends at |
@@ -45,7 +45,7 @@ the moves that end the count (by either side, as long as the win is kept):
 A White win can end with Black's forced capture, so in dtc and dtz a win can take an even number of plies.
 
 **One file pair per material.** A material is named wp-bp-wm-bm (white pieces, black pieces, white men, black men,
-two digits each, as in `egdb_6x6`'s material mode); its files are `6x6-wp-bp-wm-bm.wtm.dtm-W` and so on, indexed by a
+two digits each, as in `egdb_6x6`'s material mode); its files are `6x6/np/wp-bp/6x6-np-wp-bp-wm-bm-dmW-wtm` and so on (np: the number of pieces), indexed by a
 product of four colex ranks, one per colour and type: the men over the 15 squares a man may stand on, the kings over
 all 18 squares. Pieces of one colour and type never share a square, the two colours may (those slots are illegal and
 never visited), as in Thompson's 462 × 64ⁿ. Every move that leaves the material, a capture or a promotion of either
@@ -151,7 +151,7 @@ type per metric), 20,482,891 White-to-move wins and 11,884,425 Black-to-move los
 
 Measured with the 1986 style at `granularity=configuration` (then its default) and the 1996 style at `material`:
 
-| style | metric | wall time, builds | CPU summed | longest win (`dtm-W`) | longest loss (`dtm-L`) |
+| style | metric | wall time, builds | CPU summed | longest win (`dmW`) | longest loss (`dmL`) |
 |---|---|---|---|---|---|
 | 1986 | dtm | 10.0 s | 34.3 s | 69 plies (04-02-04-00) | 68 plies (04-02-03-00) |
 | 1986 | dtc | 9.9 s | 32.4 s | 43 plies (03-02-02-01) | 42 plies (03-02-02-01) |
@@ -171,10 +171,10 @@ parse time), every combination byte-identical:
 | 1996 | `configuration` | 12.7 s, 44.4 s | 10.6 s, 37.9 s | 10.8 s, 38.3 s |
 
 * **checks**: dtm equals `egdb_6x6`'s DTM in every position, both sides to move; dtc and dtz have `egdb_6x6`'s wins
-  and losses; for all three metrics every `dtm-W` value equals its recomputation by one ply over `dtm-L`, and every `dtm-L`
-  value its recomputation by one ply over `dtm-W`;
-* the two styles give **byte-identical files** for every material, metric and file type, and the `dtm-W` files are
-  byte-identical to those of the build that stored only `dtm-W`;
+  and losses; for all three metrics every `dmW` value equals its recomputation by one ply over `dmL`, and every `dmL`
+  value its recomputation by one ply over `dmW`;
+* the two styles give **byte-identical files** for every material, metric and file type, and the `dmW` files are
+  byte-identical to those of the build that stored only `dmW`;
 * **dtz ≤ dtc ≤ dtm** holds for every White win and every Black loss, with the same wins and losses in all three
   (wins: dtz = dtc in 16,667,806, dtc = dtm in 3,662,469; losses: dtz = dtc in 7,693,843, dtc = dtm in 1,107,200);
 * a dtz loss can be a ply longer than the longest dtz win: Black makes a king move that does not zero, then White
@@ -183,17 +183,17 @@ parse time), every combination byte-identical:
   both styles; rebuilding with them left every byte file unchanged;
 * 3 and 4 pieces check out the same way.
 
-**Storing `dtm-L` costs a second file and saves a third of the CPU.** With only `dtm-W`, every White move out of a group
-(captures, promotions and, in the 1986 style at configurations, man moves) was looked up by one ply of Black moves over `dtm-W`; with `dtm-L`
+**Storing `dmL` costs a second file and saves a third of the CPU.** With only `dmW`, every White move out of a group
+(captures, promotions and, in the 1986 style at configurations, man moves) was looked up by one ply of Black moves over `dmW`; with `dmL`
 it is one read. The 1986 dtm build went from 51.1 s to 34.3 s of CPU, 14.3 s to 10.0 s wall. That ply of search was
-also what the 1996 waves saved by keeping man moves inside the rounds: with `dtm-L` the two styles cost the same, within
+also what the 1996 waves saved by keeping man moves inside the rounds: with `dmL` the two styles cost the same, within
 the noise of the timings.
 
 ## Per material against runs (6 pieces, 1986 style, dtm)
 
 The earlier version built **runs**: a material read as capacities, holding every smaller material with the captured
 pieces parked on graveyard squares above the board (contiguous layers by the colex rank formula), with only
-promotions leaving a run. Same results, same checks; per material (only `dtm-W` stored, before `dtm-L` was added):
+promotions leaving a run. Same results, same checks; per material (only `dmW` stored, before `dmL` was added):
 
 | | runs | per material |
 |---|---|---|
@@ -213,7 +213,7 @@ no measurable difference.
 | | positions computed | CPU | per position | wall time | stored |
 |---|---|---|---|---|---|
 | `egdb_6x6 build 6` | 51,237,726 (one of each mirror pair, both sides to move) | 22.6 s | 0.44 µs | 6.6 s (4 threads) | DTM for both sides to move, 51 MB |
-| `thompson86`, 6 pieces, dtm, 1986 style, configurations | 97,762,498 | 34.3 s | 0.35 µs | 10.0 s (4 Snakemake jobs) | DTM for White to move (`dtm-W`) and Black to move (`dtm-L`), 2 × 98 MB of slots |
+| `thompson86`, 6 pieces, dtm, 1986 style, configurations | 97,762,498 | 34.3 s | 0.35 µs | 10.0 s (4 Snakemake jobs) | DTM for White to move (`dmW`) and Black to move (`dmL`), 2 × 98 MB of slots |
 
 Per position the Thompson build is now cheaper (no ply of search for lookups); it is about 1.5× slower in total
 because of **one-sidedness**: a material only finds White's wins and Black's losses, so Black's wins and White's

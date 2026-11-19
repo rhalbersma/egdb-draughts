@@ -8,11 +8,11 @@ passes.
 
 | | `thompson86` | `syzygy` |
 |---|---|---|
-| sides | one, half results: White-to-move wins (`wtm.dtm-W`), Black-to-move losses (`btm.dtm-L`) | two, full results: both sides to move, wins, draws and losses (`wtm.dtm`, `btm.dtm`) |
+| sides | one, half results: White-to-move wins (`dmW-wtm`), Black-to-move losses (`dmL-btm`) | two, full results: both sides to move, wins, draws and losses (`dtm-wtm`, `dtm-btm`) |
 | materials (≤ 6 pieces) | 155: every material and its colour mirror | 82: one of each mirror pair, the other looked up as its mirror image |
 | per round | bit planes: the new wins and losses as frontiers | the same frontiers (default), or as `rtbgen` full scans of the byte array for the values of the previous ply (`rounds=scan`) |
 | losses | candidates verified forward (1996 style: masked late) | `rtbgen`'s `check_loss` on every predecessor of a new win |
-| outcomes, a by-product | half: `wtm.bit-W`, `btm.bit-L`, one bit per position | full: `wtm.wdl`, `btm.wdl`, two bits per position |
+| outcomes, a by-product | half: `isW-wtm`, `isL-btm`, one bit per position | full: `wdl-wtm`, `wdl-btm`, two bits per position |
 
 ## What is stored
 
@@ -20,13 +20,13 @@ Per material, named wp-bp-wm-bm (white pieces, black pieces, white men, black me
 
 | file | contents |
 |---|---|
-| `6x6-wp-bp-wm-bm.wtm.dtm` | one byte per slot, White to move: the unsigned depth |
-| `6x6-wp-bp-wm-bm.btm.dtm` | one byte per slot, Black to move: the unsigned depth |
-| `6x6-wp-bp-wm-bm.wtm.wdl` | two bits per slot (0 draw, 1 loss, 2 win), White to move |
-| `6x6-wp-bp-wm-bm.btm.wdl` | two bits per slot, Black to move |
+| `6x6-np-wp-bp-wm-bm-dtm-wtm` | one byte per slot, White to move: the unsigned depth |
+| `6x6-np-wp-bp-wm-bm-dtm-btm` | one byte per slot, Black to move: the unsigned depth |
+| `6x6-np-wp-bp-wm-bm-wdl-wtm` | two bits per slot (0 draw, 1 loss, 2 win), White to move |
+| `6x6-np-wp-bp-wm-bm-wdl-btm` | two bits per slot, Black to move |
 
-Shown for dtm; dtc and dtz alike (`wtm.dtc`, ...). These are **full results** (win, draw and loss), where
-`thompson86` stores **half results** (`dtm-W`, `dtm-L`, `bit-W`, `bit-L`). The `wdl` files carry no metric: they are
+Shown for dtm; dtc and dtz alike (`dtc-wtm`, ...). These are **full results** (win, draw and loss), where
+`thompson86` stores **half results** (`dmW`, `dmL`, `isW`, `isL`). The `wdl` files carry no metric: they are
 the same for all three, so the files of each metric go into a directory of their own, `<dir>/<metric>`.
 
 The value for the side to move, in the build: 0 a draw (or an illegal slot), 2n a win in n plies, 2n + 1 a loss in n
@@ -52,8 +52,8 @@ of `thompson86`:
 **WDL as a by-product.** The `wdl` files are the sign of every value, the same for all three metrics, next to the
 byte files of the same side to move (slot i in bits 2(i mod 4) of byte ⌊i / 4⌋). They are all that dtc and dtz need
 from the materials that a move leads into: every move out of a material is a goal move there, after which only the
-outcome counts. So their Snakemake rules read only the `wdl` files of the captures and promotions; dtm reads `wtm.dtm`
-and `btm.dtm`, because it needs the depths. A dtz build gives WDL and DTZ together, as the Syzygy tablebases do.
+outcome counts. So their Snakemake rules read only the `wdl` files of the captures and promotions; dtm reads `dtm-wtm`
+and `dtm-btm`, because it needs the depths. A dtz build gives WDL and DTZ together, as the Syzygy tablebases do.
 
 ## Passes
 
@@ -104,7 +104,7 @@ move: dtm exactly, dtc and dtz their wins and losses; every value against its re
 `wdl` files against the values. Further checks:
 
 * `syzygy cmp86 <dir> <dir_thompson86> n <metric>`: for every material with at most n pieces, both colours, the
-  `thompson86` files (`dtm-W` the White-to-move wins, `dtm-L` the Black-to-move losses) against the two-sided values;
+  `thompson86` files (`dmW` the White-to-move wins, `dmL` the Black-to-move losses) against the two-sided values;
 * `syzygy order <dtz> <dtc> <dtm> n`: dtz ≤ dtc ≤ dtm for every win and every loss, and the same WDL and `wdl` files
   in all three.
 

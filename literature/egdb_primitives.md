@@ -63,8 +63,19 @@ Two kinds of unit, by the kind of irreversible move that separates them.
 | pieces per side | white pieces and black pieces | 4 against 2 |
 | **material class** ("material" for short) | white men, white kings, black men, black kings | 03-02-02-01 in wp-bp-wm-bm (white pieces, black pieces, white men, black men): White 2 men and 1 king, Black 1 man and 1 king |
 
-The material class is the unit of the files (`6x6-wp-bp-wm-bm.*`, every position at its index of four colex ranks);
+The material class is the unit of the files (`6x6/np/wp-bp/6x6-np-wp-bp-wm-bm-*`, every position at its index of four colex ranks);
 the material classes form a DAG through captures and promotions.
+
+**Names follow the subdivisions.** A file is `db-np-wp-bp-wm-bm-<kind>-<side>`, for example
+`6x6-06-04-02-02-01-dmW-wtm`: the database, the number of pieces, pieces per side, men per side, then a kind of three
+characters (`dtm`, `dtc`, `dtz`, `wdl` for full results; `dmW`, `dmL`, `dcW`, ... and `isW`, `isL` for half results)
+and the side to move. Every subdivision is a prefix of the name and a directory of the tree,
+`6x6/06/04-02/6x6-06-04-02-02-01-dmW-wtm`, which shows the dependencies: a capture always leads into a lower `np`
+directory, a promotion keeps the piece counts and stays inside its `wp-bp` directory. The file name stays complete, so
+a file taken out of the tree still says what it is. These files are permanent; a later compression may pack a
+directory into one file of a coarser granularity. A slice adds its tempi, `<name>-wt-bt` (e.g.
+`6x6-06-04-02-02-01-dmW-wtm-03-01`): a temporary file, consolidated into the material class's file as soon as the class
+is resolved.
 
 **Slices** split a material class by the configuration of its irreversibly moving pieces (draughts and checkers men,
 chess pawns); a man's or pawn's advance leads from one slice to another, so the slices of a material class form a DAG
@@ -468,10 +479,10 @@ Rule 6 settles where random writes may go; this settles what a round must write 
 fits in RAM. The state of a round splits in two (notation of §9.6, for a one-sided build; the same holds per side
 to move for a two-sided one):
 
-* **bit planes**, a few bits per position: the cumulative `wtm.bit-W` and `btm.bit-L` of the material being built
+* **bit planes**, a few bits per position: the cumulative `isW-wtm` and `isL-btm` of the material being built
   (Thompson's W and B), the frontiers of the previous level (W_n, B_n) and the loss candidates (Thompson's J).
   Verification reads W and B at random; the pushes write the next frontiers and the candidates at random.
-* **depth bytes**, 8 bits per position: `wtm.dtm-W` and `btm.dtm-L`. During the build of their own material they
+* **depth bytes**, 8 bits per position: `dmW-wtm` and `dmL-btm`. During the build of their own material they
   are only written, never read: a position's depth is the level at which it entered W or B. Only the builds of other
   materials read them, later, through memory maps.
 
@@ -615,7 +626,7 @@ byte; the previous metric's build gives a better estimate).
 | `par` within a group | the same work, split in blocks of 4096 positions | | whole-material groups: 2.0× on 4 cores (43.0 s → 21.1 s); configuration groups: none, only thread-pool overhead |
 | scattered updates on disk | one per update | random against sorted | Wu–Liu–Hsu 2004: 10^6 updates 3787 s random against 6.5 s sorted |
 | a group larger than RAM, cached from disk | the same work | random reads and writes through a cache | Gilbert 2005: the all-kings slice "several weeks" against 2 days in RAM |
-| a value needed by many parents, searched each time | one search per parent | CPU | Gilbert 2009: verification slower than the build because capture successors were re-searched per parent ("would nearly double the speed" if cached); `thompson86`: storing `btm.dtm-L` cut dtm from 51.1 s to 34.3 s |
+| a value needed by many parents, searched each time | one search per parent | CPU | Gilbert 2009: verification slower than the build because capture successors were re-searched per parent ("would nearly double the speed" if cached); `thompson86`: storing `dmL-btm` cut dtm from 51.1 s to 34.3 s |
 
 **The decisions, in order:**
 
@@ -988,25 +999,25 @@ A stored file is one **side to move** (`wtm`, `btm`) times one **kind**:
 
 | | full result: win, draw and loss | half result: wins only | half result: losses only |
 |---|---|---|---|
-| depth (one byte) | `dtm` | `dtm-W` | `dtm-L` |
-| outcome only | `wdl` (2 bits) | `bit-W` (1 bit) | `bit-L` (1 bit) |
+| depth (one byte) | `dtm` | `dmW` | `dmL` |
+| outcome only | `wdl` (2 bits) | `isW` (1 bit) | `isL` (1 bit) |
 
 The same for `dtc` and `dtz`; the outcome files carry no metric, since all metrics have the same wins, draws and
-losses. A two-sided build stores full results (`wtm.dtm`, `btm.dtm`, `wtm.wdl`, `btm.wdl`). A one-sided build stores
-half results: White's wins with White to move and Black's losses with Black to move (`wtm.dtm-W`, `btm.dtm-L`,
-`wtm.bit-W`, `btm.bit-L`); the other halves, `wtm.dtm-L` and `btm.dtm-W`, are the colour mirror's `btm.dtm-L` and
-`wtm.dtm-W`. Thompson 1986 kept `wtm.dtm-W` only; Thompson 1996 (dtc) kept `btm.dtc-L` (RES) with `wtm.bit-W` and
-`btm.bit-L` (the summation bitmaps).
+losses. A two-sided build stores full results (`dtm-wtm`, `dtm-btm`, `wdl-wtm`, `wdl-btm`). A one-sided build stores
+half results: White's wins with White to move and Black's losses with Black to move (`dmW-wtm`, `dmL-btm`,
+`isW-wtm`, `isL-btm`); the other halves, `dmL-wtm` and `dmW-btm`, are the colour mirror's `dmL-btm` and
+`dmW-wtm`. Thompson 1986 kept `dmW-wtm` only; Thompson 1996 (dtc) kept `dcL-btm` (RES) with `isW-wtm` and
+`isL-btm` (the summation bitmaps).
 
 What a build reads from the materials that its moves lead into (a White move lands with Black to move, and vice
 versa):
 
 | build | after a White move out | after a Black move out |
 |---|---|---|
-| one-sided dtm | `btm.dtm-L` | `wtm.dtm-W` |
-| one-sided dtc, dtz | `btm.bit-L` | `wtm.bit-W` |
-| two-sided dtm | `btm.dtm` | `wtm.dtm` |
-| two-sided dtc, dtz | `btm.wdl` | `wtm.wdl` |
+| one-sided dtm | `dmL-btm` | `dmW-wtm` |
+| one-sided dtc, dtz | `isL-btm` | `isW-wtm` |
+| two-sided dtm | `dtm-btm` | `dtm-wtm` |
+| two-sided dtc, dtz | `wdl-btm` | `wdl-wtm` |
 
 Any cell that is not stored costs a ply of search per lookup (the half result from the other side to move's file).
 

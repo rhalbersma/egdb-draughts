@@ -4,17 +4,17 @@
 //          http://www.boost.org/LICENSE_1_0.txt)
 
 // Thompson style builds (1986 and 1996) for 6x6 international draughts, for three metrics. One-sided: half results,
-// White's wins and Black's losses. Per material four files, 6x6-wp-bp-wm-bm.<side to move>.<kind> (for dtm; dtc and dtz
+// White's wins and Black's losses. Per material four files, 6x6/np/wp-bp/6x6-np-wp-bp-wm-bm-<kind>-<side to move> (for dtm; dtc and dtz
 // alike):
-//   wtm.dtm-W   one byte: k for a White win in 2k - 1 plies, 0 for "not a win" (draw, loss, illegal slot); dtc-W, dtz-W
+//   dmW-wtm   one byte: k for a White win in 2k - 1 plies, 0 for "not a win" (draw, loss, illegal slot); dcW, dzW
 //               store the plies n (their wins can take an even number of plies)
-//   btm.dtm-L   one byte: k for Black lost in 2(k - 1) plies, 0 for "not lost" (a loss can take 0 plies: Black has no
-//               move); dtc-L, dtz-L store n + 1; as Thompson 1996 kept the Black-to-move loss distances (RES)
-//   wtm.bit-W   one bit: White wins (a by-product, the half-result outcome)
-//   btm.bit-L   one bit: Black is lost
+//   dmL-btm   one byte: k for Black lost in 2(k - 1) plies, 0 for "not lost" (a loss can take 0 plies: Black has no
+//               move); dcL, dzL store n + 1; as Thompson 1996 kept the Black-to-move loss distances (RES)
+//   isW-wtm   one bit: White wins (a by-product, the half-result outcome)
+//   isL-btm   one bit: Black is lost
 // The bit files are the same for all three metrics. After a goal move only the outcome counts, so a dtc or dtz build
 // reads only the bit files of the materials that its moves out lead into (every move out of a material is a goal move
-// there); dtm reads dtm-W and dtm-L.
+// there); dtm reads dmW and dmL.
 // The goal:
 //   dtm   the goal is the end of the game (Black has no move)
 //   dtc   the end, or a capture or promotion (a conversion: another material) that keeps the win
@@ -23,12 +23,12 @@
 //
 // Materials. A material is named wp-bp-wm-bm (white pieces, black pieces, white men, black men, two digits each, as
 // in egdb_6x6's material mode); every material with a piece on each side is built once, into files of its own,
-// 6x6-wp-bp-wm-bm.wtm.<metric>-W and so on. Its index: per colour and type the colex rank over the squares where such a
+// 6x6/np/wp-bp/6x6-np-wp-bp-wm-bm-d<m|c|z>W-wtm and so on. Its index: per colour and type the colex rank over the squares where such a
 // piece may stand (15 for men, 18 for kings),
 //   index = ((rank_wm * C(15, bm) + rank_bm) * C(18, wp - wm) + rank_wk) * C(18, bp - bm) + rank_bk
 // Slots where pieces of different colours or types share a square are never written (0). A move into another
-// material (a capture, a promotion) is a lookup in that material's files at its own index: after a White move in btm.<metric>-L
-// (or btm.bit-L), after a Black move in wtm.<metric>-W (or wtm.bit-W); the smaller
+// material (a capture, a promotion) is a lookup in that material's files at its own index: after a White move in d<m|c|z>L-btm
+// (or isL-btm), after a Black move in d<m|c|z>W-wtm (or isW-wtm); the smaller
 // materials are not copied or recomputed, the address of a position follows from its own pieces. The materials form
 // a DAG through captures and promotions, which Snakemake builds in order (thompson86/Snakefile).
 //
@@ -45,7 +45,7 @@
 //   W_d = unmoves of B_{d-1} into open White-to-move positions, plus exits that win in d
 //   B_d = unmoves of W_{d-1} into open Black-to-move positions whose exits all lose by d, verified: every move inside
 //         the group leads into W (levels < d); plus positions decided in pass 0 at d
-// W_d goes into wtm.<metric>-W, B_d into btm.<metric>-L: both are one-sided (White's wins, Black's losses), and every lookup is one read.
+// W_d goes into d<m|c|z>W-wtm, B_d into d<m|c|z>L-btm: both are one-sided (White's wins, Black's losses), and every lookup is one read.
 //
 // Memory: the material's two result arrays (each written to disk once, sequentially, at the end) and bit planes per
 // group. Disk: other materials are read through read-only memory maps (random reads); the only writes are sequential.
@@ -93,7 +93,7 @@ enum : int { BYTES = 0, BITS = 2 };
 std::string mat_path(std::string const& dir, Material m, int kind)
 {
         std::string const half = kind % 2 == 0 ? "W-wtm" : "L-btm";
-        return dir + "/" + m.sub() + "-" + (kind >= BITS ? std::string("is") : std::string("d") + metric_name()[2]) + half;
+        return m.path(dir) + "-" + (kind >= BITS ? std::string("is") : std::string("d") + metric_name()[2]) + half;
 }
 
 std::uint64_t file_size(Material m, int kind) { return kind < BITS ? mat_index(m).size : (mat_index(m).size + 7) / 8; }
@@ -116,8 +116,8 @@ std::uint8_t const* mat_file(Material m, int kind)
 
 // The stored bytes. A dtm win always takes an odd number of plies and a dtm loss an even number (no move ends the count
 // early), so dtm stores moves; dtc and dtz store plies (a goal move by the loser can end a win on an even ply):
-//   dtm-W   k: win in 2k - 1 plies        dtc-W, dtz-W   n: win in n plies
-//   dtm-L   k: loss in 2(k - 1) plies     dtc-L, dtz-L   n + 1: loss in n plies
+//   dmW   k: win in 2k - 1 plies        dcW, dzW   n: win in n plies
+//   dmL   k: loss in 2(k - 1) plies     dcL, dzL   n + 1: loss in n plies
 // 0: not a win, not lost. Exact plies either way; the build works in plies, and only the files are in these units.
 int encode(Metric mt, int side, int plies)
 {
@@ -145,7 +145,7 @@ std::uint8_t store_byte(int side, int plies)
 
 DepthSink<std::uint8_t>* g_sink = nullptr;                                    // of the material being built
 
-std::uint8_t mat_byte(Material m, int side, Pos const& p)       // the stored byte (dtm-W, dtm-L)
+std::uint8_t mat_byte(Material m, int side, Pos const& p)       // the stored byte (dmW, dmL)
 {
         if (m == g_current) return g_sink->read(side, p);
         return mat_file(m, BYTES + side)[mat_index(m).index(p)];
@@ -396,7 +396,7 @@ MemoryNeed memory_need(Material c)
         std::uint64_t const meta = 160 * m.slices + 480 * m.groups;
         std::uint64_t const writing = std::uint64_t(5) << 18;                  // the final pass's chunk buffers
         // the memory-mapped files count in the resident set as their pages are touched: the inputs (the materials the
-        // moves lead into: dtm-W and dtm-L for dtm, the bit files for dtc and dtz) and, at rung 1, the group-order files
+        // moves lead into: dmW and dmL for dtm, the bit files for dtc and dtz) and, at rung 1, the group-order files
         // of the material itself (read by the lookups into earlier groups and by the final pass)
         std::uint64_t inputs = 0;
         for (Material const s : successor_materials(c)) {
@@ -423,6 +423,7 @@ void open_successors(Material c)
 
 bool build_material(std::string const& dir, Material c)
 {
+        std::filesystem::create_directories(dir + "/" + c.tree());
         g_dir = dir;
         g_current = c;
         MatIndex const& mi = mat_index(c);

@@ -567,6 +567,26 @@ byte; the previous metric's build gives a better estimate).
 | at the bit-in-RAM rungs | sequential bandwidth: a few full streams per level | fewer levels per stream (Wu–Beal's spare bitmaps), faster tier |
 | on an HDD | anything random | only the sequential rungs; sorted batches |
 
+**The scheduler is not new either.** Lake–Schaeffer–Lu 1994 (§5.1 "Creating a Supercomputer", §5.2 "A Day in the
+Life of a Network Supercomputer") built one by hand, because "keeping 30 or more machines busy required too much
+manual labor":
+
+| Chinook 1994 | Snakemake |
+|---|---|
+| a job queue file, one line per (pass, slice or mini-slice): `cap`, `winmove`, `lookup`, `noioo`, `noiom`, `que`, `build`, `ver` | rules, one job per wildcard value |
+| `addq` splits a slice into page-aligned mini-slices of about 10 million positions ("manually adding work to the queues occasionally introduced errors") | the planner generating the jobs |
+| dependencies known to the shell script (`noiom` waits for `noioo`, `que` for `noiom`, `build` for `que`), other slices' work inserted by hand between them so no processor waits | the DAG; ready jobs are found and started automatically, ordered by priority |
+| four queues by machine class: `prime` (fast, enough memory, always available), `non-prime` (the same with daytime restrictions), `slow`, `small` (8 MB or less: mostly `DoCaptures`) | resources (`mem_mb`, cores) and per-machine profiles |
+| a lock file per running job, output checked on exit, failed jobs "manually inspected" and reinserted from the start or the last checkpoint | job states, incomplete outputs, logs, `--rerun-incomplete`, `--retries` |
+| a ping every minute; a crashed or rebooted machine's last job reinserted at the top of the queue, with a mail | executors for clusters; on one machine, not needed |
+| an activity monitor suspending or killing jobs on staff workstations during the day | (not Snakemake's job: OS priorities) |
+
+The difference in unit is instructive: Chinook's job was a pass over a mini-slice of a slice, so many machines could
+share one big slice (disjoint, page-aligned write intervals, made possible by forward sweeps), at the price of
+cross-machine dependencies between passes. Our job is a whole material on one machine, with the parallelism inside it
+from `par` and across it from the DAG; splitting a material across machines would bring Chinook's pass-level jobs
+back.
+
 **To build**: the machine file; a planner (an extension of `strongly_solving_6x6/materials/materials.py`, which
 already computes sizes and critical-path priorities) that assigns each job its claim, priority and policy and each
 group its rung; engines that take those decisions as arguments and report, per pass, the measured time per position,

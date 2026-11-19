@@ -773,9 +773,14 @@ per side to move ("16.5 trillion"); the largest group, all-kings 4v4, is 37.6 G 
 1.7 bits per position), so it took symmetry (one diagonal: 4.4 GiB; both: 2.2 GiB), WDL packed five positions per byte
 (1.6 bits, 7.5 GB, just fitting), or one bit per position and side at a time; the page does not say which. So in 2009 memory hardly bound, as he says ("CPU-bound"): his 200K subdivisions were for parallelism
 ("hundreds of subdivisions that can be built in parallel", enough for 12 cores), not for memory. A planner therefore
-needs a second criterion: once the groups fit, refine further until the DAG is wide enough for the cores (at 8 GB the
-coarsest fitting layout has 3,700 groups and a mean width of 16, thin at the start and the end), as Gilbert did by
-hand and Chinook 1994 with its mini-slices. Both databases are now comfortable on a desktop, CPU-bound, at minimal
+needs a second criterion: once the groups fit, refine further until the DAG is wide enough for the cores, as Gilbert
+did by hand and Chinook 1994 with its mini-slices. `src/egdb_layout.py --cores` does it by a list schedule (a group's
+time its positions, critical path first), halving the group limit until the target utilization is reached. For his
+build (4×4, 5×3 and 3×5, 8 GB, one diagonal, 10 cores, his 197,529 positions per second per core): the coarsest layout
+that fits, 2,154 groups, keeps the cores 65 % busy (149 days); limits of 16 G and 8 G positions give 2,738 groups at
+87 % (111 days) and 4,136 groups at 96 % (101 days), fifty times fewer than his 200K subdivisions; the total work, 964
+days on one core, is his 2.65 CPU-years. For his 2005 checkers build (900 MB, 5 machines) the memory layout alone keeps
+the cores busy: there, memory was what bound. Both databases are now comfortable on a desktop, CPU-bound, at minimal
 I/O. At 10×10 and 9 pieces, the 16 kings-heavy materials that do not fit 32 GB take rung 3 or a coalescing
 cache.
 

@@ -97,3 +97,20 @@ Ed Gilbert's 2005 build of the 10-piece English checkers database (2 GB machines
 | groups | 64,369 subdivisions (three leading-rank tiers) | 16,506 (packed tempi cells and configurations) |
 | buildable at once | "about 50 at a time on average, above 100 in the middle months" | mean 49, max 274 |
 | all-kings 5v5 | "almost 4 GB of buffer", halved by one diagonal to fit 2 GB | 16.3 G positions, 3.8 GiB; ÷2 1.9 GiB, ÷4 969 MiB |
+
+With `--cores N` (and `--rate`, positions per second per core) it also refines for parallelism: below the RAM limit
+it halves the group limit until a list schedule on N cores reaches `--target` utilization (default 90 %), and reports
+the makespan and critical path per step. Gilbert's 2009 8-piece draughts build (4×4, 5×3, 3×5; 8 GB; 10 cores; his
+197,529 positions per second):
+
+```bash
+python3 src/egdb_layout.py --board 10x10 --pieces 8 --split 4-4,5-3,3-5 --ram 8GB --cores 10 --rate 197529 --kings-symmetry 2
+```
+
+| group limit | groups | makespan | utilization | critical path |
+|---|---|---|---|---|
+| 32 G (the coarsest that fits 8 GB) | 2,154 | 149 days | 65 % | 149 days |
+| 16 G | 2,738 | 111 days | 87 % | 100 days |
+| 8 G | 4,136 | 101 days | 96 % | 59 days |
+
+The total work, 964 days on one core, matches his 2.65 CPU-years of building.

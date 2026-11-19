@@ -32,6 +32,10 @@ tempo tw + tb less the material's smallest; a material needs every
 material its captures and promotions lead into (materials outside --split count as built). The width of a level is the
 number of groups that could run side by side.
 
+With --cores, the groups are refined further (the group limit halved, below the RAM limit) until a list schedule on
+that many cores reaches the target utilization: memory sets the coarsest layout, parallelism how much finer to go
+(Gilbert 2009 subdivided for parallelism, not memory). A group's time is its positions (--rate turns it into days).
+
 Positions are legal placements per side to move (men of different colours on different squares, kings on the empty
 squares), the disjoint index; --cost gives the RAM per position of a group (both sides to move in RAM):
 
@@ -114,10 +118,13 @@ class Board:
 
 
 def materials(n, split):
+    """split: None, a (wp, bp) pair or a list of them"""
+    if split and isinstance(split[0], int):
+        split = [split]
     out = []
     for wp in range(1, n):
         for bp in range(1, n - wp + 1):
-            if split and (wp, bp) != split:
+            if split and (wp, bp) not in split:
                 continue
             if not split and wp + bp > n:
                 continue
@@ -152,48 +159,104 @@ def name(m):
     return f'{wm + wk:02}-{bm + bk:02}-{wm:02}-{bm:02}'
 
 
-def layout(board, m, max_pos, kings_symmetry):
-    """the groups of a material: (granularity, {total tempo: groups in that layer}, largest group, unfit configurations)
+def layout(board, m, max_pos, kings_symmetry, ram_pos=None):
+    """the groups of a material: (granularity, {total tempo: [positions of each group]}, largest group, unfit
+    configurations: those larger than ram_pos, by default max_pos)
 
     Too large for one group: per total tempo (whose cells are independent of each other), the cells that fit are packed
     into groups up to the budget, and a cell that does not fit becomes packs of its configurations."""
     wm, wk, bm, bk = m
     k = board.kings(m)
+    ram_pos = ram_pos or max_pos
     if wm + bm == 0:                                            # kings only: a single configuration
         k //= kings_symmetry
-        return 'material', {0: 1}, k, (1 if k > max_pos else 0)
+        return 'material', {0: [k]}, k, (1 if k > ram_pos else 0)
     cells = {c: n * k for c, n in board.cells[(wm, bm)].items()}
     if sum(cells.values()) <= max_pos:
-        return 'material', {0: 1}, sum(cells.values()), 0
+        return 'material', {0: [sum(cells.values())]}, sum(cells.values()), 0
     layers = defaultdict(list)
     for (tw, tb), p in cells.items():
         layers[tw + tb].append(((tw, tb), p))
     groups, largest, unfit, gran = {}, 0, 0, 'tempi'
     per_pack = max(1, max_pos // k)                             # configurations per group, in a cell that is cut
     for t, cs in layers.items():
-        g, room = 0, 0                                          # first fit, in order of size
+        sizes = []                                              # first fit, in order of size
         for c, p in sorted(cs, key=lambda x: -x[1]):
             if p <= max_pos:
-                if p > room:
-                    g, room = g + 1, max_pos
-                room -= p
-                largest = max(largest, max_pos - room)
+                if not sizes or sizes[-1] + p > max_pos:
+                    sizes.append(0)
+                sizes[-1] += p
             else:
                 gran = 'configuration'
                 n = board.cells[(wm, bm)][c]
-                g += -(-n // per_pack)
-                largest = max(largest, min(n, per_pack) * k)
-                if k > max_pos:
+                sizes += [per_pack * k] * (n // per_pack) + ([n % per_pack * k] if n % per_pack else [])
+                if k > ram_pos:
                     unfit += n
-        groups[t] = g
+        groups[t] = sizes
+        largest = max(largest, max(sizes))
     return gran, groups, largest, unfit
+
+
+def simulate(plan, ms, inside, cores):
+    """list scheduling of the groups on `cores` workers, a group's time its positions: (makespan, total work, critical
+    path). A material's first layer waits for every material it leads into, each layer for the one before; the groups
+    of one layer are independent. Ready groups go by the longest remaining path (critical path first)."""
+    import heapq
+    users = defaultdict(list)
+    for m in ms:
+        for s in successors(m):
+            if s in inside:
+                users[s].append(m)
+    stages = {m: [sorted(plan[m][1][t], reverse=True) for t in sorted(plan[m][1])] for m in ms}
+
+    @functools.lru_cache(maxsize=None)
+    def tail(m):                                                # the longest path from the end of m
+        return max((head(u, 0) for u in users[m]), default=0)
+
+    @functools.lru_cache(maxsize=None)
+    def head(m, k):                                             # the longest path from the start of stage k of m
+        return sum(st[0] for st in stages[m][k:]) + tail(m)
+
+    for m in sorted(ms, key=lambda m: -sum(m)):                 # fill the caches from the top, no deep recursion
+        head(m, 0)
+    pending = {m: sum(1 for s in successors(m) if s in inside) for m in ms}
+    left = {}
+    ready, running, now, n = [], [], 0, 0
+
+    def release(m, k):
+        nonlocal n
+        left[(m, k)] = len(stages[m][k])
+        for size in stages[m][k]:
+            n += 1
+            heapq.heappush(ready, (-head(m, k), n, size, m, k))
+
+    for m in ms:
+        if pending[m] == 0:
+            release(m, 0)
+    while ready or running:
+        while ready and len(running) < cores:
+            _, _, size, m, k = heapq.heappop(ready)
+            heapq.heappush(running, (now + size, n, m, k))
+            n += 1
+        now, _, m, k = heapq.heappop(running)
+        left[(m, k)] -= 1
+        if left[(m, k)] == 0:
+            if k + 1 < len(stages[m]):
+                release(m, k + 1)
+            else:
+                for u in users[m]:
+                    pending[u] -= 1
+                    if pending[u] == 0:
+                        release(u, 0)
+    work = sum(sum(sum(v) for v in plan[m][1].values()) for m in ms)
+    return now, work, max(head(m, 0) for m in ms)
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     ap.add_argument('--board', choices=BOARDS, default='8x8')
     ap.add_argument('--pieces', type=int, default=10)
-    ap.add_argument('--split', help='only this split of pieces per side, e.g. 5-5 (the others count as built)')
+    ap.add_argument('--split', help='only these splits of pieces per side, e.g. 5-5 or 4-4,5-3,3-5 (the others count as built)')
     ap.add_argument('--exact', action='store_true', help='only materials of exactly --pieces pieces (the others count as built)')
     ap.add_argument('--ram', type=parse_bytes, required=True, help='the RAM a group may use, e.g. 900MB, 2GiB')
     ap.add_argument('--cost', default='gilbert2005', help=f'bytes per position: {", ".join(COSTS)}, or a number')
@@ -201,15 +264,30 @@ def main():
                     help='divide kings-only materials by this: 4 (both diagonals and the half turn, the default), '
                          '2 (one diagonal, as Gilbert 2005), 1 (none)')
     ap.add_argument('--materials', action='store_true', help='one line per material')
+    ap.add_argument('--cores', type=int, help='refine the groups below the RAM limit until this many cores are kept busy')
+    ap.add_argument('--target', type=float, default=0.9, help='with --cores: the utilization to reach (default 0.9)')
+    ap.add_argument('--rate', type=float, help='positions per second per core, to turn the schedule into time '
+                                             '(Gilbert 2009: 197529)')
     a = ap.parse_args()
     cost = COSTS[a.cost] if a.cost in COSTS else float(a.cost)
-    split = tuple(map(int, a.split.split('-'))) if a.split else None
+    split = [tuple(map(int, x.split('-'))) for x in a.split.split(',')] if a.split else None
     ms = [m for m in materials(a.pieces, split) if not a.exact or sum(m) == a.pieces]
     board = Board(a.board, a.pieces)
     max_pos = int(a.ram / cost)
     inside = set(ms)
 
     plan = {m: layout(board, m, max_pos, a.kings_symmetry) for m in ms}
+    refine = []
+    if a.cores:                                                 # finer groups until the cores are busy
+        cap = max_pos
+        while True:
+            span_, work, path = simulate(plan, ms, inside, a.cores)
+            groups_n = sum(len(v) for p in plan.values() for v in p[1].values())
+            refine.append((cap, groups_n, span_, work / (a.cores * span_), path))
+            if work / (a.cores * span_) >= a.target or cap < 2 or (len(refine) > 1 and groups_n == refine[-2][1]):
+                break
+            cap //= 2
+            plan = {m: layout(board, m, cap, a.kings_symmetry, max_pos) for m in ms}
     positions = {m: sum(n * board.kings(m) for n in board.cells[(m[0], m[2])].values()) for m in ms}
 
     # levels: a material starts after every material it leads into (inside the selection) has finished
@@ -218,7 +296,7 @@ def main():
         gran, groups, _, _ = plan[m]
         if gran == 'material':
             return 1
-        return max(groups) - min(groups) + 1
+        return max(groups) - min(groups) + 1   # layers
 
     @functools.lru_cache(maxsize=None)
     def start(m):
@@ -229,12 +307,12 @@ def main():
         gran, groups, _, _ = plan[m]
         t0 = min(groups)
         for t, g in groups.items():
-            width[start(m) + t - t0] += g
+            width[start(m) + t - t0] += len(g)
 
     by = defaultdict(lambda: [0, 0])
     for m in ms:
         by[plan[m][0]][0] += 1
-        by[plan[m][0]][1] += sum(plan[m][1].values())
+        by[plan[m][0]][1] += sum(len(v) for v in plan[m][1].values())
     total_groups = sum(v[1] for v in by.values())
     unfit = [(m, plan[m]) for m in ms if plan[m][3]]
     levels = max(width) + 1
@@ -264,11 +342,23 @@ def main():
     print(f'DAG: {levels} levels (the critical path in groups), width max {max(w):,}, mean {total_groups / levels:,.0f}')
     marks = sorted({0, levels // 4, levels // 2, 3 * levels // 4, levels - 1})
     print('  width by level: ' + ', '.join(f'{i}: {w[i]:,}' for i in marks))
+    if refine:
+        def when(units):
+            if not a.rate:
+                return f'{count(units)} positions'
+            d = units / a.rate / 86400
+            return f'{d:,.0f} days' if d >= 2 else f'{d * 24:,.1f} h'
+        print(f'{a.cores} cores (target utilization {a.target:.0%}), the time of a group its positions'
+              + (f' at {a.rate:,.0f} per second' if a.rate else '') + ':')
+        print(f'  {"group limit":>12} {"groups":>10} {"makespan":>12} {"utilization":>11} {"critical path":>14}')
+        for cap, g, span_, util, path in refine:
+            print(f'  {count(cap):>12} {g:>10,} {when(span_):>12} {util:>11.0%} {when(path):>14}')
+        print(f'  total work {when(work)} on one core; the critical path is the floor of the makespan')
     if a.materials:
         print(f'{"material":12} {"positions":>10} {"granularity":13} {"groups":>10} {"largest":>10} {"MB":>8} {"start":>5} {"levels":>6}')
         for m in sorted(ms, key=lambda m: (start(m), name(m))):
             gran, groups, largest, uf = plan[m]
-            print(f'{name(m):12} {count(positions[m]):>10} {gran:13} {sum(groups.values()):>10,} {count(largest):>10} '
+            print(f'{name(m):12} {count(positions[m]):>10} {gran:13} {sum(len(v) for v in groups.values()):>10,} {count(largest):>10} '
                   f'{largest * cost / 1e6:>8.0f} {start(m):>5} {span(m):>6}' + ('  does not fit' if uf else ''))
 
 

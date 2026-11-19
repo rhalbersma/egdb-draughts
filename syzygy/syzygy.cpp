@@ -91,8 +91,6 @@ constexpr int plies(std::uint16_t v) { return v >> 1; }
 enum : std::uint8_t { WDL_DRAW = 0, WDL_LOSS = 1, WDL_WIN = 2 };
 constexpr std::uint8_t wdl_of(std::uint16_t v) { return v == 0 ? WDL_DRAW : is_loss(v) ? WDL_LOSS : WDL_WIN; }
 
-constexpr std::uint16_t NONE = 0xFFFF;                  // eloss: an exit draws or wins
-
 // the better of two values for the side to move: the fastest win, else a draw, else the slowest loss
 std::uint16_t better(std::uint16_t a, std::uint16_t b)
 {
@@ -244,15 +242,22 @@ void solve_group(MatIndex const& mi, Group const& g)
         std::uint64_t const P = g.P, T = 2 * P;                 // position id = stm * P + index in the group
         auto const pos = [&](std::uint64_t id) { return g.pos(id % P, int(id / P)); };
         auto const id_of = [&](Pos const& p) { return std::uint64_t(p.stm) * P + g.index(p); };
-        std::vector<std::uint16_t> v(T, 0), ewin(T, 0), eloss(T, NONE);
-        std::vector<std::uint8_t> open(T, 0);                   // undecided after pass 0: has a move inside
+        std::vector<std::uint16_t> v(T, 0);
 
-        // pass 0
+        // pass 0: every position looks up its moves out of the group. Decided ones get their value; the others leave
+        // bits (has a move inside; every exit loses; no exits) and, by level, their fastest win and slowest loss through
+        // an exit. A block of 4096 positions owns the words of its bits and has its own lists, merged by level after.
+        struct Entry { std::uint32_t level, id; };
+        std::uint64_t const nblocks = (T + 4095) / 4096;
+        std::vector<std::vector<Entry>> won_b(nblocks), lost_b(nblocks), ewin_b(nblocks), eloss_b(nblocks);
+        Plane openp(T), lossable(T), exits_done(T);
         for_blocks(T, [&](std::uint64_t lo, std::uint64_t hi) {
+                std::uint64_t const blk = lo / 4096;
                 for (std::uint64_t id = lo; id < hi; ++id) {
                         Pos const p = pos(id);
                         auto const ml = moves(p);
-                        if (ml.empty()) { v[id] = loss(0); continue; }
+                        auto const i = std::uint32_t(id);
+                        if (ml.empty()) { v[id] = loss(0); lost_b[blk].push_back({ 0, i }); continue; }
                         bool in = false, drawn = false;
                         int w = INF, l = 0;
                         for (auto const& mv : ml) {
@@ -262,34 +267,40 @@ void solve_group(MatIndex const& mi, Group const& g)
                                 else if (is_loss(x)) l = std::max(l, plies(x));
                                 else drawn = true;
                         }
-                        if (!in) { v[id] = w < INF ? win(w) : drawn ? 0 : loss(l); continue; }     // decided
-                        open[id] = 1;
-                        ewin[id] = w < INF ? std::uint16_t(w) : 0;
-                        eloss[id] = drawn || w < INF ? NONE : std::uint16_t(l);    // lost only if every exit loses
+                        if (!in) {                                      // decided
+                                if (w < INF) { v[id] = win(w); won_b[blk].push_back({ std::uint32_t(w), i }); }
+                                else if (!drawn) { v[id] = loss(l); lost_b[blk].push_back({ std::uint32_t(l), i }); }
+                                continue;
+                        }
+                        openp.set(id);
+                        if (w < INF) ewin_b[blk].push_back({ std::uint32_t(w), i });
+                        if (drawn || w < INF) continue;                 // lost only if every exit loses
+                        lossable.set(id);
+                        if (l == 0) exits_done.set(id);                 // no exits
+                        else eloss_b[blk].push_back({ std::uint32_t(l), i });
                 }
         });
         int max_seed = 0;
-        for (std::uint64_t id = 0; id < T; ++id) {
-                max_seed = std::max({ max_seed, plies(v[id]), int(ewin[id]) });
-                if (open[id] && eloss[id] != NONE) max_seed = std::max(max_seed, int(eloss[id]));
-        }
-
-        // the two steps of a round, shared by both ways of finding the frontier
-        auto const check_loss = [&](std::uint64_t id, int n) {                 // rtbgen's check_loss: lost in n?
-                if (!open[id] || load(v[id]) != 0 || eloss[id] == NONE || eloss[id] > n) return false;
-                Pos const p = pos(id);
-                for (auto const& mv : moves(p)) {                               // every move inside to a win in fewer than n plies
-                        if (!inside(p, mv)) continue;
-                        std::uint16_t const x = load(v[id_of(mv.next)]);
-                        if (!is_win(x) || plies(x) >= n) return false;          // pass 0 decides wins of any depth
+        for (auto const* parts : { &won_b, &lost_b, &ewin_b, &eloss_b })
+                for (auto const& v_ : *parts)
+                        for (auto const& e : v_) max_seed = std::max(max_seed, int(e.level));
+        using List = std::vector<std::uint32_t>;
+        auto const by_level = [&](std::vector<std::vector<Entry>>& parts) {    // in block order within a level
+                std::vector<List> out(std::size_t(max_seed) + 1);
+                for (auto& v_ : parts) {
+                        for (auto const& e : v_) out[e.level].push_back(e.id);
+                        std::vector<Entry>().swap(v_);
                 }
-                store(v[id], loss(n));
-                return true;
+                return out;
         };
-        auto const mark_win = [&](std::uint64_t id, int n) {                    // undecided: won in n
-                if (!open[id] || load(v[id]) != 0) return false;
-                store(v[id], win(n));
-                return true;
+        std::vector<List> const won_at = by_level(won_b), lost_at = by_level(lost_b), ewin_at = by_level(ewin_b),
+                                eloss_at = by_level(eloss_b);
+        auto const at = [&](std::vector<List> const& by, int n) -> List const& {
+                static List const none;
+                return n >= 0 && n < int(by.size()) ? by[std::size_t(n)] : none;
+        };
+        auto const for_list = [&](List const& l, auto&& f) {
+                for_blocks(l.size(), [&](std::uint64_t lo, std::uint64_t hi) { for (auto j = lo; j < hi; ++j) f(l[j]); });
         };
         auto const predecessors = [&](std::uint64_t q, auto&& f) {             // the other side to move
                 std::uint64_t const off = (1 - q / P) * P;
@@ -297,56 +308,46 @@ void solve_group(MatIndex const& mi, Group const& g)
         };
 
         if (!g_frontier) {
-                // rtbgen: every round scans the whole group for the values of the previous ply
+                // rtbgen: every round scans the whole group for the values of the previous ply; the values are the state
+                auto const check_loss = [&](std::uint64_t id, int n) {         // rtbgen's check_loss: lost in n?
+                        if (!openp.test(id) || load(v[id]) != 0 || !lossable.test(id) || !exits_done.test(id)) return false;
+                        Pos const p = pos(id);
+                        for (auto const& mv : moves(p)) {                       // every move inside to a win in fewer than n plies
+                                if (!inside(p, mv)) continue;
+                                std::uint16_t const x = load(v[id_of(mv.next)]);
+                                if (!is_win(x) || plies(x) >= n) return false;  // pass 0 decides wins of any depth
+                        }
+                        store(v[id], loss(n));
+                        return true;
+                };
+                auto const mark_win = [&](std::uint64_t id, int n) {            // undecided: won in n
+                        if (!openp.test(id) || load(v[id]) != 0) return false;
+                        store(v[id], win(n));
+                        return true;
+                };
                 for (int n = 1;; ++n) {
                         std::atomic<bool> found{ false };
                         auto const note = [&](bool b) { if (b) found.store(true, std::memory_order_relaxed); };
+                        for_list(at(eloss_at, n), [&](std::uint64_t id) { exits_done.set_atomic(id); });   // exits lost by n
                         for_blocks(T, [&](std::uint64_t lo, std::uint64_t hi) {         // losses in n
-                                for (std::uint64_t q = lo; q < hi; ++q) {
+                                for (std::uint64_t q = lo; q < hi; ++q)
                                         if (n > 1 && load(v[q]) == win(n - 1))            // win(0) would be 0
                                                 predecessors(q, [&](std::uint64_t id) { note(check_loss(id, n)); });
-                                        if (open[q] && eloss[q] == n) note(check_loss(q, n));
-                                }
                         });
+                        for_list(at(eloss_at, n), [&](std::uint64_t id) { note(check_loss(id, n)); });
                         for_blocks(T, [&](std::uint64_t lo, std::uint64_t hi) {         // wins in n
-                                for (std::uint64_t q = lo; q < hi; ++q) {
+                                for (std::uint64_t q = lo; q < hi; ++q)
                                         if (load(v[q]) == loss(n - 1))
                                                 predecessors(q, [&](std::uint64_t id) { note(mark_win(id, n)); });
-                                        if (open[q] && ewin[q] == n) note(mark_win(q, n));
-                                }
                         });
+                        for_list(at(ewin_at, n), [&](std::uint64_t id) { note(mark_win(id, n)); });
                         if (!found && n > max_seed) break;      // positions decided at max_seed are a frontier in max_seed + 1
                 }
         } else {
-                // frontiers: bit planes of the wins and losses found in the previous round, plus lists by level of the
+                // frontiers: bit planes of the wins and losses found in the previous round, plus the lists by level of the
                 // positions decided in pass 0 and of the exits; a round visits only these. The state the rounds test is
                 // in cumulative bit planes, not in the values: won and lost hold every position decided at a level
                 // below the round (pass-0 decisions join when their level comes round), so v is only written
-                using List = std::vector<std::uint32_t>;
-                std::vector<List> won_at(std::size_t(max_seed) + 1), lost_at(won_at.size()), ewin_at(won_at.size()),
-                        eloss_at(won_at.size());
-                Plane openp(T), lossable(T), exits_done(T);             // has a move inside; every exit loses; by now
-                for (std::uint64_t id = 0; id < T; ++id) {
-                        auto const i = std::uint32_t(id);
-                        if (!open[id]) {
-                                if (is_win(v[id])) won_at[std::size_t(plies(v[id]))].push_back(i);
-                                else if (is_loss(v[id])) lost_at[std::size_t(plies(v[id]))].push_back(i);
-                                continue;
-                        }
-                        openp.set(id);
-                        if (ewin[id] != 0) ewin_at[ewin[id]].push_back(i);
-                        if (eloss[id] == NONE) continue;
-                        lossable.set(id);
-                        if (eloss[id] == 0) exits_done.set(id);         // no exits
-                        else eloss_at[eloss[id]].push_back(i);
-                }
-                auto const at = [&](std::vector<List> const& by, int n) -> List const& {
-                        static List const none;
-                        return n >= 0 && n < int(by.size()) ? by[std::size_t(n)] : none;
-                };
-                auto const for_list = [&](List const& l, auto&& f) {
-                        for_blocks(l.size(), [&](std::uint64_t lo, std::uint64_t hi) { for (auto j = lo; j < hi; ++j) f(l[j]); });
-                };
                 Plane won(T), lost(T), won_prev(T), lost_prev(T), won_new(T), lost_new(T);
                 for (int n = 1;; ++n) {
                         for_list(at(eloss_at, n), [&](std::uint64_t id) { exits_done.set_atomic(id); });   // exits lost by n

@@ -769,8 +769,9 @@ Gilbert's 2005 checkers build ran on 2 GB machines (rung 4 and half the symmetry
 8-piece draughts build four instances on one 8 GB machine (the page gives no memory per instance and says nothing about
 the all-kings subdivisions). The model reproduces his position count, 4×4 + 5×3 + 3×5 = 6.35 + 5.08 + 5.08 = 16.50 T
 per side to move ("16.5 trillion"); the largest group, all-kings 4v4, is 37.6 G positions per side, 8.8 GiB at 2 bits
-(too large for 8 GB), 4.4 GiB with one diagonal (it fits, next to three instances building small subdivisions), 2.2 GiB
-with both. So in 2009 memory hardly bound, as he says ("CPU-bound"): his 200K subdivisions were for parallelism
+(too large for 8 GB even with one instance alone on the machine, which the largest material surely had: 8 GB allows
+1.7 bits per position), so it took symmetry (one diagonal: 4.4 GiB; both: 2.2 GiB), WDL packed five positions per byte
+(1.6 bits, 7.5 GB, just fitting), or one bit per position and side at a time; the page does not say which. So in 2009 memory hardly bound, as he says ("CPU-bound"): his 200K subdivisions were for parallelism
 ("hundreds of subdivisions that can be built in parallel", enough for 12 cores), not for memory. A planner therefore
 needs a second criterion: once the groups fit, refine further until the DAG is wide enough for the cores (at 8 GB the
 coarsest fitting layout has 3,700 groups and a mean width of 16, thin at the start and the end), as Gilbert did by

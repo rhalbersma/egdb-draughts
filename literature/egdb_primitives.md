@@ -492,10 +492,20 @@ A build is bound by CPU, RAM and I/O at once, and which of them binds depends on
 Chinook's network-of-workstations build (Lake–Schaeffer–Lu 1994) ran workers of 8–15 MB with a 3–4 MB working set of
 8 KB pages under LRU, chose forward sweeps *because* their writes stay local, ran the backward queue sequentially for
 lack of locality, and made up 75 % of the department's network traffic; its 2003 successor reports the capture,
-lookup and verification passes I/O-bound and the non-capture iteration CPU-bound. Gilbert's 10-piece English checkers
-build (2005, `edgilbert.org`) is the small-memory extreme: five PCs with 1–2 GB of RAM, 120–250 GB disks and a
-100 Mbit LAN, 4.2 computer-years in 11.5 months, every subdivision cut until it fitted a 2 GB buffer and 32-bit
-indices. So the choices of §7.1–7.2 and of `seq` or `par` should not be made by hand per build, but by a planner
+lookup and verification passes I/O-bound and the non-capture iteration CPU-bound. Ed Gilbert's two builds bracket
+the range (`edgilbert.org`, notes in [`papers/3_checkers.md`](papers/3_checkers.md)):
+
+* **10-piece English checkers (2005), RAM-bound**: five PCs with 1–2 GB of RAM, 120–250 GB disks, a 100 Mbit LAN;
+  4.2 computer-years in 11.5 months. Every subdivision was cut until it fitted a 2 GB buffer and 32-bit indices,
+  because beyond RAM "accessing the data on disk becomes horribly slow": his program could build a subdivision larger
+  than RAM, but the all-kings slice took "only 2 days instead of several weeks" once mirror symmetry halved it into
+  2 GB.
+* **8-piece international draughts (2009), CPU-bound**: 16.5 trillion positions on 12 cores (a quad-core with 8 GB,
+  then a dual quad-core Xeon); 2.65 CPU-years to build and 2.91 to verify in 8.8 months, about 198,000 positions per
+  second per core. "Parallelizing the build is critical": about 200,000 subdivisions, typically hundreds buildable at
+  any moment, enough for two or three times as many cores.
+
+So the choices of §7.1–7.2 and of `seq` or `par` should not be made by hand per build, but by a planner
 from a description of the machine and the sizes known before the build.
 
 **The machine**, a small description file:
@@ -524,14 +534,18 @@ byte; the previous metric's build gives a better estimate).
 | depth sink, group-order files instead of the array | the gathering pass, slice lookups | sequential writes, random reads in RAM | +10–15 % CPU; the largest material's peak memory 19.3 MB instead of 24.9 MB |
 | `par` within a group | the same work, split in blocks of 4096 positions | | whole-material groups: 2.0× on 4 cores (43.0 s → 21.1 s); single-slice groups: none, only thread-pool overhead |
 | scattered updates on disk | one per update | random against sorted | Wu–Liu–Hsu 2004: 10^6 updates 3787 s random against 6.5 s sorted |
+| a group larger than RAM, cached from disk | the same work | random reads and writes through a cache | Gilbert 2005: the all-kings slice "several weeks" against 2 days in RAM |
+| a value needed by many parents, searched each time | one search per parent | CPU | Gilbert 2009: verification slower than the build because capture successors were re-searched per parent ("would nearly double the speed" if cached); `thompson86`: storing `btm.dtm-L` cut dtm from 51.1 s to 34.3 s |
 
 **The decisions, in order:**
 
 1. **Grouping.** The knob that sets everything else: fine enough that a group fits its claim at a high rung, coarse
    enough that per-group overhead (files, maps, metadata, thread-pool start-up) stays small. Gilbert cut by piece
    counts and leading ranks, then by the configuration of the leading rank, then by the rank of the penultimate
-   checker, but only above a 900 MB threshold: 64,369 subdivisions instead of almost 3 million, which would have been
-   some 20 million files; our first group-file sink hit the kernel's 65,530 memory maps for the same reason.
+   checker, but only above a 900 MB threshold: 64,369 subdivisions instead of almost 3 million, some 20 million files,
+   on which "the build program will run out of file handles and choke"; our first group-file sink hit the kernel's
+   65,530 memory maps for the same reason. Finer subdivision also feeds parallelism: hundreds of independent
+   subdivisions kept 12 cores busy in the draughts build.
 2. **The rung per group**, the highest that fits the job's claim (§7.2).
 3. **The policy per group**: `par` when the group has several blocks per core, `seq` otherwise, with the parallelism
    taken from jobs side by side or from independent groups of one wave.

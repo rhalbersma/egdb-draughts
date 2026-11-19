@@ -39,39 +39,90 @@ Notes marked **[my analysis]** are my inferences for the `std::for_each` mapping
 
 ---
 
-## 2005-web-Gilbert, "Building the 10-piece database" (edgilbert.org/EnglishCheckers/10-pieceBuild.htm)
+## 2005-web-Gilbert, 10-piece English checkers build (edgilbert.org/EnglishCheckers/10-pieceBuild.htm)
 
-Read through a summarising web fetch, not verbatim; numbers as the summary gave them.
+Read verbatim (HTML fetched and converted to text).
 
-1. **Scope**: the 10-piece English checkers database, started 2 August 2004, finished 17 July 2005 (the 5-vs-5
-   checkers slice last): 11.5 months of calendar time, 4.2 years of computer time; the 9-piece database had taken
-   6 computer-months in 2003, the 10-piece one has 4.3 times as many positions.
-2. **Hardware**: five PCs (2.4 and 3.2 GHz P4, Athlon XP 2800+ and 2600+, a fifth with 1 GB), 2 GB of RAM each except
-   that one, 120 GB disk pairs and a 250 GB disk, a 100 Mbit LAN; near 100 % occupied at low priority.
-3. **Subdivision**: the Chinook scheme (piece counts and leading ranks), refined in three tiers: leading rank; the
-   configuration of the checkers on the leading rank (70 for 2 men of one colour, 4,900 for 2 of each); the rank of the
-   penultimate checker (up to 36 pieces). Tiers 2 and 3 only above a 900 MB threshold: 64,369 subdivisions instead of
-   almost 3 million (about 20 million files). For 9 pieces, indexing by the leading square gave 71,168 subdivisions and
-   about half a million files, under 2^32 positions each. "With these 3 tiers just about everything can be built with
-   2gb of ram and 32-bit indices"; "most of the 10-piece database can be built efficiently using only 1gb ram", but at
-   least one machine needs 2 GB.
-4. **The all-kings slice**: almost 4 GB of buffer and more than 2^32 positions; halved by mirror symmetry along the
-   double-corner diagonal to fit 2 GB, built with 64-bit indices, then split into pieces below 2^32.
-5. **Memory beyond RAM**: for the largest slices "complex disk caching schemes must then be used, else accessing the
-   data on disk becomes horribly slow"; caching is less effective at every level (CPU, operating system, program) with
-   larger data; 64-bit arithmetic through library calls slows iteration.
-6. **Storage**: WDL data and index files per colour, moves-to-conversion in four more files per subdivision; for use,
-   slices re-indexed into single subdivisions in chunks of 2^31 positions (re-indexing 12–15× faster than building);
-   Schaeffer's RLE without capture and threatened-capture positions, Fierz's 4 positions per byte with spare codes for
-   runs.
-7. **Parallelism**: subdivisions with the same leading-rank counts in one tier are independent; about 50 buildable at
-   a time on average (over 100 mid-build, under 20 at start and end).
-8. **Verification**: the self-consistency check "adds about 40% to the total build time" and was skipped; per-slice
-   WDL counts were compared with Schaeffer's independent build instead, which found one wrong subdivision (one win too
-   many), traced to a compression pass on one machine; a later self-consistency check detected it.
-9. **Lessons**: verify (random errors in compression, file transfers and RAM propagate); keep subdivisions within RAM
-   and 32-bit indices but avoid too many files (browsing the 9-piece tree froze the file manager for minutes).
-10. **Synthesis**: §7.3.
+1. **Scope**: the 10-piece English checkers database, started 2 August 2004, final slice (5 men vs 5 men, about
+   4 billion positions, "the smallest" and "the fastest slice to build") finished 17 July 2005: "11-1/2 months of
+   calendar time, but it was also 4.2 years of computer time". The 9-piece database took 6 computer-months in 2003; the
+   10-piece one has 4.3 times as many positions, and there was "a progressive slowdown as each larger db was built".
+   The largest slice "occupied 4 computers working in parallel for 2 months".
+2. **Hardware**: a 2.4 GHz P4 and an Athlon XP2800+ with 2 GB each, a pair of 120 GB disks added to each; a 3.2 GHz
+   P4 with 2 GB (July 2004); an Athlon XP2600+; after six months a fifth machine (new CPU, motherboard, a 250 GB disk,
+   1 GB taken from another build machine). One program instance per machine, at low priority, sharing results over a
+   100 Mbit Ethernet LAN. Re-indexing on a hyperthreaded P4.
+3. **Memory**: up to 8 pieces, Chinook's subdivisions (piece counts, leading ranks) "fit entirely in ram as they are
+   built, allowing fast random access and quick build times" on 32-bit PCs with 2 GB per program (the 8-piece database
+   in about 2 weeks on one machine). Beyond that, "the largest 9 and 10 piece subdivisions are much too large to fit in
+   the available ram. Complex disk caching schemes must then be used, else accessing the data on disk becomes horribly
+   slow. With these larger data sets, caching is less effective at all levels -- dram caching within the cpu, disk
+   caching within the operating system, as well as the database caching in the build program." More than 2^32
+   positions also forces 64-bit arithmetic through library calls, which slows iteration.
+4. **9 pieces**: subdivisions by piece counts and the *square* of the most advanced man of each colour (about 784
+   combinations instead of 49 leading-rank pairs): all fit 2 GB buffers and 2^32 positions, but 71,168 subdivisions
+   (against 5,364 by leading rank), "many of them trivially small", 4 WDL files and 4 moves-to-conversion files each,
+   about half a million files; Windows Explorer went "completely comatose for 3 to 4 minutes" browsing them.
+5. **10 pieces**: three tiers: piece counts and leading ranks; the configuration of the men on the leading rank (for 2
+   men, 10 per rank, 70 per colour, 4,900 for 2 men each); the penultimate rank (the most advanced man not on the
+   leading rank, "most of the largest subdivisions into 36 smaller pieces"). "With these 3 tiers just about everything
+   can be built with 2gb of ram and 32-bit indices", but there were almost 3 million subdivisions and about 20 million
+   files: "the build program will run out of file handles and choke on all those files". So the second and third tiers
+   only above a **900 MB threshold**: 64,369 subdivisions. "Most of the 10-piece database can be built efficiently
+   using only 1gb ram, but at least one machine needs to have 2gb or the largest database subdivisions will build much
+   more slowly."
+6. **The all-kings slice**: almost 4 GB of buffer and more than 2^32 positions, not subdividable (no men). "My build
+   program can build subdivisions that do not fit completely in ram, but at a much slower speed." Halved by the mirror
+   symmetry about the double-corner diagonal (Fierz's idea) to just fit 2 GB, built with 64-bit indices, then split
+   into pieces below 2^32 for lookups: "only 2 days instead of several weeks". The single-corner symmetry would halve
+   it again but was not needed.
+7. **Parallelism**: subdivisions with the same number of men on the leading rank in the same first tier are
+   independent; about 50 buildable at a time on average, above 100 in the middle months, below 20 only at the start
+   and in the last week; machines "occupied nearly 100% of the time". Estimate: about 20 dual-core processors with 2
+   instances each would build it in 5–6 weeks.
+8. **Runtime format**: each slice re-indexed into one subdivision (no tables against man collisions), then cut into
+   fixed pieces of 2^31 positions (Trice's idea, 2^31 to avoid overflow tests) so indexing data stays 32-bit (it would
+   have been nearly 2 GB for 64-bit indices). Re-indexing runs 12–15× faster than building; one hyperthreaded P4 kept
+   up with five build machines (each program at about 3/4 speed when both ran).
+9. **Verification**: self-consistency "adds about 40% to the total build time" and was skipped; WDL counts per slice
+   were compared with Schaeffer's independent database. One slice (2 black men, 3 black kings, 2 white men, 3 white
+   kings) differed by one win against one draw; narrowed to one leading-rank subdivision, recomputed (3 days), traced
+   to an error during the compression pass on one machine. A self-consistency check on the bad data "correctly detected
+   it". Schaeffer had seen errors in compression, in LAN file transfers and random bit errors in RAM.
+10. **Compression**: Schaeffer's run-length encoding with capture and threatened-capture positions removed; Fierz's 4
+    positions per byte with the spare codes for runs.
+11. **Synthesis**: §7.3.
+
+---
+
+## 2009-web-Gilbert, 8-piece international draughts database (edgilbert.org/InternationalDraughts/8_piece_international_draughts_db.htm)
+
+Read verbatim (HTML fetched and converted to text).
+
+1. **Scope**: 10×10 international draughts, all 4×4 and 5×3 positions, 16.5 trillion; WDL for all, moves to
+   conversion for "all positions that are at least 10 plies from a conversion move". October 2008 to 6 July 2009, on
+   top of the 2–7-piece databases built in 2007.
+2. **Statistics**: total calendar build and verify time 8.8 months; CPU build time 2.65 CPU-years; CPU verify time
+   2.91 CPU-years; 365 GB on disk (WDL only); average build speed per CPU 197,529 positions/s; average verify speed per
+   CPU 179,584 positions/s; longest MTC 149 plies (B:WK1,K7,48:BK8,15,K18,22,K33).
+3. **Hardware**: first a 2.4 GHz quad-core with 8 GB of RAM running 4 instances; at 14 % done (mid-January) an 8-core
+   dual Xeon (two 2.5 GHz quad-cores) for 8 more instances. For most of the build 10 cores built and verified, 2
+   re-indexed.
+4. **CPU-bound**: "It is clear from the above statistics that parallelizing the build is critical to getting the 8
+   piece database built in a reasonable period of time." Three subdivisions: man and king counts; the rows of the most
+   advanced black and white man; the configuration of the men on the leading rank (for example 5 × 10 = 50 independent
+   combinations within one such subset). "At any instant in time during the build there are typically hundreds of
+   subdivisions that can be built in parallel"; except at the start, the end and around days 208 and 248, more than
+   enough to keep 12 cores busy: "I could have easily kept two or three times as many cores occupied".
+5. **Files**: about 200K subdivisions, most with 8 files (four WDL, four MTC); not good for engine lookups, so
+   re-indexed into subdivisions by piece counts only; re-indexing about 10× faster than building.
+6. **Verification**: after each subdivision is built and compressed, every non-capture position is checked against
+   the WDL values of its successors (capture positions are excluded from the compressed data). It was "on average a bit
+   slower than building", because many successors are captures whose values need a small search, repeated for every
+   position that has the same capture successor; in the build, values within a subdivision are computed once. Caching
+   the capture values "would nearly double the speed of the verify process", two months less in total.
+7. **Synthesis**: §7.3. The verification lesson is the same as storing `btm.dtm-L` in `thompson86`: a value looked up
+   from many parents should be computed once, not re-searched per parent.
 
 ---
 

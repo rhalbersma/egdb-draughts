@@ -13,9 +13,10 @@
 # files (every move out of a material is a goal move there). The files of a metric go into <dir>/<metric>: the wdl
 # files are the same for all three.
 #
-# Memory (synthesis 7.3): the engine's `plan` gives every material's need; each build claims it, or the whole budget if
-# it does not fit (syzygy has only rung 0, so it then runs over its claim and says so). Pass the budget as
-# --resources mem_mb=N (else config mem_mb, else 75 % of physical memory). Priorities follow the critical path.
+# Memory (synthesis 7.3): the engine's `plan` gives every material's need; each build claims its rung-0 need, or the
+# whole budget if that does not fit (the build then writes its depths to group files, rung 1, with sink=auto). Pass the
+# budget as --resources mem_mb=N (else config mem_mb, else 75 % of physical memory). Priorities follow the critical
+# path. granularity=class|layer|cell|slice sets the groups (cell: the smallest largest group).
 #
 # usage (from the root of the repo):
 #   snakemake -s syzygy/Snakefile --cores 4 --config engine=build/syzygy dir=data/syzygy pieces=6 metric=dtz

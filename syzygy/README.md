@@ -130,8 +130,8 @@ move: dtm exactly, dtc and dtz their wins and losses; every value against its re
   logged 6-piece builds (both builders, granularities, sinks and modes) no peak exceeded its estimate, which averages
   about twice the peak (worst-case bounds for the lists and the inputs).
 
-At 6 pieces the largest material's peak went from 69–73 MB to 49 MB (waves, group files) or 58 MB (waves, array);
-with slice groups the peak is 89 MB, set by 03-03-03-03's slice metadata, and dtm CPU drops to 37.6 s. Every step of
+At 6 pieces the largest material's peak went from 69–73 MB to 49 MB (`class`, group files) or 58 MB (`class`,
+array); with `slice` groups the peak is 89 MB, set by 03-03-03-03's slice metadata, and dtm CPU drops to 37.6 s. Every step of
 the change left the files byte-identical (frontier and scan, both sinks, every granularity, seq and par, 4 and 6 pieces,
 all metrics).
 

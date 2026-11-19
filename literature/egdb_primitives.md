@@ -101,8 +101,14 @@ A kings-only material class is a single slice at both granularities.
 or a promotion, the moves that leave it. DTZ counts the moves inside a configuration: the count also ends at a man move,
 the move that leaves it. DTM counts to the end of the game, across all of them.
 
-**A group** is a set of configurations of one material class that a build solves together: the unit of one
-solve, whose rounds share bit planes and frontiers. **A job** is what the scheduler (Snakemake) schedules: one command
+**A group** is a set of configurations of one material class solved together: whole slices of one total tempo, or a
+pack of one slice's configurations (or the whole material class). It is the unit of one solve, whose rounds share bit
+planes and frontiers. **Slices and groups are kept apart**: the slice is the unit of the data, fixed by the rules (its
+DAG is the tempi grid, its files are named by it, `<name>-wt-bt`), the group the unit of computation, cut to fit the
+machine (its RAM and its cores, §7.4). A group may cover several slices (cells of one total tempo, which are
+independent of each other) or part of one (a pack of its configurations, which are independent too); a solve writes
+the slice files of the slices it covers, so the names stay the same whatever the machine. Chinook 1994 drew the same
+line: the slice was its unit of data, the page-aligned mini-slice its unit of work. **A job** is what the scheduler (Snakemake) schedules: one command
 with its inputs, outputs and resources. In our builders a job builds one material class (it lists the class's groups,
 solves them in dependency order and writes its files); Chinook 1994's jobs were passes over mini-slices, Gilbert's
 were subdivisions.

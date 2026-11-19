@@ -60,6 +60,16 @@ BOARDS = {'6x6': (6, 3), '8x8': (8, 4), '10x10': (10, 5)}       # rows, playable
 COSTS = {'gilbert2005': 0.25, 'wdl': 0.5, 'bit': 0.25, 'byte': 2 * (1 + 4 / 8), 'thompson86': 11 / 8 + 24 + 2, 'syzygy': 9 * 2 / 8 + 24 + 4}
 
 
+# the builders: RAM per position of a group (both sides to move), file bytes per position and side (depth, outcome),
+# CPU per position and side to move, measured at 6x6 on a 2.1 GHz Xeon (dtm; larger boards cost more per position)
+BUILDERS = {
+    'thompson86': dict(cost=COSTS['thompson86'], depth=1, outcome=1 / 8, us=0.35, two_sided=False),
+    'syzygy': dict(cost=COSTS['syzygy'], depth=1, outcome=2 / 8, us=0.68, two_sided=True),
+    'wdl': dict(cost=COSTS['wdl'], depth=0, outcome=2 / 8, us=0.52, two_sided=True),
+}
+REF_GHZ = 2.1
+
+
 def parse_bytes(s):
     m = re.fullmatch(r'([\d.]+)\s*([KMGT]i?B|B)?', s.strip(), re.I)
     if not m:
@@ -197,16 +207,16 @@ def layout(board, m, max_pos, kings_symmetry, ram_pos=None):
     return gran, groups, largest, unfit
 
 
-def simulate(plan, ms, inside, cores):
+def simulate(plan, ms, inside, cores, canon=lambda m: m):
     """list scheduling of the groups on `cores` workers, a group's time its positions: (makespan, total work, critical
     path). A material's first layer waits for every material it leads into, each layer for the one before; the groups
     of one layer are independent. Ready groups go by the longest remaining path (critical path first)."""
     import heapq
     users = defaultdict(list)
+    deps = {m: {canon(s) for s in successors(m)} & inside - {m} for m in ms}
     for m in ms:
-        for s in successors(m):
-            if s in inside:
-                users[s].append(m)
+        for s in deps[m]:
+            users[s].append(m)
     stages = {m: [sorted(plan[m][1][t], reverse=True) for t in sorted(plan[m][1])] for m in ms}
 
     @functools.lru_cache(maxsize=None)
@@ -219,7 +229,7 @@ def simulate(plan, ms, inside, cores):
 
     for m in sorted(ms, key=lambda m: -sum(m)):                 # fill the caches from the top, no deep recursion
         head(m, 0)
-    pending = {m: sum(1 for s in successors(m) if s in inside) for m in ms}
+    pending = {m: len(deps[m]) for m in ms}
     left = {}
     ready, running, now, n = [], [], 0, 0
 
@@ -259,7 +269,22 @@ def main():
     ap.add_argument('--split', help='only these splits of pieces per side, e.g. 5-5 or 4-4,5-3,3-5 (the others count as built)')
     ap.add_argument('--exact', action='store_true', help='only materials of exactly --pieces pieces (the others count as built)')
     ap.add_argument('--ram', type=parse_bytes, required=True, help='the RAM a group may use, e.g. 900MB, 2GiB')
-    ap.add_argument('--cost', default='gilbert2005', help=f'bytes per position: {", ".join(COSTS)}, or a number')
+    ap.add_argument('--cost', help=f'bytes per position: {", ".join(COSTS)}, or a number (default: the builder\'s, else '
+                                   f'gilbert2005)')
+    ap.add_argument('--builder', choices=BUILDERS, help='estimate space, I/O and time for this builder: thompson86 '
+                    '(one-sided, half results), syzygy (two-sided, full results), wdl (two-sided, outcomes only)')
+    ap.add_argument('--metrics', type=int, default=1, help='with --builder: depth metrics built (dtm, dtc, dtz), default 1')
+    ap.add_argument('--ghz', type=float, default=REF_GHZ, help=f'with --builder: the clock (calibrated at {REF_GHZ} GHz)')
+    ap.add_argument('--us', type=float, help='with --builder: microseconds per position and side to move at --ghz, '
+                    'instead of the 6x6 calibration (Gilbert 2009, 10x10: about 5.1 at 2.4 GHz)')
+    ap.add_argument('--disk', type=parse_bytes, help='with --builder: the SSD (or disk) size, e.g. 4TB')
+    ap.add_argument('--disk-mbps', type=float, default=500, help='with --builder: sequential MB/s (default 500, a SATA SSD)')
+    ap.add_argument('--tbw', type=float, help='with --builder: the SSD\'s endurance in TB written')
+    ap.add_argument('--index', choices=('disjoint', 'overlapping'), default='disjoint',
+                    help='with --builder: file slots per legal placement (disjoint, the default) or per independent '
+                         'colex ranks per colour and type, as thompson86 and syzygy index today (overlapping)')
+    ap.add_argument('--levels', type=int, default=100,
+                    help='with --builder: levels of a group that needs rung 3 (its per-level streams), default 100')
     ap.add_argument('--kings-symmetry', type=int, default=4,
                     help='divide kings-only materials by this: 4 (both diagonals and the half turn, the default), '
                          '2 (one diagonal, as Gilbert 2005), 1 (none)')
@@ -269,9 +294,19 @@ def main():
     ap.add_argument('--rate', type=float, help='positions per second per core, to turn the schedule into time '
                                              '(Gilbert 2009: 197529)')
     a = ap.parse_args()
-    cost = COSTS[a.cost] if a.cost in COSTS else float(a.cost)
+    b_ = BUILDERS.get(a.builder)
+    if a.cost is None:
+        cost = b_['cost'] if b_ else COSTS['gilbert2005']
+    else:
+        cost = COSTS[a.cost] if a.cost in COSTS else float(a.cost)
+    if a.builder and a.cores is None:
+        a.cores = 1
     split = [tuple(map(int, x.split('-'))) for x in a.split.split(',')] if a.split else None
     ms = [m for m in materials(a.pieces, split) if not a.exact or sum(m) == a.pieces]
+    if b_ and b_['two_sided']:                                  # one of each mirror pair
+        ms = [m for m in ms if not (m[2], m[0], m[3], m[1]) < (m[0], m[2], m[1], m[3])]
+    canon = ((lambda m: m if not (m[2], m[0], m[3], m[1]) < (m[0], m[2], m[1], m[3]) else (m[2], m[3], m[0], m[1]))
+             if b_ and b_['two_sided'] else (lambda m: m))
     board = Board(a.board, a.pieces)
     max_pos = int(a.ram / cost)
     inside = set(ms)
@@ -281,7 +316,7 @@ def main():
     if a.cores:                                                 # finer groups until the cores are busy
         cap = max_pos
         while True:
-            span_, work, path = simulate(plan, ms, inside, a.cores)
+            span_, work, path = simulate(plan, ms, inside, a.cores, canon)
             groups_n = sum(len(v) for p in plan.values() for v in p[1].values())
             refine.append((cap, groups_n, span_, work / (a.cores * span_), path))
             if work / (a.cores * span_) >= a.target or cap < 2 or (len(refine) > 1 and groups_n == refine[-2][1]):
@@ -300,7 +335,7 @@ def main():
 
     @functools.lru_cache(maxsize=None)
     def start(m):
-        return max((start(s) + span(s) for s in successors(m) if s in inside), default=0)
+        return max((start(c) + span(c) for c in {canon(s) for s in successors(m)} & inside - {m}), default=0)
 
     width = defaultdict(int)
     for m in ms:
@@ -354,12 +389,77 @@ def main():
         for cap, g, span_, util, path in refine:
             print(f'  {count(cap):>12} {g:>10,} {when(span_):>12} {util:>11.0%} {when(path):>14}')
         print(f'  total work {when(work)} on one core; the critical path is the floor of the makespan')
+    if b_:
+        estimate(a, b_, board, ms, plan, positions, canon, refine, max_pos, cost)
     if a.materials:
         print(f'{"material":12} {"positions":>10} {"granularity":13} {"groups":>10} {"largest":>10} {"MB":>8} {"start":>5} {"levels":>6}')
         for m in sorted(ms, key=lambda m: (start(m), name(m))):
             gran, groups, largest, uf = plan[m]
             print(f'{name(m):12} {count(positions[m]):>10} {gran:13} {sum(len(v) for v in groups.values()):>10,} {count(largest):>10} '
                   f'{largest * cost / 1e6:>8.0f} {start(m):>5} {span(m):>6}' + ('  does not fit' if uf else ''))
+
+
+def estimate(a, b, board, ms, plan, positions, canon, refine, max_pos, cost):
+    """space, I/O and time of the build on the machine (synthesis section 7.4)"""
+    n = a.metrics if b['depth'] else 1
+    legal = lambda m: positions[m] if m in positions else sum(c * board.kings(m) for c in board.cells[(m[0], m[2])].values())
+    men_sq = board.squares - board.per_row                      # a man never stands on its promotion row
+
+    def pos(m):                                                 # file slots per side to move
+        if a.index == 'disjoint':
+            return legal(m)
+        wm, wk, bm, bk = m
+        return math.comb(men_sq, wm) * math.comb(men_sq, bm) * math.comb(board.squares, wk) * math.comb(board.squares, bk)
+    P = sum(pos(m) for m in ms)                                 # slots per side to move, stored materials
+    depth = 2 * P * b['depth'] * n                              # both sides to move
+    outcome = 2 * P * b['outcome'] * n                          # each metric's build writes its own (identical) outcomes
+    files = depth + outcome
+    # scratch: the depth sink's group-order files of the jobs writing side by side (a file written under a temporary
+    # name becomes the final one by a rename, so it is counted in the files already); values of 1 byte (thompson86) or
+    # 2 (syzygy) per position and side
+    v = 0 if not b['depth'] else (2 if b['two_sided'] else 1)
+    scratch = sum(sorted((2 * pos(m) * v for m in ms), reverse=True)[:a.cores])
+    # reads: each build reads the files of the materials it leads into (depths for dtm, outcomes otherwise)
+    best = worst = 0
+    for metric in range(max(n, 1)):
+        per_pos = 2 * ((b['depth'] + b['outcome'] * (b['two_sided'])) if metric == 0 and b['depth'] else b['outcome'])
+        used = set()
+        for m in ms:
+            for s_ in {canon(x) for x in successors(m)} - {m}:
+                if s_[0] + s_[1] == 0 or s_[2] + s_[3] == 0:
+                    continue
+                worst += pos(s_) * per_pos
+                used.add(s_)
+        best += sum(pos(x) * per_pos for x in used)
+    # groups that do not fit RAM at the builder's cost: rung 3, about a dozen plane streams per level
+    big = [g for p_ in plan.values() for v in p_[1].values() for g in v if g * cost > a.ram]
+    streams = sum(a.levels * 12 * 2 * g / 8 for g in big) * n
+    writes, reads_lo, reads_hi = files, best, worst
+    mbps = a.disk_mbps * 1e6
+    io_lo = (writes + reads_lo + streams) / mbps
+    io_hi = (writes + reads_hi + streams) / mbps
+    us = (a.us if a.us else b['us'] * REF_GHZ / a.ghz) * 1e-6
+    span_, work, path = refine[-1][2], refine[-1][2] * 0 + sum(sum(sum(v) for v in p_[1].values()) for p_ in plan.values()), refine[-1][4]
+    cpu = span_ * 2 * us * n                                    # both sides to move, one metric after another
+    def t(sec):
+        for unit, d in (('days', 86400), ('h', 3600), ('min', 60)):
+            if sec >= 2 * d:
+                return f'{sec / d:,.1f} {unit}'
+        return f'{sec:,.0f} s'
+    print(f'estimate for {a.builder} ({n} metric{"s" if n > 1 else ""}), {a.cores} cores at {a.ghz:g} GHz, '
+          f'{size(a.ram)} RAM per group, disk {size(a.disk, False) if a.disk else "?"} at {a.disk_mbps:g} MB/s:')
+    print(f'  space   ({a.index} index) files {size(files, False)} (depths {size(depth, False)}, outcomes {size(outcome, False)}), '
+          f'scratch {size(scratch, False)}: {size(files + scratch, False)}'
+          + (f' of {size(a.disk, False)}: {"fits" if files + scratch <= a.disk else "DOES NOT FIT"}' if a.disk else ''))
+    print(f'  I/O     writes {size(writes, False)} (sequential), reads {size(reads_lo, False)} to {size(reads_hi, False)}'
+          + (f', rung-3 streams {size(streams, False)} ({len(big)} groups over the RAM, {a.levels} levels each)' if big else '')
+          + f': {t(io_lo)} to {t(io_hi)} of disk time'
+          + (f'; {writes / (a.tbw * 1e12):.2%} of {a.tbw:g} TBW' if a.tbw else ''))
+    print(f'  time    CPU {t(cpu)} on {a.cores} cores ({us * 1e6:.2f} µs per position and side, '
+          f'{"given" if a.us else "6x6 calibration scaled by clock"}; critical path {t(path * 2 * us * n)}); '
+          f'with the disk time: {t(max(cpu, io_lo))} (overlapped) to {t(cpu + io_hi)}')
+    if a.board != '6x6' and not a.us:
+        print('          the 6x6 calibration is a floor for larger boards (longer rays, flying kings, inputs out of cache): pass --us')
 
 
 if __name__ == '__main__':

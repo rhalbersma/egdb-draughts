@@ -9,8 +9,8 @@
 
   - computes the disk a build needs, exactly, from the slot counts (a product of four binomials per material): the
     files of every material (cumulative: they are permanent), plus the scratch of the materials being written side by
-    side (their files under temporary names and the depth sink's group-order files), at most <jobs> of them, the
-    largest;
+    side (the depth sink's group-order files; a file under its temporary name becomes the final one by a rename), at
+    most <jobs> of them, the largest;
   - computes the I/O a build does (rungs 0 to 2, synthesis section 7.4): every file written once, sequentially; at
     rung 1 the depth sink's group-order files written once more and read back; each build reads its inputs (the files
     of the materials its captures and promotions lead into: the depths for dtm, the outcomes for dtc and dtz) through
@@ -56,8 +56,9 @@ def material_bytes(m, builder):
 
 
 def build_temp_bytes(m, builder):
-    """while a material is written: its files under temporary names, and the depth sink's group-order files"""
-    return material_bytes(m, builder) + 2 * slots(m) * (1 if builder == 'thompson86' else 2)
+    """while a material is written: the depth sink's group-order files (its files under temporary names become the
+    final ones by a rename, so they are counted with the files already)"""
+    return 2 * slots(m) * (1 if builder == 'thompson86' else 2)
 
 
 def successors(m):

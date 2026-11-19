@@ -58,8 +58,8 @@ the builders run; at the lower rungs the per-level streams and random accesses o
 
 * **disk**, at configure time, exactly. Every file's size follows from its slot count, a product of four binomials, so
   no engine is needed. Disk is cumulative: the need is every file of every metric (the databases are permanent, raw:
-  uncompressed), plus the scratch of the `CORES` largest materials written side by side (their files under temporary
-  names and the depth sink's group-order files).
+  uncompressed), plus the scratch of the `CORES` largest materials written side by side (the depth sink's group-order
+  files; a file under its temporary name becomes the final one by a rename).
 * **memory**, when Snakemake reads the workflow, before any job runs. Memory is scratch only: a job's working set and
   the touched pages of the finished files it maps, freed when the job ends; Snakemake keeps the claims of the jobs side
   by side within `MEM_MB`. The engine's `plan` gives every material's need
@@ -114,3 +114,27 @@ python3 src/egdb_layout.py --board 10x10 --pieces 8 --split 4-4,5-3,3-5 --ram 8G
 | 8 G | 4,136 | 101 days | 96 % | 59 days |
 
 The total work, 964 days on one core, matches his 2.65 CPU-years of building.
+
+## Space, I/O and time for a machine
+
+With `--builder` (`thompson86`, `syzygy` or `wdl`) the same command estimates the build on a machine: RAM per group
+(`--ram`), cores (`--cores`) and their clock (`--ghz`), and the disk (`--disk`, `--disk-mbps`, `--tbw`):
+
+* **space**: the files (depth bytes per metric, the outcomes) and the scratch of the jobs side by side (the depth
+  sink's group-order files), against the disk; `--index overlapping` for the index the builders use today,
+  `disjoint` (the default) for one slot per legal position;
+* **I/O**: the writes (each file once, sequentially), the reads (each build's inputs, best and worst), and for groups
+  that do not fit the RAM at the builder's cost the per-level streams of rung 3 (`--levels` per group); the disk time
+  at `--disk-mbps`, and the writes against `--tbw`;
+* **time**: the list schedule on `--cores`, at the builders' 6×6 cost per position and side (thompson86 0.35 µs,
+  syzygy 0.68 µs, WDL 0.52 µs at 2.1 GHz) scaled by `--ghz`, or `--us` measured on the target board; with the disk
+  time overlapped or added.
+
+On 6×6 the estimate matches the builds: syzygy, three metrics, 404 MB of files with `--index overlapping` (the
+configure step's figure), about 10 s per metric on 4 cores (measured: 11.8 s for dtm). For larger boards the 6×6 cost
+is a floor (longer rays, flying kings, inputs out of the page cache): Gilbert's 2009 build ran at 5.06 µs per position
+on 2.4 GHz cores, and with that `--us` the estimate gives about 114 days on 10 cores, for his 2.65 CPU-years.
+
+```bash
+python3 src/egdb_layout.py --board 8x8 --pieces 10 --ram 16GiB --builder wdl --cores 8 --ghz 4 --disk 4TB --disk-mbps 3000 --tbw 2400
+```

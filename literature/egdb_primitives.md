@@ -63,8 +63,8 @@ Two kinds of unit, by the kind of irreversible move that separates them.
 | pieces per side | white pieces and black pieces | 4 against 2 |
 | **material class** ("material" for short) | white men, white kings, black men, black kings | 03-02-02-01 in wp-bp-wm-bm (white pieces, black pieces, white men, black men): White 2 men and 1 king, Black 1 man and 1 king |
 
-The material class is the unit of the files (`6x6-wp-bp-wm-bm.*`, every position at its index of four colex ranks) and
-of a Snakemake job; the material classes form a DAG through captures and promotions.
+The material class is the unit of the files (`6x6-wp-bp-wm-bm.*`, every position at its index of four colex ranks);
+the material classes form a DAG through captures and promotions.
 
 **Slices** split a material class by the configuration of its irreversibly moving pieces (draughts and checkers men,
 chess pawns); a man's or pawn's advance leads from one slice to another, so the slices of a material class form a DAG
@@ -84,8 +84,10 @@ or a promotion, the moves that leave it. DTZ counts the moves inside a full-conf
 a man move, the move that leaves the slice. DTM counts to the end of the game, across all of them.
 
 **A group** is a set of full-configuration slices of one material class that a build solves together: the unit of one
-solve, whose rounds share bit planes and frontiers. **A job** is one material class: one command lists its groups,
-solves them in dependency order and writes its files.
+solve, whose rounds share bit planes and frontiers. **A job** is what the scheduler (Snakemake) schedules: one command
+with its inputs, outputs and resources. In our builders a job builds one material class (it lists the class's groups,
+solves them in dependency order and writes its files); Chinook 1994's jobs were passes over mini-slices, Gilbert's
+were subdivisions.
 
 **A group** must be closed under the moves the rounds treat as inside; every other move is an exit into a group or
 material class already finished, looked up in pass 0. King moves never leave a slice, man moves connect the slices
@@ -112,6 +114,7 @@ ones through the depth sink.
 | slice: penultimate rank | slice (a union) | — | — | tier 3, "the penultimate rank of checkers" | — |
 | slice: full configuration | **slice** (`egdb_6x6`, our builders) | — | — | — | — |
 | one solve | **group** | a slice with its mirror | a slice: "A portion of the endgame database (a slice) is computed by resolving all positions" | a "subdivision" (tiers 2 and 3 only above 900 MB; 64,369) | a "subdivision" (about 200K) |
+| a job (what is scheduled) | one material class | a job queue line: one pass over a slice or mini-slice | slices (TrellisDAG) | one subdivision per program instance | one subdivision per instance |
 | a parallel index range | a block of 4096 positions | a **"mini-slice"**: page-aligned, about 10 million positions | POSIX threads dividing "the range of positions" equally | — | — |
 | the other colour | syzygy: one of each mirror pair; thompson86: both | the **"mirror"** node (4112 ↔ 1421) | "its mirror database 2332.77 with white to move" | — | — |
 
@@ -122,8 +125,8 @@ full-configuration slice. Chinook and Gilbert slice from coarse to fine until a 
 full configuration and merge slices back into groups. All cut along irreversible moves (captures and promotions between
 subdivisions, a man's advance between slices), which is what makes every scheme a DAG.
 
-**The job is one material class**: Snakemake runs material classes in parallel when none needs another, in the order
-of the DAG. Jobs are not smaller because the groups of a material class depend on each other densely and most are tiny
+**Our jobs are material classes**: Snakemake runs them in parallel when none needs another, in the order of the DAG.
+They are not smaller because the groups of a material class depend on each other densely and most are tiny
 (a 1986-style material class can have tens of thousands of slice groups): a job per group would be far too
 fine-grained, and every job would open the same files again. The memory ladder (§7.2) follows the same split: the
 job's memory claim is per material class, the rung is chosen per group inside it.

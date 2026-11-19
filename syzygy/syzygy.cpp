@@ -319,10 +319,13 @@ void solve_group(MatIndex const& mi, Group const& g)
                 }
         } else {
                 // frontiers: bit planes of the wins and losses found in the previous round, plus lists by level of the
-                // positions decided in pass 0 and of the exits; a round visits only these
+                // positions decided in pass 0 and of the exits; a round visits only these. The state the rounds test is
+                // in cumulative bit planes, not in the values: won and lost hold every position decided at a level
+                // below the round (pass-0 decisions join when their level comes round), so v is only written
                 using List = std::vector<std::uint32_t>;
                 std::vector<List> won_at(std::size_t(max_seed) + 1), lost_at(won_at.size()), ewin_at(won_at.size()),
                         eloss_at(won_at.size());
+                Plane openp(T), lossable(T), exits_done(T);             // has a move inside; every exit loses; by now
                 for (std::uint64_t id = 0; id < T; ++id) {
                         auto const i = std::uint32_t(id);
                         if (!open[id]) {
@@ -330,8 +333,12 @@ void solve_group(MatIndex const& mi, Group const& g)
                                 else if (is_loss(v[id])) lost_at[std::size_t(plies(v[id]))].push_back(i);
                                 continue;
                         }
+                        openp.set(id);
                         if (ewin[id] != 0) ewin_at[ewin[id]].push_back(i);
-                        if (eloss[id] != NONE && eloss[id] != 0) eloss_at[eloss[id]].push_back(i);
+                        if (eloss[id] == NONE) continue;
+                        lossable.set(id);
+                        if (eloss[id] == 0) exits_done.set(id);         // no exits
+                        else eloss_at[eloss[id]].push_back(i);
                 }
                 auto const at = [&](std::vector<List> const& by, int n) -> List const& {
                         static List const none;
@@ -340,27 +347,37 @@ void solve_group(MatIndex const& mi, Group const& g)
                 auto const for_list = [&](List const& l, auto&& f) {
                         for_blocks(l.size(), [&](std::uint64_t lo, std::uint64_t hi) { for (auto j = lo; j < hi; ++j) f(l[j]); });
                 };
-                auto const for_plane = [&](Plane const& pl, auto&& f) {
-                        for_blocks(pl.w.size(), [&](std::uint64_t lo, std::uint64_t hi) {
-                                for (auto k = lo; k < hi; ++k)
-                                        for (std::uint64_t b = pl.w[k]; b; b &= b - 1) f(k * 64 + std::uint64_t(std::countr_zero(b)));
-                        });
-                };
-                auto const set_bit = [](Plane& pl, std::uint64_t i) {
-                        std::atomic_ref<std::uint64_t>(pl.w[i >> 6]).fetch_or(std::uint64_t(1) << (i & 63), std::memory_order_relaxed);
-                };
-                Plane won_prev(T), lost_prev(T), won_new(T), lost_new(T);
+                Plane won(T), lost(T), won_prev(T), lost_prev(T), won_new(T), lost_new(T);
                 for (int n = 1;; ++n) {
-                        auto const lose = [&](std::uint64_t id) { if (check_loss(id, n)) set_bit(lost_new, id); };
-                        auto const gain = [&](std::uint64_t id) { if (mark_win(id, n)) set_bit(won_new, id); };
+                        for_list(at(eloss_at, n), [&](std::uint64_t id) { exits_done.set_atomic(id); });   // exits lost by n
+                        // losses in n: lossable, exits lost by n, undecided, every move inside to a win of a level below n
+                        auto const lose = [&](std::uint64_t id) {
+                                if (!openp.test(id) || !lossable.test(id) || !exits_done.test(id) || won.test(id) || lost.test(id)) return;
+                                Pos const p = pos(id);
+                                for (auto const& mv : moves(p))
+                                        if (inside(p, mv) && !won.test(id_of(mv.next))) return;
+                                store(v[id], loss(n));
+                                lost_new.set_atomic(id);
+                        };
+                        // wins in n: undecided, and not lost in n
+                        auto const gain = [&](std::uint64_t id) {
+                                if (!openp.test(id) || won.test(id) || lost.test(id) || lost_new.test(id)) return;
+                                store(v[id], win(n));
+                                won_new.set_atomic(id);
+                        };
                         // losses in n: the predecessors of the wins in n - 1, and the exits losing in n
-                        for_plane(won_prev, [&](std::uint64_t q) { predecessors(q, lose); });
+                        won_prev.for_each_par([&](std::uint64_t q) { predecessors(q, lose); });
                         for_list(at(won_at, n - 1), [&](std::uint64_t q) { predecessors(q, lose); });
                         for_list(at(eloss_at, n), lose);
                         // wins in n: the predecessors of the losses in n - 1, and the exits winning in n
-                        for_plane(lost_prev, [&](std::uint64_t q) { predecessors(q, gain); });
+                        lost_prev.for_each_par([&](std::uint64_t q) { predecessors(q, gain); });
                         for_list(at(lost_at, n - 1), [&](std::uint64_t q) { predecessors(q, gain); });
                         for_list(at(ewin_at, n), gain);
+                        // commit level n: the new wins and losses, and the pass-0 decisions of level n
+                        won_new.for_each_par([&](std::uint64_t q) { won.set(q); });
+                        lost_new.for_each_par([&](std::uint64_t q) { lost.set(q); });
+                        for_list(at(won_at, n), [&](std::uint64_t q) { won.set_atomic(q); });
+                        for_list(at(lost_at, n), [&](std::uint64_t q) { lost.set_atomic(q); });
                         std::swap(won_prev, won_new);
                         std::swap(lost_prev, lost_new);
                         won_new.clear();

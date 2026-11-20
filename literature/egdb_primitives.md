@@ -844,16 +844,18 @@ Without outcounting (the syzygy builder: a loss candidate is verified forward, a
 needs **one byte per position and side to move**, and no bit planes: rtbgen's design, with its reduction step made
 value-preserving and aligned with the storage escapes of §10.
 
-**The cell.** S = 16 of the 256 codes are reserved, W = 240 are depth codes of the current window:
+**The cell.** S = 16 of the 256 codes are reserved, W = 240 are depth codes of the current window. Undecided is
+**0**, so the cell array needs no initialisation pass: fresh anonymous memory (`mmap`, `calloc`) is all zero pages
+(§9.3). The depths take 1 … 240, the other reserved codes 241 … 255:
 
-| codes | meaning |
+| code | meaning |
 |---|---|
-| undecided | the default; what is left at the end is a draw |
+| 0: undecided | the default; what is left at the end is a draw |
 | `WON`, `LOST` | decided in an earlier window: the class only (to skip it, and for `check_loss`: is a successor won?) |
 | not lossable | undecided, but an exit draws or wins (rtbgen's `CAPT_DRAW`; saves probing the exits again in every check) |
 | `FRONT_WIN`, `FRONT_LOSS` | the last ply of the previous window, the frontier of the first round after a reduction; they become `WON`, `LOST` as that round's scan passes them |
 | 10 spare | never used in the build; they exist as storage tokens (§10) |
-| W = 240 depth codes | DTM: one code per ply (a win odd, a loss even: 240 plies per window); DTZ, DTC: two codes per ply, win and loss (no parity: 120 plies per window) |
+| 1 … 240: W depth codes | code c is offset c − 1 in the window. DTM: one code per ply (a win odd, a loss even: 240 plies per window); DTZ, DTC: two codes per ply, win and loss (no parity: 120 plies per window) |
 
 What the cell does not need: "open" (an undecided position has a move inside, or pass 0 would have decided it), a
 candidate mark (rtbgen's `CHANGED`: our rounds check a predecessor at once), loss in 0 (a depth), and, in draughts,
@@ -872,9 +874,10 @@ group's lowest level: a DTM group whose seeds start deep simply starts in a late
 window's end, the build reduces:
 
 1. **snapshot**: the window's bytes are written as they are, values unchanged; every position not decided in this
-   window (undecided, `WON`, `LOST`, the statuses) becomes `NOT_MINE` (255, a value no extra byte takes). One plain
-   zstd frame (`ZSTD_compressStream2`, multithreaded with `ZSTD_c_nbWorkers`), fed through a small staging buffer
-   that applies the marker; kept in RAM if it fits (mostly marker, it compresses to long runs), written to disk if not;
+   window becomes `NOT_MINE` = 0, the undecided code itself (a value no extra byte takes): undecided positions are
+   0 already, only `WON`, `LOST` and the statuses (241 … 255) need the staging buffer that maps them to 0. One plain
+   zstd frame (`ZSTD_compressStream2`, multithreaded with `ZSTD_c_nbWorkers`); kept in RAM if it fits (mostly zeros,
+   it compresses to long runs), written to disk if not;
 2. **collapse**: every depth of the window becomes `WON` or `LOST`, the last ply `FRONT_WIN` or `FRONT_LOSS`.
 
 A 6×6 DTC or DTZ build (at most 43 levels so far) never reduces; a deep DTM group reduces once per 240 plies.
@@ -1247,16 +1250,16 @@ win is odd and a loss even, so a DTM can be stored in moves and its plies recove
 byte, up to 509 plies). DTZ and DTC have no such parity (either side's move can end the count) and stay in plies.
 
 **Escapes: S = 16 tokens, one extra byte each, for every game.** Each position has one code byte. Codes 0 … 239
-(E = W = 240) are direct; codes 240 … 255 are tokens, and token 240 + i is followed by one extra byte x < 240:
+(E = W = 240) are direct; codes 240 … 255 are tokens, and token 240 + i is followed by one extra byte x, 1 … 240:
 
 | metric | direct code | token 240 + i with extra byte x | deepest |
 |---|---|---|---|
-| DTZ, DTC | the depth in plies, 0 … 239, sign from WDL | 240 + 120 i + x / 2 plies (x holds win/loss, as the build cell) | 2,160 plies |
-| DTM | c = ⌊plies / 2⌋, sign from WDL (a win 2c + 1, a loss 2c plies): plies 0 … 479 | 480 + 240 i + x plies (the class is the parity) | 4,320 plies |
+| DTZ, DTC | the depth in plies, 0 … 239, sign from WDL | 240 + 120 i + (x − 1) / 2 plies (x holds win/loss, as the build cell) | 2,160 plies |
+| DTM | c = ⌊plies / 2⌋, sign from WDL (a win 2c + 1, a loss 2c plies): plies 0 … 479 | 480 + 240 i + x − 1 plies (the class is the parity) | 4,320 plies |
 
 The token ranges are exactly the windows of the 8-bit build cell (§7.5): W = 240 codes each, and the extra byte is the
-cell code of its window, copied from the build's snapshot. The extra byte never takes 240 … 255: those are the
-cell's reserved codes, and 255 is the snapshot's `NOT_MINE`. E is the same constant for every unit and game (it still
+cell code of its window, copied from the build's snapshot. The extra byte never takes 0 (undecided in the cell,
+`NOT_MINE` in a snapshot) nor 241 … 255 (the cell's other reserved codes). E is the same constant for every unit and game (it still
 goes in the header); there is no overflow table, and a build deeper than the last token stops with an error (§7.5).
 
 The extra bytes follow the block's position bytes in the same zstd frame, one per token, in position order, so the

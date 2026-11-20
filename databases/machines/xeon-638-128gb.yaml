@@ -1,0 +1,13 @@
+# an Intel Xeon 638 workstation (Xeon 600 series, Q1 2026): 16 performance cores / 32 threads, 3.2-4.8 GHz, 72 MB
+# cache (intel.com, SKU 244334), 128 GB. PassMark CPU Mark about 55,700, single thread about 3,670 (third-party
+# aggregators, not yet confirmed on cpubenchmark.net); the W-3245 of gilbert-2026.yaml about 31,100: same core count,
+# 1.79x per core, so his 1.63 us per position per core (build and self-verify) becomes 0.91 us here.
+# The disk is an assumption: an 8 TB NVMe SSD.
+name: Xeon 638, 16 cores, 128 GB
+cores: 16
+ghz: 3.2
+ram: 128GB
+disk: 8TB
+disk_kind: nvme
+disk_mbps: 5000
+us: 0.91

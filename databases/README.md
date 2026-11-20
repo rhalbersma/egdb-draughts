@@ -166,3 +166,35 @@ to 5 pieces, thompson86 dtm, predicted for the 6-piece materials against the bui
 per position and side, about 36 against 40.5 s of CPU. The number of levels (passes) is an outcome of the build, the
 longest win, and is not predicted: the frontier builds do not depend on it, and what costs a pass per level (rung 3)
 is given as a range, from the calibration build's levels to what the byte holds.
+
+## Machine files
+
+A machine is a small file of `key: value` lines, so the estimate can be rerun for another machine, or for this one
+with an upgrade: options given on the command line override the file.
+
+| key | meaning |
+|---|---|
+| `name` | shown in the report |
+| `cores`, `ghz` | jobs side by side and their clock |
+| `ram`, `ram_per_group` | the machine's memory, and what one group may use (default 75 % of `ram`) |
+| `disk`, `disk_kind`, `disk_mbps`, `tbw` | capacity, `hdd`/`ssd`/`nvme` (default speed 150/500/3000 MB/s), sequential speed, endurance in TB written |
+| `us` | microseconds per position and side, when measured on that machine (Gilbert 2009: 5.06) |
+
+`databases/machines/` holds Thompson's 1986 and 1996 machines, Gilbert's 2005 and 2009 build machines, and a desktop and
+a workstation of 2026; the configure step writes this machine's as `<build>/machine.yaml`, which the `estimate` target
+uses.
+
+```bash
+python3 src/egdb_layout.py --board 8x8 --pieces 10 --builder wdl --machine databases/machines/desktop-2026.yaml --cores 32
+```
+
+| 8×8 checkers ≤ 10 pieces, WDL | time | |
+|---|---|---|
+| `desktop-2026` (16 cores, 64 GiB, 4 TB NVMe) | 7.5 days | 10.3 TB of files (raw) do not fit 4 TB |
+| `--ram 192GiB` | 7.5 days | RAM did not bind |
+| `--cores 32` | 3.8 days | |
+| `--disk 24TB` | 7.5 days | the files fit |
+| `workstation-2026` (64 cores, 512 GiB, 32 TB) | 2.6 days | 34,605 groups keep 64 cores 91 % busy |
+
+More RAM only raises the limit a group may have; the refinement for the cores (`--cores`) cuts the groups as fine as
+the schedule needs, so an upgrade never makes the estimate worse.

@@ -78,6 +78,38 @@ BUILDERS = {
 REF_GHZ = 2.1
 
 
+# a machine file: "key: value" lines (# comments), sizes with units; the configure step's machine.yaml reads too
+MACHINE_KEYS = {
+    'name': str, 'cores': int, 'ghz': float, 'ram': 'bytes', 'ram_per_group': 'bytes', 'disk': 'bytes',
+    'disk_kind': str, 'disk_mbps': float, 'tbw': float, 'us': float,
+}
+DISK_MBPS = {'hdd': 150, 'ssd': 500, 'nvme': 3000}
+
+
+def load_machine(path):
+    """the machine: cores, clock, RAM (and the RAM a group may use, by default 75 %), disk size, kind, speed, endurance;
+    the configure step's keys (logical_cores, memory_mb, disk_free_mb, disk_rotational) are understood as well"""
+    raw = {}
+    with open(path) as f:
+        for line in f:
+            line = line.split('#', 1)[0].strip()
+            if ':' in line:
+                k, v = line.split(':', 1)
+                raw[k.strip()] = v.strip().strip("'\"")
+    alias = {'logical_cores': ('cores', lambda v: v), 'memory_mb': ('ram', lambda v: v + 'MiB'),
+             'disk_free_mb': ('disk', lambda v: v + 'MiB'),
+             'disk_rotational': ('disk_kind', lambda v: {'1': 'hdd', '0': 'ssd'}.get(v, ''))}
+    for k, (key, f_) in alias.items():
+        if k in raw and key not in raw and f_(raw[k]):
+            raw[key] = f_(raw[k])
+    m = {}
+    for k, t in MACHINE_KEYS.items():
+        if k in raw and raw[k] != '':
+            m[k] = parse_bytes(raw[k]) if t == 'bytes' else t(raw[k])
+    m.setdefault('name', path)
+    return m
+
+
 def this_ghz():
     try:
         with open('/proc/cpuinfo') as f:
@@ -343,13 +375,17 @@ def main():
     ap.add_argument('--pieces', type=int, default=10)
     ap.add_argument('--split', help='only these splits of pieces per side, e.g. 5-5 or 4-4,5-3,3-5 (the others count as built)')
     ap.add_argument('--exact', action='store_true', help='only materials of exactly --pieces pieces (the others count as built)')
-    ap.add_argument('--ram', type=parse_bytes, required=True, help='the RAM a group may use, e.g. 900MB, 2GiB')
+    ap.add_argument('--machine', help='a machine file (key: value; e.g. databases/machines/*.yaml, or a build\'s '
+                    'machine.yaml): cores, ghz, ram, ram_per_group, disk, disk_kind, disk_mbps, tbw, us; options given '
+                    'on the command line override it, to see what an upgrade buys')
+    ap.add_argument('--ram', type=parse_bytes, help='the RAM a group may use, e.g. 900MB, 2GiB (default: the machine\'s '
+                    'ram_per_group, else 75 %% of its ram)')
     ap.add_argument('--cost', help=f'bytes per position: {", ".join(COSTS)}, or a number (default: the builder\'s, else '
                                    f'gilbert2005)')
     ap.add_argument('--builder', choices=BUILDERS, help='estimate space, I/O and time for this builder: thompson86 '
                     '(one-sided, half results), syzygy (two-sided, full results), wdl (two-sided, outcomes only)')
     ap.add_argument('--metrics', type=int, default=1, help='with --builder: depth metrics built (dtm, dtc, dtz), default 1')
-    ap.add_argument('--ghz', type=float, default=REF_GHZ, help=f'with --builder: the clock (calibrated at {REF_GHZ} GHz)')
+    ap.add_argument('--ghz', type=float, help=f'with --builder: the clock (default: the machine\'s, else {REF_GHZ} GHz)')
     ap.add_argument('--us', type=float, help='with --builder: microseconds per position and side to move at --ghz, '
                     'instead of the 6x6 calibration (Gilbert 2009, 10x10: about 5.1 at 2.4 GHz)')
     ap.add_argument('--calibration', help='with --builder: an instrumented build (src/egdb_calibrate.py on a small build\'s '
@@ -357,7 +393,9 @@ def main():
                     'the cost per position from the move generation)')
     ap.add_argument('--bench-ghz', type=float, help='the clock of the machine the bench ran on (default: this one)')
     ap.add_argument('--disk', type=parse_bytes, help='with --builder: the SSD (or disk) size, e.g. 4TB')
-    ap.add_argument('--disk-mbps', type=float, default=500, help='with --builder: sequential MB/s (default 500, a SATA SSD)')
+    ap.add_argument('--disk-kind', choices=DISK_MBPS, help='with --builder: hdd, ssd or nvme (sets the default speed)')
+    ap.add_argument('--disk-mbps', type=float, help='with --builder: sequential MB/s (default by kind: hdd 150, ssd 500, '
+                    'nvme 3000)')
     ap.add_argument('--tbw', type=float, help='with --builder: the SSD\'s endurance in TB written')
     ap.add_argument('--index', choices=('disjoint', 'overlapping'), default='disjoint',
                     help='with --builder: file slots per legal placement (disjoint, the default) or per independent '
@@ -376,6 +414,22 @@ def main():
     ap.add_argument('--rate', type=float, help='positions per second per core, to turn the schedule into time '
                                              '(Gilbert 2009: 197529)')
     a = ap.parse_args()
+    given = {k for k, v in vars(a).items() if v is not None}
+    machine = load_machine(a.machine) if a.machine else {}
+    for k in ('cores', 'ghz', 'disk', 'disk_kind', 'disk_mbps', 'tbw', 'us'):
+        if getattr(a, k) is None and k in machine:
+            setattr(a, k, machine[k])
+    if a.ram is None:
+        a.ram = machine.get('ram_per_group') or (0.75 * machine['ram'] if 'ram' in machine else None)
+    if a.ram is None:
+        ap.error('--ram, or a --machine with ram')
+    a.ghz = a.ghz or REF_GHZ
+    a.disk_mbps = a.disk_mbps or DISK_MBPS.get(a.disk_kind or 'ssd', 500)
+    if machine:
+        over = sorted(k for k in ('ram', 'cores', 'ghz', 'disk', 'disk_kind', 'disk_mbps', 'tbw', 'us')
+                      if k in given and (k in machine or (k == 'ram' and 'ram_per_group' in machine)))
+        print(f'machine {machine["name"]}' + (f' ({a.machine})' if machine['name'] != a.machine else '')
+              + (f', overridden: {", ".join(over)}' if over else ''))
     b_ = BUILDERS.get(a.builder)
     if a.cost is None:
         cost = b_['cost'] if b_ else COSTS['gilbert2005']
@@ -396,15 +450,26 @@ def main():
     plan = {m: layout(board, m, max_pos, a.kings_symmetry) for m in ms}
     refine = []
     if a.cores:                                                 # finer groups until the cores are busy
-        cap = max_pos
+        cap = min(max_pos, max(p_[2] for p_ in plan.values()))  # halving above the largest group splits nothing
+        groups_n = None
         while True:
             span_, work, path = simulate(plan, ms, inside, a.cores, canon)
-            groups_n = sum(len(v) for p in plan.values() for v in p[1].values())
+            groups_n = sum(len(v) for p_ in plan.values() for v in p_[1].values())
             refine.append((cap, groups_n, span_, work / (a.cores * span_), path))
-            if work / (a.cores * span_) >= a.target or cap < 2 or (len(refine) > 1 and groups_n == refine[-2][1]):
+            # stop at the target, at a million groups, or when nothing more splits. Not when utilization stays flat:
+            # a chain of whole materials can hold the critical path until the limit drops below their size, and then
+            # refining pays again. More RAM only raises the limit a group may have, so it never makes the build slower
+            if work / (a.cores * span_) >= a.target or cap < 2 or groups_n > 1_000_000:
                 break
-            cap //= 2
-            plan = {m: layout(board, m, cap, a.kings_symmetry, max_pos) for m in ms}
+            new = None
+            while cap >= 2:                                     # halve until the layout changes
+                cap //= 2
+                new = {m: layout(board, m, cap, a.kings_symmetry, max_pos) for m in ms}
+                if sum(len(v) for p_ in new.values() for v in p_[1].values()) != groups_n:
+                    break
+            if new is None or sum(len(v) for p_ in new.values() for v in p_[1].values()) == groups_n:
+                break                                           # nothing splits any more
+            plan = new
     positions = {m: sum(n * board.kings(m) for n in board.cells[(m[0], m[2])].values()) for m in ms}
 
     # levels: a material starts after every material it leads into (inside the selection) has finished

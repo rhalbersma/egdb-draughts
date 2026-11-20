@@ -1,0 +1,11 @@
+# Ken Thompson's 1986 build (ICCA Journal 9(3)): a Sequent Balance 8000, 12 NS32032 processors (about 4 in use),
+# 16 MB shared memory, 1 MB per processor as a cache on the randomly accessed file, 500 MB of disk at 1 MB/s
+# (his own table, 1996: "1985: 1 MIP, 16 MB, 500 MB disk, 1 MB/s")
+name: Thompson 1986, Sequent Balance 8000
+cores: 4
+ghz: 0.01
+ram: 16MB
+ram_per_group: 4MB
+disk: 500MB
+disk_kind: hdd
+disk_mbps: 1

@@ -1,0 +1,9 @@
+# Ken Thompson's 1996 build (ICCA Journal 19(4)), his own table: "1996: 150 MIP, 250 MB memory, 50 GB disk, 10 MB/s"
+name: Thompson 1996
+cores: 1
+ghz: 0.15
+ram: 250MB
+ram_per_group: 250MB
+disk: 50GB
+disk_kind: hdd
+disk_mbps: 10

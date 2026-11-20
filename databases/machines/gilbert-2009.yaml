@@ -1,0 +1,11 @@
+# Ed Gilbert's 8-piece international draughts build, 2008-2009 (edgilbert.org/InternationalDraughts/...):
+# a 2.4 GHz quad-core with 8 GB (4 instances), then an 8-core dual Xeon; 10 cores built and verified, 2 re-indexed;
+# his average build speed 197,529 positions per second per CPU (us: 5.06)
+name: Gilbert 2009, 10 cores, 8 GB
+cores: 10
+ghz: 2.4
+ram: 8GB
+disk: 1TB
+disk_kind: hdd
+disk_mbps: 80
+us: 5.06

@@ -163,13 +163,19 @@ execute_process(                                                # the checks pas
     COMMAND_ERROR_IS_FATAL ANY)
 file(WRITE "${CMAKE_BINARY_DIR}/machine.yaml"
 "# written by the configure step of databases/CMakeLists.txt (synthesis 7.3)
+name: this machine (configure step)
 physical_cores: ${PHYSICAL_CORES}
 logical_cores: ${LOGICAL_CORES}
 memory_mb: ${TOTAL_MB}
 memory_available_mb: ${AVAILABLE_MB}
+ram: ${TOTAL_MB}MiB
+ram_per_group: ${MEM_MB}MiB
+cores: ${CORES}
+ghz: ${DISK_ghz}
 data_dir: ${DATA_DIR}
 disk_free_mb: ${DISK_free_mb}
 disk_rotational: ${DISK_rotational}
+disk: ${DISK_free_mb}MiB
 disk_need_mb: ${DISK_need_mb}
 disk_scratch_mb: ${DISK_scratch_mb}
 io_write_mb: ${DISK_write_mb}
@@ -177,6 +183,12 @@ io_write_max_mb: ${DISK_write_max_mb}
 io_read_best_mb: ${DISK_read_best_mb}
 io_read_max_mb: ${DISK_read_max_mb}
 ")
+if(NOT DISK_MBPS STREQUAL "")
+    file(APPEND "${CMAKE_BINARY_DIR}/machine.yaml" "disk_mbps: ${DISK_MBPS}\n")
+endif()
+if(NOT DISK_TBW STREQUAL "")
+    file(APPEND "${CMAKE_BINARY_DIR}/machine.yaml" "tbw: ${DISK_TBW}\n")
+endif()
 
 # ---------------------------------------------------------------- the engine
 
@@ -269,6 +281,6 @@ add_custom_target(bench COMMAND ${BUILDER} bench ${PIECES} DEPENDS ${BUILDER} US
 list(LENGTH METRICS n_metrics)
 add_custom_target(estimate
     COMMAND "${Python3_EXECUTABLE}" -I "${REPO}/src/egdb_layout.py" --board 6x6 --pieces ${PIECES} --builder ${BUILDER}
-            --metrics ${n_metrics} --ram ${MEM_MB}MiB --cores ${CORES} --kings-symmetry 1 --index overlapping
-            --calibration "${CMAKE_BINARY_DIR}/calibration.tsv" --disk ${DISK_free_mb}MiB --disk-mbps ${mbps}
+            --metrics ${n_metrics} --machine "${CMAKE_BINARY_DIR}/machine.yaml" --kings-symmetry 1 --index overlapping
+            --calibration "${CMAKE_BINARY_DIR}/calibration.tsv"
     DEPENDS "${CMAKE_BINARY_DIR}/calibration.tsv" USES_TERMINAL COMMENT "space, I/O and time on this machine" VERBATIM)

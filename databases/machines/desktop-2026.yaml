@@ -1,0 +1,9 @@
+# a desktop of 2026: 16 cores, 64 GB, a 4 TB NVMe SSD
+name: desktop 2026
+cores: 16
+ghz: 4.5
+ram: 64GiB
+disk: 4TB
+disk_kind: nvme
+disk_mbps: 5000
+tbw: 2400

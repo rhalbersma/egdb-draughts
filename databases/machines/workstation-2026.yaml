@@ -1,0 +1,9 @@
+# a workstation of 2026: 64 cores, 512 GB, 4 x 8 TB NVMe SSDs
+name: workstation 2026
+cores: 64
+ghz: 3.5
+ram: 512GiB
+disk: 32TB
+disk_kind: nvme
+disk_mbps: 12000
+tbw: 56000

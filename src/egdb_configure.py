@@ -155,6 +155,11 @@ def main():
     print(f'read_worst_mb={read_worst / 2**20:.0f}')
     print(f'free_mb={shutil.disk_usage(data_dir).free / 2**20:.0f}')
     print(f'rotational={rotational(data_dir)}')
+    try:
+        with open('/proc/cpuinfo') as f:
+            print(f"ghz={next(float(l.split(':')[1]) / 1000 for l in f if l.startswith('cpu MHz')):.2f}")
+    except (OSError, StopIteration, ValueError):
+        pass
 
 
 if __name__ == '__main__':

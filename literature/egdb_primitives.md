@@ -691,7 +691,8 @@ that could properly manage the data file dependencies, taking into account disk 
 maximize throughput." File dependencies are what Snakemake is built on; disk space can be declared as a resource and
 intermediate files marked temporary.
 
-**To build**: the machine file; a planner (an extension of `strongly_solving_6x6/materials/materials.py`, which
+**To build**: the machine file (now `databases/machines/*.yaml` and the configure step's `machine.yaml`, read by
+`src/egdb_layout.py --machine`, any key overridden on the command line to see what an upgrade buys); a planner (an extension of `strongly_solving_6x6/materials/materials.py`, which
 already computes sizes and critical-path priorities) that assigns each job its claim, priority and policy and each
 group its rung; engines that take those decisions as arguments and report, per pass, the measured time per position,
 lookups per position and cache misses, so the constants above are calibrated per machine rather than assumed.

@@ -19,6 +19,11 @@ is not decided, the unknown leaves that matter are listed.
 usage: opening_solve_6x6.py path/to/egdb_6x6 [--db data/6x6_le10.db] [--table 3] [--out opening_6x6]
                             [--dtm-db data/6x6_le9.db]
        opening_solve_6x6.py path/to/egdb_6x6 --db data/6x6_le9.db --attach data/6x6_10.dtm --dtm [--table 4]
+       opening_solve_6x6.py path/to/egdb_6x6 --store data/units [--table 3] [--tree 4]
+
+With --store (the complete store of units_6x6.py: every position with at most 12 pieces) the game is solved: the start
+position is itself in the store. The tree is then expanded to the given depth, every leaf gets its exact value from the
+store, the values are backed up by minimax, and every interior position is checked against its own stored value.
 """
 
 import argparse
@@ -35,8 +40,14 @@ VAL = {'L': -1, 'D': 0, 'W': 1}
 
 
 class Engine:
-    def __init__(self, exe, db, attach=None):
+    def __init__(self, exe, db, attach=None, store=None):
         self.p = subprocess.Popen([exe], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, bufsize=1)
+        if store:
+            out = self.cmd(f'store {store}')
+            if not out[0].startswith('store ok'):
+                raise RuntimeError(out)
+            self.built = 12
+            return
         out = self.cmd(f'load {db}')
         if not out[0].startswith('load ok'):
             raise RuntimeError(out)
@@ -112,6 +123,107 @@ def score_label(lo, hi, move=False):
     return '?'
 
 
+def numeric(nota):
+    return tuple(int(x) for x in re.split('[-x]', nota))
+
+
+def solve_from_store(eng, args, log):
+    """the opening tree from the complete store: exact values at every node, backed up and checked"""
+    depth = max(args.table, args.tree or args.table)
+    children, kind, ply = {}, {}, {START: 0}
+    layer = [START]
+    for d in range(depth + 1):
+        nxt = set()
+        for fen in layer:
+            ms = eng.moves(fen)
+            if not ms:
+                kind[fen] = 'no moves'
+            elif d < depth:
+                children[fen] = ms
+                for _, c in ms:
+                    if c not in ply:
+                        ply[c] = d + 1
+                        nxt.add(c)
+            else:
+                kind[fen] = 'leaf'
+        layer = sorted(nxt)
+    stored = {f: to_score(eng.cmd('dtm ' + f)[0].split()[1]) for f in ply}
+    log(f'tree to {depth} plies: {len(children)} interior positions, {len(kind)} leaves, all looked up')
+    sc = {f: stored[f] for f in kind}
+    stack = [(START, False)]
+    while stack:                               # minimax in post-order, every interior value checked against the store
+        fen, expanded = stack.pop()
+        if fen in sc:
+            continue
+        if not expanded:
+            stack.append((fen, True))
+            stack.extend((c, False) for _, c in children[fen] if c not in sc)
+            continue
+        sc[fen] = max(up(sc[c]) for _, c in children[fen])
+        if sc[fen] != stored[fen]:
+            raise RuntimeError(f'{fen}: backed up {sc[fen]}, stored {stored[fen]}')
+    log(f'start position: {score_label(sc[START], sc[START])}; {len(children)} interior values equal to the store')
+
+    def lab(fen, move):
+        return score_label(sc[fen], sc[fen], move)
+
+    def best_first(moves):
+        return sorted(moves, key=lambda m: (-up(sc[m[1]]),) + numeric(m[0]))
+
+    tree = []
+
+    def walk_tree(fen, path):
+        name = 'beginstand' if not path else ('wit ' if len(path) % 2 else 'zwart ') + path[-1]
+        tree.append('    ' * len(path) + f'{name}  {lab(fen, bool(path))}')
+        if len(path) < (args.tree or args.table) and fen in children:
+            for nota, c in best_first(children[fen]):
+                walk_tree(c, path + [nota])
+    walk_tree(START, [])
+    rows = []
+
+    def walk(fen, path):
+        if len(path) == args.table or fen not in children:
+            rows.append((path, fen))
+            return
+        for nota, c in children[fen]:
+            walk(c, path + [nota])
+    walk(START, [])
+    rows.sort(key=lambda r: tuple(numeric(m) for m in r[0]))
+    res = Counter(lab(f, True)[:1] for _, f in rows)
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'strategie_der_36_velden'))
+    from board import diagram
+    diagrams = ['## Diagrammen', '', 'w/b = witte/zwarte schijf, W/B = dam.', '',
+                f'Beginstand, wit aan zet: **{lab(START, False)}**', '', '```text', diagram(START), '```', '']
+    for nota, c in best_first(children[START]):
+        diagrams += [f'1. {nota} (zwart aan zet): **{lab(c, True)}**', '', '```text', diagram(c), '```', '']
+    md = ['# Openingen van 6×6-dammen', '',
+          f'Beginstand, wit aan zet: **{lab(START, False)}**.', '',
+          'Notatie: D = remise, Wn = winst, Ln = verlies, met n het aantal ply tot het einde van de partij bij perfect '
+          'spel. Bij de beginstand geldt de waarde voor wit (aan zet). Bij een zet geldt de waarde voor wie de zet doet, '
+          'en telt n vanaf de stelling vóór de zet, de zet meegeteld. Een winst heeft dus altijd een oneven n, een '
+          'verlies een even n. In de tabel geldt het label voor de laatste (witte) zet van de opening.', '',
+          'Methode: elke stelling met hoogstens 12 stukken (hooguit 6 per kant) staat in de database, dus ook de '
+          'beginstand: het spel is opgelost en alle waarden zijn exact, met afstand. De boom is uitgebreid tot '
+          f'{depth} ply (transposities samengevoegd); elk blad heeft zijn waarde uit de database, de waarden zijn met '
+          f'minimax teruggerekend, en elk van de {len(children)} inwendige stellingen is gecontroleerd tegen zijn eigen '
+          'waarde in de database.', '',
+          *diagrams, '## Boom', '', 'Per stelling staan de zetten op volgorde van waarde voor wie ze doet: winst (snelste '
+          'eerst), remise, verlies (taaiste eerst); daarbinnen numeriek.', '', '```text', *tree, '```', '',
+          f'## Alle openingen van {args.table} ply', '', 'Numeriek gesorteerd.', '',
+          f"{len(rows)} openingen: W {res['W']}, D {res['D']}, L {res['L']}.", '',
+          '| # | opening | resultaat |', '|---|---|---|']
+    md += [f"| {i} | {' '.join(p)} | {lab(f, bool(p))} |" for i, (p, f) in enumerate(rows, 1)]
+    sign = lambda v: (v > 0) - (v < 0)
+    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+    Path(args.out + '.md').write_text('\n'.join(md) + '\n')
+    Path(args.out + '.json').write_text(json.dumps({
+        'start': START, 'root': [sign(sc[START])] * 2, 'leaf_kinds': Counter(kind.values()), 'relevant_unknown': [],
+        'openings': [{'moves': p, 'fen': f, 'interval': [sign(sc[f])] * 2, 'dtm': None} for p, f in rows],
+        'tree': {f: {'ply': d, 'interval': [sign(sc[f])] * 2, 'dtm': None, 'score': [sc[f], sc[f]]}
+                 for f, d in ply.items() if d <= (args.tree or args.table)}}, indent=0))
+    log('done')
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('engine')
@@ -122,11 +234,15 @@ def main():
     ap.add_argument('--attach', default=None, help='layer to attach after loading --db (e.g. data/6x6_10.dtm)')
     ap.add_argument('--dtm', action='store_true', help='the databases have exact DTM: compute the distances with the same engine')
     ap.add_argument('--dtm-db', default=None, help='database with exact DTM (e.g. data/6x6_le9.db) for the distances')
+    ap.add_argument('--store', default=None, help='the complete unit store (e.g. data/units): every position exact')
     args = ap.parse_args()
     t0 = time.time()
     log = lambda m: print(f'[{time.time() - t0:7.1f}s] {m}', file=sys.stderr, flush=True)
-    eng = Engine(args.engine, args.db, args.attach)
+    eng = Engine(args.engine, args.db, args.attach, args.store)
     log(f'database loaded, built_max {eng.built}')
+    if args.store:
+        solve_from_store(eng, args, log)
+        return
 
     # the complete opening DAG
     children = {}              # interior node -> [(move, child)]
@@ -341,7 +457,7 @@ def main():
     walk_tree(START, [])
     rows.sort(key=lambda r: tuple(numeric(m) for m in r[0]))
     res = Counter(label(*iv[f], f[0], None, True)[:1] for _, f in rows)
-    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'strategie_der_36_velden'))
     from board import diagram
     diagrams = ['## Diagrammen', '', 'w/b = witte/zwarte schijf, W/B = dam.', '',
                 f'Beginstand, wit aan zet: **{lab(START, False)}**', '', '```text', diagram(START), '```', '']

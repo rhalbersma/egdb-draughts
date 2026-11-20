@@ -550,7 +550,27 @@ diff <(grep -v '^#' strongly_solving_6x6/international/crc32c_6x6.txt) <(head -n
 python3 strongly_solving_6x6/international/recode_store.py build/egdb_6x6 --dir data/units --threads 10 --values
 ```
 
-With the store complete, the claims of the book and the sites are checked and regenerated from it:
+With the store complete, the game is solved: the start position is itself in the store. The opening book
+([`opening_6x6.md`](strongly_solving_6x6/international/opening_6x6.md) and `.json`, read by the sites) is regenerated
+from it with exact values everywhere: the tree to 4 plies and all openings of 3 plies, every leaf looked up, the values
+backed up by minimax and every interior position checked against its stored value:
+
+```bash
+python3 strongly_solving_6x6/international/opening_solve_6x6.py build/egdb_6x6 --store data/units --table 3 --tree 4
+```
+
+The longest win per number of pieces (FEN and DTM in plies; `--losses` for the longest losses, `--materials` for one
+line per material). It reads every stored position, so it takes about as long as a verification of the store:
+
+```bash
+python3 strongly_solving_6x6/international/longest_wins.py build/egdb_6x6 --dir data/units --pieces 2-12 --threads 10 > strongly_solving_6x6/international/longest_wins_6x6.txt
+```
+
+```bash
+python3 strongly_solving_6x6/international/longest_wins.py build/egdb_6x6 --dir data/units --pieces 2-12 --threads 10 --losses > strongly_solving_6x6/international/longest_losses_6x6.txt
+```
+
+The claims of the book and the sites are checked and regenerated from the store:
 
 ```bash
 python3 strategie_der_36_velden/check.py build/egdb_6x6 --store data/units

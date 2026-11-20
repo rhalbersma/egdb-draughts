@@ -95,6 +95,31 @@ Read verbatim (HTML fetched and converted to text).
 
 ---
 
+## 2026-web-Gilbert, 12-piece English checkers database (edgilbert.org/EnglishCheckers/12-pieceEnglishDB.htm)
+
+Read verbatim (fetched 2026-11).
+
+1. **Scope**: "In July 2026, I finished building a 12-piece endgame database for English checkers"; WLD for 2–12
+   pieces and a separate 12-piece MTC database ("a distance-to-conversion DB that guides Kingsrow to play the shortest
+   path to the next non-reversible move"). "Compared to the older 10-piece WLD DB, it contains 48 times the number of
+   positions and is 29 times larger on disk." No total position count, split or restriction is given.
+2. **Machine and time**: "It took 1.7 years to build and self-verify using a 16-core Xeon workstation with 192 GB of
+   ECC RAM." No CPU model, clock, disks, instances, CPU time or speed per position.
+3. **Disk**: unpacked WLD 2.88 TB (download 2.19 TB, 7-Zip), unpacked MTC 872 GB (download 485 GB); users need at least
+   16 GB of RAM, 10 GB of EGDB cache, and the WLD data on an internal SSD ("Do not attempt to run this database from an
+   external USB drive or an internal physical hard drive"); "I have redesigned the indexing format".
+4. **Not on the page**: memory per subdivision, all-kings handling, symmetry, indexing width, subdivisions, parallelism,
+   compression scheme, temporary disk.
+5. **Checked against the board model** (`src/egdb_layout.py`): exactly 12 pieces 1.695 × 10^15 positions per side to
+   move against exactly 10 pieces 34.71 × 10^12, ratio 48.8 ("48 times"); 2–12 pieces 1.99 × 10^15, so 0.43 µs per
+   position per core over the build and verification together (2.3 M positions per second per core; his 2009 build
+   ran at 5.06 µs building alone), and about 690 positions per byte in the 2.88 TB WLD. The largest group, the
+   all-kings 6v6 (209 G positions per side), takes 24 GiB at 2 bits and both sides with the 4-fold symmetry, 49 GiB with
+   one diagonal, 97 GiB with none: all within 192 GB, so the build ran in RAM, CPU-bound.
+6. **Synthesis**: §7.4; machine file `databases/machines/gilbert-2026.yaml`.
+
+---
+
 ## 2009-web-Gilbert, 8-piece international draughts database (edgilbert.org/InternationalDraughts/8_piece_international_draughts_db.htm)
 
 Read verbatim (HTML fetched and converted to text).

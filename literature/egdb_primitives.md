@@ -790,10 +790,9 @@ days on one core, is his 2.65 CPU-years. For his 2005 checkers build (900 MB, 5 
 the cores busy: there, memory was what bound. Both databases are now comfortable on a desktop, CPU-bound, at minimal
 I/O. Gilbert's 12-piece checkers database (July 2026: "1.7 years to build and self-verify using a 16-core Xeon
 workstation with 192 GB of ECC RAM") is the comfortable regime at scale: its largest group, the all-kings 6v6 (209 G
-positions per side), takes 24–97 GiB for WDL depending on the symmetry used, within 192 GB; the model gives 1.99 ×
-10^15 positions for 2–12 pieces (exactly 12 against exactly 10 pieces: 48.8, his "48 times"), so about 0.43 µs per
-position per core for building and verifying together, twelve times his 2009 cost per position, and 690 positions per
-byte in the 2.88 TB of WLD. At 10×10 and 9 pieces, the 16 kings-heavy materials that do not fit 32 GB take rung 3 or a coalescing
+positions per side), takes 24–97 GiB for WDL depending on the symmetry used, within 192 GB. Its 12-piece part is the
+6v6 subset (384 T positions per side to move; 44.7 times the 10-piece 5v5 subset, close to his "48 times"), so about
+2.27 µs per position per core for building and verifying together, some 4.5 times faster per core than in 2009. At 10×10 and 9 pieces, the 16 kings-heavy materials that do not fit 32 GB take rung 3 or a coalescing
 cache.
 
 **The cost per position depends on the game**, so the plan measures it rather than carry a constant over: the

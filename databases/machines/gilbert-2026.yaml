@@ -1,11 +1,12 @@
 # Ed Gilbert's 12-piece English checkers build, finished July 2026 (edgilbert.org/EnglishCheckers/12-pieceEnglishDB.htm):
 # "a 16-core Xeon workstation with 192 GB of ECC RAM", 1.7 years to build and self-verify. The page names no CPU model,
-# clock or disks (a Xeon W-3245, 16 cores at 3.2-4.4 GHz, would fit; not confirmed). us: build and self-verify together,
-# 1.99e15 positions (2-12 pieces, per side to move) over 1.7 years on 16 cores
+# clock or disks (a Xeon W-3245, 16 cores at 3.2-4.4 GHz, would fit; not confirmed). The 12-piece part is the 6v6
+# subset only (384 T positions per side to move, both colours); us: build and self-verify together, 384 T positions
+# over 1.7 years on 16 cores
 name: Gilbert 2026, 16 cores, 192 GB
 cores: 16
 ghz: 3.2
 ram: 192GB
 disk: 8TB
 disk_kind: ssd
-us: 0.43
+us: 2.27

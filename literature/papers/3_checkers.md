@@ -110,12 +110,14 @@ Read verbatim (fetched 2026-11).
    external USB drive or an internal physical hard drive"); "I have redesigned the indexing format".
 4. **Not on the page**: memory per subdivision, all-kings handling, symmetry, indexing width, subdivisions, parallelism,
    compression scheme, temporary disk.
-5. **Checked against the board model** (`src/egdb_layout.py`): exactly 12 pieces 1.695 × 10^15 positions per side to
-   move against exactly 10 pieces 34.71 × 10^12, ratio 48.8 ("48 times"); 2–12 pieces 1.99 × 10^15, so 0.43 µs per
-   position per core over the build and verification together (2.3 M positions per second per core; his 2009 build
-   ran at 5.06 µs building alone), and about 690 positions per byte in the 2.88 TB WLD. The largest group, the
-   all-kings 6v6 (209 G positions per side), takes 24 GiB at 2 bits and both sides with the 4-fold symmetry, 49 GiB with
-   one diagonal, 97 GiB with none: all within 192 GB, so the build ran in RAM, CPU-bound.
+5. **Checked against the board model** (`src/egdb_layout.py`), taking the 12-piece part as the 6v6 subset only (not
+   stated on the page): 6v6 is 384 T positions per side to move, both colours; 6v6 against the 10-piece 5v5 subset
+   (8.59 T) is 44.7, the subset reading closest to his "48 times" (6v6 alone against all of the 10-piece database is
+   9.8, exactly 12 against exactly 10 pieces 48.8, but that would take every split). Over 1.7 years on 16 cores that is
+   2.27 µs per position per core for building and verifying together; in 2009 he built at 5.06 µs and verified at
+   about the same cost, so roughly 4.5 times faster per core. The largest group, the all-kings 6v6 (209 G positions per
+   side), takes 24 GiB at 2 bits and both sides with the 4-fold symmetry, 49 GiB with one diagonal, 97 GiB with none:
+   all within 192 GB, so the build ran in RAM, CPU-bound.
 6. **Synthesis**: §7.4; machine file `databases/machines/gilbert-2026.yaml`.
 
 ---

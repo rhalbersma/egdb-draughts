@@ -564,6 +564,7 @@ position in RAM** for that group. Taking the rungs in order as a group outgrows 
 | rung | in RAM per position of the group | on disk | depth | from |
 |---|---|---|---|---|
 | 0 | everything (depth bytes, bit planes, seeds) | finished files only | exact | `thompson86`, `syzygy`, `egdb_6x6` today |
+| 0′ | 1 byte: the 8-bit cell, statuses inside, rounds by scanning (§7.5) | snapshots, one per 240-ply window | exact | rtbgen, made value-preserving |
 | 1 | bit planes (cumulative W/B, frontier, candidates): a few bits | depth as appended frontier lists, one merge at the end | exact | §7.1 |
 | 2 | the same, for a smaller group: wave → slice (cheap once the half results are stored, since a move out is one read) | | exact | `thompson86`, `syzygy` (`granularity=tempi\|configuration`), `egdb_6x6` |
 | 3 | 1 bit: the cumulative win bit; candidates and losses streamed | the byte database, merged per level (Wu–Beal), or the W/L/D/U state streamed (Lincke) | exact (Wu–Beal) or WDL (Lincke) | Wu–Beal, Lincke |
@@ -837,6 +838,60 @@ disk time at 150 MB/s, 1 ppm of a 600 TBW drive. At the lower rungs the plan add
 the random accesses of rung 4 (frontier × moves × (1 − r) × t_access): a build whose plan shows those terms dominant is
 one to move to an SSD, to a finer granularity, or to sorted batches.
 
+### 7.5 The 8-bit cell: one byte per position, reductions, value-preserving snapshots
+
+Without outcounting (the syzygy builder: a loss candidate is verified forward, as rtbgen's `check_loss`), the build
+needs **one byte per position and side to move**, and no bit planes: rtbgen's design, with its reduction step made
+value-preserving and aligned with the storage escapes of §10.
+
+**The cell.** S = 16 of the 256 codes are reserved, W = 240 are depth codes of the current window:
+
+| codes | meaning |
+|---|---|
+| undecided | the default; what is left at the end is a draw |
+| `WON`, `LOST` | decided in an earlier window: the class only (to skip it, and for `check_loss`: is a successor won?) |
+| not lossable | undecided, but an exit draws or wins (rtbgen's `CAPT_DRAW`; saves probing the exits again in every check) |
+| `FRONT_WIN`, `FRONT_LOSS` | the last ply of the previous window, the frontier of the first round after a reduction; they become `WON`, `LOST` as that round's scan passes them |
+| 10 spare | never used in the build; they exist as storage tokens (§10) |
+| W = 240 depth codes | DTM: one code per ply (a win odd, a loss even: 240 plies per window); DTZ, DTC: two codes per ply, win and loss (no parity: 120 plies per window) |
+
+What the cell does not need: "open" (an undecided position has a move inside, or pass 0 would have decided it), a
+candidate mark (rtbgen's `CHANGED`: our rounds check a predecessor at once), loss in 0 (a depth), and, in draughts,
+rtbgen's capture bounds (compulsory captures decide a position in pass 0; a winning exit in DTZ or DTC is a win in 1,
+decided there too). DTM's exit seeds carry a level and stay sparse lists outside the cell. Chess without the 50-move
+rule needs the same codes; with it, the bounds into a cursed win and a blessed loss and the cursed collapse classes come
+on top, still within S.
+
+**Rounds.** As rtbgen's `scan` mode: each round scans the group's bytes for the previous ply. In RAM a scan costs
+nothing worth counting (a 20 GB group in 0.4 s at 50 GB/s; 600 scans in 4 minutes), and the work per position, the
+unmoves and forward checks, is the same as with frontier bit planes. The cell is the rung-0 form for a group that fits
+in RAM at 1 byte; when it does not, rungs 1 to 5 keep their bit planes and streams.
+
+**Windows and reductions.** Window i holds the depths [W·i, W·(i+1)) in cell codes, counted from 0, not from the
+group's lowest level: a DTM group whose seeds start deep simply starts in a later window. When a round would pass the
+window's end, the build reduces:
+
+1. **snapshot**: the window's bytes are written as they are, values unchanged; every position not decided in this
+   window (undecided, `WON`, `LOST`, the statuses) becomes `NOT_MINE` (255, a value no extra byte takes). One plain
+   zstd frame (`ZSTD_compressStream2`, multithreaded with `ZSTD_c_nbWorkers`), fed through a small staging buffer
+   that applies the marker; kept in RAM if it fits (mostly marker, it compresses to long runs), written to disk if not;
+2. **collapse**: every depth of the window becomes `WON` or `LOST`, the last ply `FRONT_WIN` or `FRONT_LOSS`.
+
+A 6×6 DTC or DTZ build (at most 43 levels so far) never reduces; a deep DTM group reduces once per 240 plies.
+
+**Merge.** One sequential pass over the final cells and all snapshots side by side, written straight into the
+storage form: a position takes its byte from the one snapshot where it is not `NOT_MINE` (or from the final cells, if
+decided in the last window). Windows 0 and 1 are translated once into direct storage codes (the class dropped: DTZ,
+DTC take their sign from WDL; DTM goes to moves); window i ≥ 2 becomes **storage token 240 + (i − 2), and its snapshot
+byte is the extra byte, verbatim**. Every value stays exact from the first round to the stored byte: no rounding, no
+halving, no margin for an engine to keep, and the token is the window number: a multiple of the reduction interval.
+
+**Limits.** The 16 tokens reach 2,160 plies (DTZ, DTC) and 4,320 plies (DTM), against the deepest known values of
+every game: chess DTZ 1,193 plies (8 pieces, the opposing-pair tables) and DTM 1,097 plies (7 pieces, chesstb's
+statistics); checkers 253 plies at 7 pieces (Trice–Dodgen) and 279 at 10 (Gilbert); 6×6 checkers 147 at 8 pieces.
+A build that goes deeper stops with an error naming the material and its depth; the remedy is a larger S, not a side
+path.
+
 ## 8. Best of breed for draughts
 
 Take from syzygy: the metric split (WDL + DTZ), one value cell with codes, the fused round, level synchrony.
@@ -854,9 +909,10 @@ is decided is its exact depth.
 **Values are 16 bits during the build and 8 bits in storage**, for every metric. DTZ restarts at every exit, so its
 depth is bounded by the longest phase of king moves inside one slice, not by the whole game (Bourzutschky-Tamplin-
 Haworth: maxDTC 6 against maxDTM 107 in KQBNKN); it will usually fit a byte, but only a measurement says so, and the
-build should not depend on it. The build never meets a range
-limit (no syzygy-style `reduce_tables`, no fit check of depth plus counter, no escapes); the storage form is the
-existing byte with escape codes (§10), converted once when a unit or material is written.
+build should not depend on it. With the counter inside the cell the build never meets a range
+limit (no syzygy-style `reduce_tables`, no fit check of depth plus counter, no escapes). Without outcounting the
+cell shrinks to 8 bits, with value-preserving reductions whose windows are the storage escape ranges (§7.5). Either
+way the storage form is the byte with the escape tokens of §10.
 
 ### 8.1 The value cell (16 bits, per position and side to move)
 
@@ -1176,10 +1232,10 @@ files are the same for every metric, any metric's build can supply them.
 ## 10. Storage
 
 Keep what is there: blocks of 4096 positions with zstd per block, capture positions filled with the previous value
-(Chinook's run-continuing fill, syzygy's and Zakharov's don't-care values: all three report large gains), **the
-successive escape codes E … 254 with their extra bytes appended to each block in the same frame** (cdb version 2),
-and a CRC per unit. **8 bits in storage, 16 bits in the build**: the escapes are a storage concern only, applied in
-one conversion pass when a unit or material is written; the build never needs them.
+(Chinook's run-continuing fill, syzygy's and Zakharov's don't-care values: all three report large gains), **escape
+tokens with their extra bytes appended to each block in the same frame** (below; egdb_6x6's cdb version 2 is the
+precursor), and a CRC per unit. **8 bits in storage**; the build holds 16 bits with the counter in the cell (§8.1),
+or the 8-bit cell whose windows are the escape ranges (§7.5).
 
 **Full depth everywhere.** Depth files are exact, in the build and in storage: no rounding, no halving into moves for
 DTZ or DTC, and no band of values beyond a draw rule (we build without one). Both chess generators give up a ply there:
@@ -1190,24 +1246,35 @@ limit (FIDE's automatic draw at 75 moves) falls inside the halved band. The one 
 win is odd and a loss even, so a DTM can be stored in moves and its plies recovered from WDL (the thompson86 and syzygy
 byte, up to 509 plies). DTZ and DTC have no such parity (either side's move can end the count) and stay in plies.
 
-**Escapes: k tokens in the code byte, one extra byte each** (egdb_6x6, `escape_value`). Each position has one code byte;
-a code below E is the value itself, the codes E … E + k − 1 are tokens, and token c is followed by one extra byte x:
+**Escapes: S = 16 tokens, one extra byte each, for every game.** Each position has one code byte. Codes 0 … 239
+(E = W = 240) are direct; codes 240 … 255 are tokens, and token 240 + i is followed by one extra byte x < 240:
 
-    value = E + 256 (c − E) + x          (k tokens reach E − 1 + 256 k)
+| metric | direct code | token 240 + i with extra byte x | deepest |
+|---|---|---|---|
+| DTZ, DTC | the depth in plies, 0 … 239, sign from WDL | 240 + 120 i + x / 2 plies (x holds win/loss, as the build cell) | 2,160 plies |
+| DTM | c = ⌊plies / 2⌋, sign from WDL (a win 2c + 1, a loss 2c plies): plies 0 … 479 | 480 + 240 i + x plies (the class is the parity) | 4,320 plies |
+
+The token ranges are exactly the windows of the 8-bit build cell (§7.5): W = 240 codes each, and the extra byte is the
+cell code of its window, copied from the build's snapshot. The extra byte never takes 240 … 255: those are the
+cell's reserved codes, and 255 is the snapshot's `NOT_MINE`. E is the same constant for every unit and game (it still
+goes in the header); there is no overflow table, and a build deeper than the last token stops with an error (§7.5).
 
 The extra bytes follow the block's position bytes in the same zstd frame, one per token, in position order, so the
 j-th token of a block takes the j-th extra byte: a probe counts the tokens before its position (one SIMD pass over at
 most a block, or egdb_6x6's per-block bitset with prefix counts) and reads that byte directly, with no sequence to
-walk. E goes in the header, chosen per unit as large as the longest value allows: a unit that fits never emits a
-token, and its blocks have no extra bytes. Reserved codes come off the top: egdb_6x6 keeps 255 for the draw, so
-E = 255 − k and k tokens reach 254 + 255 k plies. In the probe format draws are don't-cares (looked up in WDL), so no
-code is reserved and E = 256 − k (one token: 0 … 254 direct, 255 … 510 escaped).
+walk. A block without tokens has no extra bytes. Draughts and checkers (deepest known values around 300 plies) fit
+DTM in the direct range and DTZ, DTC nearly so: tokens are rare.
+
+egdb_6x6's cdb version 2 is the precursor: token c with extra byte x is E + 256 (c − E) + x, with E chosen per unit as
+large as the longest value allows and 255 reserved for the draw (E = 255 − k, k tokens reaching 254 + 255 k plies).
+The new form gives up 16 direct codes for a fixed E, ranges that match the build's windows, and no draw code (draws
+are don't-cares, looked up in WDL). In egdb_6x6's raw build format, depths above 251 get the code 252 and their exact
+value in an overflow table (`raw_ovf`, saved as `.ovf` next to the raw file).
 
 **Don't-care fills** take either the dominant value (the most frequent direct code in the block) or the
 run-extending value (the previous stored one, Chinook's fill), whichever compresses the block better (chesstb likewise
 tries two fills per block and keeps the smaller), but **never an escape token**: a token needs an extra byte and would
-shift every later extra byte of the block. Where the run-extending value is escaped, the fill takes the dominant value. The build has the same split in memory: values above 251 get the
-code 252 and their exact value in an overflow table (`raw_ovf`, saved as `.ovf` next to the raw file).
+shift every later extra byte of the block. Where the run-extending value is escaped, the fill takes the dominant value.
 
 Products per material: **WDL** (2 bits, dense, the probe for search), **DTZ** (byte, escapes if ever needed), **DTM**
 (byte + escapes). Options from syzygy worth measuring: DTZ for one side to move only (*[bg]*; the other side follows

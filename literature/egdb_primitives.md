@@ -1201,8 +1201,12 @@ most a block, or egdb_6x6's per-block bitset with prefix counts) and reads that 
 walk. E goes in the header, chosen per unit as large as the longest value allows: a unit that fits never emits a
 token, and its blocks have no extra bytes. Reserved codes come off the top: egdb_6x6 keeps 255 for the draw, so
 E = 255 − k and k tokens reach 254 + 255 k plies. In the probe format draws are don't-cares (looked up in WDL), so no
-code is reserved and E = 256 − k (one token: 0 … 254 direct, 255 … 510 escaped). Don't-care fills use direct codes
-only: a token would shift every later extra byte. The build has the same split in memory: values above 251 get the
+code is reserved and E = 256 − k (one token: 0 … 254 direct, 255 … 510 escaped).
+
+**Don't-care fills** take either the dominant value (the most frequent direct code in the block) or the
+run-extending value (the previous stored one, Chinook's fill), whichever compresses the block better (chesstb likewise
+tries two fills per block and keeps the smaller), but **never an escape token**: a token needs an extra byte and would
+shift every later extra byte of the block. Where the run-extending value is escaped, the fill takes the dominant value. The build has the same split in memory: values above 251 get the
 code 252 and their exact value in an overflow table (`raw_ovf`, saved as `.ovf` next to the raw file).
 
 Products per material: **WDL** (2 bits, dense, the probe for search), **DTZ** (byte, escapes if ever needed), **DTM**

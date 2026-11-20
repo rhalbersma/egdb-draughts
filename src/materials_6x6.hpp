@@ -148,19 +148,74 @@ Material material_of(Pos const& p)
 constexpr bitboard DOM_WM = FULL - PROMO_WHITE;    // squares a white man may stand on (15)
 constexpr bitboard DOM_BM = FULL - PROMO_BLACK;    // squares a black man may stand on (15)
 
+// The index of a material's files. Factorised (the default): four independent colex ranks, white men over the 15
+// squares a white man may stand on, black men over theirs, white and black kings over all 18 squares; pieces may share
+// a square, so some slots are illegal (one popcount tells them apart). Joint (-DEGDB_JOINT_INDEX=1): the black men over
+// the squares the white men leave (an offset per white-men rank), the white kings over the empty squares, the black
+// kings over what is left; every slot is a legal placement, as in egdb_6x6.
+#ifndef EGDB_JOINT_INDEX
+#define EGDB_JOINT_INDEX 0
+#endif
 struct MatIndex {
+        Material c;
         std::uint64_t swm, sbm, swk, sbk, size;
+#if EGDB_JOINT_INDEX
+        std::uint64_t nk1 = 0, nk2 = 0, men = 0;
+        std::vector<std::uint64_t> off;                         // per white-men rank: its first men index
+#endif
 
         explicit MatIndex(Material m)
         :
-                swm(CC[15][std::size_t(m.wm)]), sbm(CC[15][std::size_t(m.bm)]), swk(CC[18][std::size_t(m.wk)]),
+                c(m), swm(CC[15][std::size_t(m.wm)]), sbm(CC[15][std::size_t(m.bm)]), swk(CC[18][std::size_t(m.wk)]),
                 sbk(CC[18][std::size_t(m.bk)]), size(swm * sbm * swk * sbk)
-        {}
+        {
+#if EGDB_JOINT_INDEX
+                int const e = 18 - m.wm - m.bm;
+                nk1 = CC[std::size_t(e)][std::size_t(m.wk)];
+                nk2 = CC[std::size_t(e - m.wk)][std::size_t(m.bk)];
+                off.resize(swm + 1);
+                for (std::uint64_t r = 0; r < swm; ++r) {
+                        off[r] = men;
+                        men += CC[(DOM_BM - unrank_in(r, m.wm, DOM_WM)).size()][std::size_t(m.bm)];
+                }
+                off[swm] = men;
+                size = men * nk1 * nk2;
+#endif
+        }
 
         std::uint64_t index(Pos const& p) const
         {
+#if EGDB_JOINT_INDEX
+                std::uint64_t const mi = off[rank_in(p.m[0], DOM_WM)] + rank_in(p.m[1], DOM_BM - p.m[0]);
+                bitboard const free = FULL - p.m[0] - p.m[1];
+                return (mi * nk1 + rank_in(p.k[0], free)) * nk2 + rank_in(p.k[1], free - p.k[0]);
+#else
                 return ((rank_in(p.m[0], DOM_WM) * sbm + rank_in(p.m[1], DOM_BM)) * swk + rank_in(p.k[0], FULL)) * sbk
                      + rank_in(p.k[1], FULL);
+#endif
+        }
+
+        // the position of a slot; false for an illegal slot (factorised: pieces sharing a square)
+        bool pos(std::uint64_t slot, int stm, Pos& p) const
+        {
+                p.stm = stm;
+#if EGDB_JOINT_INDEX
+                std::uint64_t const rk2 = slot % nk2, t = slot / nk2, rk1 = t % nk1, mi = t / nk1;
+                std::uint64_t const rw = std::uint64_t(std::ranges::upper_bound(off, mi) - off.begin()) - 1;
+                p.m[0] = unrank_in(rw, c.wm, DOM_WM);
+                p.m[1] = unrank_in(mi - off[rw], c.bm, DOM_BM - p.m[0]);
+                bitboard const free = FULL - p.m[0] - p.m[1];
+                p.k[0] = unrank_in(rk1, c.wk, free);
+                p.k[1] = unrank_in(rk2, c.bk, free - p.k[0]);
+                return true;
+#else
+                std::uint64_t const rbk = slot % sbk, t1 = slot / sbk, rwk = t1 % swk, t2 = t1 / swk;
+                p.m[0] = unrank_in(t2 / sbm, c.wm, DOM_WM);
+                p.m[1] = unrank_in(t2 % sbm, c.bm, DOM_BM);
+                p.k[0] = unrank_in(rwk, c.wk, FULL);
+                p.k[1] = unrank_in(rbk, c.bk, FULL);
+                return int((p.m[0] | p.m[1] | p.k[0] | p.k[1]).size()) == c.pieces();   // no two pieces on one square
+#endif
         }
 };
 
@@ -499,18 +554,8 @@ public:
 
         V at(int side, std::uint64_t slot) const override  // un-rank the slot, then read its group
         {
-                std::uint64_t const rbk = slot % mi_.sbk, t1 = slot / mi_.sbk, rwk = t1 % mi_.swk, t2 = t1 / mi_.swk;
-                std::uint64_t const rbm = t2 % mi_.sbm, rwm = t2 / mi_.sbm;
                 Pos p;
-                p.m[0] = unrank_in(rwm, c_.wm, DOM_WM);
-                p.m[1] = unrank_in(rbm, c_.bm, DOM_BM);
-                p.k[0] = unrank_in(rwk, c_.wk, FULL);
-                p.k[1] = unrank_in(rbk, c_.bk, FULL);
-                p.stm = side;
-                bitboard const pieces[] = { p.m[0], p.m[1], p.k[0], p.k[1] };
-                for (int i = 0; i < 4; ++i)
-                        for (int j = i + 1; j < 4; ++j)
-                                if (!(pieces[i] & pieces[j]).empty()) return 0;         // an illegal slot
+                if (!mi_.pos(slot, side, p)) return 0;                  // an illegal slot
                 return read(side, p);
         }
 };

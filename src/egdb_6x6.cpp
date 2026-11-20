@@ -89,6 +89,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
+#include <map>
 #include <new>
 #include <sstream>
 #include <string>
@@ -2277,6 +2278,64 @@ std::uint64_t thread_bytes(std::uint64_t largest)
 // EGDB_SOLVER=classic: solve_slice (one thread) and solve_slice_pull (big slices), as before solve_slice_hybrid
 bool const classic_solver = [] { char const* e = std::getenv("EGDB_SOLVER"); return e && std::string(e) == "classic"; }();
 
+// Statistics of a finished raw unit or material, from its bytes alone (one sequential pass; the raw file holds the true
+// value of every stored position, capture positions included, so nothing is resolved). Written to <unit>.stats, one block
+// per material, and the stats lines also to stdout (and so to the log of the build):
+//   stats wm bm wk bk S <sides> positions <n> wins <n> draws <n> losses <n> maxwin <W..|-> <fen|-> maxloss <L..|-> <fen|->
+//   dtm wm bm wk bk D:<draws> <dtm>:<count> ...      (every DTM that occurs: odd = won, even = lost for the side to move)
+bool write_stats(std::string const& dir, int n, int m, std::vector<UnitMat> const& lay, std::uint8_t const* raw,
+                 std::vector<std::uint64_t> const& ovf, int threads)
+{
+        std::string const path = unit_path(dir, n, m, ".stats");
+        std::FILE* f = std::fopen(path.c_str(), "w");
+        if (!f) { std::cerr << "stats: cannot write " << path << std::endl; return false; }
+        for (std::size_t mi = 0; mi < lay.size(); ++mi) {
+                UnitMat const& x = lay[mi];
+                std::uint64_t const b = x.base, e = x.base + x.size();
+                // per code (the byte), the count and the first offset; the escapes come from the overflow table
+                std::vector<std::uint64_t> cnt(std::size_t(threads) * 256, 0), first(std::size_t(threads) * 256, ~0ull);
+                #pragma omp parallel for schedule(static) num_threads(threads)
+                for (std::uint64_t o = b; o < e; ++o) {
+                        std::size_t const i = std::size_t(omp_get_thread_num()) * 256 + raw[o];
+                        if (cnt[i]++ == 0) first[i] = o;
+                }
+                std::map<int, std::uint64_t> dtm;                     // DTM -> count
+                std::map<int, std::uint64_t> at;                      // DTM -> first offset
+                std::uint64_t draws = 0;
+                for (int c = 0; c < 256; ++c) {
+                        std::uint64_t k = 0, o = ~0ull;
+                        for (int t = 0; t < threads; ++t) { k += cnt[std::size_t(t) * 256 + std::size_t(c)]; o = std::min(o, first[std::size_t(t) * 256 + std::size_t(c)]); }
+                        if (!k || c == ESC8) continue;
+                        if (c == DRAW8) { draws = k; continue; }
+                        dtm[c] += k;
+                        at[c] = o;
+                }
+                for (auto it = std::lower_bound(ovf.begin(), ovf.end(), b << 16); it != ovf.end() && (*it >> 16) < e; ++it) {
+                        int const v = int(*it & 0xFFFF);
+                        ++dtm[v];
+                        at.try_emplace(v, *it >> 16);
+                }
+                std::uint64_t wins = 0, losses = 0;
+                int maxwin = -1, maxloss = -1;
+                for (auto const& [v, k] : dtm) {
+                        if (v & 1) { wins += k; maxwin = v; } else { losses += k; maxloss = v; }
+                }
+                auto fen = [&](int v) { if (v < 0) return std::string("-"); Cursor c(lay); c.seek(at[v]); return fen_of(c.pos()); };
+                std::ostringstream line;
+                line << "stats " << x.wm << " " << x.bm << " " << x.wk << " " << x.bk << " S " << x.S << " positions " << x.size()
+                     << " wins " << wins << " draws " << draws << " losses " << losses
+                     << " maxwin " << (maxwin < 0 ? "-" : "W" + std::to_string(maxwin)) << " " << fen(maxwin)
+                     << " maxloss " << (maxloss < 0 ? "-" : "L" + std::to_string(maxloss)) << " " << fen(maxloss);
+                std::fprintf(f, "%s\ndtm %d %d %d %d D:%llu", line.str().c_str(), x.wm, x.bm, x.wk, x.bk, (unsigned long long)draws);
+                for (auto const& [v, k] : dtm) std::fprintf(f, " %d:%llu", v, (unsigned long long)k);
+                std::fprintf(f, "\n");
+                std::cout << line.str() << '\n';
+        }
+        sync_file(f);
+        std::fclose(f);
+        return true;
+}
+
 bool mat_build(std::string const& dir, int threads)
 {
         int const n = only_mat.n(), m = only_mat.m();
@@ -2373,6 +2432,7 @@ bool mat_build(std::string const& dir, int threads)
         std::uint64_t const unknown = std::uint64_t(std::count(u.p, u.p + npos, UNKNOWN8));
         if (unknown) { std::cerr << "material: " << unknown << " positions without value" << std::endl; return false; }
         write_progress(prog, std::to_string(jobs.size()) + " complete\n");
+        if (!write_stats(dir, n, m, lay, u.p, raw_ovf, threads)) return false;
         std::cout << "built " << only_mat.wm + only_mat.wk << " " << only_mat.bm + only_mat.bk << " " << only_mat.wm << " " << only_mat.bm
                   << " positions " << npos << " slices " << jobs.size() << " overflow " << raw_ovf.size() << " seconds " << seconds_since(t0)
                   << " solver " << (classic_solver ? "classic" : "hybrid") << " forward_rounds " << forward_rounds << " retrograde_rounds " << retrograde_rounds
@@ -2501,6 +2561,7 @@ bool unit_build(std::string const& dir, int n, int m, int threads, double mem_gb
         for (std::uint64_t o = 0; o < npos; ++o) unknown += u.p[o] == UNKNOWN8;
         if (unknown) { std::cerr << "unit " << n << "/" << m << ": " << unknown << " positions without value" << std::endl; return false; }
         write_progress(prog, std::to_string(jobs.size()) + " complete\n");
+        if (!write_stats(dir, n, m, lay, u.p, raw_ovf, threads)) return false;
         std::cout << "built " << n << " " << m << " positions " << npos << " slices " << jobs.size() << " overflow " << raw_ovf.size()
                   << " seconds " << seconds_since(t0) << '\n';
         return true;

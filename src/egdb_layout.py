@@ -375,6 +375,8 @@ def main():
     ap.add_argument('--pieces', type=int, default=10)
     ap.add_argument('--split', help='only these splits of pieces per side, e.g. 5-5 or 4-4,5-3,3-5 (the others count as built)')
     ap.add_argument('--exact', action='store_true', help='only materials of exactly --pieces pieces (the others count as built)')
+    ap.add_argument('--max-per-side', type=int, help='only materials with at most this many pieces per side (Gilbert\'s '
+                    'checkers databases: 5 for his 10-piece one, 6 for his 12-piece one)')
     ap.add_argument('--machine', help='a machine file (key: value; e.g. databases/machines/*.yaml, or a build\'s '
                     'machine.yaml): cores, ghz, ram, ram_per_group, disk, disk_kind, disk_mbps, tbw, us; options given '
                     'on the command line override it, to see what an upgrade buys')
@@ -439,6 +441,8 @@ def main():
         a.cores = 1
     split = [tuple(map(int, x.split('-'))) for x in a.split.split(',')] if a.split else None
     ms = [m for m in materials(a.pieces, split) if not a.exact or sum(m) == a.pieces]
+    if a.max_per_side:
+        ms = [m for m in ms if m[0] + m[1] <= a.max_per_side and m[2] + m[3] <= a.max_per_side]
     if b_ and b_['two_sided']:                                  # one of each mirror pair
         ms = [m for m in ms if not (m[2], m[0], m[3], m[1]) < (m[0], m[2], m[1], m[3])]
     canon = ((lambda m: m if not (m[2], m[0], m[3], m[1]) < (m[0], m[2], m[1], m[3]) else (m[2], m[3], m[0], m[1]))
@@ -499,7 +503,8 @@ def main():
     unfit = [(m, plan[m]) for m in ms if plan[m][3]]
     levels = max(width) + 1
 
-    print(f'{a.board}, {a.pieces} pieces{", split " + a.split if a.split else ""}: {len(ms)} materials, '
+    print(f'{a.board}, {a.pieces} pieces{", split " + a.split if a.split else ""}'
+          f'{f", at most {a.max_per_side} per side" if a.max_per_side else ""}: {len(ms)} materials, '
           f'{count(sum(positions.values()))} positions per side to move')
     print(f'RAM per group {size(a.ram)}, {cost:g} B per position: at most {count(max_pos)} positions per group')
     for g in ('material', 'tempi', 'configuration'):

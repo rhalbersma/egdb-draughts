@@ -1181,6 +1181,30 @@ successive escape codes E … 254 with their extra bytes appended to each block 
 and a CRC per unit. **8 bits in storage, 16 bits in the build**: the escapes are a storage concern only, applied in
 one conversion pass when a unit or material is written; the build never needs them.
 
+**Full depth everywhere.** Depth files are exact, in the build and in storage: no rounding, no halving into moves for
+DTZ or DTC, and no band of values beyond a draw rule (we build without one). Both chess generators give up a ply there:
+syzygy's rtbgen without `-p` stores DTZ up to 100 plies in moves, unless a side has a position at exactly 100, and
+always halves the cursed band beyond 100; chesstb keeps DTZ exact up to 100 but halves the cursed band when a table fits
+one byte. The engine then needs a margin (Stockfish counts a win as certain only if DTZ + counter ≤ 99), and a second
+limit (FIDE's automatic draw at 75 moves) falls inside the halved band. The one reduction allowed is lossless: a DTM
+win is odd and a loss even, so a DTM can be stored in moves and its plies recovered from WDL (the thompson86 and syzygy
+byte, up to 509 plies). DTZ and DTC have no such parity (either side's move can end the count) and stay in plies.
+
+**Escapes: k tokens in the code byte, one extra byte each** (egdb_6x6, `escape_value`). Each position has one code byte;
+a code below E is the value itself, the codes E … E + k − 1 are tokens, and token c is followed by one extra byte x:
+
+    value = E + 256 (c − E) + x          (k tokens reach E − 1 + 256 k)
+
+The extra bytes follow the block's position bytes in the same zstd frame, one per token, in position order, so the
+j-th token of a block takes the j-th extra byte: a probe counts the tokens before its position (one SIMD pass over at
+most a block, or egdb_6x6's per-block bitset with prefix counts) and reads that byte directly, with no sequence to
+walk. E goes in the header, chosen per unit as large as the longest value allows: a unit that fits never emits a
+token, and its blocks have no extra bytes. Reserved codes come off the top: egdb_6x6 keeps 255 for the draw, so
+E = 255 − k and k tokens reach 254 + 255 k plies. In the probe format draws are don't-cares (looked up in WDL), so no
+code is reserved and E = 256 − k (one token: 0 … 254 direct, 255 … 510 escaped). Don't-care fills use direct codes
+only: a token would shift every later extra byte. The build has the same split in memory: values above 251 get the
+code 252 and their exact value in an overflow table (`raw_ovf`, saved as `.ovf` next to the raw file).
+
 Products per material: **WDL** (2 bits, dense, the probe for search), **DTZ** (byte, escapes if ever needed), **DTM**
 (byte + escapes). Options from syzygy worth measuring: DTZ for one side to move only (*[bg]*; the other side follows
 exactly from one ply of search, cheap with compulsory capture: an exit counts 1 from the WDL of its target, an internal

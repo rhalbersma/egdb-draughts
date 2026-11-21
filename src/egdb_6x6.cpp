@@ -4,7 +4,10 @@
 //          http://www.boost.org/LICENSE_1_0.txt)
 
 // Exact endgame databases for international draughts on the 6x6 board, with men and kings, or (built with
-// -DEGDB_6X6_CHECKERS=1, as egdb_6x6_checkers) for English checkers on the same board.
+// -DEGDB_6X6_CHECKERS=1, as egdb_6x6_checkers) for English checkers on the same board. Other boards: -DEGDB_WIDTH=W
+// -DEGDB_HEIGHT=H (even sides, 18 to 64 dark squares; the geometry from tabula::chequer, the squares numbered as in
+// PDN, the promotion rows the top and bottom rows), e.g. 8x8 for English checkers and 10x10 for international draughts;
+// perft reproduces the published counts of both. The text below describes the 6x6 board.
 //
 // Rules: international draughts on 6x6: men move one square diagonally forward and capture forwards
 // and backwards, flying kings, mandatory capture, majority capture (kings and men count the same),
@@ -67,6 +70,7 @@
 // FEN: W:W17,K16:B2,K15 (side to move, white pieces, black pieces; K = king).
 // Values: "W<n>" win in n plies, "L<n>" loss in n plies, "D" draw (for the side to move).
 
+#include <tabula/grids/chequer.hpp>               // chequer
 #include <xstd/bits/bit/bit_compress.hpp>          // bit_compress
 #include <xstd/bits/bit/bit_convert.hpp>           // bit_convert
 #include <xstd/bits/bit/bit_expand.hpp>            // bit_expand
@@ -89,11 +93,13 @@
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
+#include <limits>
 #include <map>
 #include <new>
 #include <sstream>
 #include <string>
 #include <tuple>
+#include <type_traits>
 #include <utility>
 #include <fcntl.h>
 #include <sys/mman.h>
@@ -110,7 +116,24 @@
 
 namespace {
 
-constexpr int N = 18;
+// the board: BOARD_W x BOARD_H (default 6 x 6; -DEGDB_WIDTH=, -DEGDB_HEIGHT=), the dark square a1 at the bottom left
+// (tabula::chequer with parity 1), its N dark squares numbered 1..N in reading order from the top left as in PDN
+// (tabula: the index on the board flipped upside down). Even sides, so that the 180 degree rotation maps square n onto
+// N + 1 - n (mirror), and the top and bottom rows (the promotion rows) hold BOARD_W / 2 squares each.
+#ifndef EGDB_WIDTH
+#define EGDB_WIDTH 6
+#endif
+#ifndef EGDB_HEIGHT
+#define EGDB_HEIGHT 6
+#endif
+constexpr int BOARD_W = EGDB_WIDTH, BOARD_H = EGDB_HEIGHT;
+constexpr tabula::chequer GRID{ BOARD_W, BOARD_H, 1 };
+constexpr tabula::chequer PDN_GRID = GRID.flip();     // the same squares, rank 0 at the top: index = PDN number - 1
+constexpr int N = PDN_GRID.size();
+constexpr int ROW = BOARD_W / 2;                       // squares per row
+static_assert(BOARD_W % 2 == 0 && BOARD_H % 2 == 0 && BOARD_H >= 4, "even sides, at least four rows");
+static_assert(16 < N && N <= 64, "a bitboard is one 32- or 64-bit word");
+std::string board_name() { return std::to_string(BOARD_W) + "x" + std::to_string(BOARD_H); }
 
 // the rules (see the top of the file)
 #ifndef EGDB_6X6_CHECKERS
@@ -122,21 +145,23 @@ constexpr bool MEN_CAPTURE_BACK = !CHECKERS;      // men capture backwards too
 constexpr bool MAJORITY = !CHECKERS;              // the capture of the most pieces is compulsory
 bool keep_duplicates = false;                     // perft only: keep moves that give the same position
 
-// bitboards: the 18 squares in one std::uint32_t block (bit_least), widened to its 32 bits (bit_align); the full
-// board is FULL, so a complement is FULL - x
+// bitboards: the N squares in the smallest block that holds them (bit_least: std::uint32_t up to 32 squares, else
+// std::uint64_t), widened to that block (bit_align); a word is that block as an integer; the full board is FULL, so a
+// complement is FULL - x
 using bitboard = xstd::bit_align<xstd::bit_least<xstd::bit_fixed_set<N>>>;
-constexpr bitboard bb_of(std::uint32_t x) { return xstd::bit_convert<bitboard>(x); }
-constexpr std::uint32_t u32(bitboard const& x) { return xstd::bit_convert<std::uint32_t>(x); }
+using word = std::conditional_t<(N <= 32), std::uint32_t, std::uint64_t>;
+constexpr int WORD_BITS = std::numeric_limits<word>::digits;
+static_assert(sizeof(bitboard) == sizeof(word));
+constexpr bitboard bb_of(word x) { return xstd::bit_convert<bitboard>(x); }
+constexpr word bits_of(bitboard const& x) { return xstd::bit_convert<word>(x); }
 bitboard square_bb(int s) { return bitboard{ std::size_t(s) }; }
-constexpr bitboard FULL = bb_of((1u << N) - 1);
+constexpr word low_bits(int n) { return n == WORD_BITS ? ~word(0) : (word(1) << n) - 1; }
+constexpr bitboard FULL = bb_of(low_bits(N));
 
-int row_of(int s) { return s / 3; }                                    // 0 = top row (squares 1-3)
-int col_of(int s) { return 2 * (s % 3) + (row_of(s) % 2 == 0 ? 1 : 0); } // 0 = file a
-int square_at(int r, int c)
-{
-        if (r < 0 || r >= 6 || c < 0 || c >= 6 || (r + c) % 2 == 0) return -1;
-        return r * 3 + c / 2;
-}
+constexpr int row_of(int s) { return PDN_GRID.coordinates(s).second; }        // 0 = the top row (squares 1..ROW)
+constexpr int col_of(int s) { return PDN_GRID.coordinates(s).first; }         // 0 = file a
+constexpr int square_at(int r, int c) { return PDN_GRID.is_valid(std::pair{ c, r }) ? PDN_GRID.index(std::pair{ c, r }) : -1; }
+static_assert(square_at(0, 1) == 0 && square_at(BOARD_H - 1, 0) == N - ROW && row_of(N - 1) == BOARD_H - 1);
 
 // directions: 0 = up-left, 1 = up-right, 2 = down-left, 3 = down-right
 constexpr int DR[4] = { -1, -1, 1, 1 };
@@ -146,8 +171,10 @@ std::array<std::array<std::vector<int>, 4>, N> rays;
 std::array<std::array<std::uint64_t, N + 1>, N + 1> binom{};
 
 // colex ranks of the kings packed onto consecutive bits (xstd::bit_compress / bit_expand): the rank of a packed subset
-// does not depend on the mask it was packed from, so one table of 2^18 ranks serves every mask, and per number of
-// kings k one table of the packed subsets in rank order (2^18 entries over all k)
+// does not depend on the mask it was packed from, so one table of 2^N ranks serves every mask, and per number of
+// kings k one table of the packed subsets in rank order (2^N entries over all k). Only for small boards (2^20 entries
+// at most); on larger ones the ranks are sums of binomials over the set bits, and the unranks the greedy inverse.
+constexpr bool RANK_TABLES = N <= 20;
 std::vector<std::uint32_t> rank_table, unrank_table;
 std::array<std::uint32_t, N + 2> unrank_offset{};
 
@@ -161,20 +188,22 @@ void init_tables()
                 binom[n][0] = 1;
                 for (int k = 1; k <= n; ++k) binom[n][k] = binom[n - 1][k - 1] + (k <= n - 1 ? binom[n - 1][k] : 0);
         }
-        rank_table.assign(std::size_t(1) << N, 0);
-        unrank_table.assign(std::size_t(1) << N, 0);
-        for (std::uint32_t c = 0; c < (1u << N); ++c) {
-                std::uint64_t r = 0;
-                int i = 0;
-                for (auto const sq : bb_of(c)) r += binom[std::size_t(sq)][std::size_t(++i)];
-                rank_table[c] = std::uint32_t(r);
+        if constexpr (RANK_TABLES) {
+                rank_table.assign(std::size_t(1) << N, 0);
+                unrank_table.assign(std::size_t(1) << N, 0);
+                for (word c = 0; c < (word(1) << N); ++c) {
+                        std::uint64_t r = 0;
+                        int i = 0;
+                        for (auto const sq : bb_of(c)) r += binom[std::size_t(sq)][std::size_t(++i)];
+                        rank_table[c] = std::uint32_t(r);
+                }
+                for (int k = 0; k <= N; ++k) unrank_offset[std::size_t(k) + 1] = unrank_offset[std::size_t(k)] + std::uint32_t(binom[N][std::size_t(k)]);
+                for (word c = 0; c < (word(1) << N); ++c) unrank_table[unrank_offset[bb_of(c).size()] + rank_table[c]] = std::uint32_t(c);
         }
-        for (int k = 0; k <= N; ++k) unrank_offset[std::size_t(k) + 1] = unrank_offset[std::size_t(k)] + std::uint32_t(binom[N][std::size_t(k)]);
-        for (std::uint32_t c = 0; c < (1u << N); ++c) unrank_table[unrank_offset[bb_of(c).size()] + rank_table[c]] = c;
 }
 
-constexpr bitboard PROMO_WHITE = bb_of(0b111);                // squares 1-3
-constexpr bitboard PROMO_BLACK = bb_of(0b111u << 15);         // squares 16-18
+constexpr bitboard PROMO_WHITE = bb_of(low_bits(ROW));                       // the top row: squares 1..ROW
+constexpr bitboard PROMO_BLACK = bb_of(low_bits(ROW) << (N - ROW));          // the bottom row: squares N-ROW+1..N
 
 struct Pos {
         bitboard m[2]{};        // men   [0] = white, [1] = black
@@ -185,10 +214,10 @@ struct Pos {
         bool operator==(Pos const&) const = default;
 };
 
-// 180 degree rotation with colours swapped: square n <-> 19 - n, white <-> black (the 32 bits reversed, shifted down)
+// 180 degree rotation with colours swapped: square n <-> N + 1 - n, white <-> black (the word reversed, shifted down)
 bitboard flip(bitboard const& x)
 {
-        return bb_of(xstd::bit_reverse(u32(x)) >> (32 - N));
+        return bb_of(word(xstd::bit_reverse(bits_of(x)) >> (WORD_BITS - N)));
 }
 
 Pos mirror(Pos const& p)
@@ -208,9 +237,10 @@ struct Move {
         Pos next;
 };
 
-// the moves of a position, without heap allocation (at most 12 pieces on 18 squares: far fewer than 128 moves)
+// the moves of a position, without heap allocation (at most 12 pieces on 18 squares: far fewer than 128 moves; a king
+// on a larger board has at most 2 (BOARD_W - 1) moves, so 12 pieces at most 24 (BOARD_W - 1))
 struct MoveList {
-        static constexpr std::size_t CAP = 128;
+        static constexpr std::size_t CAP = std::max<std::size_t>(128, 24 * (BOARD_W - 1) + 16);
         alignas(Move) unsigned char buf[CAP * sizeof(Move)];   // uninitialised: no zeroing of 128 moves per call
         std::size_t n = 0;
         Move* data() { return std::launder(reinterpret_cast<Move*>(buf)); }
@@ -367,14 +397,25 @@ std::string show(std::uint16_t v)
 
 // ---------------------------------------------------------------- slices
 
+// a slice's key packed into one integer: the white men, the black men (N bits each), the numbers of white and black kings
+// (4 bits each); 64 bits up to 28 squares, else 128
+using KeyPack = std::conditional_t<(2 * N + 8 <= 64), std::uint64_t, unsigned __int128>;
+struct KeyPackHash {
+        std::size_t operator()(KeyPack x) const
+        {
+                std::uint64_t h = std::uint64_t(x) * 0x9E3779B97F4A7C15ull;
+                if constexpr (sizeof(KeyPack) > 8) h ^= std::uint64_t(x >> 64) * 0xC2B2AE3D27D4EB4Full;
+                return std::size_t(h ^ (h >> 31));
+        }
+};
+
 struct Key {
         bitboard wm, bm;
         int nwk, nbk;
-        std::uint64_t pack() const { return std::uint64_t(u32(wm)) | std::uint64_t(u32(bm)) << 18 | std::uint64_t(nwk) << 36 | std::uint64_t(nbk) << 40; }
-        static Key unpack(std::uint64_t x)
+        KeyPack pack() const { return KeyPack(bits_of(wm)) | KeyPack(bits_of(bm)) << N | KeyPack(nwk) << (2 * N) | KeyPack(nbk) << (2 * N + 4); }
+        static Key unpack(KeyPack x)
         {
-                constexpr std::uint32_t low = (1u << N) - 1;
-                return { bb_of(std::uint32_t(x) & low), bb_of(std::uint32_t(x >> 18) & low), int(x >> 36 & 15), int(x >> 40 & 15) };
+                return { bb_of(word(x) & low_bits(N)), bb_of(word(x >> N) & low_bits(N)), int(x >> (2 * N) & 15), int(x >> (2 * N + 4) & 15) };
         }
 };
 
@@ -410,16 +451,51 @@ Meta meta_of(Key const& key)
         return s;
 }
 
-// colex rank of x within mask (x subset of mask): x packed onto the low bits (PEXT), then one table entry
+// colex rank of x within mask (x subset of mask): x packed onto the low bits (PEXT), then one table entry (small
+// boards) or the sum of C(position, i) over its i-th set bit
 std::uint64_t rank_in(bitboard const& x, bitboard const& mask)
 {
-        return rank_table[xstd::bit_compress<std::uint32_t>(x, mask)];
+        word const c = xstd::bit_compress<word>(x, mask);
+        if constexpr (RANK_TABLES) return rank_table[c];
+        else {
+                std::uint64_t r = 0;
+                std::size_t i = 0;
+                for (word b = c; b != 0; b &= b - 1) r += binom[std::size_t(std::countr_zero(b))][++i];
+                return r;
+        }
 }
 
-// the k-subset of mask with colex rank r: one table entry, spread over the mask (PDEP)
+// the k-subset of mask with colex rank r: one table entry (small boards) or greedily, from the highest set bit down (the
+// largest p with C(p, i) <= r is the i-th bit), spread over the mask (PDEP)
 bitboard unrank_in(std::uint64_t r, int k, bitboard const& mask)
 {
-        return xstd::bit_expand(unrank_table[unrank_offset[std::size_t(k)] + r], mask);
+        if constexpr (RANK_TABLES) return xstd::bit_expand(unrank_table[unrank_offset[std::size_t(k)] + r], mask);
+        else {
+                word c = 0;
+                std::size_t p = N;
+                for (std::size_t i = std::size_t(k); i > 0; --i) {
+                        do --p; while (binom[p][i] > r);
+                        r -= binom[p][i];
+                        c |= word(1) << p;
+                }
+                return xstd::bit_expand(c, mask);
+        }
+}
+
+// every k-subset of mask (Gosper's next combination on the packed bits, spread over the mask), in colex order
+template<class F>
+void for_each_subset(bitboard const& mask, int k, F&& f)
+{
+        int const n = int(mask.size());
+        if (k < 0 || k > n) return;
+        if (k == 0) { f(bitboard{}); return; }
+        word const end = n == WORD_BITS ? 0 : word(1) << n;
+        for (word c = low_bits(k);;) {
+                f(xstd::bit_expand(c, mask));
+                word const u = c & (~c + 1), v = c + u;
+                if (v == 0 || (end != 0 && v >= end)) break;
+                c = v | (((v ^ c) >> 2) / u);
+        }
 }
 
 std::uint64_t index_of(Meta const& s, Pos const& p)
@@ -460,8 +536,8 @@ constexpr std::uint64_t WDL_FLAG = 1ull << 63;
 constexpr std::uint64_t DB2_FLAG = 1ull << 62;    // offset into db2: a layer of DTM slices in a memory-mapped file
 std::uint8_t* db2 = nullptr;
 std::size_t db2_size = 0;
-std::vector<std::uint64_t> tab_key, tab_off;      // tab_key = pack + 1 (0 = empty); tab_off = byte offset or WDL_FLAG | position offset
-std::unordered_map<std::uint64_t, std::vector<std::uint16_t>> extra;
+std::vector<KeyPack> tab_key; std::vector<std::uint64_t> tab_off;      // tab_key = pack + 1 (0 = empty); tab_off = byte offset or WDL_FLAG | position offset
+std::unordered_map<KeyPack, std::vector<std::uint16_t>, KeyPackHash> extra;
 std::uint64_t extra_positions = 0;
 bool allow_on_demand = true;   // false: a slice that is not prebuilt is an error (no on-demand solving)
 struct NotInDatabase {};
@@ -481,13 +557,14 @@ std::uint16_t ref_value(SliceRef const& r, std::uint64_t i)
         return c == 2 ? DRAW : std::uint16_t(c);
 }
 
-std::size_t tab_slot(std::uint64_t k)
+std::size_t tab_slot(KeyPack k)
 {
-        std::uint64_t h = k * 0x9E3779B97F4A7C15ull;
+        std::uint64_t h = std::uint64_t(k) * 0x9E3779B97F4A7C15ull;
+        if constexpr (sizeof(KeyPack) > 8) h ^= std::uint64_t(k >> 64) * 0xC2B2AE3D27D4EB4Full;
         return std::size_t(h >> 20) & (tab_key.size() - 1);
 }
 
-bool find_prebuilt(std::uint64_t k, SliceRef& r)
+bool find_prebuilt(KeyPack k, SliceRef& r)
 {
         if (tab_key.empty()) return false;
         for (std::size_t i = tab_slot(k);; i = (i + 1) & (tab_key.size() - 1)) {
@@ -505,7 +582,7 @@ void solve_slice(Meta const& s, std::uint16_t* out);
 
 SliceRef slice_values(Key const& key)
 {
-        std::uint64_t k = key.pack();
+        KeyPack const k = key.pack();
         SliceRef r;
         if (pieces(key) <= built_max && find_prebuilt(k, r)) return r;
         auto it = extra.find(k);
@@ -530,15 +607,36 @@ SliceRef slice_values(Key const& key)
 // kings has to move a man or capture), so their exact value, with DTM, follows from a forward
 // alpha-beta search down to the slices (see below).
 
-using PosKey = unsigned __int128;
-PosKey pack(Pos const& p)
+// a position packed into one key: four bitboards and the side to move, 4 N + 1 bits; one 128-bit integer up to 31
+// squares, else the four words and the side to move
+struct WidePosKey {
+        std::array<word, 4> b{};
+        int stm = 0;
+        auto operator<=>(WidePosKey const&) const = default;
+};
+constexpr bool NARROW_POSKEY = 4 * N + 1 <= 128;
+using PosKey = std::conditional_t<NARROW_POSKEY, unsigned __int128, WidePosKey>;
+template<class K = PosKey>                              // a template, so that only the branch for K is compiled
+K pack(Pos const& p)
 {
-        return PosKey(u32(p.m[0])) | PosKey(u32(p.m[1])) << 18 | PosKey(u32(p.k[0])) << 36 | PosKey(u32(p.k[1])) << 54 | PosKey(p.stm) << 72;
+        if constexpr (std::is_same_v<K, unsigned __int128>)
+                return K(bits_of(p.m[0])) | K(bits_of(p.m[1])) << N | K(bits_of(p.k[0])) << (2 * N)
+                     | K(bits_of(p.k[1])) << (3 * N) | K(p.stm) << (4 * N);
+        else return { { bits_of(p.m[0]), bits_of(p.m[1]), bits_of(p.k[0]), bits_of(p.k[1]) }, p.stm };
+}
+// two 64-bit halves of a key (for hashing and checksums)
+template<class K>
+std::pair<std::uint64_t, std::uint64_t> halves(K const& x)
+{
+        if constexpr (std::is_same_v<K, unsigned __int128>) return { std::uint64_t(x), std::uint64_t(x >> 64) };
+        else return { std::uint64_t(x.b[0]) ^ std::uint64_t(x.b[2]) * 0xD6E8FEB86659FD93ull,
+                      (std::uint64_t(x.b[1]) ^ std::uint64_t(x.b[3]) * 0xD6E8FEB86659FD93ull) * 2 + std::uint64_t(x.stm) };
 }
 struct PosKeyHash {
-        std::size_t operator()(PosKey x) const
+        std::size_t operator()(PosKey const& x) const
         {
-                std::uint64_t h = std::uint64_t(x) * 0x9E3779B97F4A7C15ull ^ std::uint64_t(x >> 64) * 0xC2B2AE3D27D4EB4Full;
+                auto const [lo, hi] = halves(x);
+                std::uint64_t h = lo * 0x9E3779B97F4A7C15ull ^ hi * 0xC2B2AE3D27D4EB4Full;
                 return std::size_t(h ^ (h >> 31));
         }
 };
@@ -581,7 +679,7 @@ std::uint16_t lookup_slice(Pos const& p0)
         Pos const p = canonical_key(key_of(p0)) ? p0 : mirror(p0);
         Key const key = key_of(p);
         thread_local SliceRef last;
-        thread_local std::uint64_t last_key = ~0ull;
+        thread_local KeyPack last_key = ~KeyPack(0);
         thread_local Meta last_meta;
         if (key.pack() != last_key) { last = slice_values(key); last_key = key.pack(); last_meta = meta_of(key); }
         return ref_value(last, p.stm * last_meta.P + index_of(last_meta, p));
@@ -1335,13 +1433,13 @@ void solve_slice_par(Meta const& s, std::uint16_t* out, Pool& pool)
 
 // ---------------------------------------------------------------- building all slices up to n pieces
 
-struct Job { std::uint64_t key; int level_n, men, dist; std::uint64_t P; };
+struct Job { KeyPack key; int level_n, men, dist; std::uint64_t P; };
 
 int distance(Key const& k)
 {
         int d = 0;
-        for (auto const sq : k.wm) d += int(sq) / 3;           // white: rows to row 0
-        for (auto const sq : k.bm) d += 5 - int(sq) / 3;       // black: rows to row 5
+        for (auto const sq : k.wm) d += row_of(int(sq));                       // white: rows to the top row
+        for (auto const sq : k.bm) d += BOARD_H - 1 - row_of(int(sq));         // black: rows to the bottom row
         return d;
 }
 
@@ -1350,31 +1448,23 @@ int distance(Key const& k)
 std::vector<Job> make_jobs(int nmin, int nmax)
 {
         std::vector<Job> jobs;
-        // the subsets of a mask by the integer enumeration s = (s - 1) & mask, from the mask down to the empty set
-        std::uint32_t const allowW = u32(FULL - PROMO_WHITE), allowB = u32(FULL - PROMO_BLACK);
-        std::vector<bitboard> wsets;
-        for (std::uint32_t w = allowW;; w = (w - 1) & allowW) {
-                if (int(bb_of(w).size()) <= nmax) wsets.push_back(bb_of(w));
-                if (w == 0) break;
-        }
-        for (bitboard const& wm : wsets) {
-                std::uint32_t const ab = allowB & ~u32(wm);
-                int rest0 = nmax - int(wm.size());
-                for (std::uint32_t b = ab;; b = (b - 1) & ab) {
-                        bitboard const bm = bb_of(b);
-                        int rest = rest0 - int(bm.size());
-                        if (rest >= 0)
-                                for (int nwk = 0; nwk <= rest; ++nwk)
-                                        for (int nbk = 0; nwk + nbk <= rest; ++nbk) {
-                                                Key k{ wm, bm, nwk, nbk };
-                                                if (pieces(k) < std::max(1, nmin) || !canonical_key(k)) continue;
-                                                Meta m = meta_of(k);
-                                                if (m.P == 0) continue;
-                                                jobs.push_back({ k.pack(), pieces(k), int((wm | bm).size()), distance(k), m.P });
-                                        }
-                        if (b == 0) break;
-                }
-        }
+        // the placements of at most nmax men (k-subsets of the squares each colour's men may stand on), then the kings
+        bitboard const allowW = FULL - PROMO_WHITE, allowB = FULL - PROMO_BLACK;
+        for (int nw = 0; nw <= nmax; ++nw)
+                for_each_subset(allowW, nw, [&](bitboard const& wm) {
+                        for (int nb = 0; nw + nb <= nmax; ++nb)
+                                for_each_subset(allowB - wm, nb, [&](bitboard const& bm) {
+                                        int const rest = nmax - nw - nb;
+                                        for (int nwk = 0; nwk <= rest; ++nwk)
+                                                for (int nbk = 0; nwk + nbk <= rest; ++nbk) {
+                                                        Key k{ wm, bm, nwk, nbk };
+                                                        if (pieces(k) < std::max(1, nmin) || !canonical_key(k)) continue;
+                                                        Meta m = meta_of(k);
+                                                        if (m.P == 0) continue;
+                                                        jobs.push_back({ k.pack(), pieces(k), int((wm | bm).size()), distance(k), m.P });
+                                                }
+                                });
+                });
         std::sort(jobs.begin(), jobs.end(), [](Job const& a, Job const& b) {
                 return std::tie(a.level_n, a.men, a.dist, a.key) < std::tie(b.level_n, b.men, b.dist, b.key);
         });
@@ -1440,7 +1530,7 @@ void build(int nmax, int threads, int dmax)
 }
 
 // insert (key, offset) pairs into a fresh table with room for all of them
-void rebuild_table(std::vector<std::pair<std::uint64_t, std::uint64_t>> const& entries)
+void rebuild_table(std::vector<std::pair<KeyPack, std::uint64_t>> const& entries)
 {
         std::size_t cap = 1;
         while (cap < 2 * entries.size()) cap <<= 1;
@@ -1454,9 +1544,9 @@ void rebuild_table(std::vector<std::pair<std::uint64_t, std::uint64_t>> const& e
         }
 }
 
-std::vector<std::pair<std::uint64_t, std::uint64_t>> table_entries()
+std::vector<std::pair<KeyPack, std::uint64_t>> table_entries()
 {
-        std::vector<std::pair<std::uint64_t, std::uint64_t>> e;
+        std::vector<std::pair<KeyPack, std::uint64_t>> e;
         for (std::size_t i = 0; i < tab_key.size(); ++i)
                 if (tab_key[i]) e.push_back({ tab_key[i] - 1, tab_off[i] });
         return e;
@@ -1492,7 +1582,7 @@ bool extend(int n, int threads, std::string const& path, bool resume = false)
                 return std::tie(a.level_n, a.men, a.dist, a.key) < std::tie(b.level_n, b.men, b.dist, b.key);
         });
         auto entries = table_entries();
-        std::vector<std::pair<std::uint64_t, std::uint64_t>> layer;
+        std::vector<std::pair<KeyPack, std::uint64_t>> layer;
         std::uint64_t total = 0;
         for (auto const& j : jobs) { layer.push_back({ j.key, DB2_FLAG | total }); total += 2 * j.P; }
         std::cerr << "extend: " << jobs.size() << " slices, " << total << " positions (" << total / 1e9 << " GB) in " << path << std::endl;
@@ -1559,7 +1649,7 @@ bool attach(std::string const& path)
         if (!f) return false;
         std::uint64_t hdr[4];
         bool ok = std::fread(hdr, sizeof hdr, 1, f) == 1 && hdr[0] == 0x3678364244424747ull && built_max == int(hdr[1]) - 1;
-        std::vector<std::pair<std::uint64_t, std::uint64_t>> layer(ok ? hdr[2] : 0);
+        std::vector<std::pair<KeyPack, std::uint64_t>> layer(ok ? hdr[2] : 0);
         if (ok) ok = std::fread(layer.data(), sizeof layer[0], layer.size(), f) == layer.size();
         std::fclose(f);
         if (!ok || !map_file(path, hdr[3], 0)) return false;
@@ -1582,7 +1672,7 @@ bool save(std::string const& path)
         if (!f) return false;
         std::uint64_t hdr[6] = { MAGIC2, std::uint64_t(built_max), std::uint64_t(dtm_max), tab_key.size(), db.size(), wdlbits.size() };
         std::fwrite(hdr, sizeof hdr, 1, f);
-        std::fwrite(tab_key.data(), 8, tab_key.size(), f);
+        std::fwrite(tab_key.data(), sizeof(KeyPack), tab_key.size(), f);
         std::fwrite(tab_off.data(), 8, tab_off.size(), f);
         std::fwrite(db.data(), 1, db.size(), f);
         std::fwrite(wdlbits.data(), 8, wdlbits.size(), f);
@@ -1603,7 +1693,7 @@ bool load(std::string const& path)
         } else ok = false;
         if (ok) {
                 tab_key.resize(hdr[2]); tab_off.resize(hdr[2]); db.resize(hdr[3]); wdlbits.resize(hdr[4]);
-                ok = std::fread(tab_key.data(), 8, hdr[2], f) == hdr[2] && std::fread(tab_off.data(), 8, hdr[2], f) == hdr[2]
+                ok = std::fread(tab_key.data(), sizeof(KeyPack), hdr[2], f) == hdr[2] && std::fread(tab_off.data(), 8, hdr[2], f) == hdr[2]
                   && std::fread(db.data(), 1, hdr[3], f) == hdr[3] && std::fread(wdlbits.data(), 8, hdr[4], f) == hdr[4];
                 built_max = int(hdr[0]);
                 dtm_max = int(hdr[1]);
@@ -1620,11 +1710,11 @@ std::uint64_t verify(int threads)
 {
         // in storage order (the order in which the slices were built), so that successor slices in the
         // memory-mapped layer are read with good locality
-        std::vector<std::pair<std::uint64_t, std::uint64_t>> order;
+        std::vector<std::pair<std::uint64_t, KeyPack>> order;
         for (std::size_t i = 0; i < tab_key.size(); ++i)
                 if (tab_key[i]) order.push_back({ tab_off[i], tab_key[i] - 1 });
         std::sort(order.begin(), order.end());
-        std::vector<std::uint64_t> keys;
+        std::vector<KeyPack> keys;
         for (auto const& [off, k] : order) keys.push_back(k);
         for (auto const& [k, v] : extra) keys.push_back(k);
         std::uint64_t errors = 0, done = 0;
@@ -1700,6 +1790,15 @@ std::string fen_of(Pos const& p)
         return s;
 }
 
+// the start position: BOARD_H / 2 - 1 rows of men per side (W:W13,...,18:B1,...,6 on 6x6)
+std::string start_fen()
+{
+        int const men = (BOARD_H / 2 - 1) * ROW;
+        std::string w, b;
+        for (int i = 1; i <= men; ++i) { b += (i > 1 ? "," : "") + std::to_string(i); w += (i > 1 ? "," : "") + std::to_string(N - men + i); }
+        return "W:W" + w + ":B" + b;
+}
+
 std::string notation(Move const& mv)
 {
         return std::to_string(mv.from + 1) + (!mv.captured.empty() ? "x" : "-") + std::to_string(mv.to + 1);
@@ -1727,23 +1826,24 @@ std::string notation(Move const& mv)
 
 constexpr bitboard MEN_W = FULL - PROMO_WHITE;            // squares where a white man can stand
 constexpr bitboard MEN_B = FULL - PROMO_BLACK;            // squares where a black man can stand
-constexpr bitboard MEN_MID = MEN_W & MEN_B;               // squares 4-15
+constexpr bitboard MEN_MID = MEN_W & MEN_B;               // squares ROW+1..N-ROW (4-15 on 6x6)
 constexpr std::uint64_t BLOCK = 4096;                     // positions (bytes) per compressed block
 constexpr std::uint64_t CDB_MAGIC = 0x3678364244424331ull;     // version 1: draw 253, no escapes (still read)
 constexpr std::uint64_t CDB_MAGIC2 = 0x3678364244424332ull;    // version 2: draw 255, escape codes E..254 (see ESC8)
 constexpr int ZLEVEL = 19;
 
-// placements of nwm white and nbm black men with j white men on squares 16-18
+// placements of nwm white and nbm black men with j white men on the bottom row (squares 16-18 on 6x6)
+constexpr int MID = N - 2 * ROW, MEN_SQ = N - ROW;     // the squares between the promotion rows; a colour's men's squares
 std::uint64_t men_part(int nwm, int nbm, int j)
 {
-        if (j > 3 || j > nwm || nwm - j > 12 || nbm > 15 - (nwm - j)) return 0;
-        return binom[3][j] * binom[12][nwm - j] * binom[15 - (nwm - j)][nbm];
+        if (j > ROW || j > nwm || nwm - j > MID || nbm > MEN_SQ - (nwm - j)) return 0;
+        return binom[ROW][j] * binom[MID][nwm - j] * binom[MEN_SQ - (nwm - j)][nbm];
 }
 
 std::uint64_t men_count(int nwm, int nbm)
 {
         std::uint64_t c = 0;
-        for (int j = 0; j <= 3; ++j) c += men_part(nwm, nbm, j);
+        for (int j = 0; j <= ROW; ++j) c += men_part(nwm, nbm, j);
         return c;
 }
 
@@ -1753,7 +1853,7 @@ std::uint64_t men_rank(bitboard const& wm, bitboard const& bm)
         int const nwm = int(wm.size()), nbm = int(bm.size()), j = int((wm & PROMO_BLACK).size());
         std::uint64_t r = 0;
         for (int i = 0; i < j; ++i) r += men_part(nwm, nbm, i);
-        std::uint64_t const cm = binom[12][nwm - j], cb = binom[15 - (nwm - j)][nbm];
+        std::uint64_t const cm = binom[MID][nwm - j], cb = binom[MEN_SQ - (nwm - j)][nbm];
         return r + (rank_in(wm & PROMO_BLACK, PROMO_BLACK) * cm + rank_in(wm & MEN_MID, MEN_MID)) * cb + rank_in(bm, MEN_B - wm);
 }
 
@@ -1761,7 +1861,7 @@ void men_unrank(int nwm, int nbm, std::uint64_t r, bitboard& wm, bitboard& bm)
 {
         int j = 0;
         while (r >= men_part(nwm, nbm, j)) r -= men_part(nwm, nbm, j++);
-        std::uint64_t const cm = binom[12][nwm - j], cb = binom[15 - (nwm - j)][nbm];
+        std::uint64_t const cm = binom[MID][nwm - j], cb = binom[MEN_SQ - (nwm - j)][nbm];
         std::uint64_t const c = r % cb;
         r /= cb;
         wm = unrank_in(r / cm, j, PROMO_BLACK) | unrank_in(r % cm, nwm - j, MEN_MID);
@@ -1913,16 +2013,16 @@ std::uint64_t store_gen = 0;           // changes whenever the store is opened a
 
 std::string mat_path(std::string const& dir, int wm, int bm, int wk, int bk, char const* ext)
 {
-        char name[40];   // 6x6-wp-bp-wm-bm
-        std::snprintf(name, sizeof name, "/6x6-%02d-%02d-%02d-%02d", wm + wk, bm + bk, wm, bm);
+        char name[48];   // 6x6-wp-bp-wm-bm (the board's name)
+        std::snprintf(name, sizeof name, "/%s-%02d-%02d-%02d-%02d", board_name().c_str(), wm + wk, bm + bk, wm, bm);
         return dir + name + ext;
 }
 
 std::string unit_path(std::string const& dir, int n, int m, char const* ext)
 {
         if (only_mat.on && n == only_mat.n() && m == only_mat.m()) return mat_path(dir, only_mat.wm, only_mat.bm, only_mat.wk, only_mat.bk, ext);
-        char name[32];   // 6x6-nn-mm: with leading zeros the names sort in build order
-        std::snprintf(name, sizeof name, "/6x6-%02d-%02d", n, m);
+        char name[40];   // 6x6-nn-mm (the board's name): with leading zeros the names sort in build order
+        std::snprintf(name, sizeof name, "/%s-%02d-%02d", board_name().c_str(), n, m);
         return dir + name + ext;
 }
 
@@ -2146,7 +2246,7 @@ MatRef const& mat_of(Pos const& q)
 // a capture position is often a successor of several positions that are built or checked one after the other
 struct CaptureCache {
         static constexpr std::size_t SLOTS = std::size_t(1) << 20;
-        std::vector<PosKey> key = std::vector<PosKey>(SLOTS, 0);
+        std::vector<PosKey> key = std::vector<PosKey>(SLOTS, PosKey{});
         std::vector<std::uint64_t> gen = std::vector<std::uint64_t>(SLOTS, 0);
         std::vector<std::uint16_t> val = std::vector<std::uint16_t>(SLOTS, 0);
 };
@@ -2356,7 +2456,7 @@ bool mat_build(std::string const& dir, int threads)
                 std::memset(u.p, UNKNOWN8, std::size_t(npos));
                 write_progress(prog, "0\n");
         }
-        std::vector<std::pair<int, std::uint64_t>> jobs;       // (distance, slice key), in build order
+        std::vector<std::pair<int, KeyPack>> jobs;       // (distance, slice key), in build order
         for (auto const& x : lay)
                 for (std::uint64_t r = 0; r < x.men; ++r) {
                         bitboard wm, bm;
@@ -2463,7 +2563,7 @@ bool unit_build(std::string const& dir, int n, int m, int threads, double mem_gb
         }
         // the slices to solve: every slice of an asymmetric material, the canonical slices of a symmetric one
         // (whose positions with black to move are stored as the mirrored slice with white to move)
-        std::vector<std::pair<int, std::uint64_t>> jobs;
+        std::vector<std::pair<int, KeyPack>> jobs;
         for (auto const& x : lay)
                 for (std::uint64_t r = 0; r < x.men; ++r) {
                         bitboard wm, bm;
@@ -2702,8 +2802,8 @@ bool unit_values(std::string const& dir, int n, int m, int threads)
                 std::uint16_t const v = block_cache.value(u, off);
                 std::size_t const t = std::size_t(omp_get_thread_num());
                 sum[t] += mix(off << 16 | v); ++cnt[t];
-                PosKey const k = pack(q);       // keyed by the position, not its offset: the same in any layout
-                msum[t * M + cur.mi] += mix(mix(std::uint64_t(k)) ^ std::uint64_t(k >> 64) ^ (std::uint64_t(v) << 48)); ++mcnt[t * M + cur.mi];
+                auto const [klo, khi] = halves(pack(q));       // keyed by the position, not its offset: the same in any layout
+                msum[t * M + cur.mi] += mix(mix(klo) ^ khi ^ (std::uint64_t(v) << 48)); ++mcnt[t * M + cur.mi];
         });
         for (std::size_t mi = 0; mi < M; ++mi) {
                 std::uint64_t a = 0, b = 0;
@@ -3062,7 +3162,7 @@ int main()
                         // perft <depth> [FEN] [dups]: leaf counts per depth from the position (default: the start position)
                         int depth = 0;
                         rs >> depth;
-                        std::string fen = "W:W13,14,15,16,17,18:B1,2,3,4,5,6", word;
+                        std::string fen = start_fen(), word;
                         keep_duplicates = false;
                         while (rs >> word) { if (word == "dups") keep_duplicates = true; else fen = word; }
                         Pos p0;

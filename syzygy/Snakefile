@@ -4,7 +4,8 @@
 #          http://www.boost.org/LICENSE_1_0.txt)
 
 # Syzygy style builds for 6x6 international draughts, or English checkers with the engine built for it (syzygy_checkers,
-# -DEGDB_6X6_CHECKERS=1), two-sided: one of each pair of a material and its
+# -DEGDB_6X6_CHECKERS=1), or another board (syzygy_8x8_checkers, syzygy_10x10: the tree starts with the engine's
+# board, from `<engine> board`, instead of 6x6/), two-sided: one of each pair of a material and its
 # colour mirror (the 82 materials up to 6 pieces of strongly_solving_6x6/materials), built in the order of the DAG of
 # captures and promotions. A material is named wp-bp-wm-bm (white pieces, black pieces, white men, black men, two
 # digits each); inside, a tuple (wm, wk, bm, bk) with kings. Per material four files of full results,
@@ -45,6 +46,7 @@ ROUNDS = config.get('rounds', 'frontier')
 SINK = config.get('sink', 'auto')          # the depth sink: auto (by the claim), groups (group files), bytes (8-bit, RAM), array (16-bit, RAM)
 GRANULARITY = config.get('granularity', 'material')  # material, tempi or configuration (below material: man moves exit)
 import os
+import subprocess
 THREADS = int(config.get('threads', 4))
 PAR_MIN = config.get('par_min')                # materials with at least this many positions build with policy=par on all cores
 STATS = 'stats' if str(config.get('stats', 0)) not in ('0', 'false', 'False') else ''   # stats=1: a .stats file per material
@@ -102,9 +104,13 @@ def deps(m):
     return sorted({canonical(d) for d in out} - {m})
 
 
+# the board the engine was built for (-DEGDB_WIDTH, -DEGDB_HEIGHT; default 6x6): the top of every material's tree
+BOARD = subprocess.run([ENGINE, 'board'], capture_output=True, text=True, check=True).stdout.split()[0]
+
+
 def sub(n):                                                            # wp-bp-wm-bm -> db/np/wp-bp/wm-bm
     wp, bp, wm, bm = map(int, n.split('-'))
-    return f'6x6/{wp + bp:02}/{wp:02}-{bp:02}/{wm:02}-{bm:02}'
+    return f'{BOARD}/{wp + bp:02}/{wp:02}-{bp:02}/{wm:02}-{bm:02}'
 
 
 def files(m):

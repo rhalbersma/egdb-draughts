@@ -3,7 +3,8 @@
 //    (See accompanying file LICENSE_1_0.txt or copy at
 //          http://www.boost.org/LICENSE_1_0.txt)
 
-// Per-material building blocks for 6x6 international draughts, shared by thompson86/thompson86.cpp and
+// Per-material building blocks for 6x6 international draughts (or the board and rules egdb_6x6.cpp was built for:
+// EGDB_WIDTH, EGDB_HEIGHT, EGDB_6X6_CHECKERS; the numbers in the comments are those of 6x6), shared by thompson86/thompson86.cpp and
 // syzygy/syzygy.cpp: the metrics (dtm, dtc, dtz) and the moves that end their count, the materials (named
 // wp-bp-wm-bm) and their index (a product of four colex ranks), bit planes, groups of egdb_6x6 slices solved together
 // and their unmoves, and the list of materials. Included after src/egdb_6x6.cpp (with its main renamed), whose
@@ -34,13 +35,13 @@
 
 namespace {
 
-// ---------------------------------------------------------------- binomials up to C(32, 32)
+// ---------------------------------------------------------------- binomials up to C(64, 64)
 
-std::array<std::array<std::uint64_t, 33>, 33> CC{};
+std::array<std::array<std::uint64_t, 65>, 65> CC{};
 
 void init_cc()
 {
-        for (std::size_t n = 0; n <= 32; ++n) {
+        for (std::size_t n = 0; n <= 64; ++n) {
                 CC[n][0] = 1;
                 for (std::size_t k = 1; k <= n; ++k) CC[n][k] = CC[n - 1][k - 1] + (k <= n - 1 ? CC[n - 1][k] : 0);
         }
@@ -130,7 +131,7 @@ struct Material {
         }
         std::string tree() const                        // its directory, the subdivisions above it: db/np/wp-bp/
         {
-                return std::format("6x6/{:02}/{:02}-{:02}/", pieces(), wp(), bp());
+                return std::format("{}/{:02}/{:02}-{:02}/", board_name(), pieces(), wp(), bp());
         }
         std::string stem() const                        // its files' names in that directory start with wm-bm
         {
@@ -147,8 +148,9 @@ Material material_of(Pos const& p)
         return { int(p.m[0].size()), int(p.k[0].size()), int(p.m[1].size()), int(p.k[1].size()) };
 }
 
-constexpr bitboard DOM_WM = FULL - PROMO_WHITE;    // squares a white man may stand on (15)
-constexpr bitboard DOM_BM = FULL - PROMO_BLACK;    // squares a black man may stand on (15)
+constexpr bitboard DOM_WM = FULL - PROMO_WHITE;    // squares a white man may stand on (15 on 6x6)
+constexpr bitboard DOM_BM = FULL - PROMO_BLACK;    // squares a black man may stand on (15 on 6x6)
+constexpr std::size_t NDOM = N - ROW;              // their number
 
 // The index of a material's files. Joint (the default): the white men over the 15 squares a white man may stand on, the
 // black men over theirs that the white men leave (an offset per white-men rank), the white kings over the empty
@@ -168,11 +170,11 @@ struct MatIndex {
 
         explicit MatIndex(Material m)
         :
-                c(m), swm(CC[15][std::size_t(m.wm)]), sbm(CC[15][std::size_t(m.bm)]), swk(CC[18][std::size_t(m.wk)]),
-                sbk(CC[18][std::size_t(m.bk)]), size(swm * sbm * swk * sbk)
+                c(m), swm(CC[NDOM][std::size_t(m.wm)]), sbm(CC[NDOM][std::size_t(m.bm)]), swk(CC[N][std::size_t(m.wk)]),
+                sbk(CC[N][std::size_t(m.bk)]), size(swm * sbm * swk * sbk)
         {
 #if EGDB_JOINT_INDEX
-                int const e = 18 - m.wm - m.bm;
+                int const e = N - m.wm - m.bm;
                 nk1 = CC[std::size_t(e)][std::size_t(m.wk)];
                 nk2 = CC[std::size_t(e - m.wk)][std::size_t(m.bk)];
                 off.resize(swm + 1);
@@ -336,7 +338,7 @@ struct Plane {
 struct Group {
         std::vector<Meta> units;
         std::vector<std::uint64_t> base;                                // first index of each slice
-        std::unordered_map<std::uint64_t, std::size_t> slot;            // slice key -> its number in the group
+        std::unordered_map<KeyPack, std::size_t, KeyPackHash> slot;            // slice key -> its number in the group
         std::uint64_t P = 0;                                            // positions per side to move
 
         void add(Meta const& m) { slot[m.key.pack()] = units.size(); units.push_back(m); base.push_back(P); P += m.P; }
@@ -390,32 +392,23 @@ void for_each_inside_predecessor(Group const& g, Pos const& q, F&& f)
 
 std::vector<Group> groups_of(Material c)
 {
-        struct SliceUnit { int distance, white; std::uint64_t key; Meta meta; };      // a configuration, with its tempi
+        struct SliceUnit { int distance, white; KeyPack key; Meta meta; };      // a configuration, with its tempi
         std::vector<SliceUnit> units;
-        for (std::uint32_t w = u32(DOM_WM);; w = (w - 1) & u32(DOM_WM)) {
-                bitboard const wm = bb_of(w);
-                if (int(wm.size()) == c.wm) {
-                        std::uint32_t const bdom = u32(DOM_BM - wm);
-                        for (std::uint32_t b = bdom;; b = (b - 1) & bdom) {
-                                bitboard const bm = bb_of(b);
-                                if (int(bm.size()) == c.bm) {
-                                        Key const k{ wm, bm, c.wk, c.bk };
-                                        Meta const m = meta_of(k);
-                                        int white = 0;
-                                        for (auto const sq : wm) white += int(sq) / 3;
-                                        if (m.P != 0) units.push_back({ distance(k), white, k.pack(), m });
-                                }
-                                if (b == 0) break;
-                        }
-                }
-                if (w == 0) break;
-        }
+        for_each_subset(DOM_WM, c.wm, [&](bitboard const& wm) {
+                for_each_subset(DOM_BM - wm, c.bm, [&](bitboard const& bm) {
+                        Key const k{ wm, bm, c.wk, c.bk };
+                        Meta const m = meta_of(k);
+                        int white = 0;
+                        for (auto const sq : wm) white += row_of(int(sq));
+                        if (m.P != 0) units.push_back({ distance(k), white, k.pack(), m });
+                });
+        });
         // in dependency order: a man move lowers its colour's tempo (and the total), so smaller totals come first
         std::ranges::sort(units, {}, [](SliceUnit const& u) { return std::tuple(u.distance, u.white, u.key); });
-        auto const group_key = [](SliceUnit const& u) -> std::uint64_t {    // a new group whenever this changes
+        auto const group_key = [](SliceUnit const& u) -> KeyPack {          // a new group whenever this changes
                 switch (g_granularity) {
-                case Granularity::material: return g_metric == Metric::dtz ? std::uint64_t(u.distance) : 0;
-                case Granularity::tempi: return std::uint64_t(u.distance) << 32 | std::uint64_t(u.white);
+                case Granularity::material: return g_metric == Metric::dtz ? KeyPack(u.distance) : 0;
+                case Granularity::tempi: return KeyPack(u.distance) << 32 | KeyPack(u.white);
                 case Granularity::configuration: return u.key;
                 }
                 return u.key;
@@ -496,7 +489,7 @@ class GroupSink final : public DepthSink<V>
         MatIndex const& mi_;
         std::vector<Group> const& groups_;
         std::vector<std::uint64_t> gbase_;                              // offset of each group in the group-order files
-        std::unordered_map<std::uint64_t, Slice> slice_;                // slice key -> where its positions are
+        std::unordered_map<KeyPack, Slice, KeyPackHash> slice_;                // slice key -> where its positions are
         std::vector<char> done_;                                        // finished groups
         std::array<std::string, 2> path_;
         std::array<int, 2> fd_{ -1, -1 };
@@ -508,9 +501,9 @@ class GroupSink final : public DepthSink<V>
         Slice const* find(Pos const& p) const           // with the last slice cached per thread
         {
                 thread_local GroupSink const* owner = nullptr;
-                thread_local std::uint64_t last_key = 0;
+                thread_local KeyPack last_key = 0;
                 thread_local Slice const* last = nullptr;
-                std::uint64_t const key = key_of(p).pack();
+                KeyPack const key = key_of(p).pack();
                 if (owner != this || key != last_key) {
                         auto const it = slice_.find(key);
                         last = it == slice_.end() ? nullptr : &it->second;
@@ -602,30 +595,21 @@ struct Tempi { int white = 0, black = 0; std::uint64_t configurations = 0, posit
 [[maybe_unused]] std::vector<Tempi> tempi_of(Material c)
 {
         std::map<std::pair<int, int>, Tempi> by;                        // by (total, white)
-        for (std::uint32_t w = u32(DOM_WM);; w = (w - 1) & u32(DOM_WM)) {
-                bitboard const wm = bb_of(w);
-                if (int(wm.size()) == c.wm) {
-                        std::uint32_t const bdom = u32(DOM_BM - wm);
-                        for (std::uint32_t b = bdom;; b = (b - 1) & bdom) {
-                                bitboard const bm = bb_of(b);
-                                if (int(bm.size()) == c.bm) {
-                                        Key const k{ wm, bm, c.wk, c.bk };
-                                        Meta const m = meta_of(k);
-                                        if (m.P != 0) {
-                                                int white = 0;
-                                                for (auto const sq : wm) white += int(sq) / 3;
-                                                Tempi& t = by[{ distance(k), white }];
-                                                t.white = white;
-                                                t.black = distance(k) - white;
-                                                ++t.configurations;
-                                                t.positions += m.P;
-                                        }
-                                }
-                                if (b == 0) break;
+        for_each_subset(DOM_WM, c.wm, [&](bitboard const& wm) {
+                for_each_subset(DOM_BM - wm, c.bm, [&](bitboard const& bm) {
+                        Key const k{ wm, bm, c.wk, c.bk };
+                        Meta const m = meta_of(k);
+                        if (m.P != 0) {
+                                int white = 0;
+                                for (auto const sq : wm) white += row_of(int(sq));
+                                Tempi& t = by[{ distance(k), white }];
+                                t.white = white;
+                                t.black = distance(k) - white;
+                                ++t.configurations;
+                                t.positions += m.P;
                         }
-                }
-                if (w == 0) break;
-        }
+                });
+        });
         std::vector<Tempi> out;
         for (auto const& [key, t] : by) out.push_back(t);
         return out;

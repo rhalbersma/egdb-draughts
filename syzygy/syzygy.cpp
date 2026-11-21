@@ -4,7 +4,10 @@
 //          http://www.boost.org/LICENSE_1_0.txt)
 
 // Syzygy style builds (after R. de Man's rtbgen) for 6x6 international draughts, two-sided, for three metrics, with
-// the per-material index of thompson86 (src/materials_6x6.hpp). The value of a position, for the side to move:
+// the per-material index of thompson86 (src/materials_6x6.hpp). Built for one board and rule set (see src/egdb_6x6.cpp:
+// EGDB_WIDTH, EGDB_HEIGHT, EGDB_6X6_CHECKERS; the CMake targets syzygy, syzygy_checkers, syzygy_8x8_checkers,
+// syzygy_10x10), which names the top of the tree (6x6/, 8x8/, 10x10/) and which `syzygy board` prints. The value of
+// a position, for the side to move:
 //   0          draw (also an illegal slot)
 //   2n         win in n plies (n >= 1)
 //   2n + 1     loss in n plies (n >= 0; 0: no move)
@@ -62,6 +65,7 @@
 //                                                            fits, else group files), or as given; the granularity of
 //                                                            the groups (default material; below it man moves are
 //                                                            exits)
+//        syzygy board                                        the board and rules of this binary (e.g. "8x8 checkers")
 //        syzygy plan n <metric> [granularity]                per stored material with at most n pieces: slots,
 //                                                            positions, groups, the largest group, MB needed (rung 0)
 //        syzygy checkall <dir> n <metric> [threads]          every material of at most n pieces against egdb_6x6
@@ -1609,7 +1613,7 @@ bool convert_material(std::string const& dir, Material c, int stride, ExecutionP
 bool probe_positions(std::string const& dir, std::vector<std::string> fens)
 {
         g_dir = dir;
-        if (fens.empty()) fens.push_back("W:W13,14,15,16,17,18:B1,2,3,4,5,6");
+        if (fens.empty()) fens.push_back(start_fen());
         if (std::filesystem::exists(dir + "/probe/wdl")) {             // the probe format, if the store has it
                 open_probe_all(dir, 12);
                 for (std::string const& fen : fens) {
@@ -1644,6 +1648,10 @@ int main(int argc, char* argv[])
                 if (wm < 0 || bm < 0 || wm > wp || bm > bp) { std::cerr << "not a material: wp bp wm bm" << std::endl; std::exit(2); }
                 return Material{ wm, wp - wm, bm, bp - bm };
         };
+        if (a.size() == 1 && a[0] == "board") {                      // the board this binary was built for (its tree's name)
+                std::cout << board_name() << (CHECKERS ? " checkers" : " international") << std::endl;
+                return 0;
+        }
         if ((a.size() == 2 || a.size() == 3) && a[0] == "bench") {   // what the rules cost per position
                 run_bench(std::stoi(a[1]), a.size() == 3 ? std::stoi(a[2]) : 2000);
                 return 0;

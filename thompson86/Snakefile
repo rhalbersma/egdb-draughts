@@ -71,6 +71,7 @@ def deps(m):
 
 # the plan (src/snakemake_plan.py): memory budget, per-job claims from the engine's estimates, critical-path priorities
 import os
+import subprocess
 import sys
 sys.path.insert(0, os.path.join(workflow.basedir, '..', 'src'))
 from snakemake_plan import memory_budget_mb, load_plan, claim_mb, priorities, report, check_budget  # noqa: E402
@@ -90,9 +91,13 @@ rule all:
     input: f'{D}/check-{N}.{METRIC}.ok'
 
 
+# the board the engine was built for (-DEGDB_WIDTH, -DEGDB_HEIGHT; default 6x6): the top of every material's tree
+BOARD = subprocess.run([ENGINE, 'board'], capture_output=True, text=True, check=True).stdout.split()[0]
+
+
 def sub(n):                                                            # wp-bp-wm-bm -> db/np/wp-bp/wm-bm
     wp, bp, wm, bm = map(int, n.split('-'))
-    return f'6x6/{wp + bp:02}/{wp:02}-{bp:02}/{wm:02}-{bm:02}'
+    return f'{BOARD}/{wp + bp:02}/{wp:02}-{bp:02}/{wm:02}-{bm:02}'
 
 
 DEPTH = 'd' + METRIC[2]                                                # dm, dc or dz

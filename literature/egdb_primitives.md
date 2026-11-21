@@ -35,7 +35,8 @@ checkers). Change one only on purpose, and update this list with it.
 | topic | decision | where |
 |---|---|---|
 | values | exact plies for every metric, never rounded or halved; no draw-rule band | §7.5, §10 |
-| index | the joint index: legal placements only (white men, black men over what the white men leave, kings over the free squares), ranked with PEXT (`bit_compress`, physical to logical squares) and colex tables, unranked with PDEP; men outermost | `src/materials_6x6.hpp` (`EGDB_JOINT_INDEX=1`) |
+| board | a compile-time parameter: `EGDB_WIDTH` × `EGDB_HEIGHT` (even sides, 18 to 64 dark squares, default 6×6), the geometry from `tabula::chequer`, squares numbered as in PDN; the rules by `EGDB_6X6_CHECKERS`; the tree starts with the board's name (`syzygy board`). Checked by perft (8×8 checkers, 10×10 international) and against `egdb_fast` (kings only) | `src/egdb_6x6.cpp`, CMake `egdb_board()` |
+| index | the joint index: legal placements only (white men, black men over what the white men leave, kings over the free squares), ranked with PEXT (`bit_compress`, physical to logical squares) and colex tables (up to 20 squares; beyond, sums of binomials), unranked with PDEP; men outermost | `src/materials_6x6.hpp` (`EGDB_JOINT_INDEX=1`) |
 | build cell | 8 bits per position and side (cell8), reductions every 240 codes into value-preserving zstd snapshots, merged as a transform-reduce over the windows | §7.5, `rounds=cell8` |
 | loss checks | delayed (rtbgen's `CHANGED`): mark the candidates, check each once | cell8 and frontier modes |
 | inputs | read only in pass 0; DTM builds read only the DTM build files (self-contained: 1 + plies, 0 a draw), DTC and DTZ builds only the WDL build files | `syzygy/syzygy.cpp` |
@@ -46,7 +47,7 @@ checkers). Change one only on purpose, and update this list with it.
 | probe format | one side to move; captures and draws as don't-cares (pending captures planned); depth without class (from WDL): DTM in moves, DTC and DTZ in plies, 16 escape tokens, no draw code; zstd blocks of 4 KiB; converted once the materials a material leads into are converted, then its depth build files are deleted | §10, `probe=1`, `syzygy convert` |
 | fills | don't-cares take the dominant or the run-extending value, never an escape token | §10 |
 | parallelism | `for_blocks<B>(policy, n, f)`, B a multiple of 8 cache lines; Snakemake `policy=auto`: the largest materials (at least 1 / (4 × cores) of all positions, those at the end of the critical path) with `std::execution::par` on all cores, alone; the rest on one core each, side by side as far as `--cores` and the memory claims allow | `src/materials_6x6.hpp`, Snakefile |
-| layout | `<dir>/<metric>/6x6/<np>/<wp>-<bp>/<wm>-<bm>-<kind>-<side>.z`, `<dir>/wdl/…`, `<dir>/probe/<kind>/…` | Snakefile |
+| layout | `<dir>/<metric>/<board>/<np>/<wp>-<bp>/<wm>-<bm>-<kind>-<side>.z` (board 6x6, 8x8, 10x10, …), `<dir>/wdl/…`, `<dir>/probe/<kind>/…` | Snakefile |
 
 ## 1. Vocabulary
 

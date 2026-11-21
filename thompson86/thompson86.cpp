@@ -597,6 +597,10 @@ int main(int argc, char* argv[])
         init_tables();
         init_cc();
         std::vector<std::string> const a(argv + 1, argv + argc);
+        if (a.size() == 1 && a[0] == "board") {                      // the board this binary was built for (its tree's name)
+                std::cout << board_name() << (CHECKERS ? " checkers" : " international") << std::endl;
+                return 0;
+        }
         auto mat_at = [&](std::size_t i) {                             // wp bp wm bm
                 int const wp = std::stoi(a[i]), bp = std::stoi(a[i + 1]), wm = std::stoi(a[i + 2]), bm = std::stoi(a[i + 3]);
                 if (wm < 0 || bm < 0 || wm > wp || bm > bp) { std::cerr << "not a material: wp bp wm bm" << std::endl; std::exit(2); }

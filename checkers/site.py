@@ -41,7 +41,7 @@ CHAPTERS = [
         ('vesting-pariteit.html', 'De winst is niet strategisch, de pariteit doet ertoe', 'The win is non-strategic, parity matters')]),
     ('3 tegen 2 op 8×7', '3 against 2 on 8×7', [
         ('vesting-8x7.html', 'De vallen', 'The traps'),
-        ('vesting-8x7-wit.html', 'Wit aan zet zonder directe val', 'White to move without an immediate trap')]),
+        ('vesting-8x7-wit.html', 'De winst is strategisch, de dam kan verdreven worden', 'The win is strategic, the king can be driven out')]),
     ('3 tegen 2 op 7×7', '3 against 2 on 7×7', [
         ('langste-7x7.html', 'Geen ontsnapping naar een andere dubbele hoek', 'No escape to another double corner')]),
     ('3 tegen 2 op andere borden', '3 against 2 on other boards', [
@@ -771,14 +771,42 @@ are 8 traps, at even parity not a single one.</p>''')]
                        f'passive ones; for example the active trap 1 (with white to move white exchanges at once: {x87}) and the '
                        f'passive trap 2, which is no trap with white to move:</p>'))
         body7 += self.trap_blocks(pg7, k87, e87, name, '', [(['c4', 'd5', 'e6'], ['a2', 'a6']), (OW, OB)], partner)
-        # even parity: white occupies the free edge square next to a black king, which then has to leave its double corner
+        # with white to move: the active trap exchanges at once, the passive one does not, and a tempo change along the edge
+        # does not work; how white wins all the same is on the next page
+        fw = e87.fen(OW, OB, 'W')
+        vw, legalw = e87.analyse(fw)
+        assert vw.startswith('W') and self.exchange(e87, fw) is None
+        figw, iw = pg7.diagram(fw, t(f'{name}, passieve val 2, wit aan zet: {vw}', f'{name}, passive trap 2, white to move: {vw}'),
+                               gid=k87)
+        body7 += [t(f'<p>En met wit aan zet? De actieve val 1 dwingt met beide kleuren aan zet meteen een ruil af; met wit aan '
+                    f'zet ruilt wit direct: {x87}. De passieve val 2 geeft alleen met zwart aan zet meteen een ruil. Op '
+                    f'<a href="val-pariteit.html">8×8</a> wisselt wit dan van tempo op de diagonaal; op '
+                    f'<a href="vesting-pariteit.html">9×8</a> lukt dat langs de rand niet, en op 8×7 evenmin. Toch is de '
+                    f'passieve val met wit aan zet hier gewonnen ({vw}).</p>',
+                    f'<p>And with white to move? The active trap 1 forces an exchange at once with either side to move; with '
+                    f'white to move white exchanges immediately: {x87}. The passive trap 2 gives an immediate exchange with '
+                    f'black to move only. On <a href="val-pariteit.html">8×8</a> white then changes the tempo on the diagonal; '
+                    f'on <a href="vesting-pariteit.html">9×8</a> that does not work along the edge, and on 8×7 it does not '
+                    f'either. Still the passive trap with white to move is won here ({vw}).</p>'),
+                  figw, t('<p>Alle zetten van wit: ', '<p>All moves of white: ') + self.moves_list(pg7, iw, legalw, '1. ') + '.</p>',
+                  '<div style="clear:both"></div>',
+                  t('<p>Bij even pariteit is er helemaal geen val. Hoe wit daar wint, en in de passieve val met wit aan zet, staat '
+                    'op de <a href="vesting-8x7-wit.html">volgende pagina</a>: door een zwarte dam uit zijn dubbele hoek te '
+                    'verdringen.</p>',
+                    '<p>At even parity there is no trap at all. How white wins there, and in the passive trap with white to move, '
+                    'is on the <a href="vesting-8x7-wit.html">next page</a>: by driving a black king out of its double '
+                    'corner.</p>')]
+        self.write('vesting-8x7.html', None, '\n'.join(body7), pg7, k87)
+        # driving a black king out of its double corner: at even parity (black to move), where there is no trap, and from the
+        # passive trap with white to move, where there is no immediate exchange and no tempo change along the edge
+        pgv = self.page((k87, e87))
         fe = e87.fen(EW, EB, 'B')
         ve, legale = e87.analyse(fe)
-        fige, ie = pg7.diagram(fe, t(f'{name}, zwart aan zet (even pariteit): {ve}', f'{name}, black to move (even parity): {ve}'),
+        fige, ie = pgv.diagram(fe, t(f'{name}, zwart aan zet (even pariteit): {ve}', f'{name}, black to move (even parity): {ve}'),
                                gid=k87)
         lines = []
         for line in ('1. b7-a6 2. b3-a2! b1-c2 3. a2-b1 c2-b3 4. c4xa2 a6xc4', '1. b1-a2 2. b5-a6! b7-c6 3. a6-b7 c6-b5 4. c4xa6 a2xc4'):
-            h, _, f_end, _ = pg7.moves(fe, self.plan(line), 1, True, 'm1', ie)
+            h, _, f_end, _ = pgv.moves(fe, self.plan(line), 1, True, 'm1', ie)
             assert f_end[0] == 'W' and e87.analyse(f_end)[0].startswith('W') and all(
                 len([x for x in side[1:].split(',') if x]) == n for side, n in zip(f_end.split(':')[1:], (2, 1)))
             lines.append(h)
@@ -786,74 +814,54 @@ are 8 traps, at even parity not a single one.</p>''')]
         after = e87.analyse(e87.fen(['a2', 'c4', 'b5'], ['b1', 'a6'], 'B'))[1]
         val = {m[0]: m[1] for m in after}
         assert set(val) == {'b1-c2', 'a6-b7'} and all(v[0] == 'L' for v in val.values()) and int(val['a6-b7'][1:]) < int(val['b1-c2'][1:])
-        body7 += [fige, t('<p>Bij even pariteit is er geen val. Toch is vrijwel alles verloren, want de dubbele hoeken liggen '
-                          'zo dicht bij elkaar dat wit erin kan binnendringen. Pendelt de ene zwarte dam, dan bezet wit het '
-                          'vrije randveld naast de andere: die heeft geen wachtzet meer en moet de dubbele hoek uit (de '
-                          'wachtzet met de eerste dam verliest nog sneller). Daarna gaat wit zelf op het randveld staan dat '
-                          'de zwarte dam verliet, en die kan niet meer terug. ',
-                          '<p>At even parity there is no trap. Still almost everything is lost, because the double corners are '
-                          'so close together that white can invade them. When the one black king shuttles, white occupies the '
-                          'free edge square next to the other one: it has no waiting move left and has to leave the double '
-                          'corner (the waiting move with the first king loses even faster). Then white steps onto the edge square the '
-                          'black king left, and it cannot come back. ')
-                  + lines[0] + t(', en 2 tegen 1 wint. Pendelt zwart in de onderste hoek, dan gaat het net zo in de bovenste: ',
-                                 ', and 2 against 1 wins. If black shuttles in the lower corner, it goes the same way in the '
-                                 'upper one: ')
-                  + lines[1] + t('. Alle zetten van zwart: ', '. All moves of black: ')
-                  + self.moves_list(pg7, ie, legale, '1. … ') + '.</p>', '<div style="clear:both"></div>']
-        body7.append(t('<p>De vesting valt dus bij beide pariteiten, op de <a href="val.html">twee manieren</a> om de vesting '
-                       'te breken, en zonder tempowissel: bij oneven pariteit met een ruil (een val), bij even pariteit doordat '
-                       'een zwarte dam zijn dubbele hoek uit moet en niet meer terug kan. Alleen bij zwart op a2 en a6 en wit '
-                       'op c4, b3 of b5 en d3 of d5 (wit op b5, c4 en d5 bijvoorbeeld) is het remise.</p>',
-                       '<p>The fortress therefore falls at both parities, in the <a href="val.html">two ways</a> to break the '
-                       'fortress, and without a tempo change: at odd parity with an exchange (a trap), at even parity because a '
-                       'black king has to leave its double corner and cannot come back. Only with black on a2 and a6 and white '
-                       'on c4, b3 or b5 and d3 or d5 (white on b5, c4 and d5 for example) is it a draw.</p>'))
-        for W, B, even in ((EW, EB, True), (OW, OB, False)):
-            assert (rank_parity(e87, e87.fen(W, B, 'B')) == 0) == even
-        for W in (['b5', 'c4', 'd5'], ['b5', 'c4', 'd3'], ['b3', 'c4', 'd5'], ['b3', 'c4', 'd3']):
-            assert e87.analyse(e87.fen(W, ['a2', 'a6'], 'B'))[0] == 'D'
-        body7.append(t('<p>En met wit aan zet, als er geen directe val is? Dat staat op de <a href="vesting-8x7-wit.html">volgende '
-                       'pagina</a>.</p>',
-                       '<p>And with white to move, when there is no immediate trap? That is on the <a href="vesting-8x7-wit.html">'
-                       'next page</a>.</p>'))
-        self.write('vesting-8x7.html', None, '\n'.join(body7), pg7, k87)
-        # white to move in the passive trap: no immediate exchange and no tempo change along the edge, but white drives a
-        # black king out of its double corner (the invasion of the previous page, at the other parity)
-        pgw = self.page((k87, e87))
-        fw = e87.fen(OW, OB, 'W')
-        vw, legalw = e87.analyse(fw)
-        assert vw.startswith('W') and self.exchange(e87, fw) is None
-        figw, iw = pgw.diagram(fw, t(f'{name}, passieve val 2, wit aan zet: {vw}', f'{name}, passive trap 2, white to move: {vw}'),
-                               gid=k87)
+        figw2, iw2 = pgv.diagram(fw, t(f'{name}, passieve val 2, wit aan zet: {vw}', f'{name}, passive trap 2, white to move: {vw}'),
+                                 gid=k87)
         linew = '1. d7-c6 a6-b7 2. c6-b5 b7-a6 3. b3-a2! b1-c2 4. a2-b1 c2-b3 5. c4xa2 a6xc4'
-        hw, _, fend, _ = pgw.moves(fw, self.plan(linew), 1, False, 'm1', iw)
+        hw, _, fend, _ = pgv.moves(fw, self.plan(linew), 1, False, 'm1', iw2)
         assert fend[0] == 'W' and e87.analyse(fend)[0].startswith('W') and all(
             len([x for x in side[1:].split(',') if x]) == n for side, n in zip(fend.split(':')[1:], (2, 1)))
-        f = fw                              # after 2. ... b7-a6: the invasion of the previous page after 1. ... b7-a6
+        f = fw                              # after 2. ... b7-a6: the invasion above after 1. ... b7-a6
         for mv in [m for m, _ in self.plan(linew)][:4]:
             f = next(x[2] for x in e87.analyse(f)[1] if x[0] == mv[0])
         same = lambda a, b: a[0] == b[0] and [set(x[1:].split(',')) for x in a.split(':')[1:]] == [set(x[1:].split(',')) for x in b.split(':')[1:]]
         assert same(f, e87.fen(EW, ['b1', 'a6'], 'W'))
-        bodyw = [t('<p>Met wit aan zet geeft de passieve val geen directe ruil. Op <a href="val-pariteit.html">8×8</a> '
-                   'wisselt wit dan van tempo op de diagonaal. Op <a href="vesting-pariteit.html">9×8</a> lukt dat langs de '
-                   'rand niet, en is de passieve val met wit aan zet remise. Op 8×7 lukt een tempowissel langs de rand '
-                   'evenmin, maar wit wint toch: hij verdringt een zwarte dam uit zijn dubbele hoek, zoals bij even pariteit '
-                   'op de <a href="vesting-8x7.html">vorige pagina</a>.</p>',
-                   '<p>With white to move the passive trap gives no immediate exchange. On <a href="val-pariteit.html">8×8</a> '
-                   'white then changes the tempo on the diagonal. On <a href="vesting-pariteit.html">9×8</a> that does not '
-                   'work along the edge, and the passive trap with white to move is a draw. On 8×7 a tempo change along the '
-                   'edge does not work either, but white wins all the same: he drives a black king out of its double corner, '
-                   'as at even parity on the <a href="vesting-8x7.html">previous page</a>.</p>'),
-                 figw,
-                 t('<p>Wit loopt met zijn derde dam over terwijl zwart pendelt, en na 2. … b7-a6 staat de stelling van het '
-                   'binnendringen op de vorige pagina op het bord: wit bezet het vrije randveld naast de zwarte dam op b1, '
-                   'die zijn dubbele hoek uit moet en niet meer terug kan: ',
-                   '<p>White walks his third king over while black shuttles, and after 2. … b7-a6 the position of the '
-                   'invasion on the previous page is on the board: white occupies the free edge square next to the black king '
-                   'on b1, which has to leave its double corner and cannot come back: ')
-                 + hw + t(', en 2 tegen 1 wint. Alle zetten van wit: ', ', and 2 against 1 wins. All moves of white: ')
-                 + self.moves_list(pgw, iw, legalw, '1. ') + '.</p>', '<div style="clear:both"></div>',
+        for W, B, even in ((EW, EB, True), (OW, OB, False)):
+            assert (rank_parity(e87, e87.fen(W, B, 'B')) == 0) == even
+        for W in (['b5', 'c4', 'd5'], ['b5', 'c4', 'd3'], ['b3', 'c4', 'd5'], ['b3', 'c4', 'd3']):
+            assert e87.analyse(e87.fen(W, ['a2', 'a6'], 'B'))[0] == 'D'
+        bodyv = [t('<p>Waar geen val helpt, bij even pariteit en in de passieve val met wit aan zet, wint wit op 8×7 toch: de '
+                   'dubbele hoeken liggen zo dicht bij elkaar dat wit erin kan binnendringen en een zwarte dam eruit '
+                   'verdringt.</p>',
+                   '<p>Where no trap helps, at even parity and in the passive trap with white to move, white still wins on 8×7: '
+                   'the double corners are so close together that white can invade them and drive a black king out.</p>'),
+                 fige, t('<p>Bij even pariteit, zwart aan zet: pendelt de ene zwarte dam, dan bezet wit het vrije randveld naast '
+                         'de andere. Die heeft geen wachtzet meer en moet de dubbele hoek uit (de wachtzet met de eerste dam '
+                         'verliest nog sneller). Daarna gaat wit zelf op het randveld staan dat de zwarte dam verliet, en die '
+                         'kan niet meer terug. ',
+                         '<p>At even parity, black to move: when the one black king shuttles, white occupies the free edge '
+                         'square next to the other one. It has no waiting move left and has to leave the double corner (the '
+                         'waiting move with the first king loses even faster). Then white steps onto the edge square the black '
+                         'king left, and it cannot come back. ')
+                 + lines[0] + t(', en 2 tegen 1 wint. Pendelt zwart in de onderste hoek, dan gaat het net zo in de bovenste: ',
+                                ', and 2 against 1 wins. If black shuttles in the lower corner, it goes the same way in the '
+                                'upper one: ')
+                 + lines[1] + t('. Alle zetten van zwart: ', '. All moves of black: ')
+                 + self.moves_list(pgv, ie, legale, '1. … ') + '.</p>', '<div style="clear:both"></div>',
+                 figw2, t('<p>In de passieve val 2 met wit aan zet (<a href="vesting-8x7.html">vorige pagina</a>) loopt wit met '
+                          'zijn derde dam over terwijl zwart pendelt, en na 2. … b7-a6 staat de stelling van het binnendringen '
+                          'hierboven op het bord (na 1. … b7-a6): ',
+                          '<p>In the passive trap 2 with white to move (<a href="vesting-8x7.html">previous page</a>) white walks '
+                          'his third king over while black shuttles, and after 2. … b7-a6 the position of the invasion above is '
+                          'on the board (after 1. … b7-a6): ')
+                 + hw + t(', en 2 tegen 1 wint.</p>', ', and 2 against 1 wins.</p>'), '<div style="clear:both"></div>',
+                 t('<p>De vesting valt dus bij beide pariteiten, op de <a href="val.html">twee manieren</a> om de vesting te '
+                   'breken, en zonder tempowissel: bij oneven pariteit met een ruil (een val), bij even pariteit doordat een '
+                   'zwarte dam zijn dubbele hoek uit moet en niet meer terug kan. Alleen bij zwart op a2 en a6 en wit op c4, b3 '
+                   'of b5 en d3 of d5 (wit op b5, c4 en d5 bijvoorbeeld) is het remise.</p>',
+                   '<p>The fortress therefore falls at both parities, in the <a href="val.html">two ways</a> to break the '
+                   'fortress, and without a tempo change: at odd parity with an exchange (a trap), at even parity because a '
+                   'black king has to leave its double corner and cannot come back. Only with black on a2 and a6 and white on '
+                   'c4, b3 or b5 and d3 or d5 (white on b5, c4 and d5 for example) is it a draw.</p>'),
                  # counted over every quiet position with white to move and the black kings on the edge squares of
                  # b1/a2 and b7/a6: 8,281, all won, 111 of them with an exchange at once
                  t('<p>Met wit aan zet en beide zwarte dammen op de randvelden van hun dubbele hoeken (rustige stellingen) '
@@ -868,7 +876,7 @@ are 8 traps, at even parity not a single one.</p>''')]
                    'the double corners are close enough together to drive a black king out.</p>'
                    '<p>But can such an expelled king not flee to another double corner? On 8×7 there is none; on '
                    '<a href="langste-7x7.html">7×7</a> there is.</p>')]
-        self.write('vesting-8x7-wit.html', None, '\n'.join(bodyw), pgw, k87)
+        self.write('vesting-8x7-wit.html', None, '\n'.join(bodyv), pgv, k87)
         # the distance rule, with the two pairs of 9x7 that are 8 apart
         k97, e97 = self.engine(9, 7, 'unplayable')
         name = t('9×7 onspeelbare hoeken', '9×7 unplayable corners')

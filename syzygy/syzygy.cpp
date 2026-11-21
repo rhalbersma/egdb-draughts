@@ -55,7 +55,7 @@
 //
 // build: g++-14 -std=c++23 -O2 -march=native -fopenmp -I<xstd-bits>/include -I<xstd-ints>/include
 //        -I<xstd-misc>/include syzygy/syzygy.cpp -lzstd -ltbb -o syzygy
-// usage: syzygy build <dir> wp bp wm bm <metric> [seq|par] [frontier|scan|cell8] [auto|groups|array] [material|tempi|configuration] [mem=MB]
+// usage: syzygy build <dir> wp bp wm bm <metric> [seq|par] [frontier|scan|cell8] [auto|groups|bytes|array] [material|tempi|configuration] [mem=MB]
 //                                                            build one material (its captures and promotions must exist);
 //                                                            the depth sink by the claim mem=MB (auto: the array if rung 0
 //                                                            fits, else group files), or as given; the granularity of
@@ -193,6 +193,75 @@ std::uint16_t from_byte(Metric mt, std::uint8_t s, std::uint8_t r)    // r: the 
 }
 
 std::uint8_t wdl_bits(std::uint8_t const* w, std::uint64_t i) { return std::uint8_t(w[i >> 2] >> (2 * (i & 3)) & 3); }
+
+// The 8-bit sink: the four output files themselves (<metric>-wtm, <metric>-btm, wdl-wtm, wdl-btm under temporary names),
+// memory-mapped for the whole build of the material. A decided value goes straight into its stored form, the unsigned
+// depth byte (to_byte) and two wdl bits, at its slot of the material; a lookup into an earlier group decodes it again
+// (from_byte). 2.5 bytes per slot for both sides to move, against 4 for the 16-bit array, and no conversion pass at the
+// end: the files are complete once the last group is solved, and only renamed. Concurrent writers: the depth bytes are
+// distinct per position; four slots share a wdl byte, so the wdl bits are set with an atomic or. The pages are the
+// page cache's: the kernel writes them back, and may do so early under memory pressure.
+class ByteSink final : public DepthSink<std::uint16_t>
+{
+        MatIndex const& mi_;
+        std::string path_[4];
+        std::uint8_t* map_[4]{};
+        std::size_t size_[4]{};
+        std::atomic<bool> beyond_{ false };
+        bool done_ = false;
+
+        std::uint16_t value(int side, std::uint64_t i) const
+        {
+                std::uint8_t const b = std::atomic_ref<std::uint8_t>(map_[side][i]).load(std::memory_order_relaxed);
+                std::uint8_t const w = std::atomic_ref<std::uint8_t>(map_[WDL + side][i >> 2]).load(std::memory_order_relaxed);
+                return from_byte(g_metric, b, std::uint8_t(w >> (2 * (i & 3)) & 3));
+        }
+
+public:
+        ByteSink(std::string const& dir, Material c, MatIndex const& mi) : mi_(mi)
+        {
+                for (int kind = 0; kind < 4; ++kind) {
+                        path_[kind] = mat_path(dir, c, kind);
+                        size_[kind] = file_size(c, kind);
+                        std::string const tmp = path_[kind] + ".tmp";
+                        int const fd = ::open(tmp.c_str(), O_RDWR | O_CREAT | O_TRUNC, 0644);
+                        if (fd < 0 || ::ftruncate(fd, off_t(size_[kind])) != 0) { std::cerr << "bytes sink: cannot create " << tmp << std::endl; std::exit(1); }
+                        void* const p = ::mmap(nullptr, size_[kind], PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+                        ::close(fd);
+                        if (p == MAP_FAILED) { std::cerr << "bytes sink: cannot map " << tmp << std::endl; std::exit(1); }
+                        map_[kind] = static_cast<std::uint8_t*>(p);
+                }
+        }
+        ~ByteSink() override
+        {
+                for (int kind = 0; kind < 4; ++kind) {
+                        if (map_[kind]) ::munmap(map_[kind], size_[kind]);
+                        if (!done_) std::filesystem::remove(path_[kind] + ".tmp");
+                }
+        }
+        void begin_group(std::size_t, Group const&) override {}
+        void end_group() override {}
+        void put(int side, std::uint64_t, Pos const& p, std::uint16_t v) override
+        {
+                std::uint64_t const i = mi_.index(p);
+                int const b = to_byte(g_metric, v);
+                if (b > 255) { beyond_.store(true, std::memory_order_relaxed); return; }
+                std::atomic_ref<std::uint8_t>(map_[side][i]).store(std::uint8_t(b), std::memory_order_relaxed);
+                std::atomic_ref<std::uint8_t>(map_[WDL + side][i >> 2]).fetch_or(std::uint8_t(wdl_of(v) << (2 * (i & 3))), std::memory_order_relaxed);
+        }
+        std::uint16_t read(int side, Pos const& p) const override { return value(side, mi_.index(p)); }
+        std::uint16_t at(int side, std::uint64_t slot) const override { return value(side, slot); }
+        bool beyond() const { return beyond_.load(); }
+        void finish()                                   // unmap, and give the files their final names
+        {
+                for (int kind = 0; kind < 4; ++kind) {
+                        ::munmap(map_[kind], size_[kind]);
+                        map_[kind] = nullptr;
+                        std::filesystem::rename(path_[kind] + ".tmp", path_[kind]);
+                }
+                done_ = true;
+        }
+};
 
 // the value of a position for the side to move
 std::uint16_t probe(Pos const& p0)
@@ -725,7 +794,8 @@ void solve_group(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPolicy
 
 std::uint64_t g_mem_mb = 0;                                     // the job's memory claim in MB (0: none)
 
-bool g_group_files = true;                                      // the depth sink: group files (false: the material array)
+bool g_group_files = true;                                      // the depth sink: group files (false: the material in RAM)
+bool g_byte_sink = true;                                        // the material in RAM: the 8-bit sink (false: the 16-bit array)
 bool g_sink_auto = true;                                        // choose the sink by the memory claim
 
 // the memory a build of c needs. Rung 0 keeps the material's 16-bit values in RAM (the array sink, both sides to
@@ -758,7 +828,8 @@ MemoryNeed memory_need(Material c)
                 std::uint64_t const n = mat_index(s).size;
                 inputs += 2 * ((n + 3) / 4) + (g_metric == Metric::dtm ? 2 * n : 0);
         }
-        m.rung0 = FIXED_BYTES + meta + inputs + 4 * mi.size + std::max(transient, writing);
+        std::uint64_t const sink_bytes = g_byte_sink ? 2 * mi.size + 2 * ((mi.size + 3) / 4) : 4 * mi.size;   // both sides
+        m.rung0 = FIXED_BYTES + meta + inputs + sink_bytes + std::max(transient, writing);
         m.rung1 = FIXED_BYTES + meta + inputs + 64 * m.slices + 2 * T + 2 * m.positions + std::max(transient, writing);
         return m;
 }
@@ -777,8 +848,8 @@ bool build_material(std::string const& dir, Material c, ExecutionPolicy const& p
                 std::uint64_t const r0 = to_mb(need.rung0), r1 = to_mb(need.rung1);
                 if (g_sink_auto) g_group_files = !(g_mem_mb == 0 || r0 <= g_mem_mb);
                 std::uint64_t const used = g_group_files ? r1 : r0;
-                std::cout << "memory: claim " << g_mem_mb << " MB, rung 0 (array) " << r0 << " MB, rung 1 (group files) " << r1
-                          << " MB: " << (g_group_files ? "group files" : "array");
+                std::cout << "memory: claim " << g_mem_mb << " MB, rung 0 (" << (g_byte_sink ? "bytes" : "array") << ") " << r0 << " MB, rung 1 (group files) " << r1
+                          << " MB: " << (g_group_files ? "group files" : g_byte_sink ? "bytes" : "array");
                 if (g_mem_mb != 0 && used > g_mem_mb) std::cout << " (over the claim: needs a lower rung, not implemented yet)";
                 std::cout << std::endl;
         }
@@ -786,6 +857,7 @@ bool build_material(std::string const& dir, Material c, ExecutionPolicy const& p
         g_frozen = true;
         std::unique_ptr<DepthSink<std::uint16_t>> sink;
         if (g_group_files) sink = std::make_unique<GroupSink<std::uint16_t>>(dir, c, mi, groups);
+        else if (g_byte_sink) sink = std::make_unique<ByteSink>(dir, c, mi);
         else sink = std::make_unique<ArraySink<std::uint16_t>>(mi);
         g_sink = sink.get();
         g_stats = {};
@@ -799,13 +871,34 @@ bool build_material(std::string const& dir, Material c, ExecutionPolicy const& p
         }
 
         // the four files, each written once, sequentially, in index order: the values gathered from the sink slot by
-        // slot, as unsigned bytes and wdl bits, a chunk at a time in parallel (blocks of 4096 slots own whole wdl bytes)
+        // slot, as unsigned bytes and wdl bits, a chunk at a time in parallel (blocks of 4096 slots own whole wdl bytes).
+        // The 8-bit sink holds the files already: only the counts are gathered, and the files renamed
         std::atomic<std::uint64_t> wins[2]{}, losses[2]{};
         std::atomic<int> longest{ 0 };
         std::atomic<bool> beyond{ false };
         auto const tw = std::chrono::steady_clock::now();
         constexpr std::uint64_t chunk = std::uint64_t(1) << 24;         // slots per write, a multiple of 4
+        auto* const bytes_sink = dynamic_cast<ByteSink*>(sink.get());
+        if (bytes_sink) {
+                if (bytes_sink->beyond()) { std::cerr << "value beyond one byte" << std::endl; return false; }
+                for (int side : { 0, 1 })
+                        for_blocks(policy, mi.size, [&](std::uint64_t a, std::uint64_t b) {
+                                std::uint64_t nw = 0, nl = 0;
+                                int lg = 0;
+                                for (std::uint64_t j = a; j < b; ++j) {
+                                        std::uint16_t const v = bytes_sink->at(side, j);
+                                        nw += is_win(v);
+                                        nl += is_loss(v);
+                                        lg = std::max(lg, plies(v));
+                                }
+                                wins[side].fetch_add(nw, std::memory_order_relaxed);
+                                losses[side].fetch_add(nl, std::memory_order_relaxed);
+                                for (int cur = longest.load(); lg > cur && !longest.compare_exchange_weak(cur, lg);) {}
+                        });
+                bytes_sink->finish();
+        }
         for (int side : { 0, 1 }) {
+                if (bytes_sink) break;
                 std::string const pb = mat_path(dir, c, BYTES + side), pw = mat_path(dir, c, WDL + side);
                 std::ofstream fb(pb + ".tmp", std::ios::binary | std::ios::trunc), fw(pw + ".tmp", std::ios::binary | std::ios::trunc);
                 std::vector<std::uint8_t> bytes, wdl;
@@ -844,7 +937,7 @@ bool build_material(std::string const& dir, Material c, ExecutionPolicy const& p
         g_frozen = false;
         g_stats.write = seconds_since(tw);
         double const sec = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-        std::cout << "material " << c.name() << " " << metric_name() << (g_group_files ? " group files" : " array") << ": "
+        std::cout << "material " << c.name() << " " << metric_name() << (g_group_files ? " group files" : g_byte_sink ? " bytes" : " array") << ": "
                   << groups.size() << " groups, " << positions << " positions, " << mi.size << " slots, wins " << wins[0].load() << " / "
                   << wins[1].load() << ", losses " << losses[0].load() << " / " << losses[1].load() << " (White / Black to move), longest " << longest.load()
                   << " plies, peak RSS " << peak_rss_mb() << " MB, " << sec << " s" << std::endl;
@@ -988,7 +1081,7 @@ int main(int argc, char* argv[])
                         else if (a[i] == "scan" || a[i] == "frontier") g_frontier = a[i] == "frontier";
                         else if (a[i] == "cell8") { g_cell8 = true; g_frontier = false; }
                         else if (a[i].starts_with("mem=")) g_mem_mb = std::stoull(a[i].substr(4));
-                        else if (a[i] == "groups" || a[i] == "array") { g_group_files = a[i] == "groups"; g_sink_auto = false; }
+                        else if (a[i] == "groups" || a[i] == "array" || a[i] == "bytes") { g_group_files = a[i] == "groups"; g_byte_sink = a[i] != "array"; g_sink_auto = false; }
                         else if (a[i] == "auto") g_sink_auto = true;
                         else if (parse_granularity(a[i])) {}
                         else { std::cerr << "unknown option " << a[i] << std::endl; return 2; }
@@ -1000,7 +1093,7 @@ int main(int argc, char* argv[])
                 return check_all(a[1], std::stoi(a[2]), a.size() == 5 ? std::stoi(a[4]) : 4) ? 0 : 1;
         if (a.size() == 5 && a[0] == "cmp86" && parse_metric(a[4])) return compare_thompson86(a[1], a[2], std::stoi(a[3])) ? 0 : 1;
         if (a.size() == 5 && a[0] == "order") return check_order(a[1], a[2], a[3], std::stoi(a[4])) ? 0 : 1;
-        std::cerr << "usage: syzygy build <dir> wp bp wm bm dtm|dtc|dtz [seq|par] [frontier|scan|cell8] [auto|groups|array] [material|tempi|configuration] [mem=MB] | bench n [samples] | plan n dtm|dtc|dtz [granularity] | checkall <dir> n dtm|dtc|dtz [threads]"
+        std::cerr << "usage: syzygy build <dir> wp bp wm bm dtm|dtc|dtz [seq|par] [frontier|scan|cell8] [auto|groups|bytes|array] [material|tempi|configuration] [mem=MB] | bench n [samples] | plan n dtm|dtc|dtz [granularity] | checkall <dir> n dtm|dtc|dtz [threads]"
                      " | cmp86 <dir> <dir_thompson86> n dtm|dtc|dtz | order <dir_dtz> <dir_dtc> <dir_dtm> n" << std::endl;
         return 2;
 }

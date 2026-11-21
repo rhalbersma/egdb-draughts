@@ -30,7 +30,7 @@ METRIC = config.get('metric', 'dtm')
 D = f'{BASE}/{METRIC}'
 POLICY = config.get('policy', 'seq')
 ROUNDS = config.get('rounds', 'frontier')
-SINK = config.get('sink', 'auto')          # the depth sink: auto (by the claim), groups (group files), array (RAM)
+SINK = config.get('sink', 'auto')          # the depth sink: auto (by the claim), groups (group files), bytes (8-bit, RAM), array (16-bit, RAM)
 GRANULARITY = config.get('granularity', 'material')  # material, tempi or configuration (below material: man moves exit)
 THREADS = int(config.get('threads', 4))
 

@@ -895,7 +895,13 @@ halving, no margin for an engine to keep, and the token is the window number: a 
 **Implemented** as `syzygy build … cell8` (`solve_group_cell8`); `EGDB_CELL8_WINDOW=k` forces windows of k plies, to
 exercise the reductions on small builds. Up to 6 pieces it agrees with egdb_6x6 and with every position's successors
 for all three metrics, with the full window (no reductions) and with windows of 7 and 2 plies (up to 35 reductions
-in one group).
+in one group). At 8 pieces (DTM, every material up to 7 pieces plus the 21 eight-piece ones with at most 2 men: 81
+materials, 448 M positions, 4 jobs side by side) its files are byte-identical to the frontier mode's, in the same
+100 s of wall time (373 against 378 s summed over the builds). The largest, 04-04-01-01 (68 M positions, longest 73
+plies, so no reduction at its real depths), in parallel: 16.0 s frontier, 17.6 s cell8 (the rounds 8.2 → 9.7 s: the
+scans), 21.7 s with windows of 8 plies (9 reductions, about 0.45 s each: snapshot, collapse, deferred positions
+recomputed; snapshots 2.8 MB each for 68 MB of cells), files again identical. Peak RSS falls 20–35 % (979 → 758 MB),
+less than the cell alone would give: it is dominated by the 16-bit array sink of the whole material and the input maps.
 
 **Limits.** The 16 tokens reach 2,160 plies (DTZ, DTC) and 4,320 plies (DTM), against the deepest known values of
 every game: chess DTZ 1,193 plies (8 pieces, the opposing-pair tables) and DTM 1,097 plies (7 pieces, chesstb's

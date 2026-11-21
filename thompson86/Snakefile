@@ -1,0 +1,130 @@
+#          Copyright Rein Halbersma 2026.
+# Distributed under the Boost Software License, Version 1.0.
+#    (See accompanying file LICENSE_1_0.txt or copy at
+#          http://www.boost.org/LICENSE_1_0.txt)
+
+# Thompson style builds for 6x6 international draughts (thompson86.cpp), one file per material, built in the order
+# of the DAG of captures and promotions. A material is named wp-bp-wm-bm (white pieces, black pieces, white men, black
+# men, two digits each, as in egdb_6x6's material mode); inside, a tuple (wm, wk, bm, bk) with kings. A material needs
+# every material one move can lead into: a promotion (a man of either side becomes a king), a capture of one or more
+# pieces of either side (the capturing man possibly promoting). A capture of a side's last piece ends the game and
+# needs no file. Every material with at most n pieces and a piece on each side is built, into four files of half
+# results, 6x6/np/wp-bp/wm-bm-<kind>-<side to move> (np: the number of pieces): d<m|c|z>W-wtm (plies to a White win)
+# and d<m|c|z>L-btm (1 + plies to Black's loss), one byte per slot, and isW-wtm, isL-btm (won, lost), one bit per slot. A dtm build reads the
+# bytes of the materials it leads into, a dtc or dtz build only their bits (every move out of a material is a goal move
+# there). The files of a metric go into <dir>/<metric>: the bit files are the same for all three.
+#
+# Memory (synthesis 7.3): the engine's `plan` gives every material's need per rung; each build claims its rung-0 need,
+# or the whole budget if that does not fit, and with sink=auto the engine takes the highest rung that fits its claim.
+# Pass the budget as --resources mem_mb=N so that Snakemake keeps the running claims within it (else config mem_mb,
+# else 75 % of physical memory). Priorities follow the critical path.
+#
+# usage (from the root of the repo):
+#   snakemake -s thompson86/Snakefile --cores 4 --config engine=build/thompson86 dir=data/thompson86 pieces=6 \
+#       metric=dtm style=86
+# metric: dtm, dtc or dtz; style: 86 (Thompson 1986's passes: test at once) or 96 (1996's: masked late)
+
+ENGINE = config.get('engine', 'build/thompson86')
+BASE = config.get('dir', 'data/thompson86')
+N = int(config.get('pieces', 6))
+METRIC = config.get('metric', 'dtm')
+D = f'{BASE}/{METRIC}'
+STYLE = str(config.get('style', '86'))
+SINK = config.get('sink', 'auto')          # the depth sink: auto (by the claim), groups (per-group files), array (RAM)
+POLICY = config.get('policy', 'seq')       # every pass a std::for_each: seq, or par within each build
+GRANULARITY = config.get('granularity', 'material')  # material, tempi or configuration (below material: man moves exit)
+THREADS = int(config.get('threads', 4))
+
+MATERIALS = [(wm, wk, bm, bk)
+             for wm in range(N + 1) for wk in range(N + 1 - wm) for bm in range(N + 1 - wm - wk)
+             for bk in range(N + 1 - wm - wk - bm)
+             if wm + wk > 0 and bm + bk > 0]
+
+
+def name(m):                                                           # (wm, wk, bm, bk) -> wp-bp-wm-bm
+    wm, wk, bm, bk = m
+    return f'{wm + wk:02}-{bm + bk:02}-{wm:02}-{bm:02}'
+
+
+def parse(n):                                                          # wp-bp-wm-bm -> (wm, wk, bm, bk)
+    wp, bp, wm, bm = map(int, n.split('-'))
+    return (wm, wp - wm, bm, bp - bm)
+
+
+def deps(m):
+    wm, wk, bm, bk = m
+    out = set()
+    if wm > 0: out.add((wm - 1, wk + 1, bm, bk))                       # promotions
+    if bm > 0: out.add((wm, wk, bm - 1, bk + 1))
+    for i in range(bm + 1):                                            # White captures i men and j kings
+        for j in range(bk + 1):
+            if 0 < i + j < bm + bk:
+                out.add((wm, wk, bm - i, bk - j))
+                if wm > 0: out.add((wm - 1, wk + 1, bm - i, bk - j))
+    for i in range(wm + 1):                                            # Black captures i men and j kings
+        for j in range(wk + 1):
+            if 0 < i + j < wm + wk:
+                out.add((wm - i, wk - j, bm, bk))
+                if bm > 0: out.add((wm - i, wk - j, bm - 1, bk + 1))
+    return sorted(out)
+
+
+# the plan (src/snakemake_plan.py): memory budget, per-job claims from the engine's estimates, critical-path priorities
+import os
+import sys
+sys.path.insert(0, os.path.join(workflow.basedir, '..', 'src'))
+from snakemake_plan import memory_budget_mb, load_plan, claim_mb, priorities, report, check_budget  # noqa: E402
+
+MEM = memory_budget_mb(workflow, config)
+PLAN = load_plan([ENGINE, 'plan', str(N), METRIC, STYLE] + ([GRANULARITY] if GRANULARITY else []))
+PRIO = priorities(PLAN, {name(m): [name(d) for d in deps(m)] for m in MATERIALS})
+print(report(PLAN, MEM, lambda p: claim_mb(p, MEM)), file=sys.stderr)
+check_budget(PLAN, MEM, config)    # fail now if a material cannot fit the budget at any rung
+
+
+wildcard_constraints:
+    mat=r'\d\d-\d\d-\d\d-\d\d'
+
+
+rule all:
+    input: f'{D}/check-{N}.{METRIC}.ok'
+
+
+def sub(n):                                                            # wp-bp-wm-bm -> db/np/wp-bp/wm-bm
+    wp, bp, wm, bm = map(int, n.split('-'))
+    return f'6x6/{wp + bp:02}/{wp:02}-{bp:02}/{wm:02}-{bm:02}'
+
+
+DEPTH = 'd' + METRIC[2]                                                # dm, dc or dz
+
+
+def files(m):
+    return [f'{D}/{sub(m)}-{k}' for k in (f'{DEPTH}W-wtm', f'{DEPTH}L-btm', 'isW-wtm', 'isL-btm')]
+
+
+def inputs(m):
+    kinds = (f'{DEPTH}W-wtm', f'{DEPTH}L-btm') if METRIC == 'dtm' else ('isW-wtm', 'isL-btm')
+    return [f'{D}/{sub(name(d))}-{k}' for d in deps(m) for k in kinds]
+
+
+# one build rule per material: Snakemake (8.30) accepts only constant priorities, so each material gets its own rule
+# with its claim and its critical-path priority
+for _m in MATERIALS:
+    _n = name(_m)
+    rule:
+        name: f'build_{_n}'
+        input: inputs(_m)
+        output: files(_n)
+        log: f'{D}/{sub(_n)}-{METRIC}.log'
+        params: m=_n.replace('-', ' ')
+        resources: mem_mb=claim_mb(PLAN[_n], MEM)
+        priority: PRIO[_n]
+        shell: '{ENGINE} build {D} {params.m} {METRIC} {STYLE} {SINK} {POLICY} {GRANULARITY} mem={resources.mem_mb} > {log} 2>&1'
+
+
+rule check:
+    input: [f for m in MATERIALS for f in files(name(m))]
+    output: f'{D}/check-{N}.{METRIC}.ok'
+    log: f'{D}/check-{N}.{METRIC}.log'
+    threads: THREADS
+    shell: '{ENGINE} checkall {D} {N} {METRIC} {threads} > {log} 2>&1 && touch {output}'

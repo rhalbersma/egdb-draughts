@@ -1,0 +1,11 @@
+# an AMD Ryzen Threadripper PRO 9965WX workstation (Zen 5, 2025): 24 cores / 48 threads, 8-channel DDR5, 256 GB.
+# PassMark (cpubenchmark.net, 2026): CPU Mark about 92,300, single thread about 4,540; the W-3245 of
+# gilbert-2026.yaml about 31,100: 3,840 against 1,940 per core, so his 1.63 us per position per core (build and
+# self-verify) becomes 0.82 us here. The disk is an assumption: an 8 TB NVMe SSD.
+name: Threadripper PRO 9965WX, 24 cores, 256 GB
+cores: 24
+ram: 256GB
+disk: 8TB
+disk_kind: nvme
+disk_mbps: 5000
+us: 0.82

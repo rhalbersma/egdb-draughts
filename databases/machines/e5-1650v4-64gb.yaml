@@ -1,0 +1,11 @@
+# a Xeon E5-1650 v4 workstation (Broadwell-EP, 2016): 6 cores / 12 threads, 3.6-4.0 GHz, 64 GB.
+# PassMark (cpubenchmark.net, 2026): CPU Mark about 11,300, single thread about 2,360; the W-3245 of gilbert-2026.yaml
+# about 31,100 and 2,560: per core within 3 %, so his 1.63 us per position per core (build and self-verify) scaled
+# by CPU Mark per core gives 1.68 us here. The disk is an assumption: a 4 TB SATA SSD.
+name: E5-1650 v4, 6 cores, 64 GB
+cores: 6
+ghz: 3.6
+ram: 64GB
+disk: 4TB
+disk_kind: ssd
+us: 1.68

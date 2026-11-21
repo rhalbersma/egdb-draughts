@@ -1,0 +1,241 @@
+#          Copyright Rein Halbersma 2026.
+# Distributed under the Boost Software License, Version 1.0.
+#    (See accompanying file LICENSE_1_0.txt or copy at
+#          http://www.boost.org/LICENSE_1_0.txt)
+
+# Syzygy style builds for 6x6 international draughts, or English checkers with the engine built for it (syzygy_checkers,
+# -DEGDB_6X6_CHECKERS=1), two-sided: one of each pair of a material and its
+# colour mirror (the 82 materials up to 6 pieces of strongly_solving_6x6/materials), built in the order of the DAG of
+# captures and promotions. A material is named wp-bp-wm-bm (white pieces, black pieces, white men, black men, two
+# digits each); inside, a tuple (wm, wk, bm, bk) with kings. Per material four files of full results,
+# 6x6/np/wp-bp/wm-bm-<kind>-<side to move> (np: the number of pieces): <metric>-wtm, <metric>-btm (one byte per slot)
+# and wdl-wtm, wdl-btm (two bits per slot), by default compressed (<name>.z, store=compressed; store=raw for plain
+# files). The dtm bytes carry their class (1 + plies, odd a win); dtc and dtz bytes take their sign from the wdl files.
+# A dtm build reads only dtm-wtm and dtm-btm of the materials it leads into; a dtc or dtz build only their wdl files
+# (every move out of a material is a goal move there). The depth files go into <dir>/<metric>, the wdl files into
+# <dir>/wdl, shared by the three metrics: built by whichever metric comes first, compared (not rewritten) by the others.
+#
+# Memory (synthesis 7.3): the engine's `plan` gives every material's need; each build claims its rung-0 need, or the
+# whole budget if that does not fit (the build then writes its depths to group files, rung 1, with sink=auto). Pass the
+# budget as --resources mem_mb=N (else config mem_mb, else 75 % of physical memory). Priorities follow the critical
+# path. granularity=material|tempi|configuration sets the groups (tempi: the smallest largest group).
+#
+# usage (from the root of the repo):
+#   snakemake -s syzygy/Snakefile --cores 10 --config engine=build/syzygy dir=data/syzygy pieces=12 metric=dtm rounds=cell8
+#   snakemake -s syzygy/Snakefile --cores 10 --config engine=build/syzygy_checkers dir=data/syzygy_checkers pieces=12 metric=dtm rounds=cell8
+# metric: dtm, dtc or dtz. policy=auto (default): the largest materials (at least par_min positions; default 1 / (4 x
+# cores) of all the positions of the run, so only those at the end of the critical path) with std::execution::par on all
+# cores, alone; the rest seq on one core, as many side by side as --cores and the memory claims (--resources mem_mb=N)
+# allow. policy=fill: every job par, counted as one thread; policy=par or seq for all.
+# rounds=cell8: one byte per position and side, reductions every 240 codes (synthesis 7.5); rounds=scan: full scans as
+# rtbgen; default: frontier bit planes. stats=1: a <material>-<metric>.stats file per material (positions per number of
+# plies, the longest win and loss with a position). probe=1 (default): each material is converted into the probe format
+# (<dir>/probe/), checked through the prober on every verify-th slot (default 16), and its depth build files are deleted
+# once nothing reads them any more (keep=1 keeps them; wdl_build=drop drops the wdl build files too, when no other metric
+# will be built from them); check=1: checkall against egdb_6x6 at the end (keeps every
+# build file; heavy beyond 8 pieces).
+
+ENGINE = config.get('engine', 'build/syzygy')
+BASE = config.get('dir', 'data/syzygy')
+N = int(config.get('pieces', 6))
+METRIC = config.get('metric', 'dtm')
+D = BASE                                   # depth files in <dir>/<metric>/..., wdl files in <dir>/wdl/... (shared)
+POLICY = config.get('policy', 'auto')   # auto: the largest materials par on all cores, the rest seq side by side (see sched)
+ROUNDS = config.get('rounds', 'frontier')
+SINK = config.get('sink', 'auto')          # the depth sink: auto (by the claim), groups (group files), bytes (8-bit, RAM), array (16-bit, RAM)
+GRANULARITY = config.get('granularity', 'material')  # material, tempi or configuration (below material: man moves exit)
+import os
+THREADS = int(config.get('threads', 4))
+PAR_MIN = config.get('par_min')                # materials with at least this many positions build with policy=par on all cores
+STATS = 'stats' if str(config.get('stats', 0)) not in ('0', 'false', 'False') else ''   # stats=1: a .stats file per material
+PROBE = str(config.get('probe', 1)) not in ('0', 'false', 'False')    # convert every material into the probe format
+CHECK = str(config.get('check', 0)) not in ('0', 'false', 'False')    # checkall against egdb_6x6 at the end (keeps the build files)
+KEEP = str(config.get('keep', 0)) not in ('0', 'false', 'False')      # keep the depth build files after the conversion
+VERIFY = int(config.get('verify', 16))                                # the conversion checks every VERIFY-th slot through the prober
+DELETE = PROBE and not KEEP and not CHECK
+DROP_WDL = DELETE and config.get('wdl_build', 'keep') == 'drop'      # drop the wdl build files too (no other metric to build)
+STORE = config.get('store', 'compressed')  # compressed: each file as <name>.z (zstd blocks of 4 KiB, read through a block cache); raw: plain files
+SUF = '.z' if STORE == 'compressed' else ''
+
+
+def stored(m):
+    wm, wk, bm, bk = m
+    return not (bm, wm, bk, wk) < (wm, bm, wk, bk)
+
+
+def canonical(m):
+    wm, wk, bm, bk = m
+    return m if stored(m) else (bm, bk, wm, wk)
+
+
+MATERIALS = [(wm, wk, bm, bk)
+             for wm in range(N + 1) for wk in range(N + 1 - wm) for bm in range(N + 1 - wm - wk)
+             for bk in range(N + 1 - wm - wk - bm)
+             if wm + wk > 0 and bm + bk > 0 and stored((wm, wk, bm, bk))]
+
+
+def name(m):                                                           # (wm, wk, bm, bk) -> wp-bp-wm-bm
+    wm, wk, bm, bk = m
+    return f'{wm + wk:02}-{bm + bk:02}-{wm:02}-{bm:02}'
+
+
+def parse(n):                                                          # wp-bp-wm-bm -> (wm, wk, bm, bk)
+    wp, bp, wm, bm = map(int, n.split('-'))
+    return (wm, wp - wm, bm, bp - bm)
+
+
+def deps(m):
+    wm, wk, bm, bk = m
+    out = set()
+    if wm > 0: out.add((wm - 1, wk + 1, bm, bk))                       # promotions
+    if bm > 0: out.add((wm, wk, bm - 1, bk + 1))
+    for i in range(bm + 1):                                            # White captures i men and j kings
+        for j in range(bk + 1):
+            if 0 < i + j < bm + bk:
+                out.add((wm, wk, bm - i, bk - j))
+                if wm > 0: out.add((wm - 1, wk + 1, bm - i, bk - j))
+    for i in range(wm + 1):                                            # Black captures i men and j kings
+        for j in range(wk + 1):
+            if 0 < i + j < wm + wk:
+                out.add((wm - i, wk - j, bm, bk))
+                if bm > 0: out.add((wm - i, wk - j, bm - 1, bk + 1))
+    return sorted({canonical(d) for d in out} - {m})
+
+
+def sub(n):                                                            # wp-bp-wm-bm -> db/np/wp-bp/wm-bm
+    wp, bp, wm, bm = map(int, n.split('-'))
+    return f'6x6/{wp + bp:02}/{wp:02}-{bp:02}/{wm:02}-{bm:02}'
+
+
+def files(m):
+    # the depth files, and for dtc and dtz the wdl files (their inputs). A dtm build writes the wdl files too, as a
+    # by-product, unless they exist from another metric (then it compares), but no rule needs them as its inputs
+    # by-product, unless they exist from another metric (then it compares), but no rule needs them as its inputs. A wdl
+    # file that exists when the workflow starts is no output at all: Snakemake would delete it before the job runs
+    out = [f'{D}/{METRIC}/{sub(m)}-{METRIC}-{s}{SUF}' for s in ('wtm', 'btm')]
+    if METRIC != 'dtm':
+        out += [f for f in (f'{D}/wdl/{sub(m)}-wdl-{s}{SUF}' for s in ('wtm', 'btm')) if not os.path.exists(f)]
+    return out
+
+
+def inputs(m):
+    # dtm: the depth files of the materials it leads into (self-contained); dtc, dtz: their wdl files
+    sub_dir, kind = (METRIC, 'dtm') if METRIC == 'dtm' else ('wdl', 'wdl')
+    return [f'{D}/{sub_dir}/{sub(name(d))}-{kind}-{s}{SUF}' for d in deps(m) for s in ('wtm', 'btm')]
+
+
+# the plan (src/snakemake_plan.py): memory budget, per-job claims from the engine's estimates, critical-path priorities
+import os
+import sys
+sys.path.insert(0, os.path.join(workflow.basedir, '..', 'src'))
+from snakemake_plan import memory_budget_mb, load_plan, claim_mb, priorities, report, check_budget  # noqa: E402
+
+MEM = memory_budget_mb(workflow, config)
+PLAN = load_plan([ENGINE, 'plan', str(N), METRIC, GRANULARITY])
+PRIO = priorities(PLAN, {name(m): [name(d) for d in deps(m)] for m in MATERIALS})
+print(report(PLAN, MEM, lambda p: claim_mb(p, MEM)), file=sys.stderr)
+check_budget(PLAN, MEM, config)    # fail now if a material cannot fit the budget at any rung
+
+
+wildcard_constraints:
+    mat=r'\d\d-\d\d-\d\d-\d\d'
+
+
+def par_min():
+    # by default 1 / (4 cores) of all the positions of the run: only the few largest materials, at the end of the
+    # critical path, run alone on all cores; everything else runs on one core, as many side by side as cores and
+    # memory claims allow
+    if PAR_MIN is not None:
+        return float(PAR_MIN)
+    return sum(PLAN[name(m)]['positions'] for m in MATERIALS) / (4 * workflow.cores)
+
+
+def sched(n):
+    # (threads Snakemake counts, the engine's policy) for material n. auto (default): par on all cores, alone, for the
+    # materials of at least par_min positions, seq on one core for the rest, as many side by side as --cores and the
+    # memory claims (mem_mb) allow. fill: every job par but counted as one thread, so that memory and --cores decide how
+    # many run and the operating system shares the cores (measured no faster than auto on the 8-piece subset; it
+    # oversubscribes the small jobs). par: every job par and alone; seq: every job on one core
+    if POLICY == 'fill':
+        return 1, 'par'
+    if POLICY == 'par' or (POLICY == 'auto' and PLAN[n]['positions'] >= par_min()):
+        return workflow.cores, 'par'
+    return 1, 'seq'
+
+
+def probe_done(m):
+    return f'{D}/probe/{METRIC}/{sub(m)}-{METRIC}.done'
+
+
+def outputs(m):
+    # the build rule's outputs: with DELETE the depth files are temporary, removed by Snakemake once the builds that read
+    # them and the material's own conversion are done (the wdl build files stay: builds of other metrics read them)
+    return [temp(f) if DELETE and ('/wdl/' not in f or DROP_WDL) else f for f in files(m)]
+
+
+rule all:
+    input: ([probe_done(name(m)) for m in MATERIALS] if PROBE else []) + ([f'{D}/{METRIC}/check-{N}.{METRIC}.ok'] if CHECK or not PROBE else [])
+
+
+# one build rule per material: Snakemake (8.30) accepts only constant priorities, so each material gets its own rule
+# with its claim and its critical-path priority
+# A kings-only material has no man moves and no promotions: captures alone end the count, and its dtc equals its dtz
+# position for position. In a dtc run, if its dtz files and the shared wdl files exist when the workflow starts, its dtc
+# files are hard links to the dtz files (a copy if the file system cannot link) instead of a build (as chesstb builds no
+# dtc for pawnless materials: its dtz answers both).
+def reuses_dtz(m):
+    wm, wk, bm, bk = m
+    if METRIC != 'dtc' or wm or bm:
+        return False
+    need = [f'{D}/dtz/{sub(name(m))}-dtz-{s}{SUF}' for s in ('wtm', 'btm')] + [f'{D}/wdl/{sub(name(m))}-wdl-{s}{SUF}' for s in ('wtm', 'btm')]
+    return all(os.path.exists(f) for f in need)
+
+
+for _m in MATERIALS:
+    _n = name(_m)
+    if reuses_dtz(_m):
+        rule:
+            name: f'reuse_dtz_{_n}'
+            input: [f'{D}/dtz/{sub(_n)}-dtz-{s}{SUF}' for s in ('wtm', 'btm')]
+            output: outputs(_n)
+            log: f'{D}/{METRIC}/{sub(_n)}-{METRIC}.log'
+            priority: PRIO[_n]
+            shell: 'for i in 0 1; do set -- {input}; s=$1; [ $i = 1 ] && s=$2; set -- {output}; t=$1; [ $i = 1 ] && t=$2; '
+                   'ln -f "$s" "$t" 2>/dev/null || cp "$s" "$t"; done; '
+                   'echo "kings-only: dtc = dtz, linked from {input}" > {log}'
+        continue
+    rule:
+        name: f'build_{_n}'
+        input: inputs(_m)
+        output: outputs(_n)
+        log: f'{D}/{METRIC}/{sub(_n)}-{METRIC}.log'
+        resources: mem_mb=claim_mb(PLAN[_n], MEM)
+        priority: PRIO[_n]
+        threads: sched(_n)[0]
+        params: m=_n.replace('-', ' '), policy=sched(_n)[1]
+        shell: '{ENGINE} build {D} {params.m} {METRIC} {params.policy} {ROUNDS} {SINK} {STORE} {STATS} {GRANULARITY} mem={resources.mem_mb} > {log} 2>&1'
+
+
+# the probe format (synthesis 10): one side, capture positions and draws as don't-cares, written once the materials the
+# moves lead into have theirs, and checked through the prober on every VERIFY-th slot
+if PROBE:
+    for _m in MATERIALS:
+        _n = name(_m)
+        rule:
+            name: f'convert_{_n}'
+            input: files(_n), [probe_done(name(d)) for d in deps(_m)]
+            output: probe_done(_n)
+            log: f'{D}/probe/{METRIC}/{sub(_n)}-{METRIC}.log'
+            priority: PRIO[_n]
+            threads: sched(_n)[0]
+            params: m=_n.replace('-', ' '), policy=sched(_n)[1],
+                    drop=(f'rm -f {D}/wdl/{sub(_n)}-wdl-wtm{SUF} {D}/wdl/{sub(_n)}-wdl-btm{SUF}' if DROP_WDL and METRIC == 'dtm' else 'true')
+            shell: '{ENGINE} convert {D} {params.m} {METRIC} {params.policy} verify={VERIFY} > {log} 2>&1 && touch {output} && {params.drop}'
+
+
+rule check:
+    input: [f for m in MATERIALS for f in files(name(m))]
+    output: f'{D}/{METRIC}/check-{N}.{METRIC}.ok'
+    log: f'{D}/{METRIC}/check-{N}.{METRIC}.log'
+    threads: THREADS
+    shell: '{ENGINE} checkall {D} {N} {METRIC} {threads} > {log} 2>&1 && touch {output}'

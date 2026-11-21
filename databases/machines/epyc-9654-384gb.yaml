@@ -1,0 +1,13 @@
+# an AMD EPYC 9654 server (Genoa, 2022; the generation before Turin): 96 cores / 192 threads, 2.4-3.7 GHz,
+# 12-channel DDR5, 384 GB (12 x 32 GB). PassMark (cpubenchmark.net) CPU Mark about 118,500, about 1,235 per core;
+# the W-3245 of gilbert-2026.yaml about 1,940 per core, so his 1.63 us per position per core (checkers, build and
+# self-verify) becomes 2.56 us here (for 10x10 draughts, Gilbert 2009's 5.06 us building gives about 1.85 us).
+# Second-hand price of the CPU about $4,900 (2026). The disk is an assumption: 16 TB of NVMe.
+name: EPYC 9654, 96 cores, 384 GB
+cores: 96
+ghz: 2.4
+ram: 384GB
+disk: 16TB
+disk_kind: nvme
+disk_mbps: 6000
+us: 2.56

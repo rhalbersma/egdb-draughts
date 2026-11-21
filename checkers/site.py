@@ -44,6 +44,9 @@ CHAPTERS = [
         ('vesting-8x7-wit.html', 'De winst is strategisch, de dam kan verdreven worden', 'The win is strategic, the king can be driven out')]),
     ('3 tegen 2 op 7×7', '3 against 2 on 7×7', [
         ('langste-7x7.html', 'Geen ontsnapping naar een andere dubbele hoek', 'No escape to another double corner')]),
+    ('3 tegen 2 op 5×5', '3 against 2 on 5×5', [
+        ('langste-5x5.html', 'De langste winst', 'The longest win'),
+        ('zetdwang-5x5.html', 'Uitzondering: zetdwang', 'Exception: zugzwang')]),
     ('3 tegen 2 op andere borden', '3 against 2 on other boards', [
         ('vesting-9x9.html', '9×9 onspeelbare hoeken: de val en de diagonaal', '9×9 unplayable corners: the trap and the diagonal'),
         ('afstandsregel.html', 'De afstandsregel', 'The distance rule')]),
@@ -724,7 +727,7 @@ uit (19. … f1-e2), en na 20. g2-f1 kan hij niet meer terug. Hij vlucht naar de
 met een offer de beslissing af: 26. b3-c2! b1×d3 27. f7-g6 f5-e6 28. d5×f7, en 2 tegen 1 wint.</p>
 <p>Je zou kunnen denken dat zwart zo eindeloos van dubbele hoek naar dubbele hoek kan blijven vluchten, zoals de zwarte dam
 bij <a href="twee-4x4.html">2 tegen 1 op 4×4</a>, en dat het remise is. Maar 7×7 is daar niet klein genoeg voor: wit vangt
-de verdreven dam in de tweede dubbele hoek alsnog.</p>''', f'''
+de verdreven dam in de tweede dubbele hoek alsnog. Ook op <a href="langste-5x5.html">5×5</a> lukt het zwart niet.</p>''', f'''
 <p>On <a href="vesting-8x7-wit.html">8×7</a> white drives a black king out of its double corner, and there is no other
 double corner to flee to. On 7×7 there is: can the expelled king keep escaping to a next double corner, like the black king
 in <a href="twee-4x4.html">2 against 1 on 4×4</a>?</p>
@@ -739,7 +742,8 @@ b1/a2, but there white forces the decision with a sacrifice: 26. b3-c2! b1×d3 2
 wins.</p>
 <p>One might think that black could keep fleeing from double corner to double corner forever like this, as the black king
 does in <a href="twee-4x4.html">2 against 1 on 4×4</a>, and that it is a draw. But 7×7 is not small enough for that: white
-still catches the expelled king in the second double corner.</p>'''), fig77, f'<p class="var">{h77}</p>', '<div style="clear:both"></div>']
+still catches the expelled king in the second double corner. On <a href="langste-5x5.html">5×5</a> black does not manage
+either.</p>'''), fig77, f'<p class="var">{h77}</p>', '<div style="clear:both"></div>']
         self.write('langste-7x7.html', None, '\n'.join(body77), pg77, k77)
         # 8x7: one pair of double corners, along the side of 7 (6 apart, closer than on 8x8): the fortress falls
         k87, e87 = self.engine(8, 7, 'unplayable')
@@ -983,7 +987,7 @@ are 8 traps, at even parity not a single one.</p>''')]
             '<tr><td>10×9</td><td>100% (18.420)</td><td>0% (18.440)</td></tr>'
             '<tr><td>11×10</td><td>100% (37.030)</td><td>100% (37.050)</td></tr></table>'
             '<p>Zie de vallen op <a href="val.html">8×8</a>, <a href="vesting.html">9×8</a> en <a href="vesting-8x7.html">8×7</a>, '
-            'en <a href="langste-7x7.html">7×7</a>.</p>',
+            'en de langste winsten op <a href="langste-7x7.html">7×7</a> en <a href="langste-5x5.html">5×5</a>.</p>',
             '<p>The traps per board, with black to move and both black kings on the edge squares of two double corners '
             '(counted with <a href="https://github.com/rhalbersma/egdb-draughts/blob/main/checkers/traps.py"><code>traps.py</code></a>):</p>'
             '<table class="tbl"><tr><th>Board</th><th>Traps at even parity</th><th>Traps at odd parity</th><th>Consequence</th></tr>'
@@ -996,9 +1000,171 @@ are 8 traps, at even parity not a single one.</p>''')]
             '<tr><td>10×9</td><td>100% (18,420)</td><td>0% (18,440)</td></tr>'
             '<tr><td>11×10</td><td>100% (37,030)</td><td>100% (37,050)</td></tr></table>'
             '<p>See the traps on <a href="val.html">8×8</a>, <a href="vesting.html">9×8</a> and <a href="vesting-8x7.html">8×7</a>, '
-            'and <a href="langste-7x7.html">7×7</a>.</p>'),
+            'and the longest wins on <a href="langste-7x7.html">7×7</a> and <a href="langste-5x5.html">5×5</a>.</p>'),
             self.page((k89, e89)), None)
 
+
+    def board55(self):
+        """5x5 with unplayable corners (12 squares, every corner a double corner): 2 against 1 always wins, 3 against 2
+        nearly always, the longest win drives a black king out of its double corner, and the only draws are zugzwang"""
+        from itertools import combinations
+        from collections import Counter
+        t = self.t
+        n = lambda x: f'{x:,}'.replace(',', '.' if self.lang == 'nl' else ',')
+        k55, e55 = self.engine(5, 5, 'unplayable')
+        k21, e21 = self.engine(5, 5, 'unplayable', 2, 1)
+        squares = sorted(f'{chr(97 + f)}{r + 1}' for f, r in e55.g['sq'].values())
+        count = lambda f: tuple(len([x for x in side[1:].split(',') if x]) for side in f.split(':')[1:])
+        captures = lambda e, f: any(count(m[2]) != count(f) for m in e.analyse(f)[1])
+
+        def quiet(e, W, B):              # nobody can capture
+            return not captures(e, e.fen(W, B, 'W')) and not captures(e, e.fen(W, B, 'B'))
+
+        def positions(e, nw, nb):
+            for W in combinations(squares, nw):
+                for B in combinations([s for s in squares if s not in W], nb):
+                    if quiet(e, list(W), list(B)):
+                        yield list(W), list(B)
+        # the 8 symmetries of the board (mirrors and rotations)
+        syms = [lambda f, r: (f, r), lambda f, r: (4 - f, r), lambda f, r: (f, 4 - r), lambda f, r: (4 - f, 4 - r),
+                lambda f, r: (r, f), lambda f, r: (4 - r, f), lambda f, r: (r, 4 - f), lambda f, r: (4 - r, 4 - f)]
+        tr = lambda s, g: (lambda f, r: f'{chr(97 + f)}{r + 1}')(*g(ord(s[0]) - 97, int(s[1:]) - 1))
+        canon = lambda W, B: min((tuple(sorted(tr(x, g) for x in W)), tuple(sorted(tr(x, g) for x in B))) for g in syms)
+
+        # 2 against 1: every quiet position is won, with either side to move
+        q21 = list(positions(e21, 2, 1))
+        assert all(e21.analyse(e21.fen(W, B, 'W'))[0][0] == 'W' and e21.analyse(e21.fen(W, B, 'B'))[0][0] == 'L' for W, B in q21)
+        # 3 against 2: the quiet positions, the fortress (black on the edge squares of two double corners)
+        q = list(positions(e55, 3, 2))
+        wtm = {(tuple(W), tuple(B)): e55.analyse(e55.fen(W, B, 'W'))[0] for W, B in q}
+        btm = {(tuple(W), tuple(B)): e55.analyse(e55.fen(W, B, 'B'))[0] for W, B in q}
+        corners = [{'b1', 'a2'}, {'d1', 'e2'}, {'a4', 'b5'}, {'d5', 'e4'}]
+        cid = lambda s: next((k for k, c in enumerate(corners) if s in c), None)
+        fort = [x for x in q if None not in map(cid, x[1]) and cid(x[1][0]) != cid(x[1][1])]
+        cw, cb = Counter(v[0] for v in wtm.values()), Counter(v[0] for v in btm.values())
+        fb = Counter(btm[(tuple(W), tuple(B))][0] for W, B in fort)
+        assert set(cw) == {'W', 'D'} and set(cb) == {'L', 'D'} and set(fb) == {'L', 'D'}
+        nq, dw, db, nf, df = len(q), cw['D'], cb['D'], len(fort), fb['D']
+
+        # the longest win from a quiet start, white to move: white wins fastest, black defends longest
+        top = max(int(v[1:]) for v in wtm.values() if v[0] == 'W')
+        starts = {canon(*x) for x, v in wtm.items() if v == f'W{top}'}
+        f55 = e55.fen(['a4', 'b5', 'd5'], ['d3', 'e4'], 'W')
+        v55, _ = e55.analyse(f55)
+        assert v55 == f'W{top}'
+        line55 = ('1. d5-c4 d3-e2 2. a4-b3 e4-d3 3. b3-a2 d3-e4 4. c4-d5 e2-d3 5. a2-b1 d3-e2 6. b1-c2 e2-d3 7. c2-d1 d3-e2 '
+                  '8. b5-a4 e2-d3 9. d1-e2! d3-c2 10. d5-c4 c2-d1 11. c4-b3 e4-d5 12. e2-d3 d5-e4 13. b3-c2! d1xb3 14. a4xc2')
+        g = f55
+        for (mv,), _ in self.plan(line55):
+            ms = e55.analyse(g)[1]
+            m = next(x for x in ms if x[0] == mv)
+            w = g[0] == 'W'
+            assert m[1][0] == ('W' if w else 'L') and int(m[1][1:]) == (min if w else max)(
+                int(x[1][1:]) for x in ms if x[1][0] == m[1][0]), (mv, m[1])
+            g = m[2]
+        assert count(g) == (2, 1) and e55.analyse(g)[0][0] == 'L'
+        pg = self.page((k55, e55))
+        fig, i0 = pg.diagram(f55, t(f'5×5, wit aan zet: {v55}', f'5×5, white to move: {v55}'), gid=k55)
+        h55, *_ = pg.moves(f55, self.plan(line55), 1, False, 'm1', i0)
+        body = [t(f'''
+<p>Op <a href="langste-7x7.html">7×7</a> vangt wit een verdreven zwarte dam ook in de volgende dubbele hoek. Hoe gaat het
+op een nog kleiner bord? Op 5×5 met onspeelbare hoekvelden zijn er maar 12 speelbare velden, en elke hoek is een dubbele
+hoek: b1/a2, d1/e2, a4/b5 en d5/e4.</p>
+<p>Anders dan op <a href="twee-4x4.html">4×4</a> is 2 tegen 1 hier altijd gewonnen: wit wint alle {len(q21)} rustige
+stellingen, met wit en met zwart aan zet. Ook 3 tegen 2 is bijna altijd gewonnen: van de {n(nq)} rustige stellingen met wit
+aan zet zijn er {dw} remise, met zwart aan zet {db}. Met zwart aan zet en beide zwarte dammen op de randvelden van twee
+dubbele hoeken zijn er {df} remise van de {n(nf)}. Die remises zijn geen vesting: zwart dwingt binnen 4 ply gelijk materiaal
+af, vaak door zetdwang (zie de <a href="zetdwang-5x5.html">volgende pagina</a>).</p>
+<p>De langste winst vanuit een rustige stelling met wit aan zet duurt {top} ply (op spiegelen en draaien na zijn er
+{len(starts)} zulke beginstellingen). Hier begint wit met twee dammen in de dubbele hoek a4/b5. Zwart houdt zijn dammen bij
+de dubbele hoeken d1/e2 en d5/e4. Wit loopt met een dam via a2, b1 en c2 naar d1 (7. c2-d1), het vrije randveld naast de
+zwarte dam op e2, en neemt met 9. d1-e2! ook e2 in: de zwarte dam moet de hoek uit (9. … d3-c2). Hij keert terug op d1,
+maar daar beslist het offer 13. b3-c2! d1×b3 14. a4×c2, en 2 tegen 1 wint.</p>''', f'''
+<p>On <a href="langste-7x7.html">7×7</a> white catches an expelled black king in the next double corner as well. How does
+it go on an even smaller board? On 5×5 with unplayable corner squares there are only 12 playable squares, and every corner
+is a double corner: b1/a2, d1/e2, a4/b5 and d5/e4.</p>
+<p>Unlike on <a href="twee-4x4.html">4×4</a>, 2 against 1 always wins here: white wins all {len(q21)} quiet positions,
+with white and with black to move. 3 against 2 too nearly always wins: of the {n(nq)} quiet positions with white to move
+{dw} are drawn, with black to move {db}. With black to move and both black kings on the edge squares of two double corners
+{df} of the {n(nf)} are drawn. These draws are no fortress: black forces equal material within 4 plies,
+often by zugzwang (see the <a href="zetdwang-5x5.html">next page</a>).</p>
+<p>The longest win from a quiet position with white to move takes {top} plies (up to mirrors and rotations there are
+{len(starts)} such start positions). Here white starts with two kings in the double corner a4/b5. Black keeps his kings
+at the double corners d1/e2 and d5/e4. White walks with a king via a2, b1 and c2 to d1 (7. c2-d1), the free edge square
+next to the black king on e2, and with 9. d1-e2! takes e2 as well: the black king has to leave the corner (9. … d3-c2).
+It returns to d1, but there the sacrifice 13. b3-c2! d1×b3 14. a4×c2 decides, and 2 against 1 wins.</p>'''),
+                fig, f'<p class="var">{h55}</p>', '<div style="clear:both"></div>']
+        self.write('langste-5x5.html', None, '\n'.join(body), pg, k55)
+
+        # the exception: every quiet draw with white to move is zugzwang (each white move gives a king away, and 2 against
+        # 2 is a draw); with black to move black has exactly one drawing move, into such a zugzwang
+        zw = {x for x, v in wtm.items() if v == 'D'}
+        for W, B in zw:
+            ms = e55.analyse(e55.fen(list(W), list(B), 'W'))[1]
+            assert ms and all(any(count(r[2])[0] < 3 for r in e55.analyse(m[2])[1]) for m in ms)
+        zb = [x for x, v in btm.items() if v == 'D']
+        name = {str(n): f'{chr(97 + f)}{r + 1}' for n, (f, r) in e55.g['sq'].items()}
+        quietw = lambda f: tuple(tuple(sorted(name[x.lstrip('K')] for x in side[1:].split(',') if x)) for side in f.split(':')[1:])
+        # or else an offer or a capture threat (the position after it is not quiet); either way black forces equal material
+        # (2 against 2 or 1 against 1) within 4 plies
+
+        def equal(f, d):
+            w, b = count(f)
+            if w == b:
+                return True
+            ms = e55.analyse(f)[1]
+            if d == 0 or w < b or not ms:
+                return False
+            return (all if f[0] == 'W' else any)(equal(m[2], d - 1) for m in ms)
+        kind = {}
+        for W, B in zb:
+            dm = [m for m in e55.analyse(e55.fen(list(W), list(B), 'B'))[1] if m[1] == 'D']
+            assert len(dm) == 1 and equal(dm[0][2], 4)
+            kind[(W, B)] = 'z' if quietw(dm[0][2]) in zw else 's'
+        nz, ns = sum(v == 'z' for v in kind.values()), sum(v == 's' for v in kind.values())
+        fz = sum(kind[(tuple(W), tuple(B))] == 'z' for W, B in fort if btm[(tuple(W), tuple(B))] == 'D')
+        orbits_w = sorted({canon(*x) for x in zw})
+        orbits_z = {canon(*x) for x, v in kind.items() if v == 'z'}
+        pgz = self.page((k55, e55))
+        fb0 = e55.fen(['a4', 'b5', 'e4'], ['b1', 'd5'], 'B')
+        vb0, legalb = e55.analyse(fb0)
+        figb, ib = pgz.diagram(fb0, t(f'5×5, zwart aan zet: {vb0}', f'5×5, black to move: {vb0}'), gid=k55)
+        draw = next(m for m in legalb if m[1] == 'D')
+        f1 = draw[2]
+        v1, legal1 = e55.analyse(f1)
+        fig1, i1 = pgz.diagram(f1, t(f'5×5, na 1. … {draw[0]}, wit aan zet: {v1}', f'5×5, after 1. … {draw[0]}, white to move: {v1}'),
+                               gid=k55)
+        other = [o for o in orbits_w if o != canon(*quietw(f1))]
+        assert len(orbits_w) == 2 and len(other) == 1
+        fo = e55.fen(list(other[0][0]), list(other[0][1]), 'W')
+        vo, legalo = e55.analyse(fo)
+        figo, io = pgz.diagram(fo, t(f'5×5, wit aan zet: {vo}', f'5×5, white to move: {vo}'), gid=k55)
+        body = [t(f'''
+<p>Van de {n(nq)} rustige stellingen met wit aan zet zijn er {dw} remise, en in elk ervan staat wit in zetdwang: elke witte
+zet geeft een dam weg, en 2 tegen 2 is remise. Op spiegelen en draaien na (het bord heeft 8 symmetrieën) zijn het maar
+{len(orbits_w)} stellingen. Met zwart aan zet zijn er {db} remises, en in elk ervan heeft zwart precies één remisezet. In
+{nz} ervan ({len(orbits_z)} op symmetrie na) zet die zet wit in zo'n zetdwang; in de andere {ns} offert zwart een dam of
+dreigt hij te slaan. Steeds dwingt zwart binnen 4 ply gelijk materiaal af: 2 tegen 2 of 1 tegen 1. Van de {df} remises met
+beide zwarte dammen op de randvelden van twee dubbele hoeken zijn er {fz} zetdwang.</p>''', f'''
+<p>Of the {n(nq)} quiet positions with white to move {dw} are drawn, and in each of them white is in zugzwang: every white
+move gives a king away, and 2 against 2 is a draw. Up to mirrors and rotations (the board has 8 symmetries) they are only
+{len(orbits_w)} positions. With black to move there are {db} draws, and in each of them black has exactly one drawing move.
+In {nz} of them ({len(orbits_z)} up to symmetry) that move puts white in such a zugzwang; in the other {ns} black offers a
+king or threatens to capture. Always black forces equal material within 4 plies: 2 against 2 or 1 against 1. Of the {df}
+draws with both black kings on the edge squares of two double corners {fz} are zugzwang.</p>'''),
+                figb,
+                t(f'''<p>Een voorbeeld: wit staat met twee dammen in de dubbele hoek a4/b5, en de derde op e4, naast de zwarte dam op d5. Zwart
+redt zich alleen met 1. … {draw[0]}; beide hoekzetten verliezen. Alle zetten van zwart: '''
+                  + self.moves_list(pgz, ib, legalb, '1. … ') + '.</p>', f'''<p>An example: white has two kings in the double corner a4/b5, and the third on e4, next to the black king on d5. Black
+saves himself only with 1. … {draw[0]}; both corner moves lose. All moves of black: '''
+                  + self.moves_list(pgz, ib, legalb, '1. … ') + '.</p>'), '<div style="clear:both"></div>',
+                fig1, t('<p>Na 1. … ' + draw[0] + ' geeft elke witte zet een dam weg. Alle zetten van wit: ',
+                        '<p>After 1. … ' + draw[0] + ' every white move gives a king away. All moves of white: ')
+                + self.moves_list(pgz, i1, legal1, '2. ') + '.</p>', '<div style="clear:both"></div>',
+                figo, t('<p>De andere zetdwangstelling: ook hier geeft elke witte zet een dam weg. Alle zetten van wit: ',
+                        '<p>The other zugzwang position: here too every white move gives a king away. All moves of white: ')
+                + self.moves_list(pgz, io, legalo, '1. ') + '.</p>', '<div style="clear:both"></div>']
+        self.write('zetdwang-5x5.html', None, '\n'.join(body), pgz, k55)
 
     def active_passive(self, e, active, passive):
         """the active trap (a double exchange threat: with white to move white exchanges at once) and the passive one
@@ -1175,6 +1341,7 @@ def main():
         s = Site(args.engine, out, lang, engines)
         s.index()
         s.vesting()
+        s.board55()
         # pages that were renamed or merged
         (out / 'vesting-9x7.html').write_text('<!DOCTYPE html><meta charset="utf-8"><meta http-equiv="refresh" '
                                               'content="0; url=vesting-8x7.html"><link rel="canonical" href="vesting-8x7.html">'

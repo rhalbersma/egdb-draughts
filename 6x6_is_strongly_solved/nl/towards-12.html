@@ -119,6 +119,9 @@ figure { float: right; margin: 4px 0 12px 20px; text-align: center; }
 figure .smallboard { width: 150px; }
 .diag figure { clear: right; width: 210px; }            /* the diagrams of a section below each other, not side by side */
 figcaption { font: 13px system-ui, sans-serif; color: var(--muted); margin-top: 4px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 16px 12px; clear: both; margin: 16px 0; }
+.grid figure { float: none; margin: 0; }                /* diagrams in reading order, aligned in rows */
+.grid figure a.diagram { display: inline-block; }   /* each board centred over its caption (the figure centres its text) */
 p.var { margin: 10px 0; }
 .verdict { font: 13px system-ui, sans-serif; padding: 1px 7px; border-radius: 10px; margin-left: 6px; white-space: nowrap; }
 .verdict.ok { background: rgba(60,140,60,.15); }

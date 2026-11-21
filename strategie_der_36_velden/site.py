@@ -271,7 +271,7 @@ class Site:
         home = '../nl/index.html' if self.lang == 'nl' else '../../index.html'      # Dutch: default, English in en/
         alt = f'en/{current}' if self.lang == 'nl' else f'../{current}'
         return (f'<a class="brand" href="index.html">Strategie der 36 velden</a>'
-                f'{menu(groups, current, t("Hoofdstukken", "Chapters"))}<a href="{self.solved()}">Opening</a>'
+                f'{menu(groups, current, t("Hoofdstukken", "Chapters"))}'
                 f'<a href="{orig}">{t("Origineel", "Original")} ↗</a><a href="{home}">{t("Alle sites", "All sites")}</a>'
                 f'{lang_link(self.lang, alt)}')
 

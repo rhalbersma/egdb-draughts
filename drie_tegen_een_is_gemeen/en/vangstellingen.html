@@ -92,8 +92,10 @@ details.onpage a { margin-right: 12px; white-space: nowrap; }
   transition: opacity .12s; pointer-events: none; z-index: 10; }
 .buttons button:hover::after, .buttons button:focus-visible::after,
 .buttons button:hover::before, .buttons button:focus-visible::before { opacity: 1; transition-delay: .25s; }
-.buttons button:first-child[data-tip]::after { left: 0; transform: none; }
-.buttons button:last-child[data-tip]::after { left: auto; right: 0; transform: none; }
+/* the tooltips at the ends of the row grow inwards: an invisible tooltip sticking out past the screen still widens the
+   page, and a page wider than the screen lets iOS Safari pan it sideways, taking the menu bar and board along */
+.buttons button:nth-child(-n+2)[data-tip]::after { left: 0; transform: none; }
+.buttons button:nth-last-child(-n+2)[data-tip]::after { left: auto; right: 0; transform: none; }
 .panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px;
   font: 14px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
 .panel .stm { font-weight: 600; margin-bottom: 4px; }
@@ -152,7 +154,7 @@ section.diag h3 { font-size: 19px; margin: 6px 0 4px; }
 .optree ul.t3 li { margin: 2px 0; }
 pre.tbl { font: 13px/1.45 ui-monospace, Menlo, Consolas, monospace; background: var(--panel); border: 1px solid var(--rule);
   border-radius: 6px; padding: 10px 12px; overflow-x: auto; }
-table.tbl { border-collapse: collapse; font: 14px/1.4 system-ui, sans-serif; margin: 10px 0; }
+table.tbl { border-collapse: collapse; font: 14px/1.4 system-ui, sans-serif; margin: 10px 0; display: block; max-width: 100%; overflow-x: auto; }   /* a wide table scrolls within itself, the page keeps the width of the screen */
 table.tbl th, table.tbl td { border-bottom: 1px solid var(--rule); padding: 4px 10px 4px 0; text-align: left; vertical-align: top; }
 table.tbl th { color: var(--muted); font-weight: 600; }
 .hub { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin: 20px 0; }

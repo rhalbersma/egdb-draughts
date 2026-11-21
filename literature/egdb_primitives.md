@@ -576,7 +576,7 @@ pass code and changes only where its inputs and outputs live, so a memory budget
 the sizes known before the build (`Meta.P` of the slices). Both builders now reach rung 1 (a depth sink with
 group-order files, `sink=auto` by the job's claim). `syzygy` first had to split its 16-bit value array, which was both
 depth store and cumulative state (about 7.5 bytes per position and side to move against rtbgen's 1 byte), into
-cumulative bit planes for the state and write-only values in the sink; its frontier rounds now hold about 9 bit planes
+cumulative bit planes for the state and write-only values in the sink; its frontier rounds now hold about 10 bit planes (one for the delayed check's candidates)
 and the level lists, its scan mode (rtbgen's) still the value array, which its frontier scans. Both also offer groups
 finer than the material class (`granularity=tempi|configuration` in both builders), rung 2.
 
@@ -904,7 +904,9 @@ largest material, 04-04-01-01 (68 M positions, longest 73 plies, so no reduction
 and checking each candidate once took 33.7 M, and its rounds fell from 9.0 s to 7.3 s, below the frontier mode's
 8.2 s despite the scans. With windows of 8 plies (9 reductions, about 0.45 s each: snapshot, collapse, deferred
 positions recomputed; snapshots 2.8 MB each for 68 MB of cells) the files are again identical. The frontier mode
-could take the same gain with a candidate bit plane. Peak RSS falls 20–35 % (979 → 758 MB),
+takes the same gain with a candidate bit plane: its rounds in 04-04-01-01 fall from 8.1 to 6.1 s (cell8 7.5 s, the
+difference being the scans), and the subset builds in 84 s of wall time (311 s summed), byte-identical. With the delayed
+check in both, the two modes are equally fast; cell8 is the one with 4× less group memory. Peak RSS falls 20–35 % (979 → 758 MB),
 less than the cell alone would give: it is dominated by the 16-bit array sink of the whole material and the input maps.
 
 **Limits.** The 16 tokens reach 2,160 plies (DTZ, DTC) and 4,320 plies (DTM), against the deepest known values of

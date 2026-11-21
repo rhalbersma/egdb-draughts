@@ -43,7 +43,10 @@
 //               unmoves to its undecided predecessors, and every undecided position whose exit wins in n
 // Two ways to find the positions of the previous ply, with the same files:
 //   frontier    (default) bit planes of the wins and losses found in the previous round, and lists by level of the
-//               positions decided in pass 0 and of the exit seeds: a round visits only these
+//               positions decided in pass 0 and of the exit seeds: a round visits only these; the unmoves mark loss candidates in
+//               a bit plane, and each candidate is checked once (rtbgen's delayed check; EGDB_FRONTIER_INLINE: at every
+//               unmove)
+//   cell8       one byte per position, the statuses inside, scans, reductions (solve_group_cell8)
 //   scan        as rtbgen: every round scans the whole byte array for the values of the previous ply
 // Within a round the losses read only wins of earlier rounds, and the wins only losses of earlier rounds, so each
 // half can run in parallel (std::for_each, seq or par, over blocks of positions; every writer writes the same value).
@@ -643,6 +646,10 @@ void solve_group(Group const& g, DepthSink<std::uint16_t>& sink)
                 // in cumulative bit planes, not in the values: won and lost hold every position decided at a level
                 // below the round (pass-0 decisions join when their level comes round), so v is only written
                 Plane won(T), lost(T), won_prev(T), lost_prev(T), won_new(T), lost_new(T);
+                // rtbgen's delayed check (default): the unmoves only mark loss candidates in a bit plane, then each
+                // candidate is checked once, against all its successors (EGDB_FRONTIER_INLINE: check at every unmove)
+                static bool const delayed = std::getenv("EGDB_FRONTIER_INLINE") == nullptr;
+                Plane cand(delayed ? T : 0);
                 for (int n = 1;; ++n) {
                         for_list(at(eloss_at, n), [&](std::uint64_t id) { exits_done.set_atomic(id); });   // exits lost by n
                         // losses in n: lossable, exits lost by n, undecided, every move inside to a win of a level below n
@@ -661,9 +668,21 @@ void solve_group(Group const& g, DepthSink<std::uint16_t>& sink)
                                 won_new.set_atomic(id);
                         };
                         // losses in n: the predecessors of the wins in n - 1, and the exits losing in n
-                        won_prev.for_each_par([&](std::uint64_t q) { predecessors(q, lose); });
-                        for_list(at(won_at, n - 1), [&](std::uint64_t q) { predecessors(q, lose); });
-                        for_list(at(eloss_at, n), lose);
+                        if (delayed) {
+                                auto const mark = [&](std::uint64_t id) {
+                                        if (openp.test(id) && lossable.test(id) && exits_done.test(id) && !won.test(id) && !lost.test(id))
+                                                cand.set_atomic(id);
+                                };
+                                won_prev.for_each_par([&](std::uint64_t q) { predecessors(q, mark); });
+                                for_list(at(won_at, n - 1), [&](std::uint64_t q) { predecessors(q, mark); });
+                                for_list(at(eloss_at, n), mark);
+                                cand.for_each_par(lose);
+                                for_blocks(cand.w.size(), [&](std::uint64_t lo, std::uint64_t hi) { std::fill(cand.w.begin() + std::ptrdiff_t(lo), cand.w.begin() + std::ptrdiff_t(hi), 0); });
+                        } else {
+                                won_prev.for_each_par([&](std::uint64_t q) { predecessors(q, lose); });
+                                for_list(at(won_at, n - 1), [&](std::uint64_t q) { predecessors(q, lose); });
+                                for_list(at(eloss_at, n), lose);
+                        }
                         // wins in n: the predecessors of the losses in n - 1, and the exits winning in n
                         lost_prev.for_each_par([&](std::uint64_t q) { predecessors(q, gain); });
                         for_list(at(lost_at, n - 1), [&](std::uint64_t q) { predecessors(q, gain); });
@@ -710,10 +729,10 @@ MemoryNeed memory_need(Material c)
                 m.slices += g.units.size();
         }
         std::uint64_t const T = 2 * m.max_group;
-        // 9 bit planes (has a move inside, every exit loses, exits lost by now, won, lost, and four frontiers); the level
+        // 10 bit planes (has a move inside, every exit loses, exits lost by now, won, lost, four frontiers, candidates); the level
         // lists with pass 0's per-block entries while they are merged (8 + 4 bytes per entry, at most one per position
         // and side to move counted); the scan mode's value array; a group about 480 bytes, a slice 160
-        std::uint64_t const transient = g_cell8 ? T + 12 * T : 9 * ((T + 63) / 64) * 8 + 12 * T + (g_frontier ? 0 : 2 * T);
+        std::uint64_t const transient = g_cell8 ? T + 12 * T : 10 * ((T + 63) / 64) * 8 + 12 * T + (g_frontier ? 0 : 2 * T);
         std::uint64_t const meta = 160 * m.slices + 480 * m.groups;
         std::uint64_t const writing = std::uint64_t(5) << 18;                          // the final pass's chunk buffers
         // the memory-mapped files count in the resident set as their pages are touched: the inputs (the materials the

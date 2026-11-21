@@ -659,12 +659,14 @@ same side:</p>
         # the other of the two traps on 9x8 (the trap of the previous page is the first), on a page of its own
         pgp = self.page((k89, e89))
         trap2 = [
-            t('<p>En met wit aan zet? De actieve val 1 wint dan ook, maar de passieve val 2 niet, en anders dan op 8×8 kan '
-              'wit vanuit die val geen tempo wisselen. Dat staat op de <a href="vesting-pariteit.html">volgende '
-              'pagina</a>.</p>',
-              '<p>And with white to move? The active trap 1 wins then too, but the passive trap 2 does not, and unlike on '
-              '8×8 white cannot change the tempo from that trap. That is on the <a href="vesting-pariteit.html">next '
-              'page</a>.</p>')]
+            t(f'<p>En met wit aan zet? De actieve val 1 dwingt met beide kleuren aan zet meteen een ruil af; met wit aan '
+              f'zet ruilt wit direct: {x89}. De passieve val 2 geeft alleen met zwart aan zet meteen een ruil, en anders '
+              f'dan op 8×8 kan wit vanuit die val geen tempo wisselen. Dat staat op de <a href="vesting-pariteit.html">'
+              f'volgende pagina</a>.</p>',
+              f'<p>And with white to move? The active trap 1 forces an exchange at once with either side to move; with '
+              f'white to move white exchanges immediately: {x89}. The passive trap 2 gives an immediate exchange with '
+              f'black to move only, and unlike on 8×8 white cannot change the tempo from that trap. That is on the '
+              f'<a href="vesting-pariteit.html">next page</a>.</p>')]
         extra = [t(f'<p>Met wit aan zet wint de actieve val 1 van de <a href="vesting.html">vorige pagina</a> ook, want '
                    f'dan ruilt wit meteen: {x89}. De passieve val 2 wint met wit aan zet niet.</p>',
                    f'<p>With white to move the active trap 1 of the <a href="vesting.html">previous page</a> wins too, since '

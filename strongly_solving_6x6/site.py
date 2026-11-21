@@ -4,7 +4,7 @@
 #    (See accompanying file LICENSE_1_0.txt or copy at
 #          http://www.boost.org/LICENSE_1_0.txt)
 
-"""The companion site Strongly Solving 6x6 Draughts (_site/strongly_solving_6x6): for now international draughts on
+"""The companion site 6x6 Is Strongly Solved (_site/strongly_solving_6x6): for now international draughts on
 the 6x6 board, strongly solved: every position up to 12 pieces (at most 6 per side) in the databases, the start position
 a draw, the complete opening tree to 4 plies and the longest win per number of pieces (international/). English by
 default, Dutch in nl/. Build it with --store (the complete unit store) for values everywhere; with the older databases up
@@ -30,7 +30,7 @@ S = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(S)
 START, REPO, Oracle, Engine = S.START, S.REPO, S.Oracle, S.Engine
 
-TITLE = 'Strongly Solving 6×6'
+TITLE = '6×6 Is Strongly Solved'
 
 # international draughts, in chapters with one page per section: (Dutch, English, [(file, Dutch, English)])
 CHAPTERS = [

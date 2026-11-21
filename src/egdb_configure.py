@@ -45,8 +45,12 @@ def materials(n, builder):
 
 
 def slots(m):
+    """the joint index of src/materials_6x6.hpp (the default): the white men on their 15 squares, the black men on theirs
+    minus the white men (12 squares are in both domains), the kings on the remaining squares, black after white"""
     wm, wk, bm, bk = m
-    return math.comb(15, wm) * math.comb(15, bm) * math.comb(18, wk) * math.comb(18, bk)
+    men = sum(math.comb(12, k) * math.comb(3, wm - k) * math.comb(15 - k, bm) for k in range(wm + 1))
+    e = 18 - wm - bm
+    return men * math.comb(e, wk) * math.comb(e - wk, bk)
 
 
 def material_bytes(m, builder):

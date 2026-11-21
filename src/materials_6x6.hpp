@@ -150,13 +150,13 @@ Material material_of(Pos const& p)
 constexpr bitboard DOM_WM = FULL - PROMO_WHITE;    // squares a white man may stand on (15)
 constexpr bitboard DOM_BM = FULL - PROMO_BLACK;    // squares a black man may stand on (15)
 
-// The index of a material's files. Factorised (the default): four independent colex ranks, white men over the 15
-// squares a white man may stand on, black men over theirs, white and black kings over all 18 squares; pieces may share
-// a square, so some slots are illegal (one popcount tells them apart). Joint (-DEGDB_JOINT_INDEX=1): the black men over
-// the squares the white men leave (an offset per white-men rank), the white kings over the empty squares, the black
-// kings over what is left; every slot is a legal placement, as in egdb_6x6.
+// The index of a material's files. Joint (the default): the white men over the 15 squares a white man may stand on, the
+// black men over theirs that the white men leave (an offset per white-men rank), the white kings over the empty
+// squares, the black kings over what is left; every slot is a legal placement, as in egdb_6x6 (half the slots of the
+// factorised index at 6 pieces, far fewer at 12). Factorised (-DEGDB_JOINT_INDEX=0): four independent colex ranks, the
+// kings over all 18 squares; pieces may share a square, so some slots are illegal (one popcount tells them apart).
 #ifndef EGDB_JOINT_INDEX
-#define EGDB_JOINT_INDEX 0
+#define EGDB_JOINT_INDEX 1
 #endif
 struct MatIndex {
         Material c;

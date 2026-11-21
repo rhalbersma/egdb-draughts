@@ -282,6 +282,6 @@ add_custom_target(bench COMMAND ${BUILDER} bench ${PIECES} DEPENDS ${BUILDER} US
 list(LENGTH METRICS n_metrics)
 add_custom_target(estimate
     COMMAND "${Python3_EXECUTABLE}" -I "${REPO}/src/egdb_layout.py" --board 6x6 --pieces ${PIECES} --builder ${BUILDER}
-            --metrics ${n_metrics} --machine "${CMAKE_BINARY_DIR}/machine.yaml" --kings-symmetry 1 --index overlapping
+            --metrics ${n_metrics} --machine "${CMAKE_BINARY_DIR}/machine.yaml" --kings-symmetry 1 --index disjoint
             --calibration "${CMAKE_BINARY_DIR}/calibration.tsv"
     DEPENDS "${CMAKE_BINARY_DIR}/calibration.tsv" USES_TERMINAL COMMENT "space, I/O and time on this machine" VERBATIM)

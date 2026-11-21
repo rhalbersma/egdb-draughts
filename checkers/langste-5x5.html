@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script>
+// the language of a site: its default, unless the visitor chose the other one on that site (remembered per site)
+(function () {
+  const key = 'lang:' + "checkers";
+  try { const pref = localStorage.getItem(key); if (pref && pref !== "en" && "nl/langste-5x5.html") location.replace("nl/langste-5x5.html" + location.hash); } catch (e) {}
+  document.addEventListener('click', function (e) {
+    const a = e.target.closest && e.target.closest('a[data-setlang]');
+    if (a) { try { localStorage.setItem(key, a.dataset.setlang); } catch (err) {} }
+  });
+})();
+</script>
+<title>The longest win · Checkers: 3 kings against 2</title>
+<style>
+:root {
+  --bg: #fbfaf7; --fg: #1d1d1b; --muted: #6b6a66; --rule: #e3e0d8; --panel: #f3f1ec;
+  --light: #efe6d2; --dark: #9c7a54; --hl: #d8b24a; --num: rgba(255,255,255,.75);
+  --wpiece: #fbf8f1; --wstroke: #4a4440; --bpiece: #2a2623; --bstroke: #000;
+  --link: #1f5f8b; --m2: #5b7d3a; --err: #b3261e; --only: #8a5a00; --db: #6d4aa8;
+  --active: #fff1b8; --lake: #8fb3c9;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #161514; --fg: #e9e6df; --muted: #a29e95; --rule: #34312d; --panel: #201e1c;
+    --light: #c9b99a; --dark: #6e5236; --hl: #c79a2a; --num: rgba(255,255,255,.6);
+    --link: #7fb6dd; --m2: #9cc06e; --err: #f2766d; --only: #e0b04f; --db: #b79cf0; --active: #4a4020; --lake: #3d5a6c;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #161514; --fg: #e9e6df; --muted: #a29e95; --rule: #34312d; --panel: #201e1c;
+  --light: #c9b99a; --dark: #6e5236; --hl: #c79a2a; --num: rgba(255,255,255,.6);
+  --link: #7fb6dd; --m2: #9cc06e; --err: #f2766d; --only: #e0b04f; --db: #b79cf0; --active: #4a4020; --lake: #3d5a6c;
+}
+* { box-sizing: border-box; }
+/* --hh: the height of the fixed navigation bar (set by the script below); anchors scroll to just below it */
+html { scroll-padding-top: calc(var(--hh, 44px) + 8px); }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 17px/1.6 Charter, "Bitstream Charter", "Sitka Text", Cambria, Georgia, serif; }
+header { border-bottom: 1px solid var(--rule); padding: 8px 16px; font: 14px/1.4 system-ui, sans-serif;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 18px; position: sticky; top: 0; z-index: 5;
+  background: var(--bg); }
+header > a { color: var(--muted); text-decoration: none; }
+header > a.brand { color: var(--fg); font-weight: 600; }
+header > a:hover { color: var(--fg); }
+header > .langs { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+.flag { display: inline-flex; width: 26px; height: 17px; border-radius: 3px; overflow: hidden; opacity: .45;
+  outline: 1px solid var(--rule); transition: opacity .15s; }
+.flag svg { width: 100%; height: 100%; display: block; }
+a.flag:hover, a.flag:focus-visible { opacity: 1; }
+.flag.cur { opacity: 1; outline: 2px solid var(--muted); outline-offset: 1px; }
+.menu { position: relative; }
+.menu summary { list-style: none; cursor: pointer; color: var(--fg); border: 1px solid var(--rule); border-radius: 6px;
+  padding: 3px 10px; background: var(--panel); user-select: none; }
+.menu summary::-webkit-details-marker { display: none; }
+.menu summary::after { content: " ▾"; color: var(--muted); }
+.menu[open] summary::after { content: " ▴"; }
+.menu-panel { position: absolute; left: 0; top: calc(100% + 6px); min-width: 300px; max-height: 75vh; overflow-y: auto;
+  background: var(--bg); border: 1px solid var(--rule); border-radius: 8px; box-shadow: 0 6px 24px rgba(0,0,0,.18);
+  padding: 8px 0; }
+.menu-panel .mh { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); padding: 8px 14px 2px; }
+.menu-panel a { display: block; padding: 4px 14px 4px 22px; color: var(--fg); text-decoration: none; }
+.menu-panel a:hover { background: var(--panel); }
+.menu-panel a[aria-current="page"] { background: var(--active); font-weight: 600; }
+details.more { border: 1px solid var(--rule); border-radius: 8px; margin: 12px 0; background: var(--panel); }
+details.more > summary { cursor: pointer; padding: 10px 14px; font: 600 15px system-ui, sans-serif; }
+details.more > div { padding: 0 16px 8px; }
+details.onpage { font: 14px/1.6 system-ui, sans-serif; margin: 10px 0 0; }
+details.onpage summary { cursor: pointer; color: var(--muted); }
+details.onpage a { margin-right: 12px; white-space: nowrap; }
+@media (max-width: 760px) { .menu-panel { position: fixed; left: 8px; right: 8px; top: calc(var(--hh, 44px) + 4px); min-width: 0; } }
+.wrap { display: grid; grid-template-columns: minmax(280px, 420px) minmax(0, 1fr); gap: 40px;
+  max-width: 1180px; margin: 0 auto; padding: 24px 16px 64px; }
+.side { position: sticky; top: calc(var(--hh, 44px) + 16px); align-self: start; }
+#board svg { width: 100%; height: auto; display: block; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+.buttons { display: flex; gap: 8px; margin: 10px 0; }
+.buttons button { flex: 1; padding: 6px 0; font: 16px system-ui, sans-serif; color: var(--fg); background: var(--panel);
+  border: 1px solid var(--rule); border-radius: 6px; cursor: pointer; }
+.buttons button:hover { border-color: var(--muted); }
+.buttons button svg { width: 14px; height: 14px; display: block; margin: 0 auto; fill: currentColor; }
+/* tooltips above the buttons, in the language of the page */
+.buttons button { position: relative; }
+.buttons button[data-tip]::after { content: attr(data-tip); position: absolute; bottom: calc(100% + 8px); left: 50%;
+  transform: translateX(-50%); background: var(--fg); color: var(--bg); font: 12px/1.35 system-ui, sans-serif;
+  padding: 5px 8px; border-radius: 5px; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity .12s;
+  z-index: 10; }
+.buttons button[data-tip]::before { content: ""; position: absolute; bottom: calc(100% + 3px); left: 50%;
+  transform: translateX(-50%); border: 5px solid transparent; border-top-color: var(--fg); opacity: 0;
+  transition: opacity .12s; pointer-events: none; z-index: 10; }
+.buttons button:hover::after, .buttons button:focus-visible::after,
+.buttons button:hover::before, .buttons button:focus-visible::before { opacity: 1; transition-delay: .25s; }
+/* the tooltips at the ends of the row grow inwards: an invisible tooltip sticking out past the screen still widens the
+   page, and a page wider than the screen lets iOS Safari pan it sideways, taking the menu bar and board along */
+.buttons button:nth-child(-n+2)[data-tip]::after { left: 0; transform: none; }
+.buttons button:nth-last-child(-n+2)[data-tip]::after { left: auto; right: 0; transform: none; }
+.panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px;
+  font: 14px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+.panel .stm { font-weight: 600; margin-bottom: 4px; }
+.panel table { border-collapse: collapse; width: 100%; }
+.panel td { padding: 1px 6px 1px 0; }
+.panel tr.played td { background: var(--active); }
+.panel a { color: var(--link); text-decoration: none; }
+main { min-width: 0; }
+h1 { font-size: 30px; line-height: 1.2; margin: 0 0 16px; }
+h2 { font-size: 22px; margin: 28px 0 8px; padding-top: 14px; border-top: 1px solid var(--rule); clear: both; }   /* sections of a chapter, separated as the diagrams are */
+a.m1, a.m2, a.m3 { text-decoration: none; white-space: nowrap; border-radius: 3px; padding: 0 1px; }
+a.m1 { color: var(--link); font-weight: 600; }
+a.m2 { color: var(--m2); }
+a.db { font-style: italic; }
+a.m3 { color: var(--db); font-size: 95%; }
+.q { color: var(--err); font-weight: 700; }
+.aside { color: var(--muted); }
+a.only::after { content: "*"; color: var(--only); }
+a.cur { background: var(--active); }
+.val { font: 14px ui-monospace, Menlo, Consolas, monospace; color: var(--muted); }
+blockquote { margin: 16px 0; padding: 4px 16px; border-left: 3px solid var(--dark); font-style: italic; }
+figure { float: right; margin: 4px 0 12px 20px; text-align: center; }
+figure .smallboard { width: 150px; }
+.diag figure { clear: right; width: 210px; }            /* the diagrams of a section below each other, not side by side */
+figcaption { font: 13px system-ui, sans-serif; color: var(--muted); margin-top: 4px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 16px 12px; clear: both; margin: 16px 0; }
+.grid figure { float: none; margin: 0; }                /* diagrams in reading order, aligned in rows */
+.grid figure a.diagram { display: inline-block; }   /* each board centred over its caption (the figure centres its text) */
+p.var { margin: 10px 0; }
+.verdict { font: 13px system-ui, sans-serif; padding: 1px 7px; border-radius: 10px; margin-left: 6px; white-space: nowrap; }
+.verdict.ok { background: rgba(60,140,60,.15); }
+.verdict.bad { background: rgba(179,38,30,.15); }
+.note { font-size: 15px; color: var(--muted); }
+.legend { font: 13px/1.6 system-ui, sans-serif; color: var(--muted); border-top: 1px solid var(--rule); margin-top: 32px; padding-top: 12px; }
+.src { font-size: 14px; color: var(--muted); }
+section.diag { clear: both; border-top: 1px solid var(--rule); padding-top: 8px; margin-top: 28px; }
+section.diag h3 { font-size: 19px; margin: 6px 0 4px; }
+.claim { margin: 6px 0; }
+.moves { font-size: 15px; }
+.issues { font: 14px/1.5 system-ui, sans-serif; color: var(--muted); margin: 2px 0 0; padding-left: 18px; }
+.refute { display: flow-root; background: var(--panel); border-left: 3px solid var(--err); padding: 6px 12px; margin: 10px 0; border-radius: 0 6px 6px 0; }
+.refute .t { font: 13px system-ui, sans-serif; color: var(--muted); }
+.toc { list-style: none; padding: 0; }
+.toc li { padding: 5px 0; border-bottom: 1px solid var(--rule); }
+.toc ul.sub { display: inline-block; vertical-align: top; list-style: none; margin: 0; padding: 0; }
+.toc ul.sub li { padding: 0 0 2px; border: 0; }
+.toc .h { color: var(--muted); font: 14px system-ui, sans-serif; display: inline-block; min-width: 205px; }
+@media (max-width: 760px) { .toc .h { display: block; } }
+.toc .cnt { font: 13px system-ui, sans-serif; color: var(--muted); margin-left: 8px; }
+.toc .orig { font: 13px system-ui, sans-serif; margin-left: 8px; }
+.credit { margin-top: 32px; }
+.pager { display: flex; justify-content: space-between; font: 14px system-ui, sans-serif; margin-top: 40px; clear: both; }
+.pager.pager-top { margin: 0 0 14px; clear: none; }
+.pager a, .toc a, .src a, main p a:not(.m1):not(.m2) { color: var(--link); }
+.optree h3 { font-size: 18px; margin: 22px 0 4px; }
+.optree p { margin: 4px 0 4px 18px; }
+.optree p.t2 { margin: 10px 0 2px 18px; }
+.optree ul.t3 { list-style: none; margin: 0 0 6px 40px; padding: 0; }
+.optree ul.t3 li { margin: 2px 0; }
+pre.tbl { font: 13px/1.45 ui-monospace, Menlo, Consolas, monospace; background: var(--panel); border: 1px solid var(--rule);
+  border-radius: 6px; padding: 10px 12px; overflow-x: auto; }
+table.tbl { border-collapse: collapse; font: 14px/1.4 system-ui, sans-serif; margin: 10px 0; display: block; max-width: 100%; overflow-x: auto; }   /* a wide table scrolls within itself, the page keeps the width of the screen */
+table.tbl th, table.tbl td { border-bottom: 1px solid var(--rule); padding: 4px 10px 4px 0; text-align: left; vertical-align: top; }
+table.tbl th { color: var(--muted); font-weight: 600; }
+.hub { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin: 20px 0; }
+.hub a.card { display: block; border: 1px solid var(--rule); border-radius: 8px; padding: 14px 16px; background: var(--panel);
+  color: var(--fg); text-decoration: none; }
+.hub a.card:hover { border-color: var(--muted); }
+.hub a.card strong { display: block; font-size: 19px; margin-bottom: 4px; color: var(--link); }
+.hub a.card span { font-size: 15px; color: var(--muted); }
+@media (max-width: 760px) {
+  .wrap { grid-template-columns: 1fr; gap: 16px; }
+  .side { position: sticky; top: var(--hh, 44px); background: var(--bg); padding-bottom: 6px; z-index: 2; }
+  #board { max-width: min(230px, 62vw); margin: 0 auto; }
+  .buttons { max-width: 360px; margin: 6px auto; }
+  .buttons button { padding: 4px 0; font-size: 15px; }
+  /* the moves of the position on display: a compact strip under the board */
+  .panel { max-height: 3.3em; overflow-y: auto; padding: 5px 8px; font-size: 13px; line-height: 1.5; }
+  .panel .stm { display: inline; margin: 0 10px 0 0; }
+  .panel table, .panel tbody { display: inline; }
+  .panel tr { display: inline-block; margin: 0 10px 0 0; white-space: nowrap; }
+  .panel td { display: inline; padding: 0 3px 0 0; }
+  .panel tr.played td { background: none; }
+  .panel tr.played { background: var(--active); border-radius: 3px; padding: 0 2px; }
+  figure { float: none; margin: 8px 0; }
+}
+</style>
+</head>
+<body>
+<header><a class="brand" href="index.html">Checkers: 3 kings against 2</a><details class="menu"><summary>Chapters</summary><nav class="menu-panel"><a href="index.html">Overview</a><div class="mh">2 against 1</div><a href="twee-langste.html">The longest win on 8×8</a><a href="twee-blokkade.html">Exception 1: the blockade at the edge</a><a href="twee-4x4.html">Exception 2: a draw on 4×4</a><div class="mh">3 against 2 on 8×8</div><a href="drie-langste.html">The longest win</a><a href="blokkades.html">Exception 1: the blockades</a><a href="curiosa.html">Exception 2: two curiosities</a><a href="val.html">Two traps to break the fortress</a><a href="val-pariteit.html">The win is strategic, parity does not matter</a><div class="mh">3 against 2 on 9×8</div><a href="vesting.html">Two traps to break the fortress</a><a href="vesting-pariteit.html">The win is non-strategic, parity matters</a><div class="mh">3 against 2 on 8×7</div><a href="vesting-8x7.html">Four traps to break the fortress</a><a href="vesting-8x7-wit.html">The win is strategic, the king can be driven out</a><div class="mh">3 against 2 on 7×7</div><a href="langste-7x7.html">No escape to another double corner</a><div class="mh">3 against 2 on 5×5</div><a href="langste-5x5.html" aria-current="page">The longest win</a><a href="zetdwang-5x5.html">Exception: zugzwang</a><div class="mh">3 against 2 on other boards</div><a href="vesting-9x9.html">9×9 unplayable corners: the trap and the diagonal</a><a href="afstandsregel.html">The distance rule</a><div class="mh">Conclusion</div><a href="conclusie.html">Conclusion</a></nav></details><a href="../index.html">All sites</a><span class="langs"><a class="flag" href="nl/langste-5x5.html" hreflang="nl" lang="nl" data-setlang="nl" title="Nederlands" aria-label="Nederlands"><svg viewBox="0 0 9 6" aria-hidden="true"><rect width="9" height="6" fill="#21468B"/><rect width="9" height="4" fill="#fff"/><rect width="9" height="2" fill="#AE1C28"/></svg></a><span class="flag cur" title="English" aria-current="true"><svg viewBox="0 0 60 30" aria-hidden="true"><clipPath id="uk-t"><path d="M30,15h30v15zv15h-30zh-30v-15zv-15h30z"/></clipPath><path d="M0,0v30h60v-30z" fill="#012169"/><path d="M0,0L60,30M60,0L0,30" stroke="#fff" stroke-width="6"/><path d="M0,0L60,30M60,0L0,30" clip-path="url(#uk-t)" stroke="#C8102E" stroke-width="4"/><path d="M30,0v30M0,15h60" stroke="#fff" stroke-width="10"/><path d="M30,0v30M0,15h60" stroke="#C8102E" stroke-width="6"/></svg></span></span></header>
+<div class="wrap">
+  <aside class="side">
+    <div id="board"></div>
+    <div class="buttons">
+      <button id="start" data-tip="Start of the line (Home)" aria-label="Start of the line (Home)"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="2" height="10"/><path d="M14 3v10L5 8z"/></svg></button>
+      <button id="back" data-tip="Previous position (←)" aria-label="Previous position (←)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10.5 2.5 5 8l5.5 5.5" fill="none" stroke="currentColor" stroke-width="2.2"/></svg></button>
+      <button id="play" data-tip="Play / pause the line" aria-label="Play / pause the line"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11L13.5 8z"/></svg></button>
+      <button id="fwd" data-tip="Next position (→)" aria-label="Next position (→)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 2.5 11 8l-5.5 5.5" fill="none" stroke="currentColor" stroke-width="2.2"/></svg></button>
+      <button id="end" data-tip="End of the line (End)" aria-label="End of the line (End)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 3v10l9-5z"/><rect x="12" y="3" width="2" height="10"/></svg></button>
+      <button id="nums" data-tip="Square names on the board on/off" aria-label="Square names on the board on/off">#</button>
+      <button id="nota" data-tip="Switch between numeric (1, 2, …) and algebraic (a1, b2, …) notation" aria-label="Switch between numeric (1, 2, …) and algebraic (a1, b2, …) notation">1…18</button>
+    </div>
+    <div class="panel" id="panel"></div>
+  </aside>
+  <main>
+<nav class="pager pager-top"><a href="langste-7x7.html">← No escape to another double corner</a><a href="zetdwang-5x5.html">Exception: zugzwang →</a></nav>
+<p class="src">3 against 2 on 5×5</p><h1>The longest win</h1>
+
+<p>On <a href="langste-7x7.html">7×7</a> white catches an expelled black king in the next double corner as well. How does
+it go on an even smaller board? On 5×5 with unplayable corner squares there are only 12 playable squares, and every corner
+is a double corner: <span class="mv" data-g="5x5 unplayable" data-n="11" data-a="b1">b1</span>/<span class="mv" data-g="5x5 unplayable" data-n="8" data-a="a2">a2</span>, <span class="mv" data-g="5x5 unplayable" data-n="12" data-a="d1">d1</span>/<span class="mv" data-g="5x5 unplayable" data-n="10" data-a="e2">e2</span>, <span class="mv" data-g="5x5 unplayable" data-n="3" data-a="a4">a4</span>/<span class="mv" data-g="5x5 unplayable" data-n="1" data-a="b5">b5</span> and <span class="mv" data-g="5x5 unplayable" data-n="2" data-a="d5">d5</span>/<span class="mv" data-g="5x5 unplayable" data-n="5" data-a="e4">e4</span>.</p>
+<p>Unlike on <a href="twee-4x4.html">4×4</a>, 2 against 1 always wins here: white wins all 452 quiet positions,
+with white and with black to move. 3 against 2 too nearly always wins: of the 2,864 quiet positions with white to move
+12 are drawn, with black to move 48. With black to move and both black kings on the edge squares of two double corners
+24 of the 1,672 are drawn. These draws are no fortress: black forces equal material within 4 plies,
+often by zugzwang (see the <a href="zetdwang-5x5.html">next page</a>).</p>
+<p>The longest win from a quiet position with white to move takes 35 plies (up to mirrors and rotations there are
+3 such start positions). Here white starts with two kings in the double corner <span class="mv" data-g="5x5 unplayable" data-n="3" data-a="a4">a4</span>/<span class="mv" data-g="5x5 unplayable" data-n="1" data-a="b5">b5</span>. Black keeps his kings
+at the double corners <span class="mv" data-g="5x5 unplayable" data-n="12" data-a="d1">d1</span>/<span class="mv" data-g="5x5 unplayable" data-n="10" data-a="e2">e2</span> and <span class="mv" data-g="5x5 unplayable" data-n="2" data-a="d5">d5</span>/<span class="mv" data-g="5x5 unplayable" data-n="5" data-a="e4">e4</span>. White walks with a king via <span class="mv" data-g="5x5 unplayable" data-n="8" data-a="a2">a2</span>, <span class="mv" data-g="5x5 unplayable" data-n="11" data-a="b1">b1</span> and <span class="mv" data-g="5x5 unplayable" data-n="9" data-a="c2">c2</span> to <span class="mv" data-g="5x5 unplayable" data-n="12" data-a="d1">d1</span> (7. <span class="mv" data-g="5x5 unplayable" data-n="9-12" data-a="c2-d1">c2-d1</span>), the free edge square
+next to the black king on <span class="mv" data-g="5x5 unplayable" data-n="10" data-a="e2">e2</span>, and with 9. <span class="mv" data-g="5x5 unplayable" data-n="12-10" data-a="d1-e2">d1-e2</span>! takes <span class="mv" data-g="5x5 unplayable" data-n="10" data-a="e2">e2</span> as well: the black king has to leave the corner (9. … <span class="mv" data-g="5x5 unplayable" data-n="7-9" data-a="d3-c2">d3-c2</span>).
+It returns to <span class="mv" data-g="5x5 unplayable" data-n="12" data-a="d1">d1</span>, but there the sacrifice 13. <span class="mv" data-g="5x5 unplayable" data-n="6-9" data-a="b3-c2">b3-c2</span>! <span class="mv" data-g="5x5 unplayable" data-n="12×6" data-a="d1×b3">d1×b3</span> 14. <span class="mv" data-g="5x5 unplayable" data-n="3×9" data-a="a4×c2">a4×c2</span> decides, and 2 against 1 wins.</p>
+<figure><a class="diagram" href="#" data-i="0"><div class="smallboard" data-g="5x5 unplayable" data-fen="W:WK3,K1,K2:BK7,K5"></div></a><figcaption>5×5, white to move: W35</figcaption></figure>
+<p class="var"><a class="m1 only" href="#" data-i="1" title="W35">1. <span class="mv" data-g="5x5 unplayable" data-n="2-4" data-a="d5-c4">d5-c4</span></a> <a class="m1 " href="#" data-i="2" title="L34"><span class="mv" data-g="5x5 unplayable" data-n="7-10" data-a="d3-e2">d3-e2</span></a> <a class="m1 " href="#" data-i="3" title="W33">2. <span class="mv" data-g="5x5 unplayable" data-n="3-6" data-a="a4-b3">a4-b3</span></a> <a class="m1 " href="#" data-i="4" title="L32"><span class="mv" data-g="5x5 unplayable" data-n="5-7" data-a="e4-d3">e4-d3</span></a> <a class="m1 " href="#" data-i="5" title="W31">3. <span class="mv" data-g="5x5 unplayable" data-n="6-8" data-a="b3-a2">b3-a2</span></a> <a class="m1 " href="#" data-i="6" title="L30"><span class="mv" data-g="5x5 unplayable" data-n="7-5" data-a="d3-e4">d3-e4</span></a> <a class="m1 " href="#" data-i="7" title="W29">4. <span class="mv" data-g="5x5 unplayable" data-n="4-2" data-a="c4-d5">c4-d5</span></a> <a class="m1 " href="#" data-i="8" title="L28"><span class="mv" data-g="5x5 unplayable" data-n="10-7" data-a="e2-d3">e2-d3</span></a> <a class="m1 " href="#" data-i="9" title="W27">5. <span class="mv" data-g="5x5 unplayable" data-n="8-11" data-a="a2-b1">a2-b1</span></a> <a class="m1 " href="#" data-i="10" title="L26"><span class="mv" data-g="5x5 unplayable" data-n="7-10" data-a="d3-e2">d3-e2</span></a> <a class="m1 " href="#" data-i="11" title="W25">6. <span class="mv" data-g="5x5 unplayable" data-n="11-9" data-a="b1-c2">b1-c2</span></a> <a class="m1 " href="#" data-i="12" title="L24"><span class="mv" data-g="5x5 unplayable" data-n="10-7" data-a="e2-d3">e2-d3</span></a> <a class="m1 " href="#" data-i="13" title="W23">7. <span class="mv" data-g="5x5 unplayable" data-n="9-12" data-a="c2-d1">c2-d1</span></a> <a class="m1 " href="#" data-i="14" title="L22"><span class="mv" data-g="5x5 unplayable" data-n="7-10" data-a="d3-e2">d3-e2</span></a> <a class="m1 " href="#" data-i="15" title="W21">8. <span class="mv" data-g="5x5 unplayable" data-n="1-3" data-a="b5-a4">b5-a4</span></a> <a class="m1 " href="#" data-i="16" title="L20"><span class="mv" data-g="5x5 unplayable" data-n="10-7" data-a="e2-d3">e2-d3</span></a> <a class="m1 " href="#" data-i="17" title="W19">9. <span class="mv" data-g="5x5 unplayable" data-n="12-10" data-a="d1-e2">d1-e2</span>!</a> <a class="m1 " href="#" data-i="18" title="L18"><span class="mv" data-g="5x5 unplayable" data-n="7-9" data-a="d3-c2">d3-c2</span></a> <a class="m1 " href="#" data-i="19" title="W17">10. <span class="mv" data-g="5x5 unplayable" data-n="2-4" data-a="d5-c4">d5-c4</span></a> <a class="m1 " href="#" data-i="20" title="L16"><span class="mv" data-g="5x5 unplayable" data-n="9-12" data-a="c2-d1">c2-d1</span></a> <a class="m1 " href="#" data-i="21" title="W15">11. <span class="mv" data-g="5x5 unplayable" data-n="4-6" data-a="c4-b3">c4-b3</span></a> <a class="m1 " href="#" data-i="22" title="L14"><span class="mv" data-g="5x5 unplayable" data-n="5-2" data-a="e4-d5">e4-d5</span></a> <a class="m1 " href="#" data-i="23" title="W13">12. <span class="mv" data-g="5x5 unplayable" data-n="10-7" data-a="e2-d3">e2-d3</span></a> <a class="m1 " href="#" data-i="24" title="L12"><span class="mv" data-g="5x5 unplayable" data-n="2-5" data-a="d5-e4">d5-e4</span></a> <a class="m1 " href="#" data-i="25" title="W11">13. <span class="mv" data-g="5x5 unplayable" data-n="6-9" data-a="b3-c2">b3-c2</span>!</a> <a class="m1 " href="#" data-i="26" title="L10"><span class="mv" data-g="5x5 unplayable" data-n="12×6" data-a="d1×b3">d1×b3</span></a> <a class="m1 only" href="#" data-i="27" title="W9">14. <span class="mv" data-g="5x5 unplayable" data-n="3×9" data-a="a4×c2">a4×c2</span></a></p>
+<div style="clear:both"></div>
+<nav class="pager"><a href="langste-7x7.html">← No escape to another double corner</a><a href="zetdwang-5x5.html">Exception: zugzwang →</a></nav>
+<p class="src credit">The form of the analyses is taken from those by Wieger Wesselink on <a href="https://10x10.org">10x10.org</a>.</p>
+<p class="legend">Click a move to see the position on the large board; ‹ › (or the arrow keys) step through the line, ⏮︎ ⏭︎ jump to its start and end, ▶︎ plays it. Values are for the side to move; for a move, for the side making it, with n the number of plies to the end of the game, the move included: W = win (odd), L = loss (even), D = draw. <span style="color:var(--link);font-weight:600">Blue</span> = main line, <span style="color:var(--m2)">green</span> = side line, <em>italics</em> = continuation by the database, <span class="q">?</span> = a move that changes the result according to the database, with the better move or the refutation in [ ] (<span style="color:var(--db)">≡</span> = back to the position before that move), <span style="color:var(--only)">*</span> = the only move that keeps the win or the draw. The # button turns the square names on the large board on or off; the button with the range of the square names (e.g. 1…18 or a1…f6 on 6×6) switches between numeric and algebraic notation, in the text as well.</p>
+  </main>
+</div>
+<script>
+// the navigation bar stays at the top: its height positions the board below it and the anchors
+(function () {
+  const h = document.querySelector('header');
+  const set = () => document.documentElement.style.setProperty('--hh', h.offsetHeight + 'px');
+  set();
+  window.addEventListener('resize', set);
+  if (window.ResizeObserver) new ResizeObserver(set).observe(h);
+})();
+const POS = [{"f":"W:WK3,K1,K2:BK7,K5","v":"W35","last":null,"prev":null,"next":1,"g":"5x5 unplayable","m":[["2-4","d5-c4","W35",1],["1-4","b5-c4","D",null],["3-6","a4-b3","D",null]]},{"f":"B:WK1,K3,K4:BK5,K7","v":"L34","last":[2,4],"prev":0,"next":2,"g":"5x5 unplayable","m":[["7-10","d3-e2","L34",2],["7-9","d3-c2","L24",null],["5-2","e4-d5","L10",null]]},{"f":"W:WK1,K3,K4:BK5,K10","v":"W33","last":[7,10],"prev":1,"next":3,"g":"5x5 unplayable","m":[["3-6","a4-b3","W33",3],["4-2","c4-d5","W37",null],["4-6","c4-b3","W37",null],["4-7","c4-d3","D",null]]},{"f":"B:WK1,K4,K6:BK5,K10","v":"L32","last":[3,6],"prev":2,"next":4,"g":"5x5 unplayable","m":[["5-7","e4-d3","L32",4],["10-12","e2-d1","L12",null],["5-2","e4-d5","L8",null],["10-7","e2-d3","L8",null]]},{"f":"W:WK1,K4,K6:BK7,K10","v":"W31","last":[5,7],"prev":3,"next":5,"g":"5x5 unplayable","m":[["6-8","b3-a2","W31",5],["6-3","b3-a4","W35",null],["1-3","b5-a4","D",null],["4-2","c4-d5","D",null],["6-9","b3-c2","D",null]]},{"f":"B:WK1,K4,K8:BK7,K10","v":"L30","last":[6,8],"prev":4,"next":6,"g":"5x5 unplayable","m":[["7-5","d3-e4","L30",6],["7-9","d3-c2","L20",null],["10-12","e2-d1","L8",null]]},{"f":"W:WK1,K4,K8:BK5,K10","v":"W29","last":[7,5],"prev":5,"next":7,"g":"5x5 unplayable","m":[["4-2","c4-d5","W29",7],["8-11","a2-b1","W29",null],["1-3","b5-a4","W33",null],["4-6","c4-b3","W33",null],["8-6","a2-b3","W33",3],["4-7","c4-d3","D",null]]},{"f":"B:WK1,K2,K8:BK5,K10","v":"L28","last":[4,2],"prev":6,"next":8,"g":"5x5 unplayable","m":[["10-7","e2-d3","L28",8],["10-12","e2-d1","L28",null],["5-7","e4-d3","L18",null]]},{"f":"W:WK1,K2,K8:BK5,K7","v":"W27","last":[10,7],"prev":7,"next":9,"g":"5x5 unplayable","m":[["8-11","a2-b1","W27",9],["1-3","b5-a4","W31",null],["2-4","d5-c4","W31",null],["1-4","b5-c4","D",null],["8-6","a2-b3","D",null]]},{"f":"B:WK1,K2,K11:BK5,K7","v":"L26","last":[8,11],"prev":8,"next":10,"g":"5x5 unplayable","m":[["7-10","d3-e2","L26",10],["7-9","d3-c2","L16",null],["7-4","d3-c4","L4",null]]},{"f":"W:WK1,K2,K11:BK5,K10","v":"W25","last":[7,10],"prev":9,"next":11,"g":"5x5 unplayable","m":[["11-9","b1-c2","W25",11],["1-4","b5-c4","W29",null],["1-3","b5-a4","W29",null],["2-4","d5-c4","W29",null],["11-8","b1-a2","W29",7]]},{"f":"B:WK1,K2,K9:BK5,K10","v":"L24","last":[11,9],"prev":10,"next":12,"g":"5x5 unplayable","m":[["10-7","e2-d3","L24",12],["5-7","e4-d3","L8",null],["10-12","e2-d1","L6",null]]},{"f":"W:WK1,K2,K9:BK5,K7","v":"W23","last":[10,7],"prev":11,"next":13,"g":"5x5 unplayable","m":[["9-12","c2-d1","W23",13],["9-11","c2-b1","W27",9],["1-4","b5-c4","D",null],["1-3","b5-a4","D",null],["2-4","d5-c4","D",null],["9-6","c2-b3","D",null]]},{"f":"B:WK1,K2,K12:BK5,K7","v":"L22","last":[9,12],"prev":12,"next":14,"g":"5x5 unplayable","m":[["7-10","d3-e2","L22",14],["7-9","d3-c2","L8",null],["7-4","d3-c4","L4",null]]},{"f":"W:WK1,K2,K12:BK5,K10","v":"W21","last":[7,10],"prev":13,"next":15,"g":"5x5 unplayable","m":[["1-3","b5-a4","W21",15],["1-4","b5-c4","W25",null],["2-4","d5-c4","W25",null],["12-9","d1-c2","W25",11]]},{"f":"B:WK2,K3,K12:BK5,K10","v":"L20","last":[1,3],"prev":14,"next":16,"g":"5x5 unplayable","m":[["10-7","e2-d3","L20",16],["5-7","e4-d3","L18",null]]},{"f":"W:WK2,K3,K12:BK5,K7","v":"W19","last":[10,7],"prev":15,"next":17,"g":"5x5 unplayable","m":[["12-10","d1-e2","W19",17],["3-1","a4-b5","W23",13],["3-6","a4-b3","W23",null],["2-4","d5-c4","D",null],["12-9","d1-c2","D",null]]},{"f":"B:WK2,K3,K10:BK5,K7","v":"L18","last":[12,10],"prev":16,"next":18,"g":"5x5 unplayable","m":[["7-9","d3-c2","L18",18],["7-4","d3-c4","L6",null]]},{"f":"W:WK2,K3,K10:BK5,K9","v":"W17","last":[7,9],"prev":17,"next":19,"g":"5x5 unplayable","m":[["2-4","d5-c4","W17",19],["3-1","a4-b5","W21",null],["10-7","e2-d3","W21",null],["10-12","e2-d1","W21",null],["3-6","a4-b3","D",null]]},{"f":"B:WK3,K4,K10:BK5,K9","v":"L16","last":[2,4],"prev":18,"next":20,"g":"5x5 unplayable","m":[["9-12","c2-d1","L16",20],["5-2","e4-d5","L14",null],["9-11","c2-b1","L14",null],["9-7","c2-d3","L10",null],["5-7","e4-d3","L6",null],["9-6","c2-b3","L6",null]]},{"f":"W:WK3,K4,K10:BK5,K12","v":"W15","last":[9,12],"prev":19,"next":21,"g":"5x5 unplayable","m":[["4-6","c4-b3","W15",21],["4-2","c4-d5","W19",null],["4-1","c4-b5","W19",null],["3-1","a4-b5","W21",null],["3-6","a4-b3","W21",null],["4-7","c4-d3","D",null],["10-7","e2-d3","D",null]]},{"f":"B:WK3,K6,K10:BK5,K12","v":"L14","last":[4,6],"prev":20,"next":22,"g":"5x5 unplayable","m":[["5-2","e4-d5","L14",22],["5-7","e4-d3","L8",null],["12-9","d1-c2","L8",null]]},{"f":"W:WK3,K6,K10:BK2,K12","v":"W13","last":[5,2],"prev":21,"next":23,"g":"5x5 unplayable","m":[["10-7","e2-d3","W13",23],["3-1","a4-b5","W17",null],["6-9","b3-c2","W17",null],["6-8","b3-a2","W17",null],["6-4","b3-c4","D",null]]},{"f":"B:WK3,K6,K7:BK2,K12","v":"L12","last":[10,7],"prev":22,"next":24,"g":"5x5 unplayable","m":[["2-5","d5-e4","L12",24],["12-10","d1-e2","L12",null],["2-4","d5-c4","L6",null],["12-9","d1-c2","L6",null]]},{"f":"W:WK3,K6,K7:BK5,K12","v":"W11","last":[2,5],"prev":23,"next":25,"g":"5x5 unplayable","m":[["6-9","b3-c2","W11",25],["7-4","d3-c4","W11",null],["7-9","d3-c2","W11",null],["7-10","d3-e2","W15",21],["6-4","b3-c4","D",null],["6-8","b3-a2","D",null],["3-1","a4-b5","L14",null]]},{"f":"B:WK3,K7,K9:BK5,K12","v":"L10","last":[6,9],"prev":24,"next":26,"g":"5x5 unplayable","m":[["12×6","d1×b3","L10",26]]},{"f":"W:WK3,K7:BK5,K6","v":"W9","last":[12,6],"prev":25,"next":27,"g":"5x5 unplayable","m":[["3×9","a4×c2","W9",27]]},{"f":"B:WK7,K9:BK5","v":"L8","last":[3,9],"prev":26,"next":null,"g":"5x5 unplayable","m":[["5-2","e4-d5","L8",null]]}];
+const UI = {"white": "white", "black": "black", "tomove": "to move", "nomoves": "no moves: lost"};
+const GEOMS = {"5x5 unplayable":{"w":5,"h":5,"corners":"unplayable","sq":{"1":[1,4],"2":[3,4],"3":[0,3],"4":[2,3],"5":[4,3],"6":[1,2],"7":[3,2],"8":[0,1],"9":[2,1],"10":[4,1],"11":[1,0],"12":[3,0]},"lake":[],"pref":"alg"}};
+// notation: 'std' = the standard notation of each board (numeric on 6x6, 8x8 checkers and 10x10), or 'num' / 'alg'
+let cur = 0, showNums = true, timer = null, notation = 'std';
+try { const n = localStorage.getItem('notation-v2'); if (n === 'num' || n === 'alg') notation = n; } catch (e) {}
+const nt = gid => notation === 'std' ? ((GEOMS[gid] || {}).pref || 'num') : notation;
+
+function parse(fen) {
+  const cells = {};
+  for (const part of fen.split(':').slice(1)) {
+    const side = part[0];
+    for (const it of part.slice(1).split(',')) {
+      if (!it) continue;
+      const king = it[0] === 'K';
+      cells[+(king ? it.slice(1) : it)] = side === 'W' ? (king ? 'W' : 'w') : (king ? 'B' : 'b');
+    }
+  }
+  return cells;
+}
+
+// board geometry: GEOMS[id] = {w, h, sq: {pdn: [file, rank]}, lake: [[file, rank]], alg: bool}
+// rank 0 is the bottom row; every playable or removed square is a dark square
+function svg(fen, last, nums, gid) {
+  const G = GEOMS[gid], cells = parse(fen), hl = new Set(last || []);
+  const at = {};
+  for (const [n, [f, r]] of Object.entries(G.sq)) at[f + ',' + r] = +n;
+  const lake = new Set((G.lake || []).map(([f, r]) => f + ',' + r));
+  let s = `<svg viewBox="0 0 ${G.w} ${G.h}" xmlns="http://www.w3.org/2000/svg">`;
+  for (let y = 0; y < G.h; y++) for (let c = 0; c < G.w; c++) {
+    const key = c + ',' + (G.h - 1 - y), sq = at[key];
+    if (lake.has(key)) {
+      s += `<rect x="${c}" y="${y}" width="1" height="1" fill="var(--lake)"/>`;
+      continue;
+    }
+    s += `<rect x="${c}" y="${y}" width="1" height="1" fill="var(--${sq ? 'dark' : 'light'})"/>`;
+    if (!sq) continue;
+    if (hl.has(sq)) s += `<rect x="${c}" y="${y}" width="1" height="1" fill="var(--hl)" opacity=".55"/>`;
+    if (nums) {
+      const t = nt(gid) === 'alg' ? String.fromCharCode(97 + c) + (G.h - y) : sq;
+      s += `<text x="${c + .06}" y="${y + .22}" font-size=".19" font-family="system-ui,sans-serif" fill="var(--num)">${t}</text>`;
+    }
+    const p = cells[sq];
+    if (!p) continue;
+    const w = p === 'w' || p === 'W', cx = c + .5, cy = y + .5;
+    const fill = w ? 'var(--wpiece)' : 'var(--bpiece)', stroke = w ? 'var(--wstroke)' : 'var(--bstroke)';
+    s += `<circle cx="${cx}" cy="${cy + .035}" r=".37" fill="rgba(0,0,0,.25)"/>`;
+    s += `<circle cx="${cx}" cy="${cy}" r=".37" fill="${fill}" stroke="${stroke}" stroke-width=".03"/>`;
+    s += `<circle cx="${cx}" cy="${cy}" r=".25" fill="none" stroke="${stroke}" stroke-width=".02" opacity=".5"/>`;
+    if (p === 'W' || p === 'B') {
+      const col = w ? '#9a6b12' : '#e2b44a';
+      s += `<path d="M${cx - .17} ${cy + .09} L${cx - .2} ${cy - .1} L${cx - .08} ${cy - .01} L${cx} ${cy - .15} L${cx + .08} ${cy - .01} L${cx + .2} ${cy - .1} L${cx + .17} ${cy + .09} Z" fill="${col}"/>`;
+    }
+  }
+  return s + '</svg>';
+}
+
+function go(i) {
+  if (i === null || i === undefined || i < 0 || i >= POS.length) return;
+  cur = i;
+  const p = POS[i];
+  document.getElementById('board').innerHTML = svg(p.f, p.last, showNums, p.g);
+  document.getElementById('nota').textContent = notaLabel(p.g);
+  document.querySelectorAll('a.cur').forEach(a => a.classList.remove('cur'));
+  document.querySelectorAll(`a[data-i="${i}"]`).forEach(a => a.classList.add('cur'));
+  const side = p.f[0] === 'W' ? UI.white : UI.black;
+  const next = p.next !== null ? POS[p.next].f : null;
+  let h = `<div class="stm">${side} ${UI.tomove}: ${p.v}</div>`;
+  if (!p.m.length) h += `<div>${UI.nomoves}</div>`;
+  h += '<table>';
+  for (const [num, alg, v, j] of p.m) {
+    const n = nt(p.g) === 'alg' ? alg : num;
+    const played = j !== null && j !== undefined && POS[j].f === next;
+    const mv = j !== null && j !== undefined ? `<a href="#" data-go="${j}">${n}</a>` : n;
+    h += `<tr class="${played ? 'played' : ''}"><td>${mv}</td><td>${v}</td></tr>`;
+  }
+  document.getElementById('panel').innerHTML = h + '</table>';
+}
+
+document.addEventListener('click', e => {
+  const a = e.target.closest('a[data-i], a[data-go]');
+  if (!a) return;
+  e.preventDefault();
+  stop();
+  go(+(a.dataset.i ?? a.dataset.go));
+});
+const ICON_PLAY = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11L13.5 8z"/></svg>', ICON_PAUSE = '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="3" width="3" height="10"/><rect x="9.5" y="3" width="3" height="10"/></svg>';
+function stop() { if (timer) { clearInterval(timer); timer = null; document.getElementById('play').innerHTML = ICON_PLAY; } }
+// the first and the last position of the line on display
+function lineStart() { let i = cur; while (POS[i].prev !== null) i = POS[i].prev; return i; }
+function lineEnd() { let i = cur; while (POS[i].next !== null) i = POS[i].next; return i; }
+document.getElementById('start').onclick = () => { stop(); go(lineStart()); };
+document.getElementById('end').onclick = () => { stop(); go(lineEnd()); };
+document.getElementById('back').onclick = () => { stop(); go(POS[cur].prev); };
+document.getElementById('fwd').onclick = () => { stop(); go(POS[cur].next); };
+document.getElementById('nums').onclick = () => { showNums = !showNums; go(cur); };
+// the label of the notation button: the range of square names of the board on display, e.g. 1…18 or a1…f6
+function notaLabel(gid) {
+  const G = GEOMS[gid];
+  if (nt(gid) !== 'alg') return '1…' + Math.max(...Object.keys(G.sq).map(Number));
+  return 'a1…' + String.fromCharCode(96 + G.w) + G.h;
+}
+function setNotation(n, store) {
+  notation = n;
+  if (store) { try { localStorage.setItem('notation-v2', n); } catch (e) {} }
+  document.querySelectorAll('span.mv').forEach(s => { s.textContent = nt(s.dataset.g) === 'alg' ? s.dataset.a : s.dataset.n; });
+  go(cur);
+}
+document.getElementById('nota').onclick = () => setNotation(nt(POS[cur].g) === 'alg' ? 'num' : 'alg', true);
+document.getElementById('play').onclick = () => {
+  if (timer) return stop();
+  if (POS[cur].next === null) go(lineStart());     // at the end of the line: play it again from the start
+  document.getElementById('play').innerHTML = ICON_PAUSE;
+  timer = setInterval(() => { if (POS[cur].next === null) stop(); else go(POS[cur].next); }, 900);
+};
+document.addEventListener('click', e => {
+  document.querySelectorAll('details.menu[open]').forEach(m => { if (!m.contains(e.target)) m.removeAttribute('open'); });
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') document.querySelectorAll('details.menu[open]').forEach(m => m.removeAttribute('open'));
+  if (e.key === 'ArrowLeft') { stop(); go(POS[cur].prev); }
+  if (e.key === 'ArrowRight') { stop(); go(POS[cur].next); }
+  if (e.key === 'Home') { e.preventDefault(); stop(); go(lineStart()); }
+  if (e.key === 'End') { e.preventDefault(); stop(); go(lineEnd()); }
+});
+document.querySelectorAll('.smallboard').forEach(d => { d.innerHTML = svg(d.dataset.fen, null, false, d.dataset.g); });
+const first = document.querySelector('figure a[data-i]');
+go(first ? +first.dataset.i : 0);
+setNotation(notation);
+</script>
+</body>
+</html>

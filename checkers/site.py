@@ -764,13 +764,19 @@ the h-file.)</p>
 lost at odd parity (3,172), and all but 4 at even parity (3,153 of 3,157). But in two different ways: at odd parity there
 are 8 traps, at even parity not a single one.</p>''')]
         x87 = self.active_passive(e87, (['c4', 'd5', 'e6'], ['a2', 'a6']), (OW, OB))
-        body7.append(t(f'<p>Bij oneven pariteit breekt wit de vesting met een val, zoals op 8×8. De 8 vallen zijn er 4 '
-                       f'actieve en 4 passieve; bijvoorbeeld de actieve val 1 (met wit aan zet ruilt wit meteen: {x87}) en de '
-                       f'passieve val 2, die met wit aan zet geen val is:</p>',
-                       f'<p>At odd parity white breaks the fortress with a trap, as on 8×8. The 8 traps are 4 active and 4 '
-                       f'passive ones; for example the active trap 1 (with white to move white exchanges at once: {x87}) and the '
-                       f'passive trap 2, which is no trap with white to move:</p>'))
-        body7 += self.trap_blocks(pg7, k87, e87, name, '', [(['c4', 'd5', 'e6'], ['a2', 'a6']), (OW, OB)], partner)
+        body7.append(t(f'<p>Bij oneven pariteit breekt wit de vesting met een val, zoals op 8×8. Er zijn 8 vallen: de oneven '
+                       f'vallen zijn actief (met wit aan zet ruilt wit in val 1 meteen: {x87}), de even vallen passief (met wit '
+                       f'aan zet is het geen val). Het bord is symmetrisch onder het verwisselen van boven en onder, en de vallen '
+                       f'5 tot en met 8 zijn het spiegelbeeld van 1 tot en met 4.</p>',
+                       f'<p>At odd parity white breaks the fortress with a trap, as on 8×8. There are 8 traps: the odd-numbered '
+                       f'traps are active (with white to move white exchanges at once in trap 1: {x87}), the even-numbered ones '
+                       f'passive (with white to move it is no trap). The board is symmetric under swapping top and bottom, and '
+                       f'traps 5 to 8 are the mirror images of 1 to 4.</p>'))
+        traps87 = [(['c4', 'd5', 'e6'], ['a2', 'a6']), (OW, OB), (['a4', 'd5', 'e6'], ['a2', 'a6']), (OW, ['a2', 'b7'])]
+        mirror = lambda xs: [x[0] + str(8 - int(x[1:])) for x in xs]
+        traps87 += [(mirror(W), mirror(B)[::-1]) for W, B in traps87]
+        assert all(bool(self.exchange(e87, e87.fen(W, B, 'W'))) == (k % 2 == 0) for k, (W, B) in enumerate(traps87))
+        body7 += self.trap_blocks(pg7, k87, e87, name, '', traps87, partner)
         # with white to move: the active trap exchanges at once, the passive one does not, and a tempo change along the edge
         # does not work; how white wins all the same is on the next page
         fw = e87.fen(OW, OB, 'W')

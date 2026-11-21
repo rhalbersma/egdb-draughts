@@ -71,7 +71,12 @@
 //        syzygy cmp86 <dir> <dir_thompson86> n <metric>      the same half results (dmW, dmL) as thompson86, for every
 //                                                            material of at most n pieces, both colours
 //        syzygy probe <dir> <metric> [FEN...]                the value of each position (default: the start position)
-//                                                            and of each of its moves, from the finished files
+//                                                            and of each of its moves, from the probe files if the store
+//                                                            has them, else from the build files
+//        syzygy convert <dir> wp bp wm bm <metric> [seq|par] [verify=N]
+//                                                            one material's build files into the probe format (one side,
+//                                                            capture positions and draws as don't-cares), checked through
+//                                                            the prober on every N-th slot (default 16)
 //        syzygy order <dir> n                                dtz <= dtc <= dtm for every win and loss, all with the class
 //                                                            in the shared wdl files
 // metric: dtm, dtc, dtz. <dir>: the base directory; depth files in <dir>/<metric>/6x6/..., wdl files in <dir>/wdl/6x6/...,
@@ -1381,12 +1386,241 @@ std::string show_value(std::uint16_t v)
         return std::string(is_win(v) ? "win" : "loss") + " in " + std::to_string(plies(v)) + " plies";
 }
 
+// ---------------------------------------------------------------- the probe format (synthesis 10)
+//
+// Per material and metric one file for one side to move, the side that compresses better (the wdl file's side, once it
+// exists, so that a material keeps one stored side): <dir>/probe/wdl/6x6/.../<wm>-<bm>-wdl-<wtm|btm>.z and
+// <dir>/probe/<metric>/...-<metric>-<wtm|btm>.z, in the container of the build files (zstd blocks of 4 KiB). Don't-cares,
+// filled with the previous stored value: illegal slots, positions where the side to move must capture (the prober
+// searches the captures, into smaller materials), and in the depth files the draws (the prober reads wdl first). The
+// depth carries no class (it comes from wdl): dtm in moves (a win in 2c + 1 plies, a loss in 2c), dtc and dtz in plies;
+// codes 0 .. 239 direct, 240 .. 255 escape tokens (no draw code). The side not stored is a one-ply search into the stored
+// side. Pending captures (the side not to move threatens one) are stored, not don't-cares, in this version.
+constexpr int PESC = 240;
+
+std::string probe_path(std::string const& dir, Material m, std::string const& kind, int side)
+{
+        return m.path(dir + "/probe/" + kind) + "-" + kind + (side == 0 ? "-wtm" : "-btm");
+}
+
+struct ProbeFiles { int side = -1; ZFile wdl, depth; bool has_depth = false; };
+std::map<Material, ProbeFiles> g_probe;                 // opened before any parallel use, then only read
+
+// open the probe files of every stored material of at most n pieces that has them (once; then only read)
+void open_probe_all(std::string const& dir, int n)
+{
+        g_probe.clear();
+        for (Material const m : stored_materials_up_to(n)) {
+                std::uint64_t const size = mat_index(m).size;
+                for (int side : { 0, 1 }) {
+                        std::string const w = probe_path(dir, m, "wdl", side);
+                        if (!std::filesystem::exists(zpath(w))) continue;
+                        ProbeFiles& f = g_probe[m];
+                        f.side = side;
+                        f.wdl = open_zfile(w, (size + 3) / 4);
+                        std::string const d = probe_path(dir, m, metric_name(), side);
+                        if (std::filesystem::exists(zpath(d))) { f.depth = open_zfile(d, size); f.has_depth = true; }
+                }
+        }
+}
+
+ProbeFiles const& probe_files(Material m)
+{
+        auto it = g_probe.find(m);
+        if (it == g_probe.end()) { std::cerr << "no probe files for " << m.name() << std::endl; std::exit(1); }
+        return it->second;
+}
+
+std::uint8_t mover_wdl(std::uint8_t child) { return child == WDL_LOSS ? WDL_WIN : child == WDL_WIN ? WDL_LOSS : WDL_DRAW; }
+
+// win, draw or loss for the side to move, from the probe files only
+std::uint8_t pwdl(Pos const& p0)
+{
+        auto const ml = moves(p0);
+        if (ml.empty()) return WDL_LOSS;
+        auto const search = [&] {                                       // the best move: a one-ply search
+                std::uint8_t b = WDL_LOSS;
+                for (auto const& mv : ml) {
+                        std::uint8_t const r = mover_wdl(pwdl(mv.next));
+                        if (r == WDL_WIN) return r;
+                        if (r == WDL_DRAW) b = r;
+                }
+                return b;
+        };
+        if (is_capture(*ml.begin())) return search();                   // compulsory captures: a don't-care
+        Pos const p = stored_pos(p0);
+        Material const m = material_of(p);
+        ProbeFiles const& f = probe_files(m);
+        if (p.stm != f.side) return search();                           // the side not stored
+        std::uint64_t const i = mat_index(m).index(p);
+        return std::uint8_t(zbyte(f.wdl, i >> 2) >> (2 * (i & 3)) & 3);
+}
+
+std::uint16_t pvalue(Pos const& p0);
+
+// the value of a move for the side making it, from the probe files only
+std::uint16_t pmove_value(Pos const& p, Move const& mv)
+{
+        if (goal_move(p, mv)) {
+                std::uint8_t const r = pwdl(mv.next);
+                return r == WDL_LOSS ? win(1) : r == WDL_WIN ? loss(1) : 0;
+        }
+        std::uint16_t const v = pvalue(mv.next);
+        return is_loss(v) ? win(plies(v) + 1) : is_win(v) ? loss(plies(v) + 1) : 0;
+}
+
+// the value of a position for the side to move, from the probe files only
+std::uint16_t pvalue(Pos const& p0)
+{
+        auto const ml = moves(p0);
+        if (ml.empty()) return loss(0);
+        auto const search = [&] {
+                std::uint16_t best = 0;
+                bool first = true;
+                for (auto const& mv : ml) {
+                        std::uint16_t const x = pmove_value(p0, mv);
+                        best = first ? x : better(best, x);
+                        first = false;
+                }
+                return best;
+        };
+        if (is_capture(*ml.begin())) return search();
+        Pos const p = stored_pos(p0);
+        Material const m = material_of(p);
+        ProbeFiles const& f = probe_files(m);
+        if (p.stm != f.side) return search();
+        std::uint64_t const i = mat_index(m).index(p);
+        std::uint8_t const r = std::uint8_t(zbyte(f.wdl, i >> 2) >> (2 * (i & 3)) & 3);
+        if (r == WDL_DRAW) return 0;
+        if (!f.has_depth) { std::cerr << "no " << metric_name() << " probe file for " << m.name() << std::endl; std::exit(1); }
+        int const c = zdepth(f.depth, i);
+        bool const dtm = g_metric == Metric::dtm;
+        return r == WDL_WIN ? win(dtm ? 2 * c + 1 : c) : loss(dtm ? 2 * c : c);
+}
+
+// convert <dir> wp bp wm bm <metric>: the material's build files into probe files (the wdl file only if no metric wrote
+// it yet), then a check through the prober of every stride-th slot of both sides against the build values. The
+// materials its moves lead into must have their probe files already.
+template<class ExecutionPolicy>
+bool convert_material(std::string const& dir, Material c, int stride, ExecutionPolicy const& policy)
+{
+        if (!stored(c)) { std::cerr << c.name() << " is the mirror of a stored material" << std::endl; return false; }
+        g_dir = dir;
+        auto const t0 = std::chrono::steady_clock::now();
+        MatIndex const& mi = mat_index(c);
+        std::uint64_t const size = mi.size, wsize = (size + 3) / 4;
+        bool const dtm = g_metric == Metric::dtm;
+        std::array<std::vector<std::uint16_t>, 2> dep;
+        std::array<std::vector<std::uint8_t>, 2> wdl;
+        for (int s : { 0, 1 }) { dep[std::size_t(s)] = load_depths(mat_path(dir, c, s), size); wdl[std::size_t(s)] = load_input(mat_path(dir, c, WDL + s), wsize); }
+        auto const value = [&](int s, std::uint64_t i) { return from_depth(g_metric, dep[std::size_t(s)][i], wdl_bits(wdl[std::size_t(s)].data(), i)); };
+        // don't-cares: bit 0 the wdl (illegal, must capture), bit 1 the depth (also a draw)
+        std::array<std::vector<std::uint8_t>, 2> dc{ std::vector<std::uint8_t>(size), std::vector<std::uint8_t>(size) };
+        for (int s : { 0, 1 })
+                for_blocks(policy, size, [&](std::uint64_t a, std::uint64_t b) {
+                        for (std::uint64_t i = a; i < b; ++i) {
+                                Pos p;
+                                std::uint8_t f = 0;
+                                if (!mi.pos(i, s, p)) f = 3;
+                                else {
+                                        auto const ml = moves(p);
+                                        if (!ml.empty() && is_capture(*ml.begin())) f = 3;
+                                        else if (value(s, i) == 0) f = 2;
+                                }
+                                dc[std::size_t(s)][i] = f;
+                        }
+                });
+        // encode one side: the wdl bits, and the depth bytes with their escape tokens (extras)
+        auto const encode = [&](int s, std::vector<std::uint8_t>& w, std::vector<std::uint8_t>& d, Extras& ex) {
+                w.assign(wsize, 0);
+                d.assign(size, 0);
+                ex.clear();
+                std::uint8_t pw = WDL_DRAW, pd = 0;
+                for (std::uint64_t i = 0; i < size; ++i) {
+                        std::uint8_t const f = dc[std::size_t(s)][i];
+                        std::uint16_t const v = value(s, i);
+                        std::uint8_t const r = f & 1 ? pw : wdl_of(v);
+                        w[i >> 2] |= std::uint8_t(r << (2 * (i & 3)));
+                        pw = r;
+                        if (f & 2) { d[i] = pd; continue; }                    // a don't-care: the previous direct code
+                        int const cd = dtm ? plies(v) / 2 : plies(v);
+                        if (cd < PESC) { d[i] = std::uint8_t(cd); pd = d[i]; continue; }
+                        if (cd > PESC + ZRANGE * (255 - PESC) + ZRANGE - 1) { std::cerr << "depth beyond the last escape token" << std::endl; std::exit(1); }
+                        d[i] = std::uint8_t(PESC + (cd - PESC) / ZRANGE);
+                        ex.emplace_back(i, std::uint8_t((cd - PESC) % ZRANGE));
+                }
+        };
+        int side = -1;
+        for (int s : { 0, 1 }) if (std::filesystem::exists(zpath(probe_path(dir, c, "wdl", s)))) side = s;     // the stored side
+        std::filesystem::create_directories(std::filesystem::path(probe_path(dir, c, "wdl", 0)).parent_path());
+        std::filesystem::create_directories(std::filesystem::path(probe_path(dir, c, metric_name(), 0)).parent_path());
+        std::uint64_t sizes[2]{};
+        for (int s : { 0, 1 }) {
+                if (side >= 0 && s != side) continue;
+                std::vector<std::uint8_t> w, d;
+                Extras ex;
+                encode(s, w, d, ex);
+                if (side < 0) compress_buffer(w.data(), wsize, probe_path(dir, c, "wdl", s), policy);
+                compress_buffer(d.data(), size, probe_path(dir, c, metric_name(), s), policy, &ex, PESC);
+                if (side < 0) sizes[s] = std::filesystem::file_size(zpath(probe_path(dir, c, "wdl", s)));
+                sizes[s] += std::filesystem::file_size(zpath(probe_path(dir, c, metric_name(), s)));
+        }
+        if (side < 0) {                                                 // keep the side that compresses better
+                side = sizes[1] < sizes[0] ? 1 : 0;
+                std::filesystem::remove(zpath(probe_path(dir, c, "wdl", 1 - side)));
+                std::filesystem::remove(zpath(probe_path(dir, c, metric_name(), 1 - side)));
+        }
+        double const t_write = seconds_since(t0);
+        // check through the prober: every stride-th slot of both sides
+        open_probe_all(dir, c.pieces());
+        auto const t1 = std::chrono::steady_clock::now();
+        std::atomic<std::uint64_t> checked{ 0 }, bad{ 0 };
+        std::uint64_t const n = (size + std::uint64_t(stride) - 1) / std::uint64_t(stride);
+        for (int s : { 0, 1 })
+                for_blocks(policy, n, [&](std::uint64_t a, std::uint64_t b) {
+                        std::uint64_t k = 0, e = 0;
+                        for (std::uint64_t j = a; j < b; ++j) {
+                                std::uint64_t const i = j * std::uint64_t(stride);
+                                Pos p;
+                                if (!mi.pos(i, s, p)) continue;
+                                std::uint16_t const want = value(s, i), got = pvalue(p);
+                                std::uint8_t const gw = pwdl(p);
+                                ++k;
+                                if (got != want || gw != wdl_of(want)) {
+                                        if (bad.load() + e < 3) std::cerr << "probe " << fen_of(p) << " build " << show_value(want) << " probe " << show_value(got) << std::endl;
+                                        ++e;
+                                }
+                        }
+                        checked += k;
+                        bad += e;
+                });
+        std::uint64_t const zw = std::filesystem::file_size(zpath(probe_path(dir, c, "wdl", side))),
+                            zd = std::filesystem::file_size(zpath(probe_path(dir, c, metric_name(), side)));
+        std::cout << "convert " << c.name() << " " << metric_name() << ": side " << (side == 0 ? "wtm" : "btm") << ", wdl " << zw
+                  << " bytes, " << metric_name() << " " << zd << " bytes (" << size << " slots), " << t_write << " s; checked "
+                  << checked.load() << " positions (every " << stride << "th slot), " << bad.load() << " differences, "
+                  << seconds_since(t1) << " s" << std::endl;
+        return bad.load() == 0;
+}
+
+
 // probe <dir> <metric> [FEN...]: the value of each position (default: the start position) and of each of its moves,
 // from the finished files under <dir>
 bool probe_positions(std::string const& dir, std::vector<std::string> fens)
 {
         g_dir = dir;
         if (fens.empty()) fens.push_back("W:W13,14,15,16,17,18:B1,2,3,4,5,6");
+        if (std::filesystem::exists(dir + "/probe/wdl")) {             // the probe format, if the store has it
+                open_probe_all(dir, 12);
+                for (std::string const& fen : fens) {
+                        Pos p;
+                        if (!parse_fen(fen, p)) { std::cerr << "bad FEN " << fen << std::endl; return false; }
+                        std::cout << fen << "\t" << metric_name() << "\t" << show_value(pvalue(p)) << " (probe files)" << std::endl;
+                        for (auto const& mv : moves(p))
+                                std::cout << "  " << fen_of(mv.next) << "\t" << show_value(pmove_value(p, mv)) << " (for the side to move)" << std::endl;
+                }
+                return true;
+        }
         for (std::string const& fen : fens) {
                 Pos p;
                 if (!parse_fen(fen, p)) { std::cerr << "bad FEN " << fen << std::endl; return false; }
@@ -1442,7 +1676,18 @@ int main(int argc, char* argv[])
         if (a.size() == 5 && a[0] == "cmp86" && parse_metric(a[4])) return compare_thompson86(a[1], a[2], std::stoi(a[3])) ? 0 : 1;
         if (a.size() == 3 && a[0] == "order") return check_order(a[1], std::stoi(a[2])) ? 0 : 1;
         if (a.size() >= 3 && a[0] == "probe" && parse_metric(a[2])) return probe_positions(a[1], std::vector<std::string>(a.begin() + 3, a.end())) ? 0 : 1;
+        if (a.size() >= 7 && a.size() <= 9 && a[0] == "convert" && parse_metric(a[6])) {
+                bool par = false;
+                int stride = 16;
+                for (std::size_t i = 7; i < a.size(); ++i) {
+                        if (a[i] == "seq" || a[i] == "par") par = a[i] == "par";
+                        else if (a[i].starts_with("verify=")) stride = std::max(1, std::stoi(a[i].substr(7)));
+                        else { std::cerr << "unknown option " << a[i] << std::endl; return 2; }
+                }
+                bool const ok = par ? convert_material(a[1], mat_at(2), stride, std::execution::par) : convert_material(a[1], mat_at(2), stride, std::execution::seq);
+                return ok ? 0 : 1;
+        }
         std::cerr << "usage: syzygy build <dir> wp bp wm bm dtm|dtc|dtz [seq|par] [frontier|scan|cell8] [auto|groups|bytes|array] [compressed|raw] [stats] [material|tempi|configuration] [mem=MB] | bench n [samples] | plan n dtm|dtc|dtz [granularity] | checkall <dir> n dtm|dtc|dtz [threads]"
-                     " | cmp86 <dir> <dir_thompson86> n dtm|dtc|dtz | order <dir> n | probe <dir> dtm|dtc|dtz [FEN...]" << std::endl;
+                     " | cmp86 <dir> <dir_thompson86> n dtm|dtc|dtz | order <dir> n | probe <dir> dtm|dtc|dtz [FEN...] | convert <dir> wp bp wm bm dtm|dtc|dtz [seq|par] [verify=N]" << std::endl;
         return 2;
 }

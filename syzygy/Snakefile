@@ -27,7 +27,11 @@
 # std::execution::par on all cores, alone; the others with seq, one core each, side by side; policy=par or seq for all.
 # rounds=cell8: one byte per position and side, reductions every 240 codes (synthesis 7.5); rounds=scan: full scans as
 # rtbgen; default: frontier bit planes. stats=1: a <material>-<metric>.stats file per material (positions per number of
-# plies, the longest win and loss with a position).
+# plies, the longest win and loss with a position). probe=1 (default): each material is converted into the probe format
+# (<dir>/probe/), checked through the prober on every verify-th slot (default 16), and its depth build files are deleted
+# once nothing reads them any more (keep=1 keeps them; wdl_build=drop drops the wdl build files too, when no other metric
+# will be built from them); check=1: checkall against egdb_6x6 at the end (keeps every
+# build file; heavy beyond 8 pieces).
 
 ENGINE = config.get('engine', 'build/syzygy')
 BASE = config.get('dir', 'data/syzygy')
@@ -42,6 +46,12 @@ import os
 THREADS = int(config.get('threads', 4))
 PAR_MIN = float(config.get('par_min', 5e7))  # materials with at least this many positions build with policy=par on all cores
 STATS = 'stats' if str(config.get('stats', 0)) not in ('0', 'false', 'False') else ''   # stats=1: a .stats file per material
+PROBE = str(config.get('probe', 1)) not in ('0', 'false', 'False')    # convert every material into the probe format
+CHECK = str(config.get('check', 0)) not in ('0', 'false', 'False')    # checkall against egdb_6x6 at the end (keeps the build files)
+KEEP = str(config.get('keep', 0)) not in ('0', 'false', 'False')      # keep the depth build files after the conversion
+VERIFY = int(config.get('verify', 16))                                # the conversion checks every VERIFY-th slot through the prober
+DELETE = PROBE and not KEEP and not CHECK
+DROP_WDL = DELETE and config.get('wdl_build', 'keep') == 'drop'      # drop the wdl build files too (no other metric to build)
 STORE = config.get('store', 'compressed')  # compressed: each file as <name>.z (zstd blocks of 4 KiB, read through a block cache); raw: plain files
 SUF = '.z' if STORE == 'compressed' else ''
 
@@ -129,8 +139,18 @@ wildcard_constraints:
     mat=r'\d\d-\d\d-\d\d-\d\d'
 
 
+def probe_done(m):
+    return f'{D}/probe/{METRIC}/{sub(m)}-{METRIC}.done'
+
+
+def outputs(m):
+    # the build rule's outputs: with DELETE the depth files are temporary, removed by Snakemake once the builds that read
+    # them and the material's own conversion are done (the wdl build files stay: builds of other metrics read them)
+    return [temp(f) if DELETE and ('/wdl/' not in f or DROP_WDL) else f for f in files(m)]
+
+
 rule all:
-    input: f'{D}/{METRIC}/check-{N}.{METRIC}.ok'
+    input: ([probe_done(name(m)) for m in MATERIALS] if PROBE else []) + ([f'{D}/{METRIC}/check-{N}.{METRIC}.ok'] if CHECK or not PROBE else [])
 
 
 # one build rule per material: Snakemake (8.30) accepts only constant priorities, so each material gets its own rule
@@ -153,7 +173,7 @@ for _m in MATERIALS:
         rule:
             name: f'reuse_dtz_{_n}'
             input: [f'{D}/dtz/{sub(_n)}-dtz-{s}{SUF}' for s in ('wtm', 'btm')]
-            output: files(_n)
+            output: outputs(_n)
             log: f'{D}/{METRIC}/{sub(_n)}-{METRIC}.log'
             priority: PRIO[_n]
             shell: 'for i in 0 1; do set -- {input}; s=$1; [ $i = 1 ] && s=$2; set -- {output}; t=$1; [ $i = 1 ] && t=$2; '
@@ -163,13 +183,31 @@ for _m in MATERIALS:
     rule:
         name: f'build_{_n}'
         input: inputs(_m)
-        output: files(_n)
+        output: outputs(_n)
         log: f'{D}/{METRIC}/{sub(_n)}-{METRIC}.log'
         resources: mem_mb=claim_mb(PLAN[_n], MEM)
         priority: PRIO[_n]
         threads: workflow.cores if (POLICY == 'par' or (POLICY == 'auto' and PLAN[_n]['positions'] >= PAR_MIN)) else 1
         params: m=_n.replace('-', ' '), policy=('par' if (POLICY == 'par' or (POLICY == 'auto' and PLAN[_n]['positions'] >= PAR_MIN)) else 'seq')
         shell: '{ENGINE} build {D} {params.m} {METRIC} {params.policy} {ROUNDS} {SINK} {STORE} {STATS} {GRANULARITY} mem={resources.mem_mb} > {log} 2>&1'
+
+
+# the probe format (synthesis 10): one side, capture positions and draws as don't-cares, written once the materials the
+# moves lead into have theirs, and checked through the prober on every VERIFY-th slot
+if PROBE:
+    for _m in MATERIALS:
+        _n = name(_m)
+        _par = POLICY == 'par' or (POLICY == 'auto' and PLAN[_n]['positions'] >= PAR_MIN)
+        rule:
+            name: f'convert_{_n}'
+            input: files(_n), [probe_done(name(d)) for d in deps(_m)]
+            output: probe_done(_n)
+            log: f'{D}/probe/{METRIC}/{sub(_n)}-{METRIC}.log'
+            priority: PRIO[_n]
+            threads: workflow.cores if _par else 1
+            params: m=_n.replace('-', ' '), policy='par' if _par else 'seq',
+                    drop=(f'rm -f {D}/wdl/{sub(_n)}-wdl-wtm{SUF} {D}/wdl/{sub(_n)}-wdl-btm{SUF}' if DROP_WDL and METRIC == 'dtm' else 'true')
+            shell: '{ENGINE} convert {D} {params.m} {METRIC} {params.policy} verify={VERIFY} > {log} 2>&1 && touch {output} && {params.drop}'
 
 
 rule check:

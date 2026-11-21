@@ -4,13 +4,13 @@
 #    (See accompanying file LICENSE_1_0.txt or copy at
 #          http://www.boost.org/LICENSE_1_0.txt)
 
-"""The companion site 6x6 Is Strongly Solved (_site/strongly_solving_6x6): for now international draughts on
+"""The companion site 6x6 Is Strongly Solved (_site/6x6_is_strongly_solved): for now international draughts on
 the 6x6 board, strongly solved: every position up to 12 pieces (at most 6 per side) in the databases, the start position
 a draw, the complete opening tree to 4 plies and the longest win per number of pieces (international/). English by
 default, Dutch in nl/. Build it with --store (the complete unit store) for values everywhere; with the older databases up
 to 10 pieces the solved opening tree fills in above them.
 
-usage: site.py path/to/egdb_6x6 [--store data/units | --db data/6x6_le9.db --attach data/6x6_10.dtm] [--out _site/strongly_solving_6x6]
+usage: site.py path/to/egdb_6x6 [--store data/units | --db data/6x6_le9.db --attach data/6x6_10.dtm] [--out _site/6x6_is_strongly_solved]
 """
 
 import argparse
@@ -660,7 +660,7 @@ def main():
     ap.add_argument('--db', default=str(ROOT / 'data' / '6x6_le9.db'))
     ap.add_argument('--attach', default=str(ROOT / 'data' / '6x6_10.dtm'))
     ap.add_argument('--store', help='the unit store of units_6x6.py (e.g. data/units), instead of --db/--attach')
-    ap.add_argument('--out', default=str(ROOT / '_site' / 'strongly_solving_6x6'))
+    ap.add_argument('--out', default=str(ROOT / '_site' / '6x6_is_strongly_solved'))
     args = ap.parse_args()
     eng = Engine(args.engine, 10, args.db, args.attach, store=args.store)
     for lang in ('en', 'nl'):

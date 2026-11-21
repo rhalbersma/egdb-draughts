@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 SITES = {
     'nl': [
-        ('../strongly_solving_6x6/nl/', '6×6 Is Strongly Solved',
+        ('../6x6_is_strongly_solved/nl/', '6×6 Is Strongly Solved',
          'Dammen op het 6×6-bord is sterk opgelost: elke stelling tot en met 12 stukken, met de exacte afstand tot het '
          'einde. De beginstand is remise; de openingsboom tot 4 ply, de langste winst per aantal stukken en de '
          'geschiedenis van de oplossing.'),
@@ -35,7 +35,7 @@ SITES = {
          'Korte dammen op borden van elke afmeting: blokkades, de vesting in de dubbele hoek en de oppositie.'),
     ],
     'en': [
-        ('strongly_solving_6x6/', '6×6 Is Strongly Solved',
+        ('6x6_is_strongly_solved/', '6×6 Is Strongly Solved',
          'Draughts on the 6×6 board is strongly solved: every position up to 12 pieces, with the exact distance to the '
          'end. The start position is a draw; the opening tree to 4 plies, the longest win per number of pieces and the '
          'history of the solution.'),
@@ -136,7 +136,7 @@ def main():
         d.mkdir(parents=True, exist_ok=True)
         (d / 'index.html').write_text(page)
     for f in OLD[1:]:
-        target = ('strongly_solving_6x6/nl/international.html' if f == 'opening.html' else
+        target = ('6x6_is_strongly_solved/nl/international.html' if f == 'opening.html' else
                   'strategie_der_36_velden/' + ('h7-7.html#d7.22' if f == 'voorbeeld-7-22.html' else f))
         (out / f).write_text(REDIRECT.format(url=target))
     (out / '.nojekyll').write_text('')

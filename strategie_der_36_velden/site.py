@@ -277,8 +277,8 @@ class Site:
 
     def solved(self, anchor=''):
         """the solved opening tree on the site 6x6 Is Strongly Solved (English by default, Dutch in nl/)"""
-        return (f'../strongly_solving_6x6/nl/international.html{anchor}' if self.lang == 'nl' else
-                f'../../strongly_solving_6x6/international.html{anchor}')
+        return (f'../6x6_is_strongly_solved/nl/international.html{anchor}' if self.lang == 'nl' else
+                f'../../6x6_is_strongly_solved/international.html{anchor}')
 
     def page(self):
         pg = Page()

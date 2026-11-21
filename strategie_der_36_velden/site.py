@@ -449,6 +449,16 @@ class Site:
                 f'<p class="note">The edge-capture opening 1. 13-11 6-8 2. 11×6 2×9 is part of the '
                 f'<a href="{self.solved("#t-13-11-6-8")}">complete solved opening tree to 4 plies</a> on the site '
                 f'<em>6×6 Is Strongly Solved</em>: all openings with their values are there.</p>'))
+        if pid == 'h7-2':               # the numbering of the book's website on this page, explained
+            body.append(self.t(
+                '<p class="note">De diagrammen zijn genummerd zoals op de website van het boek. Diagram 7.1 is hier '
+                'nogmaals het vertrekpunt; <a href="h7.html#d7.2">diagram 7.2</a> staat in het vorige deel. De '
+                'kerstpuzzel heet daar diagram 7.4, net als het eerste, andere diagram van deel 7.3 '
+                '(<a href="h7-3.html#d7.4">diagram 7.4</a>).</p>',
+                '<p class="note">The diagrams are numbered as on the book\'s website. Diagram 7.1 is the starting point '
+                'here once more; <a href="h7.html#d7.2">diagram 7.2</a> is in the previous section. The Christmas puzzle is '
+                'called diagram 7.4 there, just like the first, different diagram of section 7.3 '
+                '(<a href="h7-3.html#d7.4">diagram 7.4</a>).</p>'))
         marks = []
         for did in dids:
             sides = self.diag[did]['sides'].values() if self.home[did] == pid else []

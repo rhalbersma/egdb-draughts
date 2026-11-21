@@ -46,6 +46,7 @@ CHAPTERS = [
         ('langste-7x7.html', 'Geen ontsnapping naar een andere dubbele hoek', 'No escape to another double corner')]),
     ('3 tegen 2 op 5×5', '3 against 2 on 5×5', [
         ('langste-5x5.html', 'De langste winst', 'The longest win'),
+        ('vallen-5x5.html', 'Veertig vallen om de vesting te breken', 'Forty traps to break the fortress'),
         ('zetdwang-5x5.html', 'Uitzondering: zetdwang', 'Exception: zugzwang')]),
     ('3 tegen 2 op andere borden', '3 against 2 on other boards', [
         ('vesting-9x9.html', '9×9 onspeelbare hoeken: de val en de diagonaal', '9×9 unplayable corners: the trap and the diagonal'),
@@ -1074,12 +1075,13 @@ hoek: b1/a2, d1/e2, a4/b5 en d5/e4.</p>
 stellingen, met wit en met zwart aan zet. Ook 3 tegen 2 is bijna altijd gewonnen: van de {n(nq)} rustige stellingen met wit
 aan zet zijn er {dw} remise, met zwart aan zet {db}. Met zwart aan zet en beide zwarte dammen op de randvelden van twee
 dubbele hoeken zijn er {df} remise van de {n(nf)}. Die remises zijn geen vesting: zwart dwingt binnen 4 ply gelijk materiaal
-af, vaak door zetdwang (zie de <a href="zetdwang-5x5.html">volgende pagina</a>).</p>
+af, vaak door zetdwang (zie de <a href="zetdwang-5x5.html">uitzondering</a>).</p>
 <p>De langste winst vanuit een rustige stelling met wit aan zet duurt {top} ply (op spiegelen en draaien na zijn er
 {len(starts)} zulke beginstellingen). Hier begint wit met twee dammen in de dubbele hoek a4/b5. Zwart houdt zijn dammen bij
 de dubbele hoeken d1/e2 en d5/e4. Wit loopt met een dam via a2, b1 en c2 naar d1 (7. c2-d1), het vrije randveld naast de
 zwarte dam op e2, en neemt met 9. d1-e2! ook e2 in: de zwarte dam moet de hoek uit (9. … d3-c2). Hij keert terug op d1,
-maar daar beslist het offer 13. b3-c2! d1×b3 14. a4×c2, en 2 tegen 1 wint.</p>''', f'''
+maar daar beslist het offer 13. b3-c2! d1×b3 14. a4×c2, en 2 tegen 1 wint. Hoe wit de vesting breekt, staat bij de
+<a href="vallen-5x5.html">vallen</a>.</p>''', f'''
 <p>On <a href="langste-7x7.html">7×7</a> white catches an expelled black king in the next double corner as well. How does
 it go on an even smaller board? On 5×5 with unplayable corner squares there are only 12 playable squares, and every corner
 is a double corner: b1/a2, d1/e2, a4/b5 and d5/e4.</p>
@@ -1087,14 +1089,64 @@ is a double corner: b1/a2, d1/e2, a4/b5 and d5/e4.</p>
 with white and with black to move. 3 against 2 too nearly always wins: of the {n(nq)} quiet positions with white to move
 {dw} are drawn, with black to move {db}. With black to move and both black kings on the edge squares of two double corners
 {df} of the {n(nf)} are drawn. These draws are no fortress: black forces equal material within 4 plies,
-often by zugzwang (see the <a href="zetdwang-5x5.html">next page</a>).</p>
+often by zugzwang (see the <a href="zetdwang-5x5.html">exception</a>).</p>
 <p>The longest win from a quiet position with white to move takes {top} plies (up to mirrors and rotations there are
 {len(starts)} such start positions). Here white starts with two kings in the double corner a4/b5. Black keeps his kings
 at the double corners d1/e2 and d5/e4. White walks with a king via a2, b1 and c2 to d1 (7. c2-d1), the free edge square
 next to the black king on e2, and with 9. d1-e2! takes e2 as well: the black king has to leave the corner (9. … d3-c2).
-It returns to d1, but there the sacrifice 13. b3-c2! d1×b3 14. a4×c2 decides, and 2 against 1 wins.</p>'''),
+It returns to d1, but there the sacrifice 13. b3-c2! d1×b3 14. a4×c2 decides, and 2 against 1 wins. How white breaks the
+fortress is shown with the <a href="vallen-5x5.html">traps</a>.</p>'''),
                 fig, f'<p class="var">{h55}</p>', '<div style="clear:both"></div>']
         self.write('langste-5x5.html', None, '\n'.join(body), pg, k55)
+
+        # the traps: black to move, both black kings on the edge squares of two double corners, nobody can capture; every
+        # shuttle move of black allows a forced exchange, and every other black move loses material at once too. A white
+        # king may stand on the free edge square of a black double corner: that king then cannot shuttle
+        partner = {'b1': 'a2', 'a2': 'b1', 'd1': 'e2', 'e2': 'd1', 'a4': 'b5', 'b5': 'a4', 'd5': 'e4', 'e4': 'd5'}
+        punished = lambda f: self.exchange(e55, f) or any(count(m[2])[1] < 2 and m[1].startswith('W') for m in e55.analyse(f)[1])
+        traps, parity = [], Counter()
+        for W, B in fort:
+            fb = e55.fen(W, B, 'B')
+            legal = e55.analyse(fb)[1]
+            sh = {f'{b}-{partner[b]}' for b in B if partner[b] not in W}
+            if sh and all(self.exchange(e55, m[2]) if m[0] in sh else punished(m[2]) for m in legal):
+                traps.append((W, B))
+                parity['even' if sum(int(x[1:]) for x in W + B) % 2 == 0 else 'odd'] += 1
+        blocked = lambda W, B: any(partner[b] in W for b in B)
+        orbits_t = {canon(W, B): blocked(W, B) for W, B in traps}
+        nt, nblock = len(orbits_t), sum(orbits_t.values())
+        assert nt == 40 and set(parity) == {'even', 'odd'}
+        assert canon(['a2', 'b3', 'e2'], ['d1', 'e4']) in orbits_t and canon(['b3', 'c2', 'c4'], ['a2', 'a4']) in orbits_t
+        pgt = self.page((k55, e55))
+        body = [t(f'''
+<p>Met zwart aan zet en beide zwarte dammen op de randvelden van twee dubbele hoeken breekt wit de vesting op 5×5 met een
+val, zoals op <a href="val.html">8×8</a>: elke pendelzet van zwart staat een gedwongen ruil toe, en elke andere zwarte zet
+verliest ook meteen materiaal. Op 5×5 mag een witte dam daarbij op het vrije randveld van een zwarte dubbele hoek staan;
+die zwarte dam kan dan niet pendelen. Zo zijn er {len(traps)} vallen, {parity['even']} bij even en {parity['odd']} bij
+oneven pariteit, en op spiegelen en draaien na {nt}. Ze zijn er van twee soorten.</p>
+<p>In {nblock} van de {nt} blokkeert wit een hoek: een witte dam staat op het vrije randveld naast een zwarte dam, die dus
+niet kan pendelen. Zwart moet met de andere dam pendelen, en twee witte dammen dwingen dan de ruil af. Hier blokkeert e2
+de zwarte dam op d1; het offer staat op c4, en wit slaat terug vanaf a2.</p>''', f'''
+<p>With black to move and both black kings on the edge squares of two double corners white breaks the fortress on 5×5
+with a trap, as on <a href="val.html">8×8</a>: every shuttle move of black allows a forced exchange, and every other black
+move loses material at once too. On 5×5 a white king may stand on the free edge square of a black double corner; that
+black king then cannot shuttle. So there are {len(traps)} traps, {parity['even']} at even and {parity['odd']} at odd
+parity, and up to mirrors and rotations {nt}. They come in two kinds.</p>
+<p>In {nblock} of the {nt} white blocks a corner: a white king stands on the free edge square next to a black king, which
+therefore cannot shuttle. Black has to shuttle with the other king, and two white kings then force the exchange. Here e2
+blocks the black king on d1; the offer is on c4, and white captures back from a2.</p>''')]
+        body += self.trap_blocks(pgt, k55, e55, '5×5', '', [(['a2', 'b3', 'e2'], ['d1', 'e4'])], partner)
+        body += [t(f'''
+<p>In de andere {nt - nblock} is het de dubbele dreiging van <a href="val.html">8×8</a>: niets is geblokkeerd, en beide
+pendelzetten van zwart staan meteen een ruil toe.</p>''', f'''
+<p>In the other {nt - nblock} it is the double threat of <a href="val.html">8×8</a>: nothing is blocked, and both shuttle
+moves of black allow an exchange at once.</p>''')]
+        body += self.trap_blocks(pgt, k55, e55, '5×5', '', [(['b3', 'c2', 'c4'], ['a2', 'a4'])], partner, 2)
+        body += [t('<p>Steeds volgt 2 tegen 1, en dat wint op 5×5 altijd. Waar zwart toch remise houdt, staat bij de '
+                   '<a href="zetdwang-5x5.html">uitzondering</a>.</p>',
+                   '<p>Always 2 against 1 follows, and that always wins on 5×5. Where black holds a draw all the same is '
+                   'under the <a href="zetdwang-5x5.html">exception</a>.</p>')]
+        self.write('vallen-5x5.html', None, '\n'.join(body), pgt, k55)
 
         # the exception: every quiet draw with white to move is zugzwang (each white move gives a king away, and 2 against
         # 2 is a draw); with black to move black has exactly one drawing move, into such a zugzwang
@@ -1200,8 +1252,9 @@ saves himself only with 1. … {draw[0]}; both corner moves lose. All moves of b
             v, legal = e.analyse(fen)
             name = f'{board} {extra}' if extra else board
             fig, i0 = pg.diagram(fen, t(f'{name}, zwart aan zet: {v}', f'{name}, black to move: {v}'), gid=gid)
-            sh = self.shuttles(pg, gid, e, i0, legal, {f'{b}-{partner[b]}' for b in B})
-            assert len(sh) == 2 and all(ok for _, ok, _ in sh), (fen, sh)
+            free = {f'{b}-{partner[b]}' for b in B if partner[b] not in W}      # a blocked king cannot shuttle
+            sh = self.shuttles(pg, gid, e, i0, legal, free)
+            assert sh and len(sh) == len(free) and all(ok for _, ok, _ in sh), (fen, sh)
             # a trap: every other black move (leaving a double corner) loses material at once too
             for m in legal:
                 if m[0] in {x for x, _, _ in sh}:

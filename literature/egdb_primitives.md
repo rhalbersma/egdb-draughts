@@ -857,11 +857,12 @@ value-preserving and aligned with the storage escapes of §10.
 | `DRAWN` | decided in pass 0 as a draw. Needed because the unmoves do not test compulsory capture: a position whose captures all leave the group (no move inside) still turns up as a predecessor, and must not look undecided |
 | `PENDING` | undecided and lossable, but not before its slowest losing exit's level (DTM; in DTZ and DTC that level is 1); it becomes undecided (0) when the level comes round |
 | `DEFER` | decided in pass 0 at a depth beyond the current window (DTM: captures into deep materials); recomputed from its exits when its window comes |
-| 7 spare | never used in the build; they exist as storage tokens (§10) |
+| `CHANGED` | a loss candidate of the current round (rtbgen's mark): the predecessors of the previous ply's wins are marked first, then each candidate is checked once, against all its successors, and becomes a loss or undecided again |
+| 6 spare | never used in the build; they exist as storage tokens (§10) |
 | 1 … 240: W depth codes | code c is offset c − 1 in the window. DTM: one code per ply (a win odd, a loss even: 240 plies per window); DTZ, DTC: two codes per ply, win and loss (no parity: 120 plies per window) |
 
 What the cell does not need: "open" (an undecided position has a move inside, or pass 0 would have decided it;
-the decided ones carry a depth, `DRAWN` or `DEFER`), a candidate mark (rtbgen's `CHANGED`: our rounds check a predecessor at once), loss in 0 (a depth), and, in draughts,
+the decided ones carry a depth, `DRAWN` or `DEFER`), loss in 0 (a depth), and, in draughts,
 rtbgen's capture bounds (compulsory captures decide a position in pass 0; a winning exit in DTZ or DTC is a win in 1,
 decided there too). DTM's exit seeds carry a level and stay sparse lists outside the cell. Chess without the 50-move
 rule needs the same codes; with it, the bounds into a cursed win and a blessed loss and the cursed collapse classes come
@@ -896,11 +897,14 @@ halving, no margin for an engine to keep, and the token is the window number: a 
 exercise the reductions on small builds. Up to 6 pieces it agrees with egdb_6x6 and with every position's successors
 for all three metrics, with the full window (no reductions) and with windows of 7 and 2 plies (up to 35 reductions
 in one group). At 8 pieces (DTM, every material up to 7 pieces plus the 21 eight-piece ones with at most 2 men: 81
-materials, 448 M positions, 4 jobs side by side) its files are byte-identical to the frontier mode's, in the same
-100 s of wall time (373 against 378 s summed over the builds). The largest, 04-04-01-01 (68 M positions, longest 73
-plies, so no reduction at its real depths), in parallel: 16.0 s frontier, 17.6 s cell8 (the rounds 8.2 → 9.7 s: the
-scans), 21.7 s with windows of 8 plies (9 reductions, about 0.45 s each: snapshot, collapse, deferred positions
-recomputed; snapshots 2.8 MB each for 68 MB of cells), files again identical. Peak RSS falls 20–35 % (979 → 758 MB),
+materials, 448 M positions, 4 jobs side by side) its files are byte-identical to the frontier mode's, and it is
+faster: 87 s of wall time against 100 s (315 against 373 s summed over the builds). **The delayed check is the gain**:
+checking a predecessor at every unmove of a won successor, as the frontier mode does, took 46.9 M loss checks in the
+largest material, 04-04-01-01 (68 M positions, longest 73 plies, so no reduction at its real depths); marking first
+and checking each candidate once took 33.7 M, and its rounds fell from 9.0 s to 7.3 s, below the frontier mode's
+8.2 s despite the scans. With windows of 8 plies (9 reductions, about 0.45 s each: snapshot, collapse, deferred
+positions recomputed; snapshots 2.8 MB each for 68 MB of cells) the files are again identical. The frontier mode
+could take the same gain with a candidate bit plane. Peak RSS falls 20–35 % (979 → 758 MB),
 less than the cell alone would give: it is dominated by the 16-bit array sink of the whole material and the input maps.
 
 **Limits.** The 16 tokens reach 2,160 plies (DTZ, DTC) and 4,320 plies (DTM), against the deepest known values of

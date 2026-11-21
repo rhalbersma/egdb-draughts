@@ -254,12 +254,14 @@ std::uint16_t value_from_successors(Pos const& p)
 //   C_NOLOSE   undecided, cannot lose: an exit draws or wins
 //   C_PENDING  undecided, lossable once its slowest losing exit is reached (its level in the eloss list)
 //   C_DEFER    decided in pass 0 at a ply beyond the current window (dtm); recomputed when its window comes
+//   C_CHANGED  a loss candidate of the current round (rtbgen's CHANGED): undecided and lossable, a predecessor of a win
+//              of the previous ply; checked once, then a loss or back to 0
 //   C_DRAWN    decided in pass 0 as a draw. Needed: the unmoves do not test compulsory capture, so a position whose
 //              captures leave the group (no move inside) still turns up as a predecessor, and must not look undecided
 
 bool g_cell8 = false;
 constexpr std::uint8_t C_WON = 241, C_LOST = 242, C_FRONT_WIN = 243, C_FRONT_LOSS = 244, C_NOLOSE = 245,
-                       C_PENDING = 246, C_DEFER = 247, C_DRAWN = 248;
+                       C_PENDING = 246, C_DEFER = 247, C_DRAWN = 248, C_CHANGED = 249;
 
 struct Snapshot { int window; std::vector<char> z; };
 
@@ -410,8 +412,14 @@ void solve_group_cell8(Group const& g, DepthSink<std::uint16_t>& sink)
                 std::uint16_t const v = decode(c, w);
                 return is_win(v) && plies(v) < n;
         };
+        // rtbgen's CHANGED mark (default): the predecessors of the previous ply's wins are marked, then each candidate
+        // is checked once, against all its successors (EGDB_CELL8_INLINE: check at every unmove instead, for comparison)
+        static bool const mark_changed = std::getenv("EGDB_CELL8_INLINE") == nullptr;
+        static bool const count_checks = std::getenv("EGDB_CELL8_COUNT") != nullptr;
+        std::atomic<std::uint64_t> checks{ 0 };
         auto const check_loss = [&](std::uint64_t id, int n) {            // rtbgen's check_loss: lost in n?
                 if (ld(id) != 0) return false;
+                if (count_checks) checks.fetch_add(1, std::memory_order_relaxed);
                 Pos const p = pos(id);
                 for (auto const& mv : moves(p))
                         if (inside(p, mv) && !win_below(ld(id_of(mv.next)), n)) return false;
@@ -434,7 +442,19 @@ void solve_group_cell8(Group const& g, DepthSink<std::uint16_t>& sink)
                 std::uint8_t const cw = has_win ? (front ? C_FRONT_WIN : encode(win_value(n - 1), w)) : 0;
                 std::uint8_t const cl = has_loss ? (front ? C_FRONT_LOSS : encode(loss(n - 1), w)) : 0;
                 for_list(at(eloss_at, n), [&](std::uint64_t id) { if (cell[id] == C_PENDING) cell[id] = 0; });
-                if (has_win)
+                if (has_win && mark_changed) {                                  // losses in n: mark, then check once
+                        for_blocks(T, [&](std::uint64_t lo, std::uint64_t hi) {
+                                for (std::uint64_t q = lo; q < hi; ++q)
+                                        if (ld(q) == cw) predecessors(q, [&](std::uint64_t id) {
+                                                std::uint8_t z = 0;
+                                                std::atomic_ref<std::uint8_t>(cell[id]).compare_exchange_strong(z, C_CHANGED, std::memory_order_relaxed);
+                                        });
+                        });
+                        for_blocks(T, [&](std::uint64_t lo, std::uint64_t hi) {
+                                for (std::uint64_t q = lo; q < hi; ++q)
+                                        if (ld(q) == C_CHANGED) { st(q, 0); note(check_loss(q, n)); }
+                        });
+                } else if (has_win)
                         for_blocks(T, [&](std::uint64_t lo, std::uint64_t hi) {         // losses in n
                                 for (std::uint64_t q = lo; q < hi; ++q)
                                         if (ld(q) == cw) predecessors(q, [&](std::uint64_t id) { note(check_loss(id, n)); });
@@ -486,6 +506,7 @@ void solve_group_cell8(Group const& g, DepthSink<std::uint16_t>& sink)
         });
         if (deferred) { std::cerr << "cell8: a deferred position was never reached" << std::endl; std::abort(); }
         g_stats.frontier += zbytes;                             // cell8: the bytes of the snapshots
+        if (count_checks) std::cout << "cell8: " << checks.load() << " loss checks for " << T << " positions" << std::endl;
         g_stats.rounds += seconds_since(t1);
         if (!snaps.empty())
                 std::cout << "cell8: group of " << T << " positions, " << snaps.size() << " reductions, snapshots " << zbytes << " bytes" << std::endl;

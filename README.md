@@ -18,8 +18,11 @@ This page collects the programs, the tables and the most interesting findings.
 >
 > **6×6 with men and kings**
 >
-> Exact databases up to 10 pieces for international draughts on the 6×6 board ([`src/egdb_6x6.cpp`](src/egdb_6x6.cpp))
-> solve the start position (a draw, [`opening_6x6.md`](strongly_solving_6x6/international/opening_6x6.md); the code and the complete opening tree are in [`strongly_solving_6x6/`](strongly_solving_6x6/)) and check every diagram and
+> Exact databases up to 12 pieces for international draughts on the 6×6 board ([`src/egdb_6x6.cpp`](src/egdb_6x6.cpp))
+> strongly solve the game: every position with at most 6 pieces per side, 63.8 billion in all, with its exact distance to
+> the end. The start position is a draw ([`opening_6x6.md`](strongly_solving_6x6/international/opening_6x6.md); the
+> longest win per number of pieces is in [`longest_wins_6x6.txt`](strongly_solving_6x6/international/longest_wins_6x6.txt);
+> the code is in [`strongly_solving_6x6/`](strongly_solving_6x6/)). The databases also check every diagram and
 > variation of Herm Jan Brascamp's *Strategie der 36 velden* (2016). The companion site follows the chapters of the
 > book with clickable moves and the database value of every position; the full report (Dutch) is
 > [`strategie_der_36_velden/RAPPORT.md`](strategie_der_36_velden/RAPPORT.md).

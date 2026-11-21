@@ -26,6 +26,7 @@ class Engine:
     def __init__(self, exe, slicemax, db=None, attach=None, store=None):
         self.p = subprocess.Popen([exe], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, bufsize=1)
         self.cache = {}
+        self.limit = 12 if store else slicemax      # every position with at most this many pieces is in the databases
         if store:
             out = self.cmd(f'store {store}')
             if not out or not out[0].startswith('store ok'):

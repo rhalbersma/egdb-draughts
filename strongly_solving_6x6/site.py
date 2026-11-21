@@ -5,8 +5,10 @@
 #          http://www.boost.org/LICENSE_1_0.txt)
 
 """The companion site Strongly Solving 6x6 Draughts (_site/strongly_solving_6x6): for now international draughts on
-the 6x6 board, with the solved start position and the complete opening tree to 4 plies (international/). English by
-default, Dutch in nl/.
+the 6x6 board, strongly solved: every position up to 12 pieces (at most 6 per side) in the databases, the start position
+a draw, the complete opening tree to 4 plies and the longest win per number of pieces (international/). English by
+default, Dutch in nl/. Build it with --store (the complete unit store) for values everywhere; with the older databases up
+to 10 pieces the solved opening tree fills in above them.
 
 usage: site.py path/to/egdb_6x6 [--store data/units | --db data/6x6_le9.db --attach data/6x6_10.dtm] [--out _site/strongly_solving_6x6]
 """
@@ -37,11 +39,11 @@ CHAPTERS = [
     ('Eerdere oplossingen', 'Earlier solutions', [
         ('history.html', 'Perft en een zoektocht (2009, 2011)', 'Perft and a search (2009, 2011)'),
         ('van-horssen.html', 'Van Horssen (2016–2018)', 'Van Horssen (2016–2018)')]),
-    ('Hoe ver is 6×6 opgelost?', 'How far is 6×6 solved?', [
-        ('status.html', 'Zwak opgelost, sterk tot en met 10 stukken', 'Weakly solved, strongly up to 10 pieces'),
-        ('missing.html', 'Wat er nog ontbreekt', 'What is still missing')]),
-    ('Op weg naar 12 stukken', 'Towards 12 pieces', [
-        ('towards-12.html', 'De omvang tot 12 stukken', 'The size up to 12 pieces'),
+    ('Sterk opgelost', 'Strongly solved', [
+        ('status.html', 'Elke stelling tot en met 12 stukken', 'Every position up to 12 pieces'),
+        ('longest.html', 'De langste winst per aantal stukken', 'The longest win per number of pieces')]),
+    ('De databases tot en met 12 stukken', 'The databases up to 12 pieces', [
+        ('towards-12.html', 'Omvang en bouw', 'Size and build'),
         ('compression.html', 'Hoe goed comprimeren de databases?', 'How well do the databases compress?')]),
 ]
 # every page in reading order: (file, Dutch, English, chapter number or None)
@@ -93,12 +95,14 @@ class Site:
         t = self.t
         fig, _ = pg.diagram(START, t('de beginstand van 6×6, wit aan zet', 'the start position of 6×6, white to move'))
         body = [f'<h1>{TITLE}</h1>', fig, t(
-            '<p>Het doel: dammen op het 6×6-bord <strong>sterk oplossen</strong>, dus de waarde van elke legale stelling '
-            'kennen. De weg ernaartoe: exacte eindspeldatabases, met de afstand tot het einde van de partij, en daarboven '
-            'de volledige openingsboom. Voorlopig met één variant.</p>',
-            '<p>The goal: to <strong>strongly solve</strong> draughts on the 6×6 board, that is, to know the value of every '
-            'legal position. The way there: exact endgame databases, with the distance to the end of the game, and above '
-            'them the complete opening tree. For now with one variant.</p>'),
+            '<p>Dammen op het 6×6-bord is <strong>sterk opgelost</strong>: van elke legale stelling, met hooguit 6 stukken '
+            'per kant, is de waarde bekend, met de exacte afstand tot het einde van de partij. Dat zijn 63,8 miljard '
+            'stellingen, in exacte databases tot en met 12 stukken. De beginstand is <strong>remise</strong>. Voorlopig met '
+            'één variant: internationaal dammen.</p>',
+            '<p>Draughts on the 6×6 board is <strong>strongly solved</strong>: the value of every legal position, with at '
+            'most 6 pieces per side, is known, with the exact distance to the end of the game. That is 63.8 billion '
+            'positions, in exact databases up to 12 pieces. The start position is a <strong>draw</strong>. For now with one '
+            'variant: international draughts.</p>'),
             t('<h2>Internationaal dammen</h2>', '<h2>International draughts</h2>'),
             '<ul class="toc">' + ''.join(
                 f'<li><span class="h">{esc(self.chapter(c))}</span>'
@@ -113,50 +117,65 @@ class Site:
         self.write('index.html', '\n'.join(body), pg)
 
     def strength(self):
-        """how far 6x6 is solved (numbers from international/opening_strength_6x6.py)"""
+        """the strong solution: every position up to 12 pieces"""
         t = self.t
-        rows = [(t('Tot en met 10 stukken', 'Up to 10 pieces'), t('18.379.036.017', '18,379,036,017'),
-                 t('sterk opgelost, met exacte afstand tot het einde (DTM)', 'strongly solved, with the exact distance to '
-                   'the end (DTM)')),
-                (t('11–12 stukken, hooguit één kant dammen: de volledige openings-DAG',
-                   '11–12 pieces, kings on at most one side: the complete opening DAG'), t('193.708', '193,708'),
-                 t('188.103 (97%) bewezen; open: 2.008 ≥D, 578 ≤D, 3.019 ?', '188,103 (97%) proven; open: 2,008 ≥D, '
-                   '578 ≤D, 3,019 ?')),
-                (t('Alle overige stellingen met 11 of 12 stukken', 'All other positions with 11 or 12 pieces'),
-                 t('ca. 45,5 miljard, waarvan 44,5 miljard met dammen aan beide kanten',
-                   'about 45.5 billion, of which 44.5 billion with kings on both sides'), t('onbekend', 'unknown'))]
-        tbl = ''.join(f'<tr><td>{a}</td><td>{b}</td><td>{c}</td></tr>' for a, b, c in rows)
+        num = lambda x: f'{x:,}'.replace(',', '.') if self.lang == 'nl' else f'{x:,}'
+        rows = [(t('Tot en met 10 stukken', 'Up to 10 pieces'), 18_379_036_017), (t('11 stukken', '11 pieces'), 22_071_836_160),
+                (t('12 stukken', '12 pieces'), 23_385_567_744), (t('Samen', 'Together'), 63_836_439_921)]
+        tbl = ''.join(f'<tr><td>{a}</td><td>{num(b)}</td><td>{t("sterk opgelost, met exacte afstand tot het einde (DTM)", "strongly solved, with the exact distance to the end (DTM)")}</td></tr>'
+                      for a, b in rows)
         return (t(
-            '<p>In de termen van Allis (1994) is 6×6 hiermee, net als bij Van Horssen, <strong>zwak opgelost</strong>: de '
-            'waarde van de beginstand is bewezen, met een strategie om die te halen. <strong>Sterk opgelost</strong> zou '
-            'betekenen dat de waarde van elke legale stelling bekend is. Zover is het niet, maar inhoudelijk ligt er veel '
-            'meer vast dan bij een zwakke oplossing gebruikelijk is:</p>',
-            '<p>In the terms of Allis (1994) 6×6 is thereby, as with Van Horssen, <strong>weakly solved</strong>: the '
-            'value of the start position is proven, with a strategy to achieve it. <strong>Strongly solved</strong> would '
-            'mean that the value of every legal position is known. It is not that far, but in substance much more is '
-            'settled than is usual for a weak solution:</p>')
+            '<p>In de termen van Allis (1994) is 6×6 <strong>sterk opgelost</strong>: de waarde van elke legale stelling '
+            'is bekend. Van Horssen loste het spel eerder <strong>zwak</strong> op: de waarde van de beginstand, met een '
+            'strategie om die te halen. Hier staat elke stelling met hooguit 6 stukken per kant in de databases, met de '
+            'exacte afstand tot het einde van de partij bij perfect spel, de beginstand met 12 stukken inbegrepen:</p>',
+            '<p>In the terms of Allis (1994) 6×6 is <strong>strongly solved</strong>: the value of every legal position is '
+            'known. Van Horssen solved the game <strong>weakly</strong> before: the value of the start position, with a '
+            'strategy to achieve it. Here every position with at most 6 pieces per side is in the databases, with the exact '
+            'distance to the end of the game under perfect play, the start position with 12 pieces included:</p>')
             + f'<table class="tbl"><tr><th></th><th>{t("Stellingen", "Positions")}</th><th>Status</th></tr>{tbl}</table>'
             + t('<p class="note">Legale stellingen met hooguit 6 stukken per kant en wit aan zet, zoals Van Horssen telt.</p>',
                 '<p class="note">Legal positions with at most 6 pieces per side and white to move, as Van Horssen counts.</p>')
-            + t('<h2>Wat er voor sterk oplossen nog ontbreekt</h2>', '<h2>What is still missing for a strong solution</h2>')
-            + t('<p>De open stellingen in de DAG hangen allemaal af van de 5.101 bladeren met 11 of 12 stukken en dammen '
-                'aan beide kanten waarvan de waarde ook na één ply niet vastligt. Achter die bladeren ligt geen handvol '
-                'stellingen: een verkenning vanaf die bladeren vond meer dan 5 miljoen verschillende bereikbare stellingen '
-                'met dammen aan beide kanten voordat hij werd gestopt, vooral eindspelen met alleen dammen, zoals 6 dammen '
-                'tegen 5 (alleen al 14.702.688 legale stellingen). Sterk oplossen vraagt dus de databases voor 11 en 12 '
-                'stukken met dammen aan beide kanten: bijna tweeënhalf keer zoveel stellingen als alle stellingen tot en '
-                'met 10 stukken samen.</p><p>Kort gezegd: formeel zwak opgelost, inhoudelijk sterk tot en met 10 stukken, met een '
-                'openingsboom die voor 97% is bewezen en een exacte afstand tot het einde voor de beginstand en alle '
-                'stellingen tot en met ply 4.</p>',
-                '<p>The open positions in the DAG all depend on the 5,101 leaves with 11 or 12 pieces and kings on both '
-                'sides whose value is not settled after one ply either. Behind those leaves lies not a handful of '
-                'positions: a probe from those leaves found more than 5 million different reachable positions with kings '
-                'on both sides before it was stopped, mostly endgames with kings only, such as 6 kings against 5 (14,702,688 '
-                'legal positions for that material alone). Solving strongly therefore needs the databases for 11 and 12 '
-                'pieces with kings on both sides: almost two and a half times as many positions as all positions up to '
-                '10 pieces together.</p><p>In short: formally weakly solved, in substance strongly up to 10 pieces, with an '
-                'opening tree that is 97% proven and an exact distance to the end for the start position and all positions '
-                'up to ply 4.</p>'))
+            + t('<h2>Gecontroleerd</h2><p>Elke eenheid (n stukken, waarvan m schijven) is na het bouwen stelling voor stelling '
+                'gecontroleerd: elke waarde opnieuw berekend uit die van zijn opvolgers. Daarna is ze gecomprimeerd en is elk '
+                'blok vergeleken met de ongecomprimeerde waarden; het controlegetal (CRC32C) van alle 88 eenheden staat in '
+                '<a href="https://github.com/rhalbersma/egdb-draughts/blob/main/strongly_solving_6x6/international/crc32c_6x6.txt">'
+                '<code>crc32c_6x6.txt</code></a>. De openingsboom tot 4 ply komt rechtstreeks uit de databases, en elke '
+                'inwendige stelling van die boom heeft dezelfde waarde als de minimax van zijn zetten. Eerder was de '
+                'openingsboom bewezen met intervallen, boven de databases tot en met 10 stukken; die waarden komen op alle '
+                '349 stellingen met de volledige databases overeen.</p>',
+                '<h2>Checked</h2><p>After it was built, every unit (n pieces, of which m men) was checked position by '
+                'position: every value recomputed from those of its successors. Then it was compressed and every block was '
+                'compared with the uncompressed values; the checksum (CRC32C) of all 88 units is in '
+                '<a href="https://github.com/rhalbersma/egdb-draughts/blob/main/strongly_solving_6x6/international/crc32c_6x6.txt">'
+                '<code>crc32c_6x6.txt</code></a>. The opening tree to 4 plies comes straight from the databases, and every '
+                'interior position of that tree has the same value as the minimax of its moves. Before, the opening tree was '
+                'proven with intervals, above the databases up to 10 pieces; those values agree with the complete databases '
+                'on all 349 positions.</p>'))
+
+    def longest(self):
+        """the longest win per number of pieces (international/longest_wins_6x6.txt, from longest_wins.py)"""
+        t = self.t
+        pg = self.page()
+        body = [t('<p>Per aantal stukken de stelling met de langste winst bij perfect spel, in ply (halve zetten), voor de '
+                  'partij aan zet. Tot en met 8 stukken zijn de stellingen ook met onafhankelijk gebouwde databases '
+                  'nagerekend.</p>',
+                  '<p>Per number of pieces the position with the longest win under perfect play, in plies (half moves), for '
+                  'the side to move. Up to 8 pieces the positions were also recomputed with independently built '
+                  'databases.</p>')]
+        rows = []
+        for line in (HERE / 'international' / 'longest_wins_6x6.txt').read_text().splitlines():
+            n, v, fen = line.split()
+            side = t('wit', 'white') if fen[0] == 'W' else t('zwart', 'black')
+            fig, _ = pg.diagram(fen, t(f'{n} stukken: {side} aan zet wint in {v[1:]} ply',
+                                       f'{n} pieces: {side} to move wins in {v[1:]} plies'))
+            rows.append(f'<tr><td>{n}</td><td>{v[1:]}</td><td><code>{esc(fen)}</code></td></tr>')
+            body.append(fig)
+        body.insert(1, f'<table class="tbl"><tr><th>{t("Stukken", "Pieces")}</th><th>{t("Langste winst (ply)", "Longest win (plies)")}</th>'
+                       f'<th>{t("Stelling", "Position")}</th></tr>{"".join(rows)}</table>')
+        body.insert(2, t('<p>Met 12 stukken is de langste winst niet langer dan met 11: beide 111 ply.</p>',
+                         '<p>With 12 pieces the longest win is no longer than with 11: both 111 plies.</p>'))
+        self.write('longest.html', '\n'.join(body), pg)
 
     def international(self):
         pg = self.page()
@@ -165,12 +184,12 @@ class Site:
         body = [fig, self.t(
                 '<p>De beginstand is <strong>remise</strong>. Alle vijf eerste zetten van wit houden remise. Hieronder de '
                 'volledige openingsboom tot 4 ply: elke zet met zijn waarde, sterkste eerst; klik op een zet om de '
-                'stelling te zien. De waarden komen uit de opgeloste openingsboom (stellingen met meer dan 10 stukken) en '
-                'de databases, met de exacte afstand tot het einde.</p>',
+                'stelling te zien. De waarden komen rechtstreeks uit de databases, die elke stelling met hooguit 12 stukken '
+                'bevatten, met de exacte afstand tot het einde.</p>',
                 '<p>The start position is a <strong>draw</strong>. All five first moves of white keep the draw. Below, the '
                 'complete opening tree to 4 plies: every move with its value, strongest first; click a move to see the '
-                'position. The values come from the solved opening tree (positions with more than 10 pieces) and the '
-                'databases, with the exact distance to the end.</p>'),
+                'position. The values come straight from the databases, which hold every position with at most 12 '
+                'pieces, with the exact distance to the end.</p>'),
                 '<div class="optree">']
         key = lambda m: re.sub(r'[^0-9]+', '-', m[0]).strip('-')
         lab = lambda m: pg.label('6x6', m)
@@ -265,18 +284,16 @@ class Site:
         body.append(f'<table class="tbl"><tr><th></th><th>Van Horssen (2018)</th><th>{self.t("Hier", "Here")}</th></tr>{tbl}</table>')
         body.append(self.t(
             '<p>We reproduceren zijn databases dus tot en met 8 stukken. Hij bewijst de waarde van de beginstand (zonder '
-            'transpositietabel, om graph-history-problemen te vermijden); hier zijn de afstanden tot het einde exact voor '
-            'de hele boom tot en met ply 4.</p>',
+            'transpositietabel, om graph-history-problemen te vermijden); hier is de waarde van elke stelling tot en met '
+            '12 stukken bekend, met de exacte afstand tot het einde.</p>',
             '<p>So we reproduce his databases up to 8 pieces. He proves the value of the start position (without '
-            'a transposition table, to avoid graph-history problems); here the distances to the end are exact for the '
-            'whole tree up to ply 4.</p>'))
+            'a transposition table, to avoid graph-history problems); here the value of every position up to 12 pieces is '
+            'known, with the exact distance to the end.</p>'))
         self.write('van-horssen.html', '\n'.join(body), pg)
 
     def status(self):
-        text = self.strength()
-        cut = text.index('<h2>' + self.t('Wat er voor sterk oplossen nog ontbreekt', 'What is still missing for a strong solution') + '</h2>')
-        self.write('status.html', text[:cut], self.page())
-        self.write('missing.html', text[cut:].split('</h2>', 1)[1], self.page())
+        self.write('status.html', self.strength(), self.page())
+        self.longest()
 
     def towards12(self):
         t = self.t
@@ -284,10 +301,10 @@ class Site:
         rows = [('≤ 10', 18_379_036_017, 18_379_036_017), ('11', 22_071_836_160, 40_450_872_177),
                 ('12', 23_385_567_744, 63_836_439_921)]
         tbl = ''.join(f'<tr><td>{a}</td><td>{num(b)}</td><td>{num(c)}</td></tr>' for a, b, c in rows)
-        body = [t('<p>Sterk oplossen vraagt de databases tot en met 12 stukken. Het aantal legale stellingen, met hooguit '
-                  '6 stukken per kant en wit aan zet (tot en met 8 stukken precies de aantallen van Van Horssen):</p>',
-                  '<p>A strong solution needs the databases up to 12 pieces. The number of legal positions, with at most 6 '
-                  'pieces per side and white to move (up to 8 pieces exactly Van Horssen\'s numbers):</p>'),
+        body = [t('<p>De databases tot en met 12 stukken bevatten elke legale stelling met hooguit 6 stukken per kant. Het '
+                  'aantal, met wit aan zet (tot en met 8 stukken precies de aantallen van Van Horssen):</p>',
+                  '<p>The databases up to 12 pieces hold every legal position with at most 6 pieces per side. Their number, '
+                  'with white to move (up to 8 pieces exactly Van Horssen\'s numbers):</p>'),
                 f'<table class="tbl"><tr><th>{t("Stukken", "Pieces")}</th><th>{t("Stellingen (hooguit 6 per kant)", "Positions (at most 6 per side)")}</th>'
                 f'<th>{t("Cumulatief", "Cumulative")}</th></tr>{tbl}</table>',
                 t('<h2>Geheugen</h2><p>Gebouwd wordt per slice: de schijven liggen vast, alleen de dammen variëren. De grootste '
@@ -296,20 +313,24 @@ class Site:
                   'slagen, schijfzetten en promoties: tot en met 11 stukken is dat ongecomprimeerd zo\'n 10 GB, tot en met '
                   '12 stukken 16 GB. Daarom moeten de databases gecomprimeerd worden, met willekeurige toegang; zie de '
                   '<a href="compression.html">volgende sectie</a>.</p>'
-                  '<h2>Rekentijd</h2><p>De databases tot en met 10 stukken werden gebouwd met zo\'n 3,8 miljoen stellingen '
-                  'per seconde. Voor de 45,5 miljard stellingen met 11 of 12 stukken is dat ruwweg 3 tot 4 uur; met '
-                  'gecomprimeerd opzoeken en de slices met dammen aan beide kanten, die binnen de slice iteratief worden '
-                  'opgelost, eerder 10 tot 30 uur. Dat kan op één machine.</p>',
+                  '<h2>De bouw</h2><p>Gebouwd eenheid voor eenheid (n stukken, waarvan m schijven) met '
+                  '<a href="https://github.com/rhalbersma/egdb-draughts/blob/main/strongly_solving_6x6/international/units_6x6.py">'
+                  '<code>units_6x6.py</code></a>: bouwen, elke stelling controleren tegen zijn opvolgers, comprimeren (zstd -19, '
+                  'blokken van 4 KiB), elk blok vergelijken met de ongecomprimeerde waarden en het controlegetal berekenen. '
+                  'Alle 88 eenheden tot en met 12 stukken samen kostten 26 uur en 37 minuten op 10 cores (Xeon E5-1650 v4, '
+                  'in een virtuele machine). Dat kan op één machine.</p>',
                   '<h2>Memory</h2><p>The databases are built slice by slice: the men are fixed, only the kings vary. The '
                   'largest slice is 6 kings against 6, with 17,153,136 positions: at 2 bits per position just over 4 MB. '
                   'The memory for building itself is therefore no problem. The problem is fast lookup in the other '
                   'databases, for captures, man moves and promotions: up to 11 pieces that is some 10 GB uncompressed, up '
                   'to 12 pieces 16 GB. So the databases have to be compressed, with random access; see the '
                   '<a href="compression.html">next section</a>.</p>'
-                  '<h2>Computing time</h2><p>The databases up to 10 pieces were built at some 3.8 million positions per '
-                  'second. For the 45.5 billion positions with 11 or 12 pieces that is roughly 3 to 4 hours; with '
-                  'compressed lookup and the slices with kings on both sides, which are solved iteratively within the '
-                  'slice, more like 10 to 30 hours. That fits on one machine.</p>')]
+                  '<h2>The build</h2><p>Built unit by unit (n pieces, of which m men) with '
+                  '<a href="https://github.com/rhalbersma/egdb-draughts/blob/main/strongly_solving_6x6/international/units_6x6.py">'
+                  '<code>units_6x6.py</code></a>: build, check every position against its successors, compress (zstd -19, '
+                  'blocks of 4 KiB), compare every block with the uncompressed values and compute the checksum. All 88 units '
+                  'up to 12 pieces together took 26 hours and 37 minutes on 10 cores (Xeon E5-1650 v4, in a virtual '
+                  'machine). That fits on one machine.</p>')]
         self.write('towards-12.html', '\n'.join(body), self.page())
 
     def compression(self):

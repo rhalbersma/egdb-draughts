@@ -475,38 +475,52 @@ void solve_group_cell8(Group const& g, DepthSink<std::uint16_t>& sink)
                 }
         }
 
-        // merge: every snapshot (its window's values), then the last window, into the sink
+        // merge: all windows side by side, chunk by chunk (every snapshot stream-decompressed, the last window read from
+        // the cells). A position's value is a transform-reduce over the windows: transform its byte in each window into
+        // that window's value (0 where it is NOT_MINE, or not a depth code), reduce by keeping the non-zero one (exactly
+        // one window decided it; 0 is the identity, and no decided value is 0)
+        struct Window { std::uint8_t const* bytes; int window; };
+        struct Stream { ZSTD_DCtx* dx; ZSTD_inBuffer in; std::vector<std::uint8_t> buf; };
+        constexpr std::size_t B = std::size_t(1) << 20;
         std::uint64_t zbytes = 0;
+        std::vector<Stream> streams;
         for (auto const& s : snaps) {
                 zbytes += s.z.size();
-                ZSTD_DCtx* dx = ZSTD_createDCtx();
-                constexpr std::size_t B = std::size_t(1) << 20;
-                std::vector<std::uint8_t> buf(B);
-                ZSTD_inBuffer in{ s.z.data(), s.z.size(), 0 };
-                std::uint64_t base = 0;
-                while (base < T) {
-                        ZSTD_outBuffer o{ buf.data(), std::size_t(std::min<std::uint64_t>(B, T - base)), 0 };
+                streams.push_back({ ZSTD_createDCtx(), { s.z.data(), s.z.size(), 0 }, std::vector<std::uint8_t>(B) });
+        }
+        std::vector<Window> windows(snaps.size() + 1);
+        std::atomic<bool> deferred{ false };
+        for (std::uint64_t base = 0; base < T; base += B) {
+                std::size_t const n = std::size_t(std::min<std::uint64_t>(B, T - base));
+                std::vector<std::size_t> ks(streams.size());                   // the snapshots' chunks, side by side
+                std::iota(ks.begin(), ks.end(), std::size_t(0));
+                auto const unpack = [&](std::size_t k) {
+                        ZSTD_outBuffer o{ streams[k].buf.data(), n, 0 };
                         while (o.pos < o.size) {
-                                std::size_t const r = ZSTD_decompressStream(dx, &o, &in);
+                                std::size_t const r = ZSTD_decompressStream(streams[k].dx, &o, &streams[k].in);
                                 if (ZSTD_isError(r)) { std::cerr << "zstd: " << ZSTD_getErrorName(r) << std::endl; std::abort(); }
                                 if (r == 0 && o.pos < o.size) { std::cerr << "zstd: snapshot too short" << std::endl; std::abort(); }
                         }
-                        for_blocks(o.size, [&](std::uint64_t lo, std::uint64_t hi) {
-                                for (std::uint64_t j = lo; j < hi; ++j)
-                                        if (buf[j] != 0) { std::uint64_t const id = base + j; sink.put(int(id / P), id % P, pos(id), decode(buf[j], s.window)); }
-                        });
-                        base += o.size;
-                }
-                ZSTD_freeDCtx(dx);
+                        windows[k] = { streams[k].buf.data(), snaps[k].window };
+                };
+                if (g_par) std::for_each(std::execution::par, ks.begin(), ks.end(), unpack);
+                else std::for_each(std::execution::seq, ks.begin(), ks.end(), unpack);
+                windows.back() = { cell.data() + base, w };                    // the last window: the cells themselves
+                for_blocks(n, [&](std::uint64_t lo, std::uint64_t hi) {
+                        for (std::uint64_t j = lo; j < hi; ++j) {
+                                std::uint16_t const v = std::transform_reduce(windows.begin(), windows.end(), std::uint16_t(0),
+                                        [](std::uint16_t a, std::uint16_t b) { return a != 0 ? a : b; },
+                                        [&](Window const& x) -> std::uint16_t {
+                                                std::uint8_t const c = x.bytes[j];
+                                                return c >= 1 && c <= 240 ? decode(c, x.window) : std::uint16_t(0);
+                                        });
+                                std::uint64_t const id = base + j;
+                                if (v != 0) sink.put(int(id / P), id % P, pos(id), v);
+                                else if (cell[id] == C_DEFER) deferred = true;
+                        }
+                });
         }
-        std::atomic<bool> deferred{ false };
-        for_blocks(T, [&](std::uint64_t lo, std::uint64_t hi) {
-                for (std::uint64_t id = lo; id < hi; ++id) {
-                        std::uint8_t const c = cell[id];
-                        if (c >= 1 && c <= 240) sink.put(int(id / P), id % P, pos(id), decode(c, w));
-                        else if (c == C_DEFER) deferred = true;
-                }
-        });
+        for (auto& st : streams) ZSTD_freeDCtx(st.dx);
         if (deferred) { std::cerr << "cell8: a deferred position was never reached" << std::endl; std::abort(); }
         g_stats.frontier += zbytes;                             // cell8: the bytes of the snapshots
         if (count_checks) std::cout << "cell8: " << checks.load() << " loss checks for " << T << " positions" << std::endl;

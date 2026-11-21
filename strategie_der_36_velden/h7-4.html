@@ -121,6 +121,9 @@ figure { float: right; margin: 4px 0 12px 20px; text-align: center; }
 figure .smallboard { width: 150px; }
 .diag figure { clear: right; width: 210px; }            /* the diagrams of a section below each other, not side by side */
 figcaption { font: 13px system-ui, sans-serif; color: var(--muted); margin-top: 4px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 16px 12px; clear: both; margin: 16px 0; }
+.grid figure { float: none; margin: 0; }                /* diagrams in reading order, aligned in rows */
+.grid figure a.diagram { display: inline-block; }   /* each board centred over its caption (the figure centres its text) */
 p.var { margin: 10px 0; }
 .verdict { font: 13px system-ui, sans-serif; padding: 1px 7px; border-radius: 10px; margin-left: 6px; white-space: nowrap; }
 .verdict.ok { background: rgba(60,140,60,.15); }
@@ -204,7 +207,7 @@ table.tbl th { color: var(--muted); font-weight: 600; }
 <p class="src">Herm Jan Brascamp, <a href="https://www.hijkendtc.nl/7-4-naar-voren/">Naar voren</a>, <em>Strategie der 36 velden</em>, hijkendtc.nl. Hieronder per diagram de claims van het boek, de varianten en de weerleggingen, nagerekend met de databases.</p>
 <details class="onpage"><summary>Op deze pagina: 6 diagrammen</summary><a href="#d7.12">7.12 ✅</a> <a href="#d7.13">7.13 ❌</a> <a href="#d7.13b">7.13b ✅</a> <a href="#d7.14">7.14 ✅</a> <a href="#d7.14b">7.14b ✅</a> <a href="#d7.15">7.15</a></details>
 <section class="diag" id="d7.12"><h3>Diagram 7.12</h3>
-<p class="note">de stand na 5. … <span class="mv" data-g="6x6" data-n="3×8" data-a="f6×d4">3×8</span> (als diagram 7.10): na 6. <span class="mv" data-g="6x6" data-n="18-14" data-a="e1-d2">18-14</span> wint wit, na 6. <span class="mv" data-g="6x6" data-n="17-14" data-a="c1-d2">17-14</span> remise</p>
+<p class="note">de stand na 5. … <span class="mv" data-g="6x6" data-n="3×8" data-a="f6×d4">3×8</span> (als <a href="h7-3.html#d7.10">diagram 7.10</a>): na 6. <span class="mv" data-g="6x6" data-n="18-14" data-a="e1-d2">18-14</span> wint wit, na 6. <span class="mv" data-g="6x6" data-n="17-14" data-a="c1-d2">17-14</span> remise</p>
 <figure><a class="diagram" href="#" data-i="0"><div class="smallboard" data-g="6x6" data-fen="W:W13,15,17,18:B4,5,8,9"></div></a><figcaption>diagram 7.12, wit aan zet</figcaption></figure>
 <p class="claim"><strong>wit aan zet: <span class="val">W35</span></strong> <span class="verdict ok">boek: W ✓</span></p>
 <p class="moves"><a class="m1" href="#" data-i="1"><span class="mv" data-g="6x6" data-n="18-14" data-a="e1-d2">18-14</span></a> <span class="val">W35</span>, <a class="m1" href="#" data-i="2"><span class="mv" data-g="6x6" data-n="13-10" data-a="b2-a3">13-10</span></a> <span class="val">D</span>, <a class="m1" href="#" data-i="3"><span class="mv" data-g="6x6" data-n="13-11" data-a="b2-c3">13-11</span></a> <span class="val">D</span>, <a class="m1" href="#" data-i="4"><span class="mv" data-g="6x6" data-n="15-12" data-a="f2-e3">15-12</span></a> <span class="val">D</span>, <a class="m1" href="#" data-i="5"><span class="mv" data-g="6x6" data-n="17-14" data-a="c1-d2">17-14</span></a> <span class="val">D</span></p>

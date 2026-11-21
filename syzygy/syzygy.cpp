@@ -194,6 +194,56 @@ std::uint16_t from_byte(Metric mt, std::uint8_t s, std::uint8_t r)    // r: the 
 
 std::uint8_t wdl_bits(std::uint8_t const* w, std::uint64_t i) { return std::uint8_t(w[i >> 2] >> (2 * (i & 3)) & 3); }
 
+// Inputs read compressed (EGDB_COMPRESSED_INPUTS=1, a measurement): every file of a finished material is held as zstd
+// blocks of 4 KiB (as a compressed build-format file would be), and a lookup goes through a per-thread direct-mapped
+// cache of decompressed blocks (EGDB_CACHE_BLOCKS per thread, default 4096: 16 MiB). Off: the raw memory-mapped files.
+struct ZInput { std::vector<char> data; std::vector<std::uint64_t> off; std::uint64_t size = 0; };
+std::map<std::pair<Material, int>, ZInput> g_zinputs;
+bool g_zmode = std::getenv("EGDB_COMPRESSED_INPUTS") != nullptr;
+std::atomic<std::uint64_t> g_zmiss{ 0 }, g_zlook{ 0 };
+constexpr std::uint64_t ZBLOCK = 4096;
+
+void compress_input(Material m, int kind, std::uint8_t const* raw, std::uint64_t size)
+{
+        ZInput& z = g_zinputs[{ m, kind }];
+        if (z.size) return;
+        z.size = size;
+        std::uint64_t const nb = (size + ZBLOCK - 1) / ZBLOCK;
+        std::vector<std::vector<char>> parts(nb);
+        std::vector<std::uint64_t> idx(nb);
+        std::iota(idx.begin(), idx.end(), std::uint64_t(0));
+        std::for_each(std::execution::par, idx.begin(), idx.end(), [&](std::uint64_t b) {
+                std::uint64_t const lo = b * ZBLOCK, n = std::min(ZBLOCK, size - lo);
+                parts[b].resize(ZSTD_compressBound(n));
+                parts[b].resize(ZSTD_compress(parts[b].data(), parts[b].size(), raw + lo, n, 3));
+        });
+        z.off.resize(nb + 1);
+        for (std::uint64_t b = 0; b < nb; ++b) { z.off[b] = z.data.size(); z.data.insert(z.data.end(), parts[b].begin(), parts[b].end()); }
+        z.off[nb] = z.data.size();
+}
+
+std::uint8_t zbyte(Material m, int kind, std::uint64_t pos)
+{
+        struct Slot { ZInput const* f = nullptr; std::uint64_t block = ~std::uint64_t(0); std::array<std::uint8_t, ZBLOCK> data; };
+        static std::size_t const nslots = std::getenv("EGDB_CACHE_BLOCKS") ? std::size_t(std::atoll(std::getenv("EGDB_CACHE_BLOCKS"))) : 4096;
+        thread_local std::vector<Slot> cache(nslots);
+        thread_local ZSTD_DCtx* dx = ZSTD_createDCtx();
+        thread_local std::uint64_t looks = 0, misses = 0;
+        ZInput const& z = g_zinputs.at({ m, kind });
+        std::uint64_t const b = pos / ZBLOCK;
+        std::size_t const h = std::size_t((std::uintptr_t(&z) >> 4) * 0x9E3779B97F4A7C15ull ^ b * 0xC2B2AE3D27D4EB4Full) % nslots;
+        Slot& sl = cache[h];
+        if (++looks % 65536 == 0) { g_zlook += 65536; g_zmiss += misses; misses = 0; }
+        if (sl.f != &z || sl.block != b) {
+                ++misses;
+                std::uint64_t const lo = b * ZBLOCK, n = std::min(ZBLOCK, z.size - lo);
+                ZSTD_decompressDCtx(dx, sl.data.data(), n, z.data.data() + z.off[b], z.off[b + 1] - z.off[b]);
+                sl.f = &z;
+                sl.block = b;
+        }
+        return sl.data[pos - b * ZBLOCK];
+}
+
 // The 8-bit sink: the four output files themselves (<metric>-wtm, <metric>-btm, wdl-wtm, wdl-btm under temporary names),
 // memory-mapped for the whole build of the material. A decided value goes straight into its stored form, the unsigned
 // depth byte (to_byte) and two wdl bits, at its slot of the material; a lookup into an earlier group decodes it again
@@ -271,6 +321,7 @@ std::uint16_t probe(Pos const& p0)
         Material const m = material_of(p);
         std::uint64_t const i = mat_index(m).index(p);
         if (m == g_current) return g_sink->read(p.stm, p);
+        if (g_zmode) return from_byte(g_metric, zbyte(m, BYTES + p.stm, i), std::uint8_t(zbyte(m, WDL + p.stm, i >> 2) >> (2 * (i & 3)) & 3));
         return from_byte(g_metric, mat_file(m, BYTES + p.stm)[i], wdl_bits(mat_file(m, WDL + p.stm), i));
 }
 
@@ -282,6 +333,7 @@ std::uint8_t probe_wdl(Pos const& p0)
         Material const m = material_of(p);
         std::uint64_t const i = mat_index(m).index(p);
         if (m == g_current) return wdl_of(g_sink->read(p.stm, p));
+        if (g_zmode) return std::uint8_t(zbyte(m, WDL + p.stm, i >> 2) >> (2 * (i & 3)) & 3);
         return wdl_bits(mat_file(m, WDL + p.stm), i);
 }
 
@@ -854,6 +906,15 @@ bool build_material(std::string const& dir, Material c, ExecutionPolicy const& p
                 std::cout << std::endl;
         }
         open_successors(c);
+        if (g_zmode) {                                  // the inputs as compressed build-format files (a measurement)
+                std::uint64_t raw = 0, z = 0;
+                for (auto const& [key, ptr] : g_files) {
+                        compress_input(key.first, key.second, ptr, file_size(key.first, key.second));
+                        raw += file_size(key.first, key.second);
+                        z += g_zinputs[key].data.size();
+                }
+                std::cout << "compressed inputs: " << raw << " bytes raw, " << z << " in zstd blocks of 4 KiB" << std::endl;
+        }
         g_frozen = true;
         std::unique_ptr<DepthSink<std::uint16_t>> sink;
         if (g_group_files) sink = std::make_unique<GroupSink<std::uint16_t>>(dir, c, mi, groups);
@@ -942,6 +1003,7 @@ bool build_material(std::string const& dir, Material c, ExecutionPolicy const& p
                   << wins[1].load() << ", losses " << losses[0].load() << " / " << losses[1].load() << " (White / Black to move), longest " << longest.load()
                   << " plies, peak RSS " << peak_rss_mb() << " MB, " << sec << " s" << std::endl;
         print_stats(c, positions, groups.size(), sec);
+        if (g_zmode) std::cout << "compressed inputs: " << g_zlook.load() << " lookups, " << g_zmiss.load() << " block misses" << std::endl;
         return true;
 }
 

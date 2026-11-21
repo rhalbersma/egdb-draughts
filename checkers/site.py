@@ -519,15 +519,15 @@ king in the middle of the white kings (the third diagram).</p>''')]
                      + self.moves_list(pg, i0, legal, '1. … ') + '.</p>', '<div style="clear:both"></div>']
         x88 = self.active_passive(e88, (['c5', 'd4', 'e3'], ['g1', 'a7']), (['c7', 'e5', 'g3'], ['g1', 'a7']))
         body.append(t(f'<p>De twee vallen zijn van verschillende soort. De eerste is een actieve val, een dubbele '
-                      f'ruildreiging: hij wint met zwart én met wit aan zet, want met wit aan zet ruilt wit meteen: {x88}. De '
-                      f'tweede is een passieve val, een dubbele vangstdreiging: die wint alleen met zwart aan zet. Voor een '
-                      f'sluitende winst moet wit vanuit de passieve val dus van tempo kunnen wisselen; dat staat op de '
-                      f'<a href="val-pariteit.html">volgende pagina</a>.</p>',
+                      f'ruildreiging: die dwingt meteen een ruil af, met zwart én met wit aan zet; met wit aan zet ruilt wit '
+                      f'direct: {x88}. De tweede is een passieve val, een dubbele vangstdreiging: die geeft alleen met zwart aan '
+                      f'zet meteen een ruil. Met wit aan zet in de passieve val moet wit van tempo wisselen om te winnen; dat '
+                      f'staat op de <a href="val-pariteit.html">volgende pagina</a>.</p>',
                       f'<p>The two traps are of a different kind. The first is an active trap, a double exchange threat: it '
-                      f'wins with black and with white to move, since with white to move white exchanges at once: {x88}. The '
-                      f'second is a passive trap, a double capture threat: it wins with black to move only. For a watertight win '
-                      f'white must therefore be able to change the tempo from the passive trap; that is on the '
-                      f'<a href="val-pariteit.html">next page</a>.</p>'))
+                      f'forces an exchange at once, with black and with white to move; with white to move white exchanges '
+                      f'immediately: {x88}. The second is a passive trap, a double capture threat: it gives an immediate '
+                      f'exchange with black to move only. With white to move in the passive trap, white needs to change the '
+                      f'tempo in order to win; that is on the <a href="val-pariteit.html">next page</a>.</p>'))
         pgp = self.page((k88, e88))      # the parity page has a page (positions, boards) of its own
         # why both parities: the diagonal of white decides the parity, and moving over to the other diagonal costs three
         # moves (one per king), an odd number. Squares in the text are written algebraically, so that the notation switch

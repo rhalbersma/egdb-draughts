@@ -52,7 +52,7 @@
 //
 // build: g++-14 -std=c++23 -O2 -march=native -fopenmp -I<xstd-bits>/include -I<xstd-ints>/include
 //        -I<xstd-misc>/include syzygy/syzygy.cpp -lzstd -ltbb -o syzygy
-// usage: syzygy build <dir> wp bp wm bm <metric> [seq|par] [frontier|scan] [auto|groups|array] [material|tempi|configuration] [mem=MB]
+// usage: syzygy build <dir> wp bp wm bm <metric> [seq|par] [frontier|scan|cell8] [auto|groups|array] [material|tempi|configuration] [mem=MB]
 //                                                            build one material (its captures and promotions must exist);
 //                                                            the depth sink by the claim mem=MB (auto: the array if rung 0
 //                                                            fits, else group files), or as given; the granularity of
@@ -87,6 +87,7 @@ namespace {
 
 constexpr std::uint16_t win(int n) { return std::uint16_t(2 * n); }
 constexpr std::uint16_t loss(int n) { return std::uint16_t(2 * n + 1); }
+constexpr std::uint16_t win_value(int n) { return win(n); }    // where a local named win (a window) hides win()
 constexpr bool is_win(std::uint16_t v) { return v != 0 && (v & 1) == 0; }
 constexpr bool is_loss(std::uint16_t v) { return (v & 1) != 0; }
 constexpr int plies(std::uint16_t v) { return v >> 1; }
@@ -238,12 +239,265 @@ std::uint16_t value_from_successors(Pos const& p)
         return best;
 }
 
+// ---------------------------------------------------------------- one group in the 8-bit cell (synthesis 7.5)
+//
+// One byte per position and side to move, the statuses inside, rounds by scanning (rtbgen's scan mode), and
+// value-preserving reductions: when the plies run past the window, the window's depth codes are written unchanged to a
+// zstd snapshot (0 elsewhere) and collapse to WON or LOST, the last ply to FRONT_WIN or FRONT_LOSS (the previous ply of
+// the next round). At the end the snapshots and the last window are overlaid into the sink. Codes:
+//   0          undecided and lossable, its exits (if any) all lost by now; a draw at the end
+//   1 .. 240   a depth in the current window: dtm one code per ply (the class is the parity), dtc and dtz two
+//              (win, loss), so a window holds 240 or 120 plies (EGDB_CELL8_WINDOW=k plies forces a smaller window,
+//              to test the reductions on small builds)
+//   C_WON, C_LOST            decided in an earlier window
+//   C_FRONT_WIN, C_FRONT_LOSS the last ply of the previous window
+//   C_NOLOSE   undecided, cannot lose: an exit draws or wins
+//   C_PENDING  undecided, lossable once its slowest losing exit is reached (its level in the eloss list)
+//   C_DEFER    decided in pass 0 at a ply beyond the current window (dtm); recomputed when its window comes
+//   C_DRAWN    decided in pass 0 as a draw. Needed: the unmoves do not test compulsory capture, so a position whose
+//              captures leave the group (no move inside) still turns up as a predecessor, and must not look undecided
+
+bool g_cell8 = false;
+constexpr std::uint8_t C_WON = 241, C_LOST = 242, C_FRONT_WIN = 243, C_FRONT_LOSS = 244, C_NOLOSE = 245,
+                       C_PENDING = 246, C_DEFER = 247, C_DRAWN = 248;
+
+struct Snapshot { int window; std::vector<char> z; };
+
+void solve_group_cell8(Group const& g, DepthSink<std::uint16_t>& sink)
+{
+        std::uint64_t const P = g.P, T = 2 * P;
+        auto const pos = [&](std::uint64_t id) { return g.pos(id % P, int(id / P)); };
+        auto const id_of = [&](Pos const& p) { return std::uint64_t(p.stm) * P + g.index(p); };
+        bool const dtm = g_metric == Metric::dtm;
+        int const cpp = dtm ? 1 : 2;                                    // codes per ply
+        int WP = 240 / cpp;                                             // plies per window
+        if (char const* e = std::getenv("EGDB_CELL8_WINDOW")) WP = std::clamp(std::atoi(e), 2, 240 / cpp);
+        int w = 0;                                                      // the current window
+        auto const encode = [&](std::uint16_t v, int win) {            // a value of window win -> its code
+                int const o = plies(v) - WP * win;
+                return std::uint8_t(dtm ? 1 + o : 1 + 2 * o + (is_loss(v) ? 1 : 0));
+        };
+        auto const decode = [&](std::uint8_t c, int win) -> std::uint16_t {
+                int const o = dtm ? c - 1 : (c - 1) / 2, p = WP * win + o;
+                bool const lost = dtm ? p % 2 == 0 : ((c - 1) & 1) != 0;
+                return lost ? loss(p) : win_value(p);
+        };
+        std::vector<std::uint8_t> cell(T, 0);
+        auto const ld = [&](std::uint64_t id) { return std::atomic_ref<std::uint8_t>(cell[id]).load(std::memory_order_relaxed); };
+        auto const st = [&](std::uint64_t id, std::uint8_t c) { std::atomic_ref<std::uint8_t>(cell[id]).store(c, std::memory_order_relaxed); };
+
+        // the value of a position whose moves all leave the group (pass 0, and again for a deferred one), or 0
+        auto const exit_value = [&](Pos const& p, auto const& ml) -> std::uint16_t {
+                int wn = INF, l = 0;
+                bool drawn = false;
+                for (auto const& mv : ml) {
+                        std::uint16_t const x = move_value(p, mv);
+                        if (is_win(x)) wn = std::min(wn, plies(x));
+                        else if (is_loss(x)) l = std::max(l, plies(x));
+                        else drawn = true;
+                }
+                return wn < INF ? win_value(wn) : drawn ? std::uint16_t(0) : loss(l);
+        };
+
+        // pass 0: decided positions get their code (or C_DEFER), the others a status; the exits by level in lists
+        struct Entry { std::uint32_t level, id; };
+        std::uint64_t const nblocks = (T + 4095) / 4096;
+        std::vector<std::vector<Entry>> ewin_b(nblocks), eloss_b(nblocks);
+        std::atomic<int> max_seed{ 0 };
+        auto const t0 = std::chrono::steady_clock::now();
+        for_blocks(T, [&](std::uint64_t lo, std::uint64_t hi) {
+                std::uint64_t const blk = lo / 4096;
+                int ms = 0;
+                for (std::uint64_t id = lo; id < hi; ++id) {
+                        Pos const p = pos(id);
+                        auto const ml = moves(p);
+                        auto const i = std::uint32_t(id);
+                        if (ml.empty()) { cell[id] = encode(loss(0), 0); continue; }
+                        bool in = false, drawn = false;
+                        int wn = INF, l = 0;
+                        for (auto const& mv : ml) {
+                                if (inside(p, mv)) { in = true; continue; }
+                                std::uint16_t const x = move_value(p, mv);
+                                if (is_win(x)) wn = std::min(wn, plies(x));
+                                else if (is_loss(x)) l = std::max(l, plies(x));
+                                else drawn = true;
+                        }
+                        if (!in) {                                      // decided
+                                std::uint16_t const v = wn < INF ? win_value(wn) : drawn ? std::uint16_t(0) : loss(l);
+                                if (v == 0) { cell[id] = C_DRAWN; continue; }
+                                ms = std::max(ms, plies(v));
+                                cell[id] = plies(v) < WP ? encode(v, 0) : C_DEFER;
+                                continue;
+                        }
+                        if (wn < INF) { ewin_b[blk].push_back({ std::uint32_t(wn), i }); ms = std::max(ms, wn); }
+                        if (drawn || wn < INF) { cell[id] = C_NOLOSE; continue; }
+                        if (l > 0) { cell[id] = C_PENDING; eloss_b[blk].push_back({ std::uint32_t(l), i }); ms = std::max(ms, l); }
+                }
+                int cur = max_seed.load();
+                while (ms > cur && !max_seed.compare_exchange_weak(cur, ms)) {}
+        });
+        g_stats.pass0 += seconds_since(t0);
+        auto const t1 = std::chrono::steady_clock::now();
+        using List = std::vector<std::uint32_t>;
+        auto const by_level = [&](std::vector<std::vector<Entry>>& parts) {
+                std::vector<List> out(std::size_t(max_seed.load()) + 1);
+                for (auto& v_ : parts) {
+                        for (auto const& e : v_) out[e.level].push_back(e.id);
+                        std::vector<Entry>().swap(v_);
+                }
+                return out;
+        };
+        std::vector<List> const ewin_at = by_level(ewin_b), eloss_at = by_level(eloss_b);
+        auto const at = [&](std::vector<List> const& by, int n) -> List const& {
+                static List const none;
+                return n >= 0 && n < int(by.size()) ? by[std::size_t(n)] : none;
+        };
+        auto const for_list = [&](List const& l, auto&& f) {
+                for_blocks(l.size(), [&](std::uint64_t lo, std::uint64_t hi) { for (auto j = lo; j < hi; ++j) f(l[j]); });
+        };
+        auto const predecessors = [&](std::uint64_t q, auto&& f) {
+                std::uint64_t const off = (1 - q / P) * P;
+                for_each_inside_predecessor(g, pos(q), [&](std::uint64_t i) { f(off + i); });
+        };
+
+        // reduce: snapshot window w - 1 (its depth codes unchanged, 0 elsewhere), collapse it, enter window w
+        std::vector<Snapshot> snaps;
+        auto const reduce = [&]() {
+                Snapshot s{ w - 1, {} };
+                ZSTD_CCtx* cx = ZSTD_createCCtx();
+                ZSTD_CCtx_setParameter(cx, ZSTD_c_compressionLevel, 1);
+                ZSTD_CCtx_setParameter(cx, ZSTD_c_nbWorkers, g_par ? 4 : 0);
+                constexpr std::size_t B = std::size_t(1) << 20;
+                std::vector<std::uint8_t> stage(B);
+                std::vector<char> out(ZSTD_CStreamOutSize());
+                for (std::uint64_t lo = 0; lo < T; lo += B) {
+                        std::size_t const n = std::size_t(std::min<std::uint64_t>(B, T - lo));
+                        for (std::size_t j = 0; j < n; ++j) { std::uint8_t const c = cell[lo + j]; stage[j] = c >= 1 && c <= 240 ? c : 0; }
+                        ZSTD_inBuffer in{ stage.data(), n, 0 };
+                        bool const last = lo + n == T;
+                        for (;;) {
+                                ZSTD_outBuffer o{ out.data(), out.size(), 0 };
+                                std::size_t const r = ZSTD_compressStream2(cx, &o, &in, last ? ZSTD_e_end : ZSTD_e_continue);
+                                if (ZSTD_isError(r)) { std::cerr << "zstd: " << ZSTD_getErrorName(r) << std::endl; std::abort(); }
+                                s.z.insert(s.z.end(), out.data(), out.data() + o.pos);
+                                if (last ? r == 0 : in.pos == in.size) break;
+                        }
+                }
+                ZSTD_freeCCtx(cx);
+                snaps.push_back(std::move(s));
+                int const last_ply = WP * w - 1;
+                for_blocks(T, [&](std::uint64_t lo, std::uint64_t hi) {
+                        for (std::uint64_t id = lo; id < hi; ++id) {
+                                std::uint8_t const c = cell[id];
+                                if (c >= 1 && c <= 240) {
+                                        std::uint16_t const v = decode(c, w - 1);
+                                        cell[id] = plies(v) == last_ply ? (is_win(v) ? C_FRONT_WIN : C_FRONT_LOSS) : (is_win(v) ? C_WON : C_LOST);
+                                } else if (c == C_FRONT_WIN) cell[id] = C_WON;
+                                else if (c == C_FRONT_LOSS) cell[id] = C_LOST;
+                                else if (c == C_DEFER) {                       // decided in pass 0: does it fall in window w?
+                                        Pos const p = pos(id);
+                                        std::uint16_t const v = exit_value(p, moves(p));
+                                        if (plies(v) < WP * (w + 1)) cell[id] = encode(v, w);
+                                }
+                        }
+                });
+        };
+
+        // a code that is a win in fewer than n plies (WON and FRONT_WIN are wins of earlier windows)
+        auto const win_below = [&](std::uint8_t c, int n) {
+                if (c == C_WON || c == C_FRONT_WIN) return true;
+                if (c < 1 || c > 240) return false;
+                std::uint16_t const v = decode(c, w);
+                return is_win(v) && plies(v) < n;
+        };
+        auto const check_loss = [&](std::uint64_t id, int n) {            // rtbgen's check_loss: lost in n?
+                if (ld(id) != 0) return false;
+                Pos const p = pos(id);
+                for (auto const& mv : moves(p))
+                        if (inside(p, mv) && !win_below(ld(id_of(mv.next)), n)) return false;
+                st(id, encode(loss(n), w));
+                return true;
+        };
+        auto const mark_win = [&](std::uint64_t id, int n) {
+                std::uint8_t const c = ld(id);
+                if (c != 0 && c != C_NOLOSE && c != C_PENDING) return false;
+                st(id, encode(win_value(n), w));
+                return true;
+        };
+        for (int n = 1;; ++n) {
+                if (n % WP == 0) { ++w; reduce(); }
+                std::atomic<bool> found{ false };
+                auto const note = [&](bool b) { if (b) found.store(true, std::memory_order_relaxed); };
+                // the codes of the previous ply n - 1 (dtm: a win only at an odd ply, a loss only at an even one)
+                bool const front = (n - 1) / WP != w;
+                bool const has_win = n > 1 && (!dtm || (n - 1) % 2 == 1), has_loss = !dtm || (n - 1) % 2 == 0;
+                std::uint8_t const cw = has_win ? (front ? C_FRONT_WIN : encode(win_value(n - 1), w)) : 0;
+                std::uint8_t const cl = has_loss ? (front ? C_FRONT_LOSS : encode(loss(n - 1), w)) : 0;
+                for_list(at(eloss_at, n), [&](std::uint64_t id) { if (cell[id] == C_PENDING) cell[id] = 0; });
+                if (has_win)
+                        for_blocks(T, [&](std::uint64_t lo, std::uint64_t hi) {         // losses in n
+                                for (std::uint64_t q = lo; q < hi; ++q)
+                                        if (ld(q) == cw) predecessors(q, [&](std::uint64_t id) { note(check_loss(id, n)); });
+                        });
+                for_list(at(eloss_at, n), [&](std::uint64_t id) { note(check_loss(id, n)); });
+                if (has_loss)
+                        for_blocks(T, [&](std::uint64_t lo, std::uint64_t hi) {         // wins in n
+                                for (std::uint64_t q = lo; q < hi; ++q)
+                                        if (ld(q) == cl) predecessors(q, [&](std::uint64_t id) { note(mark_win(id, n)); });
+                        });
+                for_list(at(ewin_at, n), [&](std::uint64_t id) { note(mark_win(id, n)); });
+                if (!found && n > max_seed.load()) {
+                        g_stats.levels = std::max(g_stats.levels, std::uint64_t(n));
+                        break;
+                }
+        }
+
+        // merge: every snapshot (its window's values), then the last window, into the sink
+        std::uint64_t zbytes = 0;
+        for (auto const& s : snaps) {
+                zbytes += s.z.size();
+                ZSTD_DCtx* dx = ZSTD_createDCtx();
+                constexpr std::size_t B = std::size_t(1) << 20;
+                std::vector<std::uint8_t> buf(B);
+                ZSTD_inBuffer in{ s.z.data(), s.z.size(), 0 };
+                std::uint64_t base = 0;
+                while (base < T) {
+                        ZSTD_outBuffer o{ buf.data(), std::size_t(std::min<std::uint64_t>(B, T - base)), 0 };
+                        while (o.pos < o.size) {
+                                std::size_t const r = ZSTD_decompressStream(dx, &o, &in);
+                                if (ZSTD_isError(r)) { std::cerr << "zstd: " << ZSTD_getErrorName(r) << std::endl; std::abort(); }
+                                if (r == 0 && o.pos < o.size) { std::cerr << "zstd: snapshot too short" << std::endl; std::abort(); }
+                        }
+                        for_blocks(o.size, [&](std::uint64_t lo, std::uint64_t hi) {
+                                for (std::uint64_t j = lo; j < hi; ++j)
+                                        if (buf[j] != 0) { std::uint64_t const id = base + j; sink.put(int(id / P), id % P, pos(id), decode(buf[j], s.window)); }
+                        });
+                        base += o.size;
+                }
+                ZSTD_freeDCtx(dx);
+        }
+        std::atomic<bool> deferred{ false };
+        for_blocks(T, [&](std::uint64_t lo, std::uint64_t hi) {
+                for (std::uint64_t id = lo; id < hi; ++id) {
+                        std::uint8_t const c = cell[id];
+                        if (c >= 1 && c <= 240) sink.put(int(id / P), id % P, pos(id), decode(c, w));
+                        else if (c == C_DEFER) deferred = true;
+                }
+        });
+        if (deferred) { std::cerr << "cell8: a deferred position was never reached" << std::endl; std::abort(); }
+        g_stats.frontier += zbytes;                             // cell8: the bytes of the snapshots
+        g_stats.rounds += seconds_since(t1);
+        if (!snaps.empty())
+                std::cout << "cell8: group of " << T << " positions, " << snaps.size() << " reductions, snapshots " << zbytes << " bytes" << std::endl;
+}
+
 // ---------------------------------------------------------------- one group: pass 0 and the rounds
 
 // The values go to the depth sink: frontier rounds never read them back, so they write straight into it; scan mode
 // finds its frontier by scanning the values, so it keeps them in an array of the group and hands them over at the end.
 void solve_group(Group const& g, DepthSink<std::uint16_t>& sink)
 {
+        if (g_cell8) { solve_group_cell8(g, sink); return; }
         std::uint64_t const P = g.P, T = 2 * P;                 // position id = stm * P + index in the group
         auto const pos = [&](std::uint64_t id) { return g.pos(id % P, int(id / P)); };
         auto const id_of = [&](Pos const& p) { return std::uint64_t(p.stm) * P + g.index(p); };
@@ -438,7 +692,7 @@ MemoryNeed memory_need(Material c)
         // 9 bit planes (has a move inside, every exit loses, exits lost by now, won, lost, and four frontiers); the level
         // lists with pass 0's per-block entries while they are merged (8 + 4 bytes per entry, at most one per position
         // and side to move counted); the scan mode's value array; a group about 480 bytes, a slice 160
-        std::uint64_t const transient = 9 * ((T + 63) / 64) * 8 + 12 * T + (g_frontier ? 0 : 2 * T);
+        std::uint64_t const transient = g_cell8 ? T + 12 * T : 9 * ((T + 63) / 64) * 8 + 12 * T + (g_frontier ? 0 : 2 * T);
         std::uint64_t const meta = 160 * m.slices + 480 * m.groups;
         std::uint64_t const writing = std::uint64_t(5) << 18;                          // the final pass's chunk buffers
         // the memory-mapped files count in the resident set as their pages are touched: the inputs (the materials the
@@ -666,6 +920,7 @@ int main(int argc, char* argv[])
                 for (std::size_t i = 7; i < a.size(); ++i) {
                         if (a[i] == "seq" || a[i] == "par") g_par = a[i] == "par";
                         else if (a[i] == "scan" || a[i] == "frontier") g_frontier = a[i] == "frontier";
+                        else if (a[i] == "cell8") { g_cell8 = true; g_frontier = false; }
                         else if (a[i].starts_with("mem=")) g_mem_mb = std::stoull(a[i].substr(4));
                         else if (a[i] == "groups" || a[i] == "array") { g_group_files = a[i] == "groups"; g_sink_auto = false; }
                         else if (a[i] == "auto") g_sink_auto = true;
@@ -678,7 +933,7 @@ int main(int argc, char* argv[])
                 return check_all(a[1], std::stoi(a[2]), a.size() == 5 ? std::stoi(a[4]) : 4) ? 0 : 1;
         if (a.size() == 5 && a[0] == "cmp86" && parse_metric(a[4])) return compare_thompson86(a[1], a[2], std::stoi(a[3])) ? 0 : 1;
         if (a.size() == 5 && a[0] == "order") return check_order(a[1], a[2], a[3], std::stoi(a[4])) ? 0 : 1;
-        std::cerr << "usage: syzygy build <dir> wp bp wm bm dtm|dtc|dtz [seq|par] [frontier|scan] [auto|groups|array] [material|tempi|configuration] [mem=MB] | bench n [samples] | plan n dtm|dtc|dtz [granularity] | checkall <dir> n dtm|dtc|dtz [threads]"
+        std::cerr << "usage: syzygy build <dir> wp bp wm bm dtm|dtc|dtz [seq|par] [frontier|scan|cell8] [auto|groups|array] [material|tempi|configuration] [mem=MB] | bench n [samples] | plan n dtm|dtc|dtz [granularity] | checkall <dir> n dtm|dtc|dtz [threads]"
                      " | cmp86 <dir> <dir_thompson86> n dtm|dtc|dtz | order <dir_dtz> <dir_dtc> <dir_dtm> n" << std::endl;
         return 2;
 }

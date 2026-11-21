@@ -854,11 +854,14 @@ value-preserving and aligned with the storage escapes of §10.
 | `WON`, `LOST` | decided in an earlier window: the class only (to skip it, and for `check_loss`: is a successor won?) |
 | not lossable | undecided, but an exit draws or wins (rtbgen's `CAPT_DRAW`; saves probing the exits again in every check) |
 | `FRONT_WIN`, `FRONT_LOSS` | the last ply of the previous window, the frontier of the first round after a reduction; they become `WON`, `LOST` as that round's scan passes them |
-| 10 spare | never used in the build; they exist as storage tokens (§10) |
+| `DRAWN` | decided in pass 0 as a draw. Needed because the unmoves do not test compulsory capture: a position whose captures all leave the group (no move inside) still turns up as a predecessor, and must not look undecided |
+| `PENDING` | undecided and lossable, but not before its slowest losing exit's level (DTM; in DTZ and DTC that level is 1); it becomes undecided (0) when the level comes round |
+| `DEFER` | decided in pass 0 at a depth beyond the current window (DTM: captures into deep materials); recomputed from its exits when its window comes |
+| 7 spare | never used in the build; they exist as storage tokens (§10) |
 | 1 … 240: W depth codes | code c is offset c − 1 in the window. DTM: one code per ply (a win odd, a loss even: 240 plies per window); DTZ, DTC: two codes per ply, win and loss (no parity: 120 plies per window) |
 
-What the cell does not need: "open" (an undecided position has a move inside, or pass 0 would have decided it), a
-candidate mark (rtbgen's `CHANGED`: our rounds check a predecessor at once), loss in 0 (a depth), and, in draughts,
+What the cell does not need: "open" (an undecided position has a move inside, or pass 0 would have decided it;
+the decided ones carry a depth, `DRAWN` or `DEFER`), a candidate mark (rtbgen's `CHANGED`: our rounds check a predecessor at once), loss in 0 (a depth), and, in draughts,
 rtbgen's capture bounds (compulsory captures decide a position in pass 0; a winning exit in DTZ or DTC is a win in 1,
 decided there too). DTM's exit seeds carry a level and stay sparse lists outside the cell. Chess without the 50-move
 rule needs the same codes; with it, the bounds into a cursed win and a blessed loss and the cursed collapse classes come
@@ -888,6 +891,11 @@ decided in the last window). Windows 0 and 1 are translated once into direct sto
 DTC take their sign from WDL; DTM goes to moves); window i ≥ 2 becomes **storage token 240 + (i − 2), and its snapshot
 byte is the extra byte, verbatim**. Every value stays exact from the first round to the stored byte: no rounding, no
 halving, no margin for an engine to keep, and the token is the window number: a multiple of the reduction interval.
+
+**Implemented** as `syzygy build … cell8` (`solve_group_cell8`); `EGDB_CELL8_WINDOW=k` forces windows of k plies, to
+exercise the reductions on small builds. Up to 6 pieces it agrees with egdb_6x6 and with every position's successors
+for all three metrics, with the full window (no reductions) and with windows of 7 and 2 plies (up to 35 reductions
+in one group).
 
 **Limits.** The 16 tokens reach 2,160 plies (DTZ, DTC) and 4,320 plies (DTM), against the deepest known values of
 every game: chess DTZ 1,193 plies (8 pieces, the opposing-pair tables) and DTM 1,097 plies (7 pieces, chesstb's

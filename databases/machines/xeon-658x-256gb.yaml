@@ -1,0 +1,11 @@
+# an Intel Xeon 658X workstation (Xeon 600 series, 2026): 24 cores / 48 threads, 256 GB.
+# PassMark (cpubenchmark.net, November 2026): CPU Mark about 73,600, single thread about 3,700; the W-3245 of
+# gilbert-2026.yaml about 31,100: 3,070 against 1,940 per core, so his 1.63 us per position per core (build and
+# self-verify) becomes 1.03 us here. The disk is an assumption: an 8 TB NVMe SSD.
+name: Xeon 658X, 24 cores, 256 GB
+cores: 24
+ram: 256GB
+disk: 8TB
+disk_kind: nvme
+disk_mbps: 5000
+us: 1.03

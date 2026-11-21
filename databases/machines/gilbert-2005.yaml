@@ -1,0 +1,11 @@
+# Ed Gilbert's 10-piece English checkers build, 2004-2005 (edgilbert.org/EnglishCheckers/10-pieceBuild.htm):
+# five 32-bit PCs (2.4 GHz P4, Athlon XP2800+, 3.2 GHz P4, ...) with 2 GB each, one program instance per machine,
+# 120-250 GB disks; subdivisions refined above a 900 MB threshold
+name: Gilbert 2005, 5 machines with 2 GB
+cores: 5
+ghz: 2.4
+ram: 2GB
+ram_per_group: 900MB
+disk: 600GB
+disk_kind: hdd
+disk_mbps: 50

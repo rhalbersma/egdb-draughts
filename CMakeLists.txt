@@ -72,3 +72,30 @@ target_compile_features(egdb_6x6_checkers PRIVATE cxx_std_23)
 target_compile_options(egdb_6x6_checkers PRIVATE
     $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -march=native>
 )
+
+# Thompson (1986, 1996) style builds on top of egdb_6x6's rules: one-sided files per material (White-to-move wins,
+# Black-to-move losses) for dtm, dtc and dtz, bit planes per group (see thompson86/)
+add_executable(thompson86 thompson86/thompson86.cpp)
+target_link_libraries(thompson86 PRIVATE xstd::bits OpenMP::OpenMP_CXX ${ZSTD_LIBRARY} TBB::tbb)
+target_compile_features(thompson86 PRIVATE cxx_std_23)
+target_compile_options(thompson86 PRIVATE
+    $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -march=native>
+)
+
+# a Syzygy (rtbgen) style build on top of egdb_6x6's rules: two-sided files per material for dtm, dtc and dtz, with
+# WDL as a by-product, the per-material index of thompson86 (see syzygy/)
+add_executable(syzygy syzygy/syzygy.cpp)
+target_link_libraries(syzygy PRIVATE xstd::bits OpenMP::OpenMP_CXX ${ZSTD_LIBRARY} TBB::tbb)
+target_compile_features(syzygy PRIVATE cxx_std_23)
+target_compile_options(syzygy PRIVATE
+    $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -march=native>
+)
+
+# the same builder with the rules of English checkers on the same 6x6 board
+add_executable(syzygy_checkers syzygy/syzygy.cpp)
+target_compile_definitions(syzygy_checkers PRIVATE EGDB_6X6_CHECKERS=1)
+target_link_libraries(syzygy_checkers PRIVATE xstd::bits OpenMP::OpenMP_CXX ${ZSTD_LIBRARY} TBB::tbb)
+target_compile_features(syzygy_checkers PRIVATE cxx_std_23)
+target_compile_options(syzygy_checkers PRIVATE
+    $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -march=native>
+)

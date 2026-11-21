@@ -39,6 +39,124 @@ Notes marked **[my analysis]** are my inferences for the `std::for_each` mapping
 
 ---
 
+## 2005-web-Gilbert, 10-piece English checkers build (edgilbert.org/EnglishCheckers/10-pieceBuild.htm)
+
+Read verbatim (HTML fetched and converted to text).
+
+1. **Scope**: the 10-piece English checkers database, started 2 August 2004, final slice (5 men vs 5 men, about
+   4 billion positions, "the smallest" and "the fastest slice to build") finished 17 July 2005: "11-1/2 months of
+   calendar time, but it was also 4.2 years of computer time". The 9-piece database took 6 computer-months in 2003; the
+   10-piece one has 4.3 times as many positions, and there was "a progressive slowdown as each larger db was built".
+   The largest slice "occupied 4 computers working in parallel for 2 months".
+2. **Hardware**: a 2.4 GHz P4 and an Athlon XP2800+ with 2 GB each, a pair of 120 GB disks added to each; a 3.2 GHz
+   P4 with 2 GB (July 2004); an Athlon XP2600+; after six months a fifth machine (new CPU, motherboard, a 250 GB disk,
+   1 GB taken from another build machine). One program instance per machine, at low priority, sharing results over a
+   100 Mbit Ethernet LAN. Re-indexing on a hyperthreaded P4.
+3. **Memory**: up to 8 pieces, Chinook's subdivisions (piece counts, leading ranks) "fit entirely in ram as they are
+   built, allowing fast random access and quick build times" on 32-bit PCs with 2 GB per program (the 8-piece database
+   in about 2 weeks on one machine). Beyond that, "the largest 9 and 10 piece subdivisions are much too large to fit in
+   the available ram. Complex disk caching schemes must then be used, else accessing the data on disk becomes horribly
+   slow. With these larger data sets, caching is less effective at all levels -- dram caching within the cpu, disk
+   caching within the operating system, as well as the database caching in the build program." More than 2^32
+   positions also forces 64-bit arithmetic through library calls, which slows iteration.
+4. **9 pieces**: subdivisions by piece counts and the *square* of the most advanced man of each colour (about 784
+   combinations instead of 49 leading-rank pairs): all fit 2 GB buffers and 2^32 positions, but 71,168 subdivisions
+   (against 5,364 by leading rank), "many of them trivially small", 4 WDL files and 4 moves-to-conversion files each,
+   about half a million files; Windows Explorer went "completely comatose for 3 to 4 minutes" browsing them.
+5. **10 pieces**: three tiers: piece counts and leading ranks; the configuration of the men on the leading rank (for 2
+   men, 10 per rank, 70 per colour, 4,900 for 2 men each); the penultimate rank (the most advanced man not on the
+   leading rank, "most of the largest subdivisions into 36 smaller pieces"). "With these 3 tiers just about everything
+   can be built with 2gb of ram and 32-bit indices", but there were almost 3 million subdivisions and about 20 million
+   files: "the build program will run out of file handles and choke on all those files". So the second and third tiers
+   only above a **900 MB threshold**: 64,369 subdivisions. "Most of the 10-piece database can be built efficiently
+   using only 1gb ram, but at least one machine needs to have 2gb or the largest database subdivisions will build much
+   more slowly."
+6. **The all-kings slice**: almost 4 GB of buffer and more than 2^32 positions, not subdividable (no men). "My build
+   program can build subdivisions that do not fit completely in ram, but at a much slower speed." Halved by the mirror
+   symmetry about the double-corner diagonal (Fierz's idea) to just fit 2 GB, built with 64-bit indices, then split
+   into pieces below 2^32 for lookups: "only 2 days instead of several weeks". The single-corner symmetry would halve
+   it again but was not needed.
+7. **Parallelism**: subdivisions with the same number of men on the leading rank in the same first tier are
+   independent; about 50 buildable at a time on average, above 100 in the middle months, below 20 only at the start
+   and in the last week; machines "occupied nearly 100% of the time". Estimate: about 20 dual-core processors with 2
+   instances each would build it in 5–6 weeks.
+8. **Runtime format**: each slice re-indexed into one subdivision (no tables against man collisions), then cut into
+   fixed pieces of 2^31 positions (Trice's idea, 2^31 to avoid overflow tests) so indexing data stays 32-bit (it would
+   have been nearly 2 GB for 64-bit indices). Re-indexing runs 12–15× faster than building; one hyperthreaded P4 kept
+   up with five build machines (each program at about 3/4 speed when both ran).
+9. **Verification**: self-consistency "adds about 40% to the total build time" and was skipped; WDL counts per slice
+   were compared with Schaeffer's independent database. One slice (2 black men, 3 black kings, 2 white men, 3 white
+   kings) differed by one win against one draw; narrowed to one leading-rank subdivision, recomputed (3 days), traced
+   to an error during the compression pass on one machine. A self-consistency check on the bad data "correctly detected
+   it". Schaeffer had seen errors in compression, in LAN file transfers and random bit errors in RAM.
+10. **Compression**: Schaeffer's run-length encoding with capture and threatened-capture positions removed; Fierz's 4
+    positions per byte with the spare codes for runs.
+11. **Synthesis**: §7.3.
+
+---
+
+## 2026-web-Gilbert, 12-piece English checkers database (edgilbert.org/EnglishCheckers/12-pieceEnglishDB.htm)
+
+Read verbatim (fetched 2026-11).
+
+1. **Scope**: "In July 2026, I finished building a 12-piece endgame database for English checkers"; WLD for 2–12
+   pieces and a separate 12-piece MTC database ("a distance-to-conversion DB that guides Kingsrow to play the shortest
+   path to the next non-reversible move"). "Compared to the older 10-piece WLD DB, it contains 48 times the number of
+   positions and is 29 times larger on disk." No total position count, split or restriction is given.
+2. **Machine and time**: "It took 1.7 years to build and self-verify using a 16-core Xeon workstation with 192 GB of
+   ECC RAM." No CPU model, clock, disks, instances, CPU time or speed per position.
+3. **Disk**: unpacked WLD 2.88 TB (download 2.19 TB, 7-Zip), unpacked MTC 872 GB (download 485 GB); users need at least
+   16 GB of RAM, 10 GB of EGDB cache, and the WLD data on an internal SSD ("Do not attempt to run this database from an
+   external USB drive or an internal physical hard drive"); "I have redesigned the indexing format".
+4. **Not on the page**: memory per subdivision, all-kings handling, symmetry, indexing width, subdivisions, parallelism,
+   compression scheme, temporary disk.
+5. **Checked against the board model** (`src/egdb_layout.py --max-per-side`): the database holds every position with at
+   most 6 pieces per side (11 pieces: the 6v5 subset; 12 pieces: the 6v6 subset), as the 10-piece one held at most 5
+   per side (5v5 at 10 pieces): 528.2 T against 10.907 T positions per side to move, ratio 48.4, his "48 times" (no
+   other reading comes close: 6v6 against 5v5 alone is 44.7, exactly 12 against exactly 10 pieces 48.8 but with every
+   split). Over 1.7 years on 16 cores that is 1.63 µs per position per core for building and verifying together; in
+   2009 he built at 5.06 µs and verified at about the same cost, so roughly six times faster per core. On disk, about
+   180 positions per byte (2.88 TB), against about 110 for the 10-piece database (about 99 GB). The largest group, the
+   all-kings 6v6 (209 G positions per side), takes 24 GiB at 2 bits and both sides with the 4-fold symmetry, 49 GiB with
+   one diagonal, 97 GiB with none: all within 192 GB, so the build ran in RAM, CPU-bound.
+6. **Synthesis**: §7.4; machine file `databases/machines/gilbert-2026.yaml`.
+
+---
+
+## 2009-web-Gilbert, 8-piece international draughts database (edgilbert.org/InternationalDraughts/8_piece_international_draughts_db.htm)
+
+Read verbatim (HTML fetched and converted to text).
+
+1. **Scope**: 10×10 international draughts, all 4×4 and 5×3 positions, 16.5 trillion; WDL for all, moves to
+   conversion for "all positions that are at least 10 plies from a conversion move". October 2008 to 6 July 2009, on
+   top of the 2–7-piece databases built in 2007.
+2. **Statistics**: total calendar build and verify time 8.8 months; CPU build time 2.65 CPU-years; CPU verify time
+   2.91 CPU-years; 365 GB on disk (WDL only); average build speed per CPU 197,529 positions/s; average verify speed per
+   CPU 179,584 positions/s; longest MTC 149 plies (B:WK1,K7,48:BK8,15,K18,22,K33).
+3. **Hardware**: first a 2.4 GHz quad-core with 8 GB of RAM running 4 instances; at 14 % done (mid-January) an 8-core
+   dual Xeon (two 2.5 GHz quad-cores) for 8 more instances. For most of the build 10 cores built and verified, 2
+   re-indexed. The page gives no RAM figure for the Xeon, no memory per instance or per subdivision, and
+   does not mention the all-kings subdivisions, symmetry, 64-bit indices or how WDL values are held during the build
+   (reread 2026: only "the WLD values of positions within a subdivision are computed only once, and then they are
+   available for the remaining time of building that subdivision").
+4. **CPU-bound**: "It is clear from the above statistics that parallelizing the build is critical to getting the 8
+   piece database built in a reasonable period of time." Three subdivisions: man and king counts; the rows of the most
+   advanced black and white man; the configuration of the men on the leading rank (for example 5 × 10 = 50 independent
+   combinations within one such subset). "At any instant in time during the build there are typically hundreds of
+   subdivisions that can be built in parallel"; except at the start, the end and around days 208 and 248, more than
+   enough to keep 12 cores busy: "I could have easily kept two or three times as many cores occupied".
+5. **Files**: about 200K subdivisions, most with 8 files (four WDL, four MTC); not good for engine lookups, so
+   re-indexed into subdivisions by piece counts only; re-indexing about 10× faster than building.
+6. **Verification**: after each subdivision is built and compressed, every non-capture position is checked against
+   the WDL values of its successors (capture positions are excluded from the compressed data). It was "on average a bit
+   slower than building", because many successors are captures whose values need a small search, repeated for every
+   position that has the same capture successor; in the build, values within a subdivision are computed once. Caching
+   the capture values "would nearly double the speed of the verify process", two months less in total.
+7. **Synthesis**: §7.3. The verification lesson is the same as storing `btm.dtm-L` in `thompson86`: a value looked up
+   from many parents should be computed once, not re-searched per parent.
+
+---
+
 ## 1994-ACC-07-Lake-Schaeffer-Lu.pdf
 
 1. **Citation**: R. Lake, J. Schaeffer, P. Lu, "Solving Large Retrograde Analysis Problems Using a Network of Workstations", *Advances in Computer Chess 7*, 1994, pp. 135–162.
@@ -99,7 +217,7 @@ Notes marked **[my analysis]** are my inferences for the `std::for_each` mapping
      - (iv) DoCaptures can run for any number of slices ahead of time, since it reads only the ≤N−1-piece databases.
    - **Mini-slices**: each slice is cut into about 10 M positions, aligned to 32,768-position pages. Each worker *writes only its own interval* and may read anything.
    - **Locality**: "the choice of the forward approach is critical": it keeps writes in a contiguous range. The backward queue has no locality and was run **sequentially**.
-   - **Job control**: four job queues (prime, non-prime, slow, small), crash and reboot detection by ping, automatic restart from checkpoints. Database traffic was about 75% of the department's network traffic.
+   - **Job control** (§5.1 "Creating a Supercomputer", §5.2 "A Day in the Life of a Network Supercomputer", reread verbatim): "keeping 30 or more machines busy required too much manual labor", so a **job queue file** with one line per job, `job_type slice -max maxslices -n thisslice` or `job_type slice first_position last_position -n thisslice` (restart near the last completed index after a reboot); job types `cap`, `winmove`, `lookup`, `noioo`, `noiom`, `que`, `build`, `ver`, `stop`. A shell script on every workstation takes the top entry and forks the job; it knows the dependencies (`noiom` waits for `noioo`, `que` for `noiom`, `build` for `que`), and other slices' jobs are inserted between them so no processor waits. `addq` splits a computation into page-aligned mini-slices of about 10 million positions, because "manually adding work to the queues occasionally introduced errors". A lock file per running job; output checked on exit; failures "manually inspected" and reinserted from the start or the last checkpoint. A monitor pings every machine every minute (database traffic was about 75 % of the department's network, so packets got lost): no answer for 10 minutes means crashed; a crashed or rebooted machine's last job goes back to the top of the queue, with a mail; the only manual intervention left was after a file-server reboot. A second monitor checkpoints jobs on staff workstations when someone is active, suspends them to swap or kills and requeues them. Four queues by machine class: **prime** (fast, enough memory for any job, always available: lookup, noio, que of the current slice), **non-prime** (the same with daytime restrictions), **slow**, **small** (8 MB or less: low-priority, small-memory jobs, mainly `DoCaptures()`). Peak: 90 heterogeneous workstations at low priority. In effect a hand-built Snakemake (synthesis §7.3).
    - **On the TC2000**: the slice and its mirror sit in shared memory, with barrier synchronisation between iterations.
 8. **Draws / cycles**: Draws are whatever remains undecided at the fixpoint, including ≥D bounds. No repetition rule is needed in the construction.
 9. **Final storage / compression**:
@@ -199,6 +317,46 @@ Notes marked **[my analysis]** are my inferences for the `std::for_each` mapping
     - Queue phase: a frontier bitset, scatter-mark predecessors with atomic OR, then gather over the marked set.
     - Verify: a full-range gather plus a reduction.
     - Compression: sequential within a block, because of run continuation and prediction state; parallel across blocks.
+
+---
+
+**Reread verbatim (2026-11-19), additions to the above:**
+- **Terminology**: "A portion of the endgame database (a slice) is computed by resolving all positions as wins, losses or
+  draws." The breakdown: "By pieces" (the N-piece database); "**By material**: An N-piece database is further divided so
+  that subsets with a different number of pieces per side can be computed in parallel", e.g. "8 pieces versus 1, 7
+  versus 2, 6 versus 3, and 5 versus 4"; "By number of kings: The material division is further broken down by the number
+  of kings for each side"; "By leading rank: A sub-database is further sliced into pieces" (ranks 1 to 7, 49 slices).
+  Table 1's first column is headed "Database", in "bk wk bc wc" notation; 5v5 has "21 subsets based on the number of
+  kings and checkers" and 630 slices; slices are "bk wk bc wc. br wr"; "the symmetric database 2233.77", "its mirror
+  database 2332.77 with white to move". So "material" here is pieces per side, unlike 1994 ("subdatabases according to
+  the material, the number of checkers and kings").
+- **Bottlenecks**: "The captures, lookups, and verification phases are I/O bound. These phases need to be run on
+  machines with a minimum of 300 GB of disk storage, and they benefit from the fastest possible disk drives. The
+  non-capture phase is compute bound and should be run on the fastest available processor." And the shift since the
+  1990s: "Some parts of the program that were previously I/O bound are now CPU bound (more memory to eliminate costly
+  I/O), while other parts that were CPU bound are now I/O bound (CPU speed has improved more than disk speed). This
+  meant that we had to re-profile the program and use additional optimization techniques."
+- **Paging**: own disk paging with 200 MB of page buffers, "one disk I/O for an average of 500 database position value
+  requests"; slices that lead into one another placed close together in the file; the non-capture phase on files "as
+  large as 25 GB in only a few days" with that 200 MB.
+- **Lookups from compressed data**: captures, lookups and verification read the *compressed* databases (capture and
+  threatened-capture positions removed), so each may need a small search; the uncompressed data was not used because
+  it is not yet verified. Over 60 % of positions resolve in the captures phase (slightly more than one capture each);
+  lookups average about 3 leading-checker moves each and resolve 10–15 %.
+- **Selective slicing**: "I/O could be significantly reduced if the database construction program used slices
+  selectively", e.g. the 1045 database (45 billion positions, about 10.5 GB) in one computation instead of 42 slices;
+  "This has not been done."
+- **Errors and safeguards**: all calculations logged; CRC on every network copy (a mismatch "at least once a month");
+  a 32-bit CRC per 1024-byte block checked on every read; everything archived to tape (needed once); faults met: "a
+  faulty CPU, bad memory, a disk crash, network errors and operator errors"; the 1993 7-piece databases were wrong in a
+  few thousand positions yet "still passed all our verification tests".
+- **System issues**: TrellisDAG automated the dependencies and hardware specialisation, but "managing the data turned
+  out to be labour intensive and a source of potential errors. We were unable to find or build a usable tool that could
+  properly manage the data file dependencies, taking into account disk space constraints".
+- **Hardware and effort**: mostly dual-processor AMD machines with 1–4 GB; older 800 MHz machines precomputed captures;
+  lookups, non-captures and verification on an average of 3 machines at 1.5 GHz; the SGI Origin 3000 (64 × 500 MHz,
+  32 GB) for the largest non-capture phases, threads dividing the position range; about 15 CPU-years normalised to
+  1.5 GHz; 18 months (November 2001 to June 2003).
 
 ---
 

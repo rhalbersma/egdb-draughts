@@ -127,6 +127,27 @@ Classification vocabulary: **init / conversion / forward (pull) / retrograde (pu
     - Postprocess: gather.
 
 ---
+
+## 2002-ETH-Lincke.pdf
+
+1. **Citation**: Thomas R. Lincke, *Exploring the Computational Limits of Large Exhaustive Search Problems*, Diss. ETH
+   No. 14701, ETH Zürich, 2002 (examiners Nievergelt, Schaeffer, Nagel).
+2. **Read**: chapter 1 (in part) and chapter 2 (retrograde analysis) in full. Chapters 3–7 (opening books, a value
+   representation for books with at-least-draw / at-most-draw / cycle-draw, the OPLIB tool, experiments) were not read.
+3. **Chapter 2** reproduces Lincke–Marzetta 2000 (entry above): WDL(k) threshold decomposition of the score; two bits
+   per configuration in RAM; one bit in RAM (W/U) with two bits on disk (W/L/D/U) streamed sequentially, after "[53]",
+   a chess DTM/DTC algorithm with one bit per position; dual indexing (RAM bits for North to move, disk values for South
+   to move) cutting cache misses by at least three orders of magnitude, good with 10 % of the bitmap cached.
+4. **New against the paper**: the dual-indexing rung was carried further, databases **34 (10 GB) to 40 (47.6 GB)** on a
+   1 GB machine, and §2.6, "The Choice of an Algorithm depends on Memory Size", states the ladder as a rule: fits → one
+   byte; ≥ 1/4 → two bits; ≥ 1/8 → one bit; ≥ 1/80 → one bit with caching and dual indexing. Pre- and postprocessing,
+   which need both indexes at once, take 20 % (WDL(1)) to 50 % (larger k) of the time under dual indexing.
+5. **Scope of the claim**: about 0.9 × 10^12 Awari states (unreachable ones excluded from the bound, not from the index);
+   solving Awari estimated to need at least the 44-stone database. Awari was solved by Romein–Bal (2003) on 72 machines
+   with 72 GB in total.
+6. **Synthesis**: §7.2 (the memory–algorithm hierarchy).
+
+---
 ## 2000-ICGA-Irving-Donkers-Uiterwijk.pdf
 
 Note: this file is **"Solving Kalah"**, not an Awari paper. Kalah is a mancala relative of Awari, but it has no repetitions.

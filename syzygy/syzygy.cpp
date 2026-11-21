@@ -70,6 +70,8 @@
 //                                                            against the values
 //        syzygy cmp86 <dir> <dir_thompson86> n <metric>      the same half results (dmW, dmL) as thompson86, for every
 //                                                            material of at most n pieces, both colours
+//        syzygy probe <dir> <metric> [FEN...]                the value of each position (default: the start position)
+//                                                            and of each of its moves, from the finished files
 //        syzygy order <dir> n                                dtz <= dtc <= dtm for every win and loss, all with the class
 //                                                            in the shared wdl files
 // metric: dtm, dtc, dtz. <dir>: the base directory; depth files in <dir>/<metric>/6x6/..., wdl files in <dir>/wdl/6x6/...,
@@ -1372,6 +1374,29 @@ bool check_order(std::string const& dir, int n)
         return bad == 0;
 }
 
+// a value in words
+std::string show_value(std::uint16_t v)
+{
+        if (v == 0) return "draw";
+        return std::string(is_win(v) ? "win" : "loss") + " in " + std::to_string(plies(v)) + " plies";
+}
+
+// probe <dir> <metric> [FEN...]: the value of each position (default: the start position) and of each of its moves,
+// from the finished files under <dir>
+bool probe_positions(std::string const& dir, std::vector<std::string> fens)
+{
+        g_dir = dir;
+        if (fens.empty()) fens.push_back("W:W13,14,15,16,17,18:B1,2,3,4,5,6");
+        for (std::string const& fen : fens) {
+                Pos p;
+                if (!parse_fen(fen, p)) { std::cerr << "bad FEN " << fen << std::endl; return false; }
+                std::cout << fen << "\t" << metric_name() << "\t" << show_value(value_from_successors(p)) << std::endl;
+                for (auto const& mv : moves(p))
+                        std::cout << "  " << fen_of(mv.next) << "\t" << show_value(move_value(p, mv)) << " (for the side to move)" << std::endl;
+        }
+        return true;
+}
+
 } // namespace
 
 int main(int argc, char* argv[])
@@ -1416,7 +1441,8 @@ int main(int argc, char* argv[])
                 return check_all(a[1], std::stoi(a[2]), a.size() == 5 ? std::stoi(a[4]) : 4) ? 0 : 1;
         if (a.size() == 5 && a[0] == "cmp86" && parse_metric(a[4])) return compare_thompson86(a[1], a[2], std::stoi(a[3])) ? 0 : 1;
         if (a.size() == 3 && a[0] == "order") return check_order(a[1], std::stoi(a[2])) ? 0 : 1;
+        if (a.size() >= 3 && a[0] == "probe" && parse_metric(a[2])) return probe_positions(a[1], std::vector<std::string>(a.begin() + 3, a.end())) ? 0 : 1;
         std::cerr << "usage: syzygy build <dir> wp bp wm bm dtm|dtc|dtz [seq|par] [frontier|scan|cell8] [auto|groups|bytes|array] [compressed|raw] [stats] [material|tempi|configuration] [mem=MB] | bench n [samples] | plan n dtm|dtc|dtz [granularity] | checkall <dir> n dtm|dtc|dtz [threads]"
-                     " | cmp86 <dir> <dir_thompson86> n dtm|dtc|dtz | order <dir> n" << std::endl;
+                     " | cmp86 <dir> <dir_thompson86> n dtm|dtc|dtz | order <dir> n | probe <dir> dtm|dtc|dtz [FEN...]" << std::endl;
         return 2;
 }

@@ -154,9 +154,12 @@ class Site:
                 'on all 349 positions.</p>'))
 
     def longest(self):
-        """the longest win per number of pieces (international/longest_wins_6x6.txt, from longest_wins.py)"""
+        """the longest win per number of pieces (international/longest_wins_6x6.txt, from longest_wins.py), each with its
+        winning line to the end of the game where international/longest_wins_6x6_lines.txt (longest_lines.py) has it"""
         t = self.t
         pg = self.page()
+        lines_file = HERE / 'international' / 'longest_wins_6x6_lines.txt'
+        lines = {r.split()[2]: r.split()[3:] for r in lines_file.read_text().splitlines()} if lines_file.exists() else {}
         body = [t('<p>Per aantal stukken de stelling met de langste winst bij perfect spel, in ply (halve zetten), voor de '
                   'partij aan zet. Tot en met 8 stukken zijn de stellingen ook met onafhankelijk gebouwde databases '
                   'nagerekend.</p>',
@@ -167,14 +170,24 @@ class Site:
         for line in (HERE / 'international' / 'longest_wins_6x6.txt').read_text().splitlines():
             n, v, fen = line.split()
             side = t('wit', 'white') if fen[0] == 'W' else t('zwart', 'black')
-            fig, _ = pg.diagram(fen, t(f'{n} stukken: {side} aan zet wint in {v[1:]} ply',
+            fig, i = pg.diagram(fen, t(f'{n} stukken: {side} aan zet wint in {v[1:]} ply',
                                        f'{n} pieces: {side} to move wins in {v[1:]} plies'))
             rows.append(f'<tr><td>{n}</td><td>{v[1:]}</td><td><code>{esc(fen)}</code></td></tr>')
             body.append(fig)
+            if fen in lines:                    # the winning line, every move clickable
+                html = pg.moves(fen, [((m,), '') for m in lines[fen]], 1, fen[0] == 'B', 'm1', start=i)[0]
+                body.append(f'<p class="line">{html}</p>')
         body.insert(1, f'<table class="tbl"><tr><th>{t("Stukken", "Pieces")}</th><th>{t("Langste winst (ply)", "Longest win (plies)")}</th>'
                        f'<th>{t("Stelling", "Position")}</th></tr>{"".join(rows)}</table>')
         body.insert(2, t('<p>Met 12 stukken is de langste winst niet langer dan met 11: beide 111 ply.</p>',
                          '<p>With 12 pieces the longest win is no longer than with 11: both 111 plies.</p>'))
+        if lines:
+            body.insert(3, t('<p>Onder elke stelling de winnende lijn tot het einde van de partij: de winnaar kiest steeds '
+                             'de snelste winst, de verliezer het taaiste verlies. Klik op een zet om de lijn op het grote '
+                             'bord na te spelen.</p>',
+                             '<p>Under each position the winning line to the end of the game: the winner always takes the '
+                             'fastest win, the loser the slowest loss. Click a move to replay the line on the large '
+                             'board.</p>'))
         self.write('longest.html', '\n'.join(body), pg)
 
     def international(self):

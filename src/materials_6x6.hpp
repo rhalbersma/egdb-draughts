@@ -252,18 +252,17 @@ std::uint8_t const* map_file(std::string const& path, std::size_t size)
 
 // ---------------------------------------------------------------- seq or par, over blocks of positions
 //
-// Every pass is one std::for_each over blocks of 4096 indices (a whole number of 64-bit words, so a block owns the
-// words of its positions in every bit plane), sequential or parallel.
-bool g_par = false;
-
-template<class F>
-void for_blocks(std::uint64_t n, F&& f)
+// Every pass is one std::for_each over blocks of B indices, sequential or parallel (par: std::execution::par, else seq;
+// passed down from the build's option). The default, 4096, is a whole number of 64-bit words, so a block owns the words
+// of its positions in every bit plane: a pass that writes bit planes needs B a multiple of 64 (or atomic writes).
+template<std::uint64_t B = 4096, class F>
+void for_blocks(bool par, std::uint64_t n, F&& f)
 {
-        constexpr std::uint64_t B = 4096;
+        static_assert(B > 0, "for_blocks: a block holds at least one index");
         std::vector<std::uint64_t> starts;
         for (std::uint64_t s = 0; s < n; s += B) starts.push_back(s);
         auto const run = [&](std::uint64_t s) { f(s, std::min(n, s + B)); };
-        if (g_par) std::for_each(std::execution::par, starts.begin(), starts.end(), run);
+        if (par) std::for_each(std::execution::par, starts.begin(), starts.end(), run);
         else std::for_each(std::execution::seq, starts.begin(), starts.end(), run);
 }
 
@@ -276,16 +275,16 @@ struct Plane {
         {
                 std::atomic_ref<std::uint64_t>(w[i >> 6]).fetch_or(std::uint64_t(1) << (i & 63), std::memory_order_relaxed);
         }
-        template<class F> void for_each_par(F&& f) const        // over the set bits, one std::for_each over words
+        template<class F> void for_each_par(bool par, F&& f) const      // over the set bits, one std::for_each over words
         {
-                for_blocks(w.size(), [&](std::uint64_t lo, std::uint64_t hi) {
+                for_blocks(par, w.size(), [&](std::uint64_t lo, std::uint64_t hi) {
                         for (std::uint64_t k = lo; k < hi; ++k)
                                 for (std::uint64_t b = w[k]; b; b &= b - 1) f(k * 64 + std::uint64_t(std::countr_zero(b)));
                 });
         }
-        void mask_par(Plane const& keep, bool complement)       // this &= keep (or ~keep), one std::for_each over words
+        void mask_par(bool par, Plane const& keep, bool complement)     // this &= keep (or ~keep), one std::for_each over words
         {
-                for_blocks(w.size(), [&](std::uint64_t lo, std::uint64_t hi) {
+                for_blocks(par, w.size(), [&](std::uint64_t lo, std::uint64_t hi) {
                         for (std::uint64_t k = lo; k < hi; ++k) w[k] &= complement ? ~keep.w[k] : keep.w[k];
                 });
         }

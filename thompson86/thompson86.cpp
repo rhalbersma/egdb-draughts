@@ -239,7 +239,7 @@ struct Seed { int level; std::uint32_t idx; };
 // Every pass is one std::for_each over blocks (for_blocks, seq or par). Writes are race-free: in pass 0 a block owns
 // the words of its positions; the pushes (P2, P3) and the seeds set bits with an atomic OR (idempotent); verification
 // (P4) and the commit iterate whole words of the planes they write; the sink is written at distinct positions.
-void solve_group(Group const& g, DepthSink<std::uint8_t>& sink)
+void solve_group(Group const& g, DepthSink<std::uint8_t>& sink, bool par)
 {
         std::uint64_t const P = g.P;
         Plane open_w(P), open_b(P), lossable(P), exits_done(P), won(P), lost(P);
@@ -248,7 +248,7 @@ void solve_group(Group const& g, DepthSink<std::uint8_t>& sink)
 
         // pass 0: forward over every position, both sides to move; exits are looked up in finished groups and materials
         auto const t0 = std::chrono::steady_clock::now();
-        for_blocks(P, [&](std::uint64_t lo, std::uint64_t hi) {
+        for_blocks(par, P, [&](std::uint64_t lo, std::uint64_t hi) {
                 std::uint64_t const blk = lo / 4096;
                 for (std::uint64_t i = lo; i < hi; ++i) {
                         Pos const p = g.pos(i, 0);
@@ -304,8 +304,8 @@ void solve_group(Group const& g, DepthSink<std::uint8_t>& sink)
                 while (pos < v.size() && v[pos].level == level) ++pos;
                 return std::pair{ lo, pos };
         };
-        auto const for_seeds = [](std::vector<Seed> const& v, std::pair<std::size_t, std::size_t> r, auto&& f) {
-                for_blocks(r.second - r.first, [&](std::uint64_t lo, std::uint64_t hi) {
+        auto const for_seeds = [par](std::vector<Seed> const& v, std::pair<std::size_t, std::size_t> r, auto&& f) {
+                for_blocks(par, r.second - r.first, [&](std::uint64_t lo, std::uint64_t hi) {
                         for (std::uint64_t j = lo; j < hi; ++j) f(v[r.first + j].idx);
                 });
         };
@@ -321,15 +321,15 @@ void solve_group(Group const& g, DepthSink<std::uint8_t>& sink)
         for (int d = 1;; ++d) {
                 // P2: White wins in d
                 w_new.clear();
-                b_last.for_each_par([&](std::uint64_t q) {
+                b_last.for_each_par(par, [&](std::uint64_t q) {
                         for_each_inside_predecessor(g, g.pos(q, 1), [&](std::uint64_t id) {
                                 if (!g_waves) { if (open_w.test(id) && !won.test(id)) w_new.set_atomic(id); }
                                 else w_new.set_atomic(id);                              // 1996: mask later
                         });
                 });
-                if (g_waves) w_new.mask_par(open_w, false);                     // unmoves only reach open positions
+                if (g_waves) w_new.mask_par(par, open_w, false);                     // unmoves only reach open positions
                 for_seeds(win_seeds, level_range(win_seeds, ws, d), [&](std::uint32_t q) { w_new.set_atomic(q); });
-                w_new.mask_par(won, true);
+                w_new.mask_par(par, won, true);
 
                 // P3: candidates for Black losses in d
                 cand.clear();
@@ -337,18 +337,18 @@ void solve_group(Group const& g, DepthSink<std::uint8_t>& sink)
                         exits_done.set_atomic(q);
                         cand.set_atomic(q);
                 });
-                w_last.for_each_par([&](std::uint64_t q) {
+                w_last.for_each_par(par, [&](std::uint64_t q) {
                         for_each_inside_predecessor(g, g.pos(q, 0), [&](std::uint64_t id) {
                                 if (!g_waves) { if (open_b.test(id) && lossable.test(id) && !lost.test(id)) cand.set_atomic(id); }
                                 else cand.set_atomic(id);                               // 1996: mask later
                         });
                 });
-                if (g_waves) { cand.mask_par(open_b, false); cand.mask_par(lossable, false); cand.mask_par(lost, true); }
+                if (g_waves) { cand.mask_par(par, open_b, false); cand.mask_par(par, lossable, false); cand.mask_par(par, lost, true); }
 
                 // P4: lost in d iff the exits are lost by d and every move inside leads into W (levels below d); each
                 // candidate writes only its own bit, in a word its block owns
                 b_new.clear();
-                cand.for_each_par([&](std::uint64_t q) {
+                cand.for_each_par(par, [&](std::uint64_t q) {
                         if (!exits_done.test(q) || lost.test(q)) return;
                         Pos const p = g.pos(q, 1);
                         for (auto const& mv : moves(p))
@@ -358,11 +358,11 @@ void solve_group(Group const& g, DepthSink<std::uint8_t>& sink)
                 for_seeds(loss_decided, level_range(loss_decided, ld, d), [&](std::uint32_t q) { b_new.set_atomic(q); });
 
                 // commit: whole words of won and lost, the sink at distinct positions
-                w_new.for_each_par([&](std::uint64_t q) {
+                w_new.for_each_par(par, [&](std::uint64_t q) {
                         won.set(q);
                         sink.put(0, q, g.pos(q, 0), store_byte(0, d));
                 });
-                b_new.for_each_par([&](std::uint64_t q) {
+                b_new.for_each_par(par, [&](std::uint64_t q) {
                         lost.set(q);
                         sink.put(1, q, g.pos(q, 1), store_byte(1, d));
                 });
@@ -429,7 +429,7 @@ void open_successors(Material c)
         }
 }
 
-bool build_material(std::string const& dir, Material c)
+bool build_material(std::string const& dir, Material c, bool par)
 {
         std::filesystem::create_directories(dir + "/" + c.tree());
         g_dir = dir;
@@ -457,7 +457,7 @@ bool build_material(std::string const& dir, Material c)
         std::uint64_t positions = 0;
         for (std::size_t k = 0; k < groups.size(); ++k) {
                 sink->begin_group(k, groups[k]);
-                solve_group(groups[k], *sink);
+                solve_group(groups[k], *sink, par);
                 sink->end_group();
                 positions += 2 * groups[k].P;
         }
@@ -613,17 +613,18 @@ int main(int argc, char* argv[])
                 return 0;
         }
         if (a.size() >= 8 && a.size() <= 12 && a[0] == "build" && parse_metric(a[6]) && (a[7] == "86" || a[7] == "96")) {
+                bool par = false;                                       // std::execution::par for every pass, else seq
                 g_waves = a[7] == "96";
                 g_granularity = Granularity::material;                  // the default, for both styles
                 for (std::size_t i = 8; i < a.size(); ++i) {
                         if (a[i] == "groups" || a[i] == "array") { g_group_files = a[i] == "groups"; g_sink_auto = false; }
                         else if (a[i] == "auto") g_sink_auto = true;
-                        else if (a[i] == "seq" || a[i] == "par") g_par = a[i] == "par";
+                        else if (a[i] == "seq" || a[i] == "par") par = a[i] == "par";
                         else if (a[i].starts_with("mem=")) g_mem_mb = std::stoull(a[i].substr(4));
                         else if (parse_granularity(a[i])) {}
                         else { std::cerr << "unknown option " << a[i] << std::endl; return 2; }
                 }
-                return build_material(a[1], mat_at(2)) ? 0 : 1;
+                return build_material(a[1], mat_at(2), par) ? 0 : 1;
         }
         if ((a.size() == 4 || a.size() == 5) && a[0] == "checkall" && parse_metric(a[3]))
                 return check_all(a[1], std::stoi(a[2]), a.size() == 5 ? std::stoi(a[4]) : 4) ? 0 : 1;

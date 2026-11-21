@@ -135,8 +135,31 @@ rule all:
 
 # one build rule per material: Snakemake (8.30) accepts only constant priorities, so each material gets its own rule
 # with its claim and its critical-path priority
+# A kings-only material has no man moves and no promotions: captures alone end the count, and its dtc equals its dtz
+# position for position. In a dtc run, if its dtz files and the shared wdl files exist when the workflow starts, its dtc
+# files are hard links to the dtz files (a copy if the file system cannot link) instead of a build (as chesstb builds no
+# dtc for pawnless materials: its dtz answers both).
+def reuses_dtz(m):
+    wm, wk, bm, bk = m
+    if METRIC != 'dtc' or wm or bm:
+        return False
+    need = [f'{D}/dtz/{sub(name(m))}-dtz-{s}{SUF}' for s in ('wtm', 'btm')] + [f'{D}/wdl/{sub(name(m))}-wdl-{s}{SUF}' for s in ('wtm', 'btm')]
+    return all(os.path.exists(f) for f in need)
+
+
 for _m in MATERIALS:
     _n = name(_m)
+    if reuses_dtz(_m):
+        rule:
+            name: f'reuse_dtz_{_n}'
+            input: [f'{D}/dtz/{sub(_n)}-dtz-{s}{SUF}' for s in ('wtm', 'btm')]
+            output: files(_n)
+            log: f'{D}/{METRIC}/{sub(_n)}-{METRIC}.log'
+            priority: PRIO[_n]
+            shell: 'for i in 0 1; do set -- {input}; s=$1; [ $i = 1 ] && s=$2; set -- {output}; t=$1; [ $i = 1 ] && t=$2; '
+                   'ln -f "$s" "$t" 2>/dev/null || cp "$s" "$t"; done; '
+                   'echo "kings-only: dtc = dtz, linked from {input}" > {log}'
+        continue
     rule:
         name: f'build_{_n}'
         input: inputs(_m)

@@ -2,16 +2,9 @@
 
 Beginstand, wit aan zet: **D**.
 
-Notatie: D = remise, Wn = winst, Ln = verlies, met n het aantal ply tot het einde van de partij bij perfect spel. Bij de beginstand geldt de waarde voor wit (aan zet). Bij een zet geldt de waarde voor wie de zet doet, en telt n vanaf de stelling vóór de zet, de zet meegeteld. Een winst heeft dus altijd een oneven n, een verlies een even n. In de tabel geldt het label voor de laatste (witte) zet van de opening. Waar de exacte afstand niet vastligt (doordat een variant via een stelling met 11 of 12 stukken en dammen aan beide kanten loopt, waarvoor geen database bestaat), staat een grens: ≥Wn = wint uiterlijk na n ply, ≤Ln = verliest uiterlijk na n ply.
+Notatie: D = remise, Wn = winst, Ln = verlies, met n het aantal ply tot het einde van de partij bij perfect spel. Bij de beginstand geldt de waarde voor wit (aan zet). Bij een zet geldt de waarde voor wie de zet doet, en telt n vanaf de stelling vóór de zet, de zet meegeteld. Een winst heeft dus altijd een oneven n, een verlies een even n. In de tabel geldt het label voor de laatste (witte) zet van de opening.
 
-Methode: de volledige openings-DAG (transposities samengevoegd), uitgebreid zolang een stelling meer dan 10 stukken heeft en hoogstens één kant dammen. Bladeren: databasestellingen (exact), stellingen zonder zetten (verloren) en stellingen met meer stukken en dammen aan beide kanten (onbekend). Waarden zijn als intervallen teruggerekend, vanuit wit gezien.
-
-DAG: 193708 inwendige stellingen, bladeren: database 175882, unknown 5101, unknown, decided in one ply 3848, no moves 56.
-Onbekende bladeren die de beginstand nog kunnen beïnvloeden: 0.
-
-### Stellingen met 11 of 12 stukken en dammen aan beide kanten
-
-Daarvoor bestaat geen database. In de DAG komen er 8949 verschillende voor (vanaf ply 11, de meeste tussen ply 15 en 30, bijna altijd met één dam per kant); in de getoonde boom tot ply 4 zitten ze niet. Ze worden niet weggelaten en niet door een zoekalgoritme weggesnoeid: elk zo'n blad krijgt het ruimst mogelijke interval (van verlies tot winst, met elke afstand), verfijnd met zijn eigen zetten (een slag gaat de database in; zo liggen er 3848 toch vast). Minimax wordt daarna over de hele DAG zonder snoeien met onder- en bovengrenzen teruggerekend. Waar die samenvallen is de waarde bewezen, ongeacht de werkelijke waarde van de onbekende bladeren: er staat dan een zet naast die al minstens zo goed is. Dat geldt voor de beginstand en voor alle getoonde stellingen, inclusief hun afstanden. (Een alpha-beta-zoektocht naar de exacte afstand liep juist wél op deze stellingen vast; de intervalrekening maakt dat overbodig.)
+Methode: elke stelling met hoogstens 12 stukken (hooguit 6 per kant) staat in de database, dus ook de beginstand: het spel is opgelost en alle waarden zijn exact, met afstand. De boom is uitgebreid tot 4 ply (transposities samengevoegd); elk blad heeft zijn waarde uit de database, de waarden zijn met minimax teruggerekend, en elk van de 112 inwendige stellingen is gecontroleerd tegen zijn eigen waarde in de database.
 
 ## Diagrammen
 
@@ -110,139 +103,508 @@ beginstand  D
     wit 13-10  D
         zwart 5-7  D
             wit 10x5  D
+                zwart 1x8  D
+                zwart 2x7  D
         zwart 5-8  D
             wit 14-12  D
+                zwart 6-9  D
+                zwart 1-5  L42
+                zwart 8-11  L24
+                zwart 2-5  L16
+                zwart 4-7  L14
             wit 16-13  D
+                zwart 1-5  D
+                zwart 2-5  D
+                zwart 6-9  D
+                zwart 8-11  D
+                zwart 8-12  D
+                zwart 4-7  L16
             wit 14-11  L42
+                zwart 8x13  W41
             wit 15-12  L28
+                zwart 8x15  W27
             wit 17-13  L26
+                zwart 8-11  W25
+                zwart 1-5  D
+                zwart 2-5  D
+                zwart 6-9  L28
+                zwart 8-12  L20
+                zwart 4-7  L18
             wit 10-7  L22
+                zwart 4x11  W21
         zwart 6-8  D
             wit 16-13  D
+                zwart 2-6  D
+                zwart 3-6  D
+                zwart 4-7  D
+                zwart 8-12  D
+                zwart 5-7  L18
+                zwart 8-11  L18
             wit 17-13  D
+                zwart 2-6  D
+                zwart 3-6  D
+                zwart 8-11  L28
+                zwart 8-12  L24
+                zwart 4-7  L22
+                zwart 5-7  L20
             wit 14-12  L32
+                zwart 3-6  W31
+                zwart 8-11  D
+                zwart 4-7  L58
+                zwart 2-6  L16
+                zwart 5-7  L16
             wit 14-11  L26
+                zwart 8x13  W25
             wit 10-7  L22
+                zwart 4x11  W21
+                zwart 5x10  W23
             wit 15-12  L22
+                zwart 8x15  W21
         zwart 6-9  D
             wit 14-11  D
+                zwart 2-6  D
+                zwart 3-6  D
+                zwart 5-7  D
+                zwart 5-8  D
+                zwart 9-12  D
+                zwart 4-7  L28
             wit 16-13  D
+                zwart 2-6  D
+                zwart 3-6  D
+                zwart 5-8  D
+                zwart 9-12  D
+                zwart 5-7  L24
+                zwart 4-7  L22
             wit 17-13  D
+                zwart 2-6  D
+                zwart 3-6  D
+                zwart 4-7  D
+                zwart 5-7  L44
+                zwart 5-8  L28
+                zwart 9-12  L24
             wit 14-12  L30
+                zwart 9x14  W29
             wit 15-12  L26
+                zwart 5-7  W25
+                zwart 3-6  W27
+                zwart 2-6  D
+                zwart 4-7  D
+                zwart 5-8  L28
             wit 10-7  L22
+                zwart 4x11  W21
+                zwart 5x10  W25
         zwart 4-7  L60
             wit 14-12  W59
+                zwart 1-4  L58
+                zwart 6-8  L58
+                zwart 7-11  L28
+                zwart 6-9  L22
+                zwart 5-8  L14
             wit 16-13  D
+                zwart 1-4  D
+                zwart 6-8  D
+                zwart 7-11  L24
+                zwart 6-9  L22
+                zwart 5-8  L16
             wit 17-13  D
+                zwart 6-9  D
+                zwart 1-4  L58
+                zwart 7-11  L26
+                zwart 6-8  L22
+                zwart 5-8  L18
             wit 14-11  L44
+                zwart 7x14  W43
             wit 15-12  L32
+                zwart 6-8  W31
+                zwart 6-9  D
+                zwart 7-11  L24
+                zwart 1-4  L20
+                zwart 5-8  L14
     wit 13-11  D
         zwart 5-7  D
             wit 15-12  D
+                zwart 6-9  D
+                zwart 7-10  L28
+                zwart 1-5  L24
+                zwart 6-8  L18
+                zwart 2-5  L16
             wit 16-13  D
+                zwart 1-5  D
+                zwart 2-5  D
+                zwart 6-9  D
+                zwart 7-10  D
+                zwart 6-8  L24
             wit 17-13  L24
+                zwart 7-10  W23
+                zwart 1-5  D
+                zwart 2-5  D
+                zwart 6-8  D
+                zwart 6-9  D
             wit 11-8  L22
+                zwart 6x11  W21
             wit 14-12  L18
+                zwart 7x9  W17
         zwart 5-8  D
             wit 14-12  D
+                zwart 8x13  D
             wit 16-13  D
+                zwart 1-5  D
+                zwart 2-5  D
+                zwart 4-7  L22
+                zwart 8-12  L22
+                zwart 6-9  L20
             wit 17-13  D
+                zwart 1-5  D
+                zwart 2-5  D
+                zwart 6-9  D
+                zwart 4-7  L26
+                zwart 8-12  L22
             wit 15-12  L28
+                zwart 8x15  W27
+                zwart 8x13  D
             wit 11-7  L22
+                zwart 4x11  W21
         zwart 6-8  D
             wit 11x6  D
+                zwart 3x8  D
+                zwart 2x9  L26
         zwart 6-9  L26
             wit 11-8  W25
+                zwart 5x12  L24
             wit 15-12  D
+                zwart 3-6  D
+                zwart 5-7  D
+                zwart 5-8  L24
+                zwart 4-7  L20
+                zwart 2-6  L16
             wit 16-13  D
+                zwart 2-6  D
+                zwart 3-6  D
+                zwart 5-7  D
+                zwart 4-7  L20
+                zwart 5-8  L20
+                zwart 9-12  L20
             wit 17-13  D
+                zwart 2-6  D
+                zwart 3-6  D
+                zwart 5-7  D
+                zwart 5-8  D
+                zwart 9-12  L24
+                zwart 4-7  L22
             wit 11-7  L22
+                zwart 4x11  W21
+                zwart 5x10  W25
             wit 14-12  L18
+                zwart 9x7  W17
         zwart 4-7  L24
             wit 11x4  W23
+                zwart 5-8  L22
+                zwart 6-8  L22
+                zwart 6-9  L20
+                zwart 5-7  L18
     wit 14-11  D
         zwart 5-7  D
             wit 11-8  D
+                zwart 6x11  D
             wit 13-10  L26
+                zwart 7x14  W25
             wit 17-14  L24
+                zwart 7-10  W23
+                zwart 1-5  D
+                zwart 2-5  D
+                zwart 6-8  D
+                zwart 6-9  D
             wit 18-14  L24
+                zwart 7-10  W23
+                zwart 1-5  D
+                zwart 2-5  D
+                zwart 6-8  D
+                zwart 6-9  D
             wit 15-12  L18
+                zwart 7x9  W17
         zwart 5-8  D
             wit 17-14  D
+                zwart 1-5  D
+                zwart 2-5  D
+                zwart 6-9  D
+                zwart 4-7  L26
+                zwart 8-12  L22
             wit 13-10  L42
+                zwart 8x13  W41
             wit 18-14  L26
+                zwart 1-5  W25
+                zwart 2-5  D
+                zwart 6-9  D
+                zwart 4-7  L22
+                zwart 8-12  L20
             wit 11-7  L22
+                zwart 4x11  W21
             wit 15-12  L22
+                zwart 8x15  W21
         zwart 6-8  D
             wit 11x6  D
+                zwart 2x9  D
+                zwart 3x8  D
         zwart 6-9  D
             wit 11-8  D
+                zwart 5x12  D
             wit 13-10  D
+                zwart 2-6  D
+                zwart 3-6  D
+                zwart 5-7  D
+                zwart 5-8  D
+                zwart 9-12  D
+                zwart 4-7  L28
             wit 17-14  D
+                zwart 2-6  D
+                zwart 3-6  D
+                zwart 5-7  D
+                zwart 5-8  D
+                zwart 9-12  L24
+                zwart 4-7  L22
             wit 11-7  L26
+                zwart 5x10  W25
+                zwart 4x11  L24
             wit 18-14  L24
+                zwart 2-6  W23
+                zwart 3-6  W33
+                zwart 5-7  D
+                zwart 5-8  D
+                zwart 4-7  L26
+                zwart 9-12  L22
             wit 15-12  L18
+                zwart 9x7  W17
         zwart 4-7  L24
             wit 11x4  W23
+                zwart 5-8  L22
+                zwart 6-8  L22
+                zwart 6-9  L22
+                zwart 5-7  L18
     wit 14-12  D
         zwart 5-7  D
             wit 12-8  D
+                zwart 6x11  D
             wit 12-9  D
+                zwart 6-8  D
+                zwart 7-10  D
+                zwart 1-5  L58
+                zwart 7-11  L24
+                zwart 2-5  L22
             wit 13-10  D
+                zwart 6-9  D
+                zwart 1-5  L58
+                zwart 7-11  L24
+                zwart 2-5  L22
+                zwart 6-8  L16
             wit 18-14  L28
+                zwart 7-11  W27
+                zwart 6-9  W31
+                zwart 1-5  D
+                zwart 7-10  L28
+                zwart 2-5  L22
+                zwart 6-8  L18
             wit 17-14  L22
+                zwart 7-11  W21
+                zwart 2-5  W25
+                zwart 6-9  W25
+                zwart 7-10  W25
+                zwart 1-5  D
+                zwart 6-8  L16
             wit 13-11  L18
+                zwart 7x9  W17
         zwart 5-8  D
             wit 12x5  D
+                zwart 1x8  D
+                zwart 2x7  L24
         zwart 6-8  D
             wit 12-9  D
+                zwart 3-6  D
+                zwart 5-7  D
+                zwart 4-7  L58
+                zwart 8-11  L22
+                zwart 8-12  L22
+                zwart 2-6  L14
             wit 13-11  D
+                zwart 8x13  D
             wit 18-14  D
+                zwart 2-6  D
+                zwart 3-6  D
+                zwart 8-11  L34
+                zwart 4-7  L22
+                zwart 5-7  L18
             wit 13-10  L32
+                zwart 3-6  W31
+                zwart 8-11  D
+                zwart 4-7  L58
+                zwart 2-6  L16
+                zwart 5-7  L16
             wit 17-14  L30
+                zwart 8-11  W29
+                zwart 2-6  D
+                zwart 3-6  D
+                zwart 4-7  L26
+                zwart 5-7  L16
         zwart 6-9  D
             wit 12-8  D
+                zwart 5x12  D
             wit 18-14  L32
+                zwart 5-7  W31
+                zwart 2-6  W33
+                zwart 4-7  W37
+                zwart 3-6  D
+                zwart 5-8  D
             wit 13-10  L30
+                zwart 9x14  W29
             wit 17-14  L26
+                zwart 5-7  W25
+                zwart 2-6  D
+                zwart 3-6  D
+                zwart 4-7  D
+                zwart 5-8  L44
             wit 13-11  L18
+                zwart 9x7  W17
         zwart 4-7  L26
             wit 12-8  W25
+                zwart 5x12  L24
+                zwart 6x11  L24
             wit 13-10  W59
+                zwart 1-4  L58
+                zwart 6-8  L58
+                zwart 7-11  L28
+                zwart 6-9  L22
+                zwart 5-8  L14
             wit 12-9  L26
+                zwart 7-10  W25
+                zwart 1-4  L58
+                zwart 6-8  L58
+                zwart 7-11  L24
+                zwart 5-8  L22
             wit 18-14  L26
+                zwart 7-10  W25
+                zwart 7-11  W27
+                zwart 6-9  W37
+                zwart 1-4  D
+                zwart 6-8  L22
+                zwart 5-8  L18
             wit 17-14  L22
+                zwart 7-10  W21
+                zwart 1-4  D
+                zwart 6-9  D
+                zwart 7-11  D
+                zwart 6-8  L26
+                zwart 5-8  L18
             wit 13-11  L18
+                zwart 7x9  W17
     wit 15-12  D
         zwart 4-7  D
             wit 12-8  D
+                zwart 5x12  D
+                zwart 6x11  D
             wit 12-9  D
+                zwart 7-10  D
+                zwart 7-11  D
+                zwart 1-4  L24
+                zwart 5-8  L20
+                zwart 6-8  L20
             wit 13-10  L32
+                zwart 6-8  W31
+                zwart 6-9  D
+                zwart 7-11  L24
+                zwart 1-4  L20
+                zwart 5-8  L14
             wit 13-11  L32
+                zwart 6-8  W31
+                zwart 7-10  D
+                zwart 1-4  L24
+                zwart 6-9  L20
+                zwart 5-8  L16
             wit 18-15  L26
+                zwart 7-10  W25
+                zwart 7-11  W27
+                zwart 6-9  W37
+                zwart 1-4  D
+                zwart 6-8  L22
+                zwart 5-8  L18
             wit 14-11  L18
+                zwart 7x9  W17
         zwart 6-8  D
             wit 12-9  D
+                zwart 8-12  D
+                zwart 3-6  L28
+                zwart 8-11  L28
+                zwart 5-7  L24
+                zwart 4-7  L20
+                zwart 2-6  L16
             wit 18-15  D
+                zwart 2-6  D
+                zwart 3-6  D
+                zwart 8-11  L34
+                zwart 4-7  L22
+                zwart 5-7  L18
             wit 13-10  L22
+                zwart 8x15  W21
             wit 13-11  L22
+                zwart 8x15  W21
+                zwart 8x13  D
             wit 14-11  L22
+                zwart 8x15  W21
         zwart 6-9  D
             wit 13-11  D
+                zwart 3-6  D
+                zwart 5-7  D
+                zwart 5-8  L24
+                zwart 4-7  L20
+                zwart 2-6  L16
             wit 12-8  L32
+                zwart 5x12  W31
             wit 18-15  L32
+                zwart 5-7  W31
+                zwart 2-6  W33
+                zwart 4-7  W37
+                zwart 3-6  D
+                zwart 5-8  D
             wit 13-10  L26
+                zwart 5-7  W25
+                zwart 3-6  W27
+                zwart 2-6  D
+                zwart 4-7  D
+                zwart 5-8  L28
             wit 14-11  L18
+                zwart 9x7  W17
         zwart 5-8  L34
             wit 12x5  W33
+                zwart 1x8  L32
+                zwart 2x7  L24
         zwart 5-7  L30
             wit 12-9  W29
+                zwart 7-10  L28
+                zwart 1-5  L24
+                zwart 6-8  L24
+                zwart 7-11  L24
+                zwart 2-5  L20
             wit 12-8  D
+                zwart 6x11  D
             wit 13-11  D
+                zwart 6-9  D
+                zwart 7-10  L28
+                zwart 1-5  L24
+                zwart 6-8  L18
+                zwart 2-5  L16
             wit 18-15  L28
+                zwart 7-11  W27
+                zwart 6-9  W31
+                zwart 1-5  D
+                zwart 7-10  L28
+                zwart 2-5  L22
+                zwart 6-8  L18
             wit 13-10  L26
+                zwart 6-9  W25
+                zwart 7-11  D
+                zwart 1-5  L20
+                zwart 2-5  L20
+                zwart 6-8  L16
             wit 14-11  L18
+                zwart 7x9  W17
 ```
 
 ## Alle openingen van 3 ply

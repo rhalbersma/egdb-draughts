@@ -18539,6 +18539,196 @@
    "status": "notatie"
   },
   {
+   "section": "4.1",
+   "start": "4.1",
+   "text": "1. 17-9 2-10 2. 16-11 10-2 3. 11-13 2-10 4. 13-17 10-5 5. 9-12 15×8 6. 18-11 8×13 7. 17×2",
+   "claim": "W+",
+   "note": "gecorrigeerd: 4. … 10-5",
+   "start_fen": "W:WK16,K17,K18:BK2,15",
+   "issues": [],
+   "plies": [
+    {
+     "fen": "W:WK16,K17,K18:BK2,15",
+     "move": "17-9",
+     "val_before": "W13",
+     "val_after_mover": "W13",
+     "keeping": [
+      "16-11",
+      "16-8",
+      "16-3",
+      "17-9",
+      "16-13",
+      "17-13",
+      "17-10",
+      "17-14"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "B:WK9,K16,K18:BK2,15",
+     "move": "2-10",
+     "val_before": "L12",
+     "val_after_mover": "L12",
+     "keeping": [
+      "2-10",
+      "2-7",
+      "2-5",
+      "2-6"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "W:WK9,K16,K18:BK10,15",
+     "move": "16-11",
+     "val_before": "W11",
+     "val_after_mover": "W11",
+     "keeping": [
+      "16-11",
+      "16-8",
+      "16-3",
+      "9-6",
+      "9-2",
+      "9-14",
+      "9-17",
+      "16-6"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "B:WK9,K11,K18:BK10,15",
+     "move": "10-2",
+     "val_before": "L10",
+     "val_after_mover": "L10",
+     "keeping": [
+      "10-2",
+      "10-5",
+      "10-17",
+      "10-7",
+      "10-13"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "W:WK9,K11,K18:BK2,15",
+     "move": "11-13",
+     "val_before": "W9",
+     "val_after_mover": "W9",
+     "keeping": [
+      "11-13",
+      "11-6",
+      "9-17",
+      "11-8",
+      "11-3",
+      "11-16",
+      "11-4",
+      "11-14",
+      "9-14"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "B:WK9,K13,K18:BK2,15",
+     "move": "2-10",
+     "val_before": "L8",
+     "val_after_mover": "L8",
+     "keeping": [
+      "2-10",
+      "2-7",
+      "2-5",
+      "2-6"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "W:WK9,K13,K18:BK10,15",
+     "move": "13-17",
+     "val_before": "W7",
+     "val_after_mover": "W7",
+     "keeping": [
+      "13-17",
+      "9-17",
+      "13-11",
+      "13-8",
+      "13-3",
+      "13-16",
+      "13-6"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "B:WK9,K17,K18:BK10,15",
+     "move": "10-5",
+     "val_before": "L6",
+     "val_after_mover": "L6",
+     "keeping": [
+      "10-7",
+      "10-5",
+      "10-2",
+      "10-13"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "W:WK9,K17,K18:BK5,15",
+     "move": "9-12",
+     "val_before": "W5",
+     "val_after_mover": "W5",
+     "keeping": [
+      "9-12",
+      "9-6",
+      "17-13",
+      "9-2"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "B:WK12,K17,K18:BK5,15",
+     "move": "15x8",
+     "val_before": "L4",
+     "val_after_mover": "L4",
+     "keeping": [
+      "15x8"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "W:WK17,K18:BK5,8",
+     "move": "18-11",
+     "val_before": "W3",
+     "val_after_mover": "W3",
+     "keeping": [
+      "18-11"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "B:WK11,K17:BK5,8",
+     "move": "8x13",
+     "val_before": "L2",
+     "val_after_mover": "L2",
+     "keeping": [
+      "8x13"
+     ],
+     "marks": ""
+    },
+    {
+     "fen": "W:WK17:BK5,13",
+     "move": "17x2",
+     "val_before": "W1",
+     "val_after_mover": "W1",
+     "keeping": [
+      "17x2"
+     ],
+     "marks": ""
+    }
+   ],
+   "end_fen": "B:WK2:B",
+   "end_val": "L0",
+   "end_result": "W+",
+   "claim_ok": true,
+   "status": "ok"
+  },
+  {
    "section": "4.2",
    "start": "4.2",
    "text": "1. 17-12[enige]",

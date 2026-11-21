@@ -338,7 +338,11 @@ class Site:
                 if ok is False:
                     out.append(f'<p class="var">{self.claim_refutation(pg, fen, i0, did)}</p>')
             if d['note']:
-                out.insert(1, f'<p class="note">{pg.prose(self.btext(d['note']), '6x6')}</p>')
+                out.insert(1, f'<p class="note">{self.diagram_links(pg.prose(self.btext(d['note']), '6x6'), pid)}</p>')
+            later = [x for x in DIAGRAMS if x != did and re.search(rf'als diagram {re.escape(did)}\)', DIAGRAMS[x][3] or '')]
+            if later:                           # the book repeats this position later, saying so there ("als diagram ...")
+                refs = ', '.join(self.diagram_links(f'diagram {x}', pid) for x in later)
+                out.insert(2 if d['note'] else 1, f'<p class="note">{self.t("Dezelfde stand komt terug als", "The same position returns as")} {refs}.</p>')
         elif mylines or listed:
             f0 = mylines[0]['start_fen'] if mylines else d['fen']
             fig, _ = pg.diagram(f0, f'diagram {lab}, {self.side(f0[0])} {self.t("aan zet", "to move")}')
@@ -349,6 +353,16 @@ class Site:
             out.append(self.line_html(pg, r, starts))
         out.append('</section>')
         return '\n'.join(out)
+
+    def diagram_links(self, html, pid):
+        """every "diagram 1.1" in a text as a link to that diagram, on its own page"""
+        def link(m):
+            did = m.group(2)
+            if did not in self.home:
+                return m.group(0)
+            href = f'#d{did}' if self.home[did] == pid else f'{self.home[did]}.html#d{did}'
+            return f'<a href="{href}">{m.group(1)} {shown(did, self.home[did])}</a>'
+        return re.sub(r'\b([Dd]iagram) (\d+\.(?:\d+|slot))\b', link, html)
 
     def line_html(self, pg, r, starts):
         fen = r['start_fen']

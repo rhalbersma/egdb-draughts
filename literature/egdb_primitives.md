@@ -45,7 +45,7 @@ checkers). Change one only on purpose, and update this list with it.
 | metrics | WDL + DTM to solve; DTZ before DTC; DTC reuses DTZ for kings-only materials | Snakefile |
 | probe format | one side to move; captures and draws as don't-cares (pending captures planned); depth without class (from WDL): DTM in moves, DTC and DTZ in plies, 16 escape tokens, no draw code; zstd blocks of 4 KiB; converted once the materials a material leads into are converted, then its depth build files are deleted | §10, `probe=1`, `syzygy convert` |
 | fills | don't-cares take the dominant or the run-extending value, never an escape token | §10 |
-| parallelism | `for_blocks<B>(policy, n, f)`, B a multiple of 8 cache lines; Snakemake `policy=auto`: large materials with `std::execution::par` on all cores, the rest sequentially side by side | `src/materials_6x6.hpp`, Snakefile |
+| parallelism | `for_blocks<B>(policy, n, f)`, B a multiple of 8 cache lines; Snakemake `policy=auto`: the largest materials (at least 1 / (4 × cores) of all positions, those at the end of the critical path) with `std::execution::par` on all cores, alone; the rest on one core each, side by side as far as `--cores` and the memory claims allow | `src/materials_6x6.hpp`, Snakefile |
 | layout | `<dir>/<metric>/6x6/<np>/<wp>-<bp>/<wm>-<bm>-<kind>-<side>.z`, `<dir>/wdl/…`, `<dir>/probe/<kind>/…` | Snakefile |
 
 ## 1. Vocabulary

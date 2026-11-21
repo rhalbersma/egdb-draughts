@@ -70,8 +70,10 @@
 //                                                            against the values
 //        syzygy cmp86 <dir> <dir_thompson86> n <metric>      the same half results (dmW, dmL) as thompson86, for every
 //                                                            material of at most n pieces, both colours
-//        syzygy order <dir_dtz> <dir_dtc> <dir_dtm> n         dtz <= dtc <= dtm for every win and loss, the same WDL
-// metric: dtm, dtc, dtz
+//        syzygy order <dir> n                                dtz <= dtc <= dtm for every win and loss, all with the class
+//                                                            in the shared wdl files
+// metric: dtm, dtc, dtz. <dir>: the base directory; depth files in <dir>/<metric>/6x6/..., wdl files in <dir>/wdl/6x6/...,
+// written by whichever metric is built first (a later build of another metric compares its wdl with them)
 
 #define main egdb_6x6_main
 #include "../src/egdb_6x6.cpp"
@@ -123,7 +125,8 @@ enum : int { BYTES = 0, WDL = 2 };
 
 std::string mat_path(std::string const& dir, Material m, int kind)
 {
-        return m.path(dir) + "-" + (kind >= WDL ? std::string("wdl") : std::string(metric_name())) + (kind % 2 == 0 ? "-wtm" : "-btm");
+        std::string const sub = kind >= WDL ? std::string("wdl") : std::string(metric_name());   // <dir>/wdl, shared by the metrics
+        return m.path(dir + "/" + sub) + "-" + sub + (kind % 2 == 0 ? "-wtm" : "-btm");
 }
 
 std::uint64_t file_size(Material m, int kind) { return kind < WDL ? mat_index(m).size : (mat_index(m).size + 3) / 4; }
@@ -244,6 +247,9 @@ std::uint8_t input_byte(Material m, int kind, std::uint64_t pos)
         Input const& in = open_input(m, kind);
         return in.raw ? in.raw[pos] : zbyte(in.z, pos);
 }
+
+// a wdl file already written by the build of another metric (raw or compressed)
+bool wdl_exists(std::string const& path) { return std::filesystem::exists(path) || std::filesystem::exists(zpath(path)); }
 
 // a whole file of a finished material, for the checks
 std::vector<std::uint8_t> load_input(std::string const& path, std::uint64_t size)
@@ -371,7 +377,11 @@ public:
         void finish(ExecutionPolicy const& policy)      // the four files, each written once, sequentially
         {
                 for (int kind = 0; kind < 4; ++kind) {
-                        if (g_compressed) compress_buffer(map_[kind], size_[kind], path_[kind], policy);
+                        if (kind >= WDL && wdl_exists(path_[kind])) {          // built by another metric: compare, keep
+                                if (load_input(path_[kind], size_[kind]) != std::vector<std::uint8_t>(map_[kind], map_[kind] + size_[kind])) {
+                                        std::cerr << "wdl differs from the existing " << path_[kind] << std::endl; std::exit(1);
+                                }
+                        } else if (g_compressed) compress_buffer(map_[kind], size_[kind], path_[kind], policy);
                         else {
                                 std::ofstream f(path_[kind] + ".tmp", std::ios::binary | std::ios::trunc);
                                 f.write(reinterpret_cast<char const*>(map_[kind]), std::streamsize(size_[kind]));
@@ -999,7 +1009,7 @@ void write_stats(std::string const& dir, Material c, MatIndex const& mi, DepthSi
                         if (ll > S.longest_loss || (ll == S.longest_loss && sl < S.slot_loss)) { S.longest_loss = ll; S.slot_loss = sl; }
                 });
         }
-        std::ofstream f(c.path(dir) + "-" + metric_name() + ".stats");
+        std::ofstream f(c.path(dir + "/" + metric_name()) + "-" + metric_name() + ".stats");
         f << "# " << c.name() << " " << metric_name() << ": legal positions per side to move; plies exact\n";
         for (int side : { 0, 1 }) {
                 Side& S = st[std::size_t(side)];
@@ -1019,7 +1029,8 @@ template<class ExecutionPolicy>
 bool build_material(std::string const& dir, Material c, ExecutionPolicy const& policy)
 {
         if (!stored(c)) { std::cerr << c.name() << " is the mirror of a stored material" << std::endl; return false; }
-        std::filesystem::create_directories(dir + "/" + c.tree());
+        std::filesystem::create_directories(dir + "/" + metric_name() + "/" + c.tree());
+        std::filesystem::create_directories(dir + "/wdl/" + c.tree());
         g_dir = dir;
         g_current = c;
         MatIndex const& mi = mat_index(c);
@@ -1111,12 +1122,18 @@ bool build_material(std::string const& dir, Material c, ExecutionPolicy const& p
                 fb.close();
                 fw.close();
                 std::filesystem::rename(pb + ".tmp", pb);
-                std::filesystem::rename(pw + ".tmp", pw);
+                if (wdl_exists(pw)) {                          // built by another metric: compare, keep
+                        std::uint64_t const ws = file_size(c, WDL + side);
+                        if (load_input(pw + ".tmp", ws) != load_input(pw, ws)) { std::cerr << "wdl differs from the existing " << pw << std::endl; return false; }
+                        std::filesystem::remove(pw + ".tmp");
+                } else std::filesystem::rename(pw + ".tmp", pw);
         }
         if (g_write_stats) write_stats(dir, c, mi, *sink, policy);
         if (bytes_sink) bytes_sink->finish(policy);     // the four files from memory, compressed or raw
         else if (g_compressed)                          // the build format, compressed: <name>.z for each of the four files
-                for (int kind = 0; kind < 4; ++kind) compress_file(mat_path(dir, c, kind), file_size(c, kind), policy);
+                for (int kind = 0; kind < 4; ++kind)
+                        if (std::filesystem::exists(mat_path(dir, c, kind)))   // (a wdl file kept from another metric is done)
+                                compress_file(mat_path(dir, c, kind), file_size(c, kind), policy);
         g_sink = nullptr;
         g_frozen = false;
         g_stats.write = seconds_since(tw);
@@ -1200,39 +1217,32 @@ bool compare_thompson86(std::string const& dir, std::string const& dir86, int n)
         return bad == 0;
 }
 
-// dtz <= dtc <= dtm for every win and every loss, with the same WDL in all three, and the same wdl files
-bool check_order(std::string const& dz, std::string const& dc, std::string const& dm, int n)
+// dtz <= dtc <= dtm for every win and every loss, all three with the class of the shared wdl file (<dir>/wdl)
+bool check_order(std::string const& dir, int n)
 {
-        std::uint64_t wins = 0, losses = 0, bad = 0, bad_wdl = 0;
+        std::uint64_t wins = 0, losses = 0, bad = 0;
         for (Material const c : stored_materials_up_to(n)) {
                 std::uint64_t const size = mat_index(c).size;
                 for (int s : { 0, 1 }) {
                         std::uint64_t const ws = file_size(c, WDL + s);
-                        g_metric = Metric::dtz; auto const z = load_input(mat_path(dz, c, s), size), zw = load_input(mat_path(dz, c, WDL + s), ws);
-                        g_metric = Metric::dtc; auto const x = load_input(mat_path(dc, c, s), size), xw = load_input(mat_path(dc, c, WDL + s), ws);
-                        g_metric = Metric::dtm; auto const m = load_input(mat_path(dm, c, s), size), mw = load_input(mat_path(dm, c, WDL + s), ws);
+                        auto const w = load_input(mat_path(dir, c, WDL + s), ws);
+                        g_metric = Metric::dtz; auto const z = load_input(mat_path(dir, c, s), size);
+                        g_metric = Metric::dtc; auto const x = load_input(mat_path(dir, c, s), size);
+                        g_metric = Metric::dtm; auto const m = load_input(mat_path(dir, c, s), size);
                         for (std::uint64_t i = 0; i < size; ++i) {
-                                std::uint16_t const zv = from_byte(Metric::dtz, z[i], wdl_bits(zw.data(), i)),
-                                                    xv = from_byte(Metric::dtc, x[i], wdl_bits(xw.data(), i)),
-                                                    mv = from_byte(Metric::dtm, m[i], wdl_bits(mw.data(), i));
-                                if (wdl_of(zv) != wdl_of(mv) || wdl_of(xv) != wdl_of(mv)) { ++bad; continue; }
+                                std::uint8_t const r = wdl_bits(w.data(), i);
+                                std::uint16_t const zv = from_byte(Metric::dtz, z[i], r), xv = from_byte(Metric::dtc, x[i], r),
+                                                    mv = from_byte(Metric::dtm, m[i], r);
+                                if (wdl_of(mv) != r) { ++bad; continue; }               // the dtm byte's own class
                                 if (mv == 0) continue;
                                 (is_win(mv) ? wins : losses) += 1;
                                 if (!(plies(zv) <= plies(xv) && plies(xv) <= plies(mv))) ++bad;
                         }
                 }
-                for (int s : { 0, 1 }) {
-                        std::uint64_t const ws = file_size(c, WDL + s);
-                        g_metric = Metric::dtz; auto const z = load_input(mat_path(dz, c, WDL + s), ws);
-                        g_metric = Metric::dtc; auto const x = load_input(mat_path(dc, c, WDL + s), ws);
-                        g_metric = Metric::dtm; auto const m = load_input(mat_path(dm, c, WDL + s), ws);
-                        bad_wdl += z != m || x != m;
-                }
         }
         std::cout << "order: " << wins << " wins, " << losses << " losses, " << bad
-                  << " violations of dtz <= dtc <= dtm (or of the same WDL); " << bad_wdl << " wdl files that differ"
-                  << std::endl;
-        return bad == 0 && bad_wdl == 0;
+                  << " violations of dtz <= dtc <= dtm (or of the class in the wdl file)" << std::endl;
+        return bad == 0;
 }
 
 } // namespace
@@ -1278,8 +1288,8 @@ int main(int argc, char* argv[])
         if ((a.size() == 4 || a.size() == 5) && a[0] == "checkall" && parse_metric(a[3]))
                 return check_all(a[1], std::stoi(a[2]), a.size() == 5 ? std::stoi(a[4]) : 4) ? 0 : 1;
         if (a.size() == 5 && a[0] == "cmp86" && parse_metric(a[4])) return compare_thompson86(a[1], a[2], std::stoi(a[3])) ? 0 : 1;
-        if (a.size() == 5 && a[0] == "order") return check_order(a[1], a[2], a[3], std::stoi(a[4])) ? 0 : 1;
+        if (a.size() == 3 && a[0] == "order") return check_order(a[1], std::stoi(a[2])) ? 0 : 1;
         std::cerr << "usage: syzygy build <dir> wp bp wm bm dtm|dtc|dtz [seq|par] [frontier|scan|cell8] [auto|groups|bytes|array] [compressed|raw] [stats] [material|tempi|configuration] [mem=MB] | bench n [samples] | plan n dtm|dtc|dtz [granularity] | checkall <dir> n dtm|dtc|dtz [threads]"
-                     " | cmp86 <dir> <dir_thompson86> n dtm|dtc|dtz | order <dir_dtz> <dir_dtc> <dir_dtm> n" << std::endl;
+                     " | cmp86 <dir> <dir_thompson86> n dtm|dtc|dtz | order <dir> n" << std::endl;
         return 2;
 }

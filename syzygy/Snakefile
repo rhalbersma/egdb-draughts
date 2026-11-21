@@ -12,8 +12,8 @@
 # and wdl-wtm, wdl-btm (two bits per slot), by default compressed (<name>.z, store=compressed; store=raw for plain
 # files). The dtm bytes carry their class (1 + plies, odd a win); dtc and dtz bytes take their sign from the wdl files.
 # A dtm build reads only dtm-wtm and dtm-btm of the materials it leads into; a dtc or dtz build only their wdl files
-# (every move out of a material is a goal move there). The files of a metric go into <dir>/<metric>: the wdl files are
-# the same for all three.
+# (every move out of a material is a goal move there). The depth files go into <dir>/<metric>, the wdl files into
+# <dir>/wdl, shared by the three metrics: built by whichever metric comes first, compared (not rewritten) by the others.
 #
 # Memory (synthesis 7.3): the engine's `plan` gives every material's need; each build claims its rung-0 need, or the
 # whole budget if that does not fit (the build then writes its depths to group files, rung 1, with sink=auto). Pass the
@@ -33,11 +33,12 @@ ENGINE = config.get('engine', 'build/syzygy')
 BASE = config.get('dir', 'data/syzygy')
 N = int(config.get('pieces', 6))
 METRIC = config.get('metric', 'dtm')
-D = f'{BASE}/{METRIC}'
+D = BASE                                   # depth files in <dir>/<metric>/..., wdl files in <dir>/wdl/... (shared)
 POLICY = config.get('policy', 'auto')   # auto: par on all cores for the large materials (par_min), seq for the rest
 ROUNDS = config.get('rounds', 'frontier')
 SINK = config.get('sink', 'auto')          # the depth sink: auto (by the claim), groups (group files), bytes (8-bit, RAM), array (16-bit, RAM)
 GRANULARITY = config.get('granularity', 'material')  # material, tempi or configuration (below material: man moves exit)
+import os
 THREADS = int(config.get('threads', 4))
 PAR_MIN = float(config.get('par_min', 5e7))  # materials with at least this many positions build with policy=par on all cores
 STATS = 'stats' if str(config.get('stats', 0)) not in ('0', 'false', 'False') else ''   # stats=1: a .stats file per material
@@ -95,12 +96,20 @@ def sub(n):                                                            # wp-bp-w
 
 
 def files(m):
-    return [f'{D}/{sub(m)}-{k}{SUF}' for k in (f'{METRIC}-wtm', f'{METRIC}-btm', 'wdl-wtm', 'wdl-btm')]
+    # the depth files, and for dtc and dtz the wdl files (their inputs). A dtm build writes the wdl files too, as a
+    # by-product, unless they exist from another metric (then it compares), but no rule needs them as its inputs
+    # by-product, unless they exist from another metric (then it compares), but no rule needs them as its inputs. A wdl
+    # file that exists when the workflow starts is no output at all: Snakemake would delete it before the job runs
+    out = [f'{D}/{METRIC}/{sub(m)}-{METRIC}-{s}{SUF}' for s in ('wtm', 'btm')]
+    if METRIC != 'dtm':
+        out += [f for f in (f'{D}/wdl/{sub(m)}-wdl-{s}{SUF}' for s in ('wtm', 'btm')) if not os.path.exists(f)]
+    return out
 
 
 def inputs(m):
-    kinds = ('dtm-wtm', 'dtm-btm', 'wdl-wtm', 'wdl-btm') if METRIC == 'dtm' else ('wdl-wtm', 'wdl-btm')
-    return [f'{D}/{sub(name(d))}-{k}{SUF}' for d in deps(m) for k in kinds]
+    # dtm: the depth files of the materials it leads into (self-contained); dtc, dtz: their wdl files
+    sub_dir, kind = (METRIC, 'dtm') if METRIC == 'dtm' else ('wdl', 'wdl')
+    return [f'{D}/{sub_dir}/{sub(name(d))}-{kind}-{s}{SUF}' for d in deps(m) for s in ('wtm', 'btm')]
 
 
 # the plan (src/snakemake_plan.py): memory budget, per-job claims from the engine's estimates, critical-path priorities
@@ -121,7 +130,7 @@ wildcard_constraints:
 
 
 rule all:
-    input: f'{D}/check-{N}.{METRIC}.ok'
+    input: f'{D}/{METRIC}/check-{N}.{METRIC}.ok'
 
 
 # one build rule per material: Snakemake (8.30) accepts only constant priorities, so each material gets its own rule
@@ -132,7 +141,7 @@ for _m in MATERIALS:
         name: f'build_{_n}'
         input: inputs(_m)
         output: files(_n)
-        log: f'{D}/{sub(_n)}-{METRIC}.log'
+        log: f'{D}/{METRIC}/{sub(_n)}-{METRIC}.log'
         resources: mem_mb=claim_mb(PLAN[_n], MEM)
         priority: PRIO[_n]
         threads: workflow.cores if (POLICY == 'par' or (POLICY == 'auto' and PLAN[_n]['positions'] >= PAR_MIN)) else 1
@@ -142,7 +151,7 @@ for _m in MATERIALS:
 
 rule check:
     input: [f for m in MATERIALS for f in files(name(m))]
-    output: f'{D}/check-{N}.{METRIC}.ok'
-    log: f'{D}/check-{N}.{METRIC}.log'
+    output: f'{D}/{METRIC}/check-{N}.{METRIC}.ok'
+    log: f'{D}/{METRIC}/check-{N}.{METRIC}.log'
     threads: THREADS
     shell: '{ENGINE} checkall {D} {N} {METRIC} {threads} > {log} 2>&1 && touch {output}'

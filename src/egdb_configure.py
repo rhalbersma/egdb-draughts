@@ -18,7 +18,7 @@
     build that reads it; the final checks read every file once;
   - probes the disk of <data_dir>: free bytes, and whether it is rotational (an HDD) or not (SSD, NVMe, RAM disk);
   - with `tree` (once the checks have passed): creates the tree of subdivisions for every metric,
-    <data_dir>/<metric>/6x6/<np>/<wp>-<bp>/.
+    <data_dir>/<metric>/6x6/<np>/<wp>-<bp>/ and <data_dir>/wdl/6x6/<np>/<wp>-<bp>/ (the wdl files, shared).
 
 Prints key=value lines for CMake. The engines are not needed: they are only compiled at build time, after this step.
 """
@@ -138,7 +138,7 @@ def main():
     builder, n, metrics, data_dir, jobs = sys.argv[1], int(sys.argv[2]), sys.argv[3].split(';'), sys.argv[4], int(sys.argv[5])
     ms = materials(n, builder)
     if sys.argv[6:] == ['tree']:
-        for metric in metrics:
+        for metric in list(metrics) + ['wdl']:
             for m in ms:
                 os.makedirs(os.path.join(data_dir, metric, tree(m)), exist_ok=True)
         return

@@ -13,7 +13,8 @@
 #   cmake --build build/syzygy-6 --target plan                            what would run: Snakemake's dry run
 #   cmake --build build/syzygy-6 --target machine                         the machine description of the configure step
 #
-# The databases go to DATA_DIR (default: <build>/data), in <DATA_DIR>/<metric>/6x6/<np>/<wp>-<bp>/. Snakemake runs from
+# The databases go to DATA_DIR (default: <build>/data), in <DATA_DIR>/<metric>/6x6/<np>/<wp>-<bp>/ (the wdl files in
+# <DATA_DIR>/wdl/, shared by the metrics). Snakemake runs from
 # the build directory with the profile written here (<build>/profile/config.yaml) and the values in <build>/egdb.yaml;
 # `snakemake --profile <build>/profile` from anywhere does the same as the build targets.
 

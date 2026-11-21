@@ -165,7 +165,8 @@ def chapter(did):
 
 
 class Oracle:
-    """Values from the databases (at most 10 pieces) and from the solved opening tree (more pieces)."""
+    """Values from the databases and, above them, from the solved opening tree. With the complete store every position
+    (at most 12 pieces) comes from the databases; with the older databases up to 10 pieces the opening tree fills in."""
 
     def __init__(self, eng):
         self.eng = eng
@@ -173,7 +174,7 @@ class Oracle:
 
     def analyse(self, fen):
         """-> (value, [(notation, value for the mover, next fen)]) best first"""
-        if pieces(fen) <= 10:
+        if pieces(fen) <= self.eng.limit:
             return self.eng.analyse(fen)
         out = self.eng.cmd('moves ' + fen)
         legal = []
@@ -185,7 +186,7 @@ class Oracle:
         return self.value(fen) or '?', legal
 
     def value(self, fen):
-        if pieces(fen) <= 10:
+        if pieces(fen) <= self.eng.limit:
             return self.eng.analyse(fen)[0]
         node = self.tree.get(fen)
         if node and node['score'][0] == node['score'][1]:
@@ -501,11 +502,13 @@ class Site:
                   '<p>In the order of the book\'s website (the chapter titles are Brascamp\'s, in Dutch). Each chapter '
                   'shows the diagrams with the claims of the book, the variations and the refutations; the '
                   '<em>Chapters</em> menu at the top takes you anywhere.</p>'), '\n'.join(toc),
-                t(f'<h2>De opening</h2><p>Met de databases tot en met 10 stukken is ook de beginstand van 6×6 opgelost: '
-                  f'<a href="{self.solved()}">remise, met de volledige openingsboom tot 4 ply</a>, op de site '
+                t(f'<h2>De opening</h2><p>Met de databases tot en met 12 stukken is 6×6 sterk opgelost: van elke '
+                  f'stelling is de waarde bekend, met de exacte afstand tot het einde. De beginstand is '
+                  f'<a href="{self.solved()}">remise; de volledige openingsboom tot 4 ply</a> staat op de site '
                   f'<em>Strongly Solving 6×6</em>.</p>',
-                  f'<h2>The opening</h2><p>With the databases up to 10 pieces the start position of 6×6 is solved too: '
-                  f'<a href="{self.solved()}">a draw, with the complete opening tree to 4 plies</a>, on the site '
+                  f'<h2>The opening</h2><p>With the databases up to 12 pieces 6×6 is strongly solved: the value of every '
+                  f'position is known, with the exact distance to the end. The start position is '
+                  f'<a href="{self.solved()}">a draw; the complete opening tree to 4 plies</a> is on the site '
                   f'<em>Strongly Solving 6×6</em>.</p>'),
                 t('<h2>Achtergrond</h2>', '<h2>Background</h2>')]
         for head, rest in sections:

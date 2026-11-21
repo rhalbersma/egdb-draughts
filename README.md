@@ -18,8 +18,11 @@ This page collects the programs, the tables and the most interesting findings.
 >
 > **6×6 with men and kings**
 >
-> Exact databases up to 10 pieces for international draughts on the 6×6 board ([`src/egdb_6x6.cpp`](src/egdb_6x6.cpp))
-> solve the start position (a draw, [`opening_6x6.md`](strongly_solving_6x6/international/opening_6x6.md); the code and the complete opening tree are in [`strongly_solving_6x6/`](strongly_solving_6x6/)) and check every diagram and
+> Exact databases up to 12 pieces for international draughts on the 6×6 board ([`src/egdb_6x6.cpp`](src/egdb_6x6.cpp))
+> strongly solve the game: every position with at most 6 pieces per side, 63.8 billion in all, with its exact distance to
+> the end. The start position is a draw ([`opening_6x6.md`](strongly_solving_6x6/international/opening_6x6.md); the
+> longest win per number of pieces is in [`longest_wins_6x6.txt`](strongly_solving_6x6/international/longest_wins_6x6.txt);
+> the code is in [`strongly_solving_6x6/`](strongly_solving_6x6/)). The databases also check every diagram and
 > variation of Herm Jan Brascamp's *Strategie der 36 velden* (2016). The companion site follows the chapters of the
 > book with clickable moves and the database value of every position; the full report (Dutch) is
 > [`strategie_der_36_velden/RAPPORT.md`](strategie_der_36_velden/RAPPORT.md).
@@ -550,7 +553,27 @@ diff <(grep -v '^#' strongly_solving_6x6/international/crc32c_6x6.txt) <(head -n
 python3 strongly_solving_6x6/international/recode_store.py build/egdb_6x6 --dir data/units --threads 10 --values
 ```
 
-With the store complete, the claims of the book and the sites are checked and regenerated from it:
+With the store complete, the game is solved: the start position is itself in the store. The opening book
+([`opening_6x6.md`](strongly_solving_6x6/international/opening_6x6.md) and `.json`, read by the sites) is regenerated
+from it with exact values everywhere: the tree to 4 plies and all openings of 3 plies, every leaf looked up, the values
+backed up by minimax and every interior position checked against its stored value:
+
+```bash
+python3 strongly_solving_6x6/international/opening_solve_6x6.py build/egdb_6x6 --store data/units --table 3 --tree 4
+```
+
+The longest win per number of pieces (FEN and DTM in plies; `--losses` for the longest losses, `--materials` for one
+line per material). It reads every stored position, so it takes about as long as a verification of the store:
+
+```bash
+python3 strongly_solving_6x6/international/longest_wins.py build/egdb_6x6 --dir data/units --pieces 2-12 --threads 10 > strongly_solving_6x6/international/longest_wins_6x6.txt
+```
+
+```bash
+python3 strongly_solving_6x6/international/longest_wins.py build/egdb_6x6 --dir data/units --pieces 2-12 --threads 10 --losses > strongly_solving_6x6/international/longest_losses_6x6.txt
+```
+
+The claims of the book and the sites are checked and regenerated from the store:
 
 ```bash
 python3 strategie_der_36_velden/check.py build/egdb_6x6 --store data/units

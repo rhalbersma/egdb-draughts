@@ -11,7 +11,7 @@ The databases were used to check, extend and refine the results of a 1988 Dutch 
 This page collects the programs, the tables and the most interesting findings.
 
 > **Companion sites** with clickable diagrams: [Strategie der 36 velden](https://rhalbersma.github.io/egdb-draughts/strategie_der_36_velden/) ·
-> [Strongly Solving 6×6](https://rhalbersma.github.io/egdb-draughts/strongly_solving_6x6/) ·
+> [6×6 Is Strongly Solved](https://rhalbersma.github.io/egdb-draughts/6x6_is_strongly_solved/) ·
 > [Drie tegen een is gemeen](https://rhalbersma.github.io/egdb-draughts/drie_tegen_een_is_gemeen/) ·
 > [English checkers 3 vs 2](https://rhalbersma.github.io/egdb-draughts/checkers/).
 > The form of the analyses is taken from those by Wieger Wesselink on [10x10.org](https://10x10.org).

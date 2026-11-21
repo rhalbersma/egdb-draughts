@@ -8,7 +8,7 @@
 //   0          draw (also an illegal slot)
 //   2n         win in n plies (n >= 1)
 //   2n + 1     loss in n plies (n >= 0; 0: no move)
-// 16 bits during the build; stored as one byte (see to_byte): dtm self-contained (plies, the class from their parity),
+// 16 bits during the build; stored as one byte (see to_depth; escape tokens beyond, see g_esc): dtm self-contained (plies, the class from their parity),
 // dtc and dtz unsigned with the sign from the wdl file. The metric decides which moves end the count (as in thompson86):
 //   dtm   none: the count runs to the end of the game
 //   dtc   captures and promotions (a conversion into another material)
@@ -142,30 +142,46 @@ DepthSink<std::uint16_t>* g_sink = nullptr;             // the material being bu
 // offsets of the blocks from the start of the data, the blocks.
 bool g_compressed = true;
 constexpr std::uint64_t ZBLOCK = 4096;
-constexpr char ZMAGIC[8] = { 'E', 'G', 'D', 'B', 'Z', '1', 0, 0 };
-struct ZFile { std::uint64_t size = 0, nblocks = 0; std::uint64_t const* off = nullptr; std::uint8_t const* data = nullptr; };
+constexpr char ZMAGIC[8] = { 'E', 'G', 'D', 'B', 'Z', '2', 0, 0 };
+
+// Depths beyond one byte (escape tokens, synthesis 10). A depth file holds a depth index d per position (dtm: 1 + plies,
+// 0 a draw; dtc, dtz: plies). d below E is its own byte; else the byte is the token E + k with one extra byte x, and
+// d = E + 240 k + x. E is 241 (EGDB_DIRECT=k forces a smaller one, to test the tokens on small builds), so 15 tokens
+// reach d = 3840. A compressed file appends the extra bytes of each block after its position bytes, in position order,
+// and records E in its header; a raw file keeps them in a side file <name>.x (E, then the slot and d of each).
+constexpr int ZRANGE = 240;
+int const g_esc = std::getenv("EGDB_DIRECT") ? std::clamp(std::atoi(std::getenv("EGDB_DIRECT")), 1, 255) : 241;
+int max_depth_index(int esc) { return esc + ZRANGE * (255 - esc) + ZRANGE - 1; }
+
+struct ZFile { std::uint64_t size = 0, nblocks = 0; int esc = 256; std::uint64_t const* off = nullptr; std::uint8_t const* data = nullptr; };
 
 std::string zpath(std::string const& path) { return path + ".z"; }
+std::string xpath(std::string const& path) { return path + ".x"; }
 
 ZFile open_zfile(std::string const& path, std::uint64_t size)
 {
         std::uintmax_t const fs = std::filesystem::exists(zpath(path)) ? std::filesystem::file_size(zpath(path)) : 0;
-        if (fs < 32) { std::cerr << "missing or short " << zpath(path) << std::endl; std::exit(1); }
+        if (fs < 40) { std::cerr << "missing or short " << zpath(path) << std::endl; std::exit(1); }
         std::uint8_t const* const p = map_file(zpath(path), std::size_t(fs));
         ZFile z;
-        std::uint64_t h[4];
+        std::uint64_t h[5];
         std::memcpy(h, p, sizeof h);
         if (std::memcmp(p, ZMAGIC, 8) != 0 || h[1] != size || h[2] != ZBLOCK) { std::cerr << "bad header " << zpath(path) << std::endl; std::exit(1); }
         z.size = h[1];
         z.nblocks = h[3];
-        z.off = reinterpret_cast<std::uint64_t const*>(p + 32);
-        z.data = p + 32 + 8 * (z.nblocks + 1);
+        z.esc = int(h[4]);
+        z.off = reinterpret_cast<std::uint64_t const*>(p + 40);
+        z.data = p + 40 + 8 * (z.nblocks + 1);
         return z;
 }
 
-// bytes in memory, written as <path>.z (compressed in parallel over the blocks, written once, sequentially)
+using Extras = std::vector<std::pair<std::uint64_t, std::uint8_t>>;     // (slot, extra byte), sorted by slot
+
+// bytes in memory, written as <path>.z (compressed in parallel over the blocks, written once, sequentially); extras: the
+// extra bytes of the escape tokens, appended to their blocks (esc: E, 256 for a file without tokens)
 template<class ExecutionPolicy>
-void compress_buffer(std::uint8_t const* raw, std::uint64_t size, std::string const& path, ExecutionPolicy const& policy)
+void compress_buffer(std::uint8_t const* raw, std::uint64_t size, std::string const& path, ExecutionPolicy const& policy,
+                     Extras const* extras = nullptr, int esc = 256)
 {
         std::uint64_t const nb = (size + ZBLOCK - 1) / ZBLOCK;
         std::vector<std::vector<char>> parts(nb);
@@ -173,15 +189,20 @@ void compress_buffer(std::uint8_t const* raw, std::uint64_t size, std::string co
         std::iota(idx.begin(), idx.end(), std::uint64_t(0));
         std::for_each(policy, idx.begin(), idx.end(), [&](std::uint64_t b) {
                 std::uint64_t const lo = b * ZBLOCK, n = std::min(ZBLOCK, size - lo);
-                parts[b].resize(ZSTD_compressBound(n));
-                std::size_t const r = ZSTD_compress(parts[b].data(), parts[b].size(), raw + lo, n, 3);
+                std::vector<std::uint8_t> blk(raw + lo, raw + lo + n);
+                if (extras) {
+                        auto it = std::ranges::lower_bound(*extras, lo, {}, &Extras::value_type::first);
+                        for (; it != extras->end() && it->first < lo + n; ++it) blk.push_back(it->second);
+                }
+                parts[b].resize(ZSTD_compressBound(blk.size()));
+                std::size_t const r = ZSTD_compress(parts[b].data(), parts[b].size(), blk.data(), blk.size(), 3);
                 if (ZSTD_isError(r)) { std::cerr << "zstd: " << ZSTD_getErrorName(r) << std::endl; std::exit(1); }
                 parts[b].resize(r);
         });
         std::vector<std::uint64_t> off(nb + 1, 0);
         for (std::uint64_t b = 0; b < nb; ++b) off[b + 1] = off[b] + parts[b].size();
         std::ofstream f(zpath(path) + ".tmp", std::ios::binary | std::ios::trunc);
-        std::uint64_t const h[3] = { size, ZBLOCK, nb };
+        std::uint64_t const h[4] = { size, ZBLOCK, nb, std::uint64_t(esc) };
         f.write(ZMAGIC, 8);
         f.write(reinterpret_cast<char const*>(h), sizeof h);
         f.write(reinterpret_cast<char const*>(off.data()), std::streamsize(8 * off.size()));
@@ -191,7 +212,7 @@ void compress_buffer(std::uint8_t const* raw, std::uint64_t size, std::string co
         std::filesystem::rename(zpath(path) + ".tmp", zpath(path));
 }
 
-// a raw file, compressed into <path>.z, then removed
+// a raw file, compressed into <path>.z, then removed (files without escape tokens: the wdl files, or the array sink's)
 template<class ExecutionPolicy>
 void compress_file(std::string const& path, std::uint64_t size, ExecutionPolicy const& policy)
 {
@@ -201,32 +222,69 @@ void compress_file(std::string const& path, std::uint64_t size, ExecutionPolicy 
         std::filesystem::remove(path);
 }
 
-// one byte of a compressed file, through the calling thread's block cache
-std::uint8_t zbyte(ZFile const& z, std::uint64_t pos)
+// one decompressed block (its position bytes, then the extra bytes of its tokens), through the calling thread's cache
+std::uint8_t const* zblock(ZFile const& z, std::uint64_t b)
 {
         struct Tag { ZFile const* f = nullptr; std::uint64_t block = ~std::uint64_t(0); };
-        static std::size_t const nslots = std::getenv("EGDB_CACHE_BLOCKS") ? std::size_t(std::atoll(std::getenv("EGDB_CACHE_BLOCKS"))) : 16384;
+        static std::size_t const nslots = std::getenv("EGDB_CACHE_BLOCKS") ? std::size_t(std::atoll(std::getenv("EGDB_CACHE_BLOCKS"))) : 8192;
         thread_local std::vector<Tag> tags(nslots);                                    // the data uninitialised: pages are
-        thread_local std::unique_ptr<std::uint8_t[]> blocks(new std::uint8_t[nslots * ZBLOCK]);       // touched only when used
+        thread_local std::unique_ptr<std::uint8_t[]> blocks(new std::uint8_t[nslots * 2 * ZBLOCK]);   // touched only when used
         thread_local std::unique_ptr<ZSTD_DCtx, std::size_t (*)(ZSTD_DCtx*)> dx(ZSTD_createDCtx(), ZSTD_freeDCtx);
-        std::uint64_t const b = pos / ZBLOCK;
         std::size_t const h = std::size_t((std::uintptr_t(&z) >> 4) * 0x9E3779B97F4A7C15ull ^ b * 0xC2B2AE3D27D4EB4Full) % nslots;
         Tag& t = tags[h];
-        std::uint8_t* const data = blocks.get() + h * ZBLOCK;
+        std::uint8_t* const data = blocks.get() + h * 2 * ZBLOCK;
         if (t.f != &z || t.block != b) {
-                std::uint64_t const lo = b * ZBLOCK, n = std::min(ZBLOCK, z.size - lo);
-                std::size_t const r = ZSTD_decompressDCtx(dx.get(), data, n, z.data + z.off[b], z.off[b + 1] - z.off[b]);
-                if (ZSTD_isError(r) || r != n) { std::cerr << "zstd: bad block " << b << std::endl; std::exit(1); }
+                std::size_t const r = ZSTD_decompressDCtx(dx.get(), data, 2 * ZBLOCK, z.data + z.off[b], z.off[b + 1] - z.off[b]);
+                if (ZSTD_isError(r)) { std::cerr << "zstd: bad block " << b << std::endl; std::exit(1); }
                 t.f = &z;
                 t.block = b;
         }
-        return data[pos - b * ZBLOCK];
+        return data;
+}
+
+std::uint8_t zbyte(ZFile const& z, std::uint64_t pos) { return zblock(z, pos / ZBLOCK)[pos % ZBLOCK]; }
+
+// the depth index of a position in a decompressed block of n positions: a token's extra byte follows the block's
+// position bytes, as many places in as there are tokens before it
+int block_depth(std::uint8_t const* blk, std::uint64_t n, std::uint64_t j, int esc)
+{
+        std::uint8_t const c = blk[j];
+        if (c < esc) return c;
+        std::uint64_t k = 0;
+        for (std::uint64_t q = 0; q < j; ++q) k += blk[q] >= esc;
+        return esc + ZRANGE * (c - esc) + blk[n + k];
+}
+
+int zdepth(ZFile const& z, std::uint64_t pos)
+{
+        std::uint64_t const b = pos / ZBLOCK, lo = b * ZBLOCK;
+        return block_depth(zblock(z, b), std::min(ZBLOCK, z.size - lo), pos - lo, z.esc);
 }
 
 bool g_frozen = false;                                  // during the passes of a build: the maps are only read
 
+// a raw file's escape tokens, from its side file <name>.x (none if it does not exist)
+struct RawExtras { int esc = 256; std::unordered_map<std::uint64_t, std::uint16_t> d; };
+RawExtras load_xfile(std::string const& path)
+{
+        RawExtras x;
+        std::ifstream f(xpath(path), std::ios::binary);
+        if (!f) return x;
+        std::uint64_t h[2];
+        f.read(reinterpret_cast<char*>(h), sizeof h);
+        x.esc = int(h[0]);
+        for (std::uint64_t i = 0; i < h[1]; ++i) {
+                std::uint64_t slot;
+                std::uint16_t d;
+                f.read(reinterpret_cast<char*>(&slot), 8);
+                f.read(reinterpret_cast<char*>(&d), 2);
+                x.d[slot] = d;
+        }
+        return x;
+}
+
 // a file of a finished material, opened once: compressed if <name>.z exists, else raw (so either kind of store is read)
-struct Input { std::uint8_t const* raw = nullptr; ZFile z; };
+struct Input { std::uint8_t const* raw = nullptr; ZFile z; RawExtras x; };
 std::map<std::pair<Material, int>, Input> g_inputs;
 
 Input const& open_input(Material m, int kind)
@@ -237,34 +295,73 @@ Input const& open_input(Material m, int kind)
         std::string const path = mat_path(g_dir, m, kind);
         Input in;
         if (std::filesystem::exists(zpath(path))) in.z = open_zfile(path, file_size(m, kind));
-        else in.raw = map_file(path, file_size(m, kind));
-        return g_inputs[{ m, kind }] = in;
+        else {
+                in.raw = map_file(path, file_size(m, kind));
+                if (kind < WDL) in.x = load_xfile(path);
+        }
+        return g_inputs[{ m, kind }] = std::move(in);
 }
 
-// one byte of a file of a finished material
+// one byte of a wdl file of a finished material
 std::uint8_t input_byte(Material m, int kind, std::uint64_t pos)
 {
         Input const& in = open_input(m, kind);
         return in.raw ? in.raw[pos] : zbyte(in.z, pos);
 }
 
+// the depth index of a position in a depth file of a finished material
+int input_depth(Material m, int kind, std::uint64_t pos)
+{
+        Input const& in = open_input(m, kind);
+        if (!in.raw) return zdepth(in.z, pos);
+        std::uint8_t const c = in.raw[pos];
+        return c < in.x.esc ? c : in.x.d.at(pos);
+}
+
 // a wdl file already written by the build of another metric (raw or compressed)
 bool wdl_exists(std::string const& path) { return std::filesystem::exists(path) || std::filesystem::exists(zpath(path)); }
 
-// a whole file of a finished material, for the checks
+// a whole wdl file of a finished material, for the checks and comparisons (no tokens)
 std::vector<std::uint8_t> load_input(std::string const& path, std::uint64_t size)
 {
         std::vector<std::uint8_t> out(size);
         if (std::filesystem::exists(zpath(path))) {            // every block decompressed in place (not through the cache:
                 ZFile const z = open_zfile(path, size);         // a local ZFile has no stable address to key it by)
+                std::vector<std::uint8_t> blk(2 * ZBLOCK);
                 for (std::uint64_t b = 0; b < z.nblocks; ++b) {
                         std::uint64_t const lo = b * ZBLOCK, n = std::min(ZBLOCK, size - lo);
-                        std::size_t const r = ZSTD_decompress(out.data() + lo, n, z.data + z.off[b], z.off[b + 1] - z.off[b]);
-                        if (ZSTD_isError(r) || r != n) { std::cerr << "zstd: bad block " << b << " of " << zpath(path) << std::endl; std::exit(1); }
+                        std::size_t const r = ZSTD_decompress(blk.data(), blk.size(), z.data + z.off[b], z.off[b + 1] - z.off[b]);
+                        if (ZSTD_isError(r) || r < n) { std::cerr << "zstd: bad block " << b << " of " << zpath(path) << std::endl; std::exit(1); }
+                        std::copy(blk.begin(), blk.begin() + std::ptrdiff_t(n), out.begin() + std::ptrdiff_t(lo));
                 }
         } else {
                 std::uint8_t const* const p = map_file(path, size);
                 std::copy(p, p + size, out.begin());
+        }
+        return out;
+}
+
+// a whole depth file of a finished material: the depth index of every slot, tokens resolved
+std::vector<std::uint16_t> load_depths(std::string const& path, std::uint64_t size)
+{
+        std::vector<std::uint16_t> out(size);
+        if (std::filesystem::exists(zpath(path))) {
+                ZFile const z = open_zfile(path, size);
+                std::vector<std::uint8_t> blk(2 * ZBLOCK);
+                for (std::uint64_t b = 0; b < z.nblocks; ++b) {
+                        std::uint64_t const lo = b * ZBLOCK, n = std::min(ZBLOCK, size - lo);
+                        std::size_t const r = ZSTD_decompress(blk.data(), blk.size(), z.data + z.off[b], z.off[b + 1] - z.off[b]);
+                        if (ZSTD_isError(r) || r < n) { std::cerr << "zstd: bad block " << b << " of " << zpath(path) << std::endl; std::exit(1); }
+                        std::uint64_t k = 0;                    // tokens so far in the block
+                        for (std::uint64_t j = 0; j < n; ++j) {
+                                std::uint8_t const c = blk[j];
+                                out[lo + j] = std::uint16_t(c < z.esc ? c : z.esc + ZRANGE * (c - z.esc) + blk[n + k++]);
+                        }
+                }
+        } else {
+                std::uint8_t const* const p = map_file(path, size);
+                RawExtras const x = load_xfile(path);
+                for (std::uint64_t i = 0; i < size; ++i) out[i] = p[i] < x.esc ? p[i] : x.d.at(i);
         }
         return out;
 }
@@ -297,13 +394,13 @@ void open_successors(Material c)
 // a position in a stored material: itself or its mirror image (the value for the side to move is the same)
 Pos stored_pos(Pos const& p) { return stored(material_of(p)) ? p : mirror(p); }
 
-// The stored bytes, exact plies either way (the build works in plies: 2n win, 2n + 1 loss):
+// The stored depth index d of a value, exact plies either way (the build works in plies: 2n win, 2n + 1 loss):
 //   dtm        1 + n for a win or a loss in n plies, 0 a draw. A dtm win always takes an odd number of plies and a loss an
-//              even number, so the byte carries its class: a dtm build reads no wdl file (as the cells of cell8, synthesis
-//              7.5). Up to 254 plies in a byte.
+//              even number, so d carries its class: a dtm build reads no wdl file (as the cells of cell8, synthesis 7.5).
 //   dtc, dtz   n for a win or a loss in n plies, 0 a draw; the sign from the wdl file of the same side to move (their wins
-//              and losses can take the same number of plies). Up to 255 plies.
-int to_byte(Metric mt, std::uint16_t v)
+//              and losses can take the same number of plies).
+// d below E is one byte; above, an escape token and an extra byte (see g_esc).
+int to_depth(Metric mt, std::uint16_t v)
 {
         if (v == 0) return 0;
         if (mt != Metric::dtm) return plies(v);
@@ -311,24 +408,22 @@ int to_byte(Metric mt, std::uint16_t v)
         return 1 + plies(v);
 }
 
-std::uint16_t from_byte(Metric mt, std::uint8_t s, std::uint8_t r)    // r: the wdl of the same position (dtc, dtz)
+std::uint16_t from_depth(Metric mt, int d, std::uint8_t r)    // r: the wdl of the same position (dtc, dtz)
 {
-        if (mt == Metric::dtm) return s == 0 ? std::uint16_t(0) : (s - 1) % 2 == 1 ? win(s - 1) : loss(s - 1);
+        if (mt == Metric::dtm) return d == 0 ? std::uint16_t(0) : (d - 1) % 2 == 1 ? win(d - 1) : loss(d - 1);
         if (r == WDL_DRAW) return 0;
-        return r == WDL_WIN ? win(s) : loss(s);
+        return r == WDL_WIN ? win(d) : loss(d);
 }
-
-std::uint16_t from_dtm_byte(std::uint8_t s) { return from_byte(Metric::dtm, s, 0); }
 
 std::uint8_t wdl_bits(std::uint8_t const* w, std::uint64_t i) { return std::uint8_t(w[i >> 2] >> (2 * (i & 3)) & 3); }
 
 // The 8-bit sink: the four output files in their stored form (<metric>-wtm, <metric>-btm, wdl-wtm, wdl-btm), held in
 // anonymous memory for the whole build of the material (zero pages until touched) and written once, sequentially, at the
-// end: compressed (<name>.z) or raw. No random writes ever reach the disk. A decided value goes straight into its stored form, the unsigned
-// depth byte (to_byte) and two wdl bits, at its slot of the material; a lookup into an earlier group decodes it again
-// (from_byte). 2.5 bytes per slot for both sides to move, against 4 for the 16-bit array, and no conversion pass at the
-// end: the files are complete once the last group is solved, and only written out. Concurrent writers: the depth bytes are
-// distinct per position; four slots share a wdl byte, so the wdl bits are set with an atomic or.
+// end: compressed (<name>.z) or raw. No random writes ever reach the disk. A decided value goes straight into its stored
+// form, the depth byte (an escape token for a depth beyond the direct range, its extra byte kept aside) and two wdl
+// bits, at its slot of the material; a lookup into an earlier group decodes it again. 2.5 bytes per slot for both sides
+// to move, and no conversion pass at the end. Concurrent writers: the depth bytes are distinct per position; four slots
+// share a wdl byte, so the wdl bits are set with an atomic or; the rare extra bytes go into a map under a mutex.
 class ByteSink final : public DepthSink<std::uint16_t>
 {
         MatIndex const& mi_;
@@ -336,12 +431,19 @@ class ByteSink final : public DepthSink<std::uint16_t>
         std::uint8_t* map_[4]{};
         std::size_t size_[4]{};
         std::atomic<bool> beyond_{ false };
+        mutable std::mutex mx_;
+        std::unordered_map<std::uint64_t, std::uint8_t> extra_[2];
 
         std::uint16_t value(int side, std::uint64_t i) const
         {
                 std::uint8_t const b = std::atomic_ref<std::uint8_t>(map_[side][i]).load(std::memory_order_relaxed);
                 std::uint8_t const w = std::atomic_ref<std::uint8_t>(map_[WDL + side][i >> 2]).load(std::memory_order_relaxed);
-                return from_byte(g_metric, b, std::uint8_t(w >> (2 * (i & 3)) & 3));
+                int d = b;
+                if (b >= g_esc) {
+                        std::lock_guard lock(mx_);
+                        d = g_esc + ZRANGE * (b - g_esc) + extra_[side].at(i);
+                }
+                return from_depth(g_metric, d, std::uint8_t(w >> (2 * (i & 3)) & 3));
         }
 
 public:
@@ -365,14 +467,21 @@ public:
         void put(int side, std::uint64_t, Pos const& p, std::uint16_t v) override
         {
                 std::uint64_t const i = mi_.index(p);
-                int const b = to_byte(g_metric, v);
-                if (b > 255) { beyond_.store(true, std::memory_order_relaxed); return; }
-                std::atomic_ref<std::uint8_t>(map_[side][i]).store(std::uint8_t(b), std::memory_order_relaxed);
+                int const d = to_depth(g_metric, v);
+                std::uint8_t b = std::uint8_t(d);
+                if (d >= g_esc) {                                               // an escape token and its extra byte
+                        if (d > max_depth_index(g_esc)) { beyond_.store(true, std::memory_order_relaxed); return; }
+                        b = std::uint8_t(g_esc + (d - g_esc) / ZRANGE);
+                        std::lock_guard lock(mx_);
+                        extra_[side][i] = std::uint8_t((d - g_esc) % ZRANGE);
+                }
+                std::atomic_ref<std::uint8_t>(map_[side][i]).store(b, std::memory_order_relaxed);
                 std::atomic_ref<std::uint8_t>(map_[WDL + side][i >> 2]).fetch_or(std::uint8_t(wdl_of(v) << (2 * (i & 3))), std::memory_order_relaxed);
         }
         std::uint16_t read(int side, Pos const& p) const override { return value(side, mi_.index(p)); }
         std::uint16_t at(int side, std::uint64_t slot) const override { return value(side, slot); }
         bool beyond() const { return beyond_.load(); }
+        std::uint64_t tokens() const { return extra_[0].size() + extra_[1].size(); }
         template<class ExecutionPolicy>
         void finish(ExecutionPolicy const& policy)      // the four files, each written once, sequentially
         {
@@ -381,13 +490,30 @@ public:
                                 if (load_input(path_[kind], size_[kind]) != std::vector<std::uint8_t>(map_[kind], map_[kind] + size_[kind])) {
                                         std::cerr << "wdl differs from the existing " << path_[kind] << std::endl; std::exit(1);
                                 }
-                        } else if (g_compressed) compress_buffer(map_[kind], size_[kind], path_[kind], policy);
-                        else {
-                                std::ofstream f(path_[kind] + ".tmp", std::ios::binary | std::ios::trunc);
-                                f.write(reinterpret_cast<char const*>(map_[kind]), std::streamsize(size_[kind]));
-                                if (!f) { std::cerr << "write failed " << path_[kind] << std::endl; std::exit(1); }
-                                f.close();
-                                std::filesystem::rename(path_[kind] + ".tmp", path_[kind]);
+                        } else {
+                                Extras ex;
+                                if (kind < WDL) {
+                                        ex.assign(extra_[kind].begin(), extra_[kind].end());
+                                        std::ranges::sort(ex);
+                                }
+                                if (g_compressed) compress_buffer(map_[kind], size_[kind], path_[kind], policy, kind < WDL ? &ex : nullptr, kind < WDL ? g_esc : 256);
+                                else {
+                                        std::ofstream f(path_[kind] + ".tmp", std::ios::binary | std::ios::trunc);
+                                        f.write(reinterpret_cast<char const*>(map_[kind]), std::streamsize(size_[kind]));
+                                        if (!f) { std::cerr << "write failed " << path_[kind] << std::endl; std::exit(1); }
+                                        f.close();
+                                        std::filesystem::rename(path_[kind] + ".tmp", path_[kind]);
+                                        if (!ex.empty()) {                      // the side file of the tokens: E, n, (slot, d)
+                                                std::ofstream x(xpath(path_[kind]), std::ios::binary | std::ios::trunc);
+                                                std::uint64_t const h[2] = { std::uint64_t(g_esc), ex.size() };
+                                                x.write(reinterpret_cast<char const*>(h), sizeof h);
+                                                for (auto const& [slot, e] : ex) {
+                                                        std::uint16_t const d = std::uint16_t(g_esc + ZRANGE * (map_[kind][slot] - g_esc) + e);
+                                                        x.write(reinterpret_cast<char const*>(&slot), 8);
+                                                        x.write(reinterpret_cast<char const*>(&d), 2);
+                                                }
+                                        }
+                                }
                         }
                         ::munmap(map_[kind], size_[kind]);
                         map_[kind] = nullptr;
@@ -403,8 +529,8 @@ std::uint16_t probe(Pos const& p0)
         Material const m = material_of(p);
         std::uint64_t const i = mat_index(m).index(p);
         if (m == g_current) return g_sink->read(p.stm, p);
-        if (g_metric == Metric::dtm) return from_dtm_byte(input_byte(m, BYTES + p.stm, i));          // one file
-        return from_byte(g_metric, input_byte(m, BYTES + p.stm, i), std::uint8_t(input_byte(m, WDL + p.stm, i >> 2) >> (2 * (i & 3)) & 3));
+        if (g_metric == Metric::dtm) return from_depth(Metric::dtm, input_depth(m, BYTES + p.stm, i), 0);          // one file
+        return from_depth(g_metric, input_depth(m, BYTES + p.stm, i), std::uint8_t(input_byte(m, WDL + p.stm, i >> 2) >> (2 * (i & 3)) & 3));
 }
 
 // win, draw or loss of a position for the side to move
@@ -1072,7 +1198,8 @@ bool build_material(std::string const& dir, Material c, ExecutionPolicy const& p
         constexpr std::uint64_t chunk = std::uint64_t(1) << 24;         // slots per write, a multiple of 4
         auto* const bytes_sink = dynamic_cast<ByteSink*>(sink.get());
         if (bytes_sink) {
-                if (bytes_sink->beyond()) { std::cerr << "value beyond one byte" << std::endl; return false; }
+                if (bytes_sink->beyond()) { std::cerr << "a depth beyond the last escape token" << std::endl; return false; }
+                if (bytes_sink->tokens()) std::cout << "escape tokens: " << bytes_sink->tokens() << " positions beyond the direct range" << std::endl;
                 for (int side : { 0, 1 })
                         for_blocks(policy, mi.size, [&](std::uint64_t a, std::uint64_t b) {
                                 std::uint64_t nw = 0, nl = 0;
@@ -1102,8 +1229,8 @@ bool build_material(std::string const& dir, Material c, ExecutionPolicy const& p
                                 int lg = 0;
                                 for (std::uint64_t j = a; j < b; ++j) {
                                         std::uint16_t const v = sink->at(side, lo + j);
-                                        int const by = to_byte(g_metric, v);
-                                        if (by > 255) { beyond.store(true, std::memory_order_relaxed); continue; }
+                                        int const by = to_depth(g_metric, v);
+                                        if (by >= g_esc) { beyond.store(true, std::memory_order_relaxed); continue; }   // tokens: the bytes sink only
                                         bytes[j] = std::uint8_t(by);
                                         wdl[j >> 2] |= std::uint8_t(wdl_of(v) << (2 * (j & 3)));
                                         nw += is_win(v);
@@ -1114,7 +1241,7 @@ bool build_material(std::string const& dir, Material c, ExecutionPolicy const& p
                                 losses[side].fetch_add(nl, std::memory_order_relaxed);
                                 for (int cur = longest.load(); lg > cur && !longest.compare_exchange_weak(cur, lg);) {}
                         });
-                        if (beyond) { std::cerr << "value beyond one byte" << std::endl; return false; }
+                        if (beyond) { std::cerr << "a depth beyond the direct range: needs escape tokens (sink=bytes)" << std::endl; return false; }
                         fb.write(reinterpret_cast<char const*>(bytes.data()), std::streamsize(bytes.size()));
                         fw.write(reinterpret_cast<char const*>(wdl.data()), std::streamsize(wdl.size()));
                 }
@@ -1226,13 +1353,13 @@ bool check_order(std::string const& dir, int n)
                 for (int s : { 0, 1 }) {
                         std::uint64_t const ws = file_size(c, WDL + s);
                         auto const w = load_input(mat_path(dir, c, WDL + s), ws);
-                        g_metric = Metric::dtz; auto const z = load_input(mat_path(dir, c, s), size);
-                        g_metric = Metric::dtc; auto const x = load_input(mat_path(dir, c, s), size);
-                        g_metric = Metric::dtm; auto const m = load_input(mat_path(dir, c, s), size);
+                        g_metric = Metric::dtz; auto const z = load_depths(mat_path(dir, c, s), size);
+                        g_metric = Metric::dtc; auto const x = load_depths(mat_path(dir, c, s), size);
+                        g_metric = Metric::dtm; auto const m = load_depths(mat_path(dir, c, s), size);
                         for (std::uint64_t i = 0; i < size; ++i) {
                                 std::uint8_t const r = wdl_bits(w.data(), i);
-                                std::uint16_t const zv = from_byte(Metric::dtz, z[i], r), xv = from_byte(Metric::dtc, x[i], r),
-                                                    mv = from_byte(Metric::dtm, m[i], r);
+                                std::uint16_t const zv = from_depth(Metric::dtz, z[i], r), xv = from_depth(Metric::dtc, x[i], r),
+                                                    mv = from_depth(Metric::dtm, m[i], r);
                                 if (wdl_of(mv) != r) { ++bad; continue; }               // the dtm byte's own class
                                 if (mv == 0) continue;
                                 (is_win(mv) ? wins : losses) += 1;

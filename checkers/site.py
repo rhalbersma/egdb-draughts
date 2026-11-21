@@ -36,12 +36,12 @@ CHAPTERS = [
         ('curiosa.html', 'Uitzondering 2: twee curiosa', 'Exception 2: two curiosities'),
         ('val.html', 'Twee vallen om de vesting te breken', 'Two traps to break the fortress'),
         ('val-pariteit.html', 'De winst is strategisch, de pariteit doet er niet toe', 'The win is strategic, parity does not matter')]),
+    ('3 tegen 2 op 9×8', '3 against 2 on 9×8', [
+        ('vesting.html', 'Twee vallen om de vesting te breken', 'Two traps to break the fortress'),
+        ('vesting-pariteit.html', 'De winst is niet strategisch, de pariteit doet ertoe', 'The win is non-strategic, parity matters')]),
     ('3 tegen 2 op andere borden', '3 against 2 on other boards', [
         ('langste-7x7.html', 'De langste winst op 7×7', 'The longest win on 7×7'),
         ('vesting-8x7.html', 'Langs de zijde van 7 valt de vesting op 8×7', 'Along the side of 7 the fortress falls on 8×7'),
-        ('vesting.html', 'Twee vallen om de vesting te breken op 9×8', 'Two traps to break the fortress on 9×8'),
-        ('vesting-pariteit.html', 'De winst is niet strategisch, de pariteit doet ertoe op 9×8',
-         'The win is non-strategic, parity matters on 9×8'),
         ('vesting-9x9.html', '9×9 onspeelbare hoeken: de val en de diagonaal', '9×9 unplayable corners: the trap and the diagonal'),
         ('afstandsregel.html', 'De afstandsregel', 'The distance rule')]),
     ('Conclusie', 'Conclusion', [
@@ -806,8 +806,8 @@ are 8 traps, at even parity not a single one.</p>''')]
             assert (rank_parity(e87, e87.fen(W, B, 'B')) == 0) == even
         for W in (['b5', 'c4', 'd5'], ['b5', 'c4', 'd3'], ['b3', 'c4', 'd5'], ['b3', 'c4', 'd3']):
             assert e87.analyse(e87.fen(W, ['a2', 'a6'], 'B'))[0] == 'D'
-        body7.append(t('<p>Wat er gebeurt als de dubbele hoeken 8 uit elkaar liggen, zien we op <a href="vesting.html">9×8</a>.</p>',
-                       '<p>What happens when the double corners are 8 apart, we see on <a href="vesting.html">9×8</a>.</p>'))
+        body7.append(t('<p>Wat er gebeurt als de dubbele hoeken 8 uit elkaar liggen, zagen we op <a href="vesting.html">9×8</a>.</p>',
+                       '<p>What happens when the double corners are 8 apart, we saw on <a href="vesting.html">9×8</a>.</p>'))
         self.write('vesting-8x7.html', None, '\n'.join(body7), pg7, k87)
         # the distance rule, with the two pairs of 9x7 that are 8 apart
         k97, e97 = self.engine(9, 7, 'unplayable')

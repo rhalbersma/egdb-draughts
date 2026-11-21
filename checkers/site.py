@@ -444,14 +444,16 @@ king in the middle of the white kings (the third diagram).</p>''')]
         """two traps on 8x8, one at each parity: every shuttle move of black allows a forced exchange"""
         t = self.t
         body = [t('<p>Bij <a href="twee-langste.html">2 tegen 1</a> is de dubbele hoek geen veilige haven: twee witte '
-                  'dammen winnen ook tegen een zwarte dam in de dubbele hoek. Bij 3 tegen 2 bezet zwart daarom beide dubbele '
-                  'hoeken, en per hoek twee witte dammen zou neerkomen op 4 tegen 2. Op 8×8 is het bord precies klein genoeg om '
-                  'het met 3 dammen te doen: in de val doet de middelste witte dam dubbel werk. Hij slaat terug na de ruil in '
+                  'dammen winnen ook tegen een zwarte dam in de dubbele hoek. Twee zwarte dammen bezetten daarom beide dubbele '
+                  'hoeken, en per hoek twee witte dammen zou betekenen dat pas 4 tegen 2 wint. Het 8×8-bord is echter precies '
+                  'klein genoeg om 2 zwarte dammen met 3 dammen te vangen: in de val doet de middelste witte dam dubbel werk. '
+                  'Hij slaat terug na de ruil in '
                   'de ene hoek én na die in de andere, in de eerste val hieronder vanaf d4, in de tweede vanaf e5.</p>',
                   '<p>In <a href="twee-langste.html">2 against 1</a> the double corner is no safe haven: two white kings win '
-                  'against a black king in the double corner too. In 3 against 2 black therefore occupies both double corners, '
-                  'and two white kings per corner would mean 4 against 2. On 8×8 the board is just small enough to do it with '
-                  '3 kings: in the trap the middle white king does double duty. It captures back after the exchange in the one '
+                  'against a black king in the double corner too. 2 black kings therefore occupy both double corners, and two '
+                  'white kings per corner would mean only 4 against 2 is winning. However, the 8×8 board is just small enough '
+                  'to capture 2 black kings with 3 kings: in the trap the middle white king does double duty. It captures back '
+                  'after the exchange in the one '
                   'corner and after the one in the other, in the first trap below from d4, in the second from e5.</p>')
                 + t('<p>Een dam op de randvelden van een dubbele hoek kan niet geslagen worden. Om de vesting te breken, moet '
                     'wit dus een zwarte dam uit zijn dubbele hoek krijgen, en dat kan op twee manieren: ofwel wit ruilt een '

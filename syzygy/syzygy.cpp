@@ -55,7 +55,7 @@
 //
 // build: g++-14 -std=c++23 -O2 -march=native -fopenmp -I<xstd-bits>/include -I<xstd-ints>/include
 //        -I<xstd-misc>/include syzygy/syzygy.cpp -lzstd -ltbb -o syzygy
-// usage: syzygy build <dir> wp bp wm bm <metric> [seq|par] [frontier|scan|cell8] [auto|groups|bytes|array] [material|tempi|configuration] [mem=MB]
+// usage: syzygy build <dir> wp bp wm bm <metric> [seq|par] [frontier|scan|cell8] [auto|groups|bytes|array] [compressed|raw] [material|tempi|configuration] [mem=MB]
 //                                                            build one material (its captures and promotions must exist);
 //                                                            the depth sink by the claim mem=MB (auto: the array if rung 0
 //                                                            fits, else group files), or as given; the granularity of
@@ -130,16 +130,129 @@ std::uint64_t file_size(Material m, int kind) { return kind < WDL ? mat_index(m)
 std::string g_dir;
 Material g_current{ -1, -1, -1, -1 };
 DepthSink<std::uint16_t>* g_sink = nullptr;             // the material being built: its values (src/materials_6x6.hpp)
-std::map<std::pair<Material, int>, std::uint8_t const*> g_files;
+
+// Compressed build-format files (the default; the build option `raw` keeps plain files): a material's four files are
+// written as <name>.z, the same bytes in zstd blocks of 4 KiB, and every lookup into a finished material goes through a
+// per-thread direct-mapped cache of decompressed blocks (EGDB_CACHE_BLOCKS per thread, default 16384: 64 MiB). Only
+// pass 0 looks into other materials. Format: "EGDBZ1\0\0", the raw size, the block size, the number of blocks n, n + 1
+// offsets of the blocks from the start of the data, the blocks.
+bool g_compressed = true;
+constexpr std::uint64_t ZBLOCK = 4096;
+constexpr char ZMAGIC[8] = { 'E', 'G', 'D', 'B', 'Z', '1', 0, 0 };
+struct ZFile { std::uint64_t size = 0, nblocks = 0; std::uint64_t const* off = nullptr; std::uint8_t const* data = nullptr; };
+
+std::string zpath(std::string const& path) { return path + ".z"; }
+
+ZFile open_zfile(std::string const& path, std::uint64_t size)
+{
+        std::uintmax_t const fs = std::filesystem::exists(zpath(path)) ? std::filesystem::file_size(zpath(path)) : 0;
+        if (fs < 32) { std::cerr << "missing or short " << zpath(path) << std::endl; std::exit(1); }
+        std::uint8_t const* const p = map_file(zpath(path), std::size_t(fs));
+        ZFile z;
+        std::uint64_t h[4];
+        std::memcpy(h, p, sizeof h);
+        if (std::memcmp(p, ZMAGIC, 8) != 0 || h[1] != size || h[2] != ZBLOCK) { std::cerr << "bad header " << zpath(path) << std::endl; std::exit(1); }
+        z.size = h[1];
+        z.nblocks = h[3];
+        z.off = reinterpret_cast<std::uint64_t const*>(p + 32);
+        z.data = p + 32 + 8 * (z.nblocks + 1);
+        return z;
+}
+
+// a raw file, compressed into <path>.z (in parallel over the blocks), then removed
+template<class ExecutionPolicy>
+void compress_file(std::string const& path, std::uint64_t size, ExecutionPolicy const& policy)
+{
+        std::uint8_t const* const raw = map_file(path, size);
+        std::uint64_t const nb = (size + ZBLOCK - 1) / ZBLOCK;
+        std::vector<std::vector<char>> parts(nb);
+        std::vector<std::uint64_t> idx(nb);
+        std::iota(idx.begin(), idx.end(), std::uint64_t(0));
+        std::for_each(policy, idx.begin(), idx.end(), [&](std::uint64_t b) {
+                std::uint64_t const lo = b * ZBLOCK, n = std::min(ZBLOCK, size - lo);
+                parts[b].resize(ZSTD_compressBound(n));
+                std::size_t const r = ZSTD_compress(parts[b].data(), parts[b].size(), raw + lo, n, 3);
+                if (ZSTD_isError(r)) { std::cerr << "zstd: " << ZSTD_getErrorName(r) << std::endl; std::exit(1); }
+                parts[b].resize(r);
+        });
+        ::munmap(const_cast<std::uint8_t*>(raw), size);
+        std::vector<std::uint64_t> off(nb + 1, 0);
+        for (std::uint64_t b = 0; b < nb; ++b) off[b + 1] = off[b] + parts[b].size();
+        std::ofstream f(zpath(path) + ".tmp", std::ios::binary | std::ios::trunc);
+        std::uint64_t const h[3] = { size, ZBLOCK, nb };
+        f.write(ZMAGIC, 8);
+        f.write(reinterpret_cast<char const*>(h), sizeof h);
+        f.write(reinterpret_cast<char const*>(off.data()), std::streamsize(8 * off.size()));
+        for (auto const& b : parts) f.write(b.data(), std::streamsize(b.size()));
+        if (!f) { std::cerr << "write failed " << zpath(path) << std::endl; std::exit(1); }
+        f.close();
+        std::filesystem::rename(zpath(path) + ".tmp", zpath(path));
+        std::filesystem::remove(path);
+}
+
+// one byte of a compressed file, through the calling thread's block cache
+std::uint8_t zbyte(ZFile const& z, std::uint64_t pos)
+{
+        struct Tag { ZFile const* f = nullptr; std::uint64_t block = ~std::uint64_t(0); };
+        static std::size_t const nslots = std::getenv("EGDB_CACHE_BLOCKS") ? std::size_t(std::atoll(std::getenv("EGDB_CACHE_BLOCKS"))) : 16384;
+        thread_local std::vector<Tag> tags(nslots);                                    // the data uninitialised: pages are
+        thread_local std::unique_ptr<std::uint8_t[]> blocks(new std::uint8_t[nslots * ZBLOCK]);       // touched only when used
+        thread_local std::unique_ptr<ZSTD_DCtx, std::size_t (*)(ZSTD_DCtx*)> dx(ZSTD_createDCtx(), ZSTD_freeDCtx);
+        std::uint64_t const b = pos / ZBLOCK;
+        std::size_t const h = std::size_t((std::uintptr_t(&z) >> 4) * 0x9E3779B97F4A7C15ull ^ b * 0xC2B2AE3D27D4EB4Full) % nslots;
+        Tag& t = tags[h];
+        std::uint8_t* const data = blocks.get() + h * ZBLOCK;
+        if (t.f != &z || t.block != b) {
+                std::uint64_t const lo = b * ZBLOCK, n = std::min(ZBLOCK, z.size - lo);
+                std::size_t const r = ZSTD_decompressDCtx(dx.get(), data, n, z.data + z.off[b], z.off[b + 1] - z.off[b]);
+                if (ZSTD_isError(r) || r != n) { std::cerr << "zstd: bad block " << b << std::endl; std::exit(1); }
+                t.f = &z;
+                t.block = b;
+        }
+        return data[pos - b * ZBLOCK];
+}
 
 bool g_frozen = false;                                  // during the passes of a build: the maps are only read
 
-std::uint8_t const* mat_file(Material m, int kind)
+// a file of a finished material, opened once: compressed if <name>.z exists, else raw (so either kind of store is read)
+struct Input { std::uint8_t const* raw = nullptr; ZFile z; };
+std::map<std::pair<Material, int>, Input> g_inputs;
+
+Input const& open_input(Material m, int kind)
 {
-        auto it = g_files.find({ m, kind });
-        if (it != g_files.end()) return it->second;
+        auto it = g_inputs.find({ m, kind });
+        if (it != g_inputs.end()) return it->second;
         if (g_frozen) { std::cerr << "not opened before the passes: " << mat_path(g_dir, m, kind) << std::endl; std::abort(); }
-        return g_files[{ m, kind }] = map_file(mat_path(g_dir, m, kind), file_size(m, kind));
+        std::string const path = mat_path(g_dir, m, kind);
+        Input in;
+        if (std::filesystem::exists(zpath(path))) in.z = open_zfile(path, file_size(m, kind));
+        else in.raw = map_file(path, file_size(m, kind));
+        return g_inputs[{ m, kind }] = in;
+}
+
+// one byte of a file of a finished material
+std::uint8_t input_byte(Material m, int kind, std::uint64_t pos)
+{
+        Input const& in = open_input(m, kind);
+        return in.raw ? in.raw[pos] : zbyte(in.z, pos);
+}
+
+// a whole file of a finished material, for the checks
+std::vector<std::uint8_t> load_input(std::string const& path, std::uint64_t size)
+{
+        std::vector<std::uint8_t> out(size);
+        if (std::filesystem::exists(zpath(path))) {            // every block decompressed in place (not through the cache:
+                ZFile const z = open_zfile(path, size);         // a local ZFile has no stable address to key it by)
+                for (std::uint64_t b = 0; b < z.nblocks; ++b) {
+                        std::uint64_t const lo = b * ZBLOCK, n = std::min(ZBLOCK, size - lo);
+                        std::size_t const r = ZSTD_decompress(out.data() + lo, n, z.data + z.off[b], z.off[b + 1] - z.off[b]);
+                        if (ZSTD_isError(r) || r != n) { std::cerr << "zstd: bad block " << b << " of " << zpath(path) << std::endl; std::exit(1); }
+                }
+        } else {
+                std::uint8_t const* const p = map_file(path, size);
+                std::copy(p, p + size, out.begin());
+        }
+        return out;
 }
 
 Material canonical(Material m) { return stored(m) ? m : mirror_of(m); }
@@ -163,7 +276,7 @@ void open_successors(Material c)
                 mat_index(m);
                 mat_index(mirror_of(m));
                 for (int kind : g_metric == Metric::dtm ? std::vector<int>{ BYTES, BYTES + 1, WDL, WDL + 1 } : std::vector<int>{ WDL, WDL + 1 })
-                        mat_file(m, kind);                      // dtm: the depths with their signs; dtc, dtz: the signs
+                        open_input(m, kind);                    // dtm: the depths with their signs; dtc, dtz: the signs
         }
 }
 
@@ -193,56 +306,6 @@ std::uint16_t from_byte(Metric mt, std::uint8_t s, std::uint8_t r)    // r: the 
 }
 
 std::uint8_t wdl_bits(std::uint8_t const* w, std::uint64_t i) { return std::uint8_t(w[i >> 2] >> (2 * (i & 3)) & 3); }
-
-// Inputs read compressed (EGDB_COMPRESSED_INPUTS=1, a measurement): every file of a finished material is held as zstd
-// blocks of 4 KiB (as a compressed build-format file would be), and a lookup goes through a per-thread direct-mapped
-// cache of decompressed blocks (EGDB_CACHE_BLOCKS per thread, default 4096: 16 MiB). Off: the raw memory-mapped files.
-struct ZInput { std::vector<char> data; std::vector<std::uint64_t> off; std::uint64_t size = 0; };
-std::map<std::pair<Material, int>, ZInput> g_zinputs;
-bool g_zmode = std::getenv("EGDB_COMPRESSED_INPUTS") != nullptr;
-std::atomic<std::uint64_t> g_zmiss{ 0 }, g_zlook{ 0 };
-constexpr std::uint64_t ZBLOCK = 4096;
-
-void compress_input(Material m, int kind, std::uint8_t const* raw, std::uint64_t size)
-{
-        ZInput& z = g_zinputs[{ m, kind }];
-        if (z.size) return;
-        z.size = size;
-        std::uint64_t const nb = (size + ZBLOCK - 1) / ZBLOCK;
-        std::vector<std::vector<char>> parts(nb);
-        std::vector<std::uint64_t> idx(nb);
-        std::iota(idx.begin(), idx.end(), std::uint64_t(0));
-        std::for_each(std::execution::par, idx.begin(), idx.end(), [&](std::uint64_t b) {
-                std::uint64_t const lo = b * ZBLOCK, n = std::min(ZBLOCK, size - lo);
-                parts[b].resize(ZSTD_compressBound(n));
-                parts[b].resize(ZSTD_compress(parts[b].data(), parts[b].size(), raw + lo, n, 3));
-        });
-        z.off.resize(nb + 1);
-        for (std::uint64_t b = 0; b < nb; ++b) { z.off[b] = z.data.size(); z.data.insert(z.data.end(), parts[b].begin(), parts[b].end()); }
-        z.off[nb] = z.data.size();
-}
-
-std::uint8_t zbyte(Material m, int kind, std::uint64_t pos)
-{
-        struct Slot { ZInput const* f = nullptr; std::uint64_t block = ~std::uint64_t(0); std::array<std::uint8_t, ZBLOCK> data; };
-        static std::size_t const nslots = std::getenv("EGDB_CACHE_BLOCKS") ? std::size_t(std::atoll(std::getenv("EGDB_CACHE_BLOCKS"))) : 4096;
-        thread_local std::vector<Slot> cache(nslots);
-        thread_local ZSTD_DCtx* dx = ZSTD_createDCtx();
-        thread_local std::uint64_t looks = 0, misses = 0;
-        ZInput const& z = g_zinputs.at({ m, kind });
-        std::uint64_t const b = pos / ZBLOCK;
-        std::size_t const h = std::size_t((std::uintptr_t(&z) >> 4) * 0x9E3779B97F4A7C15ull ^ b * 0xC2B2AE3D27D4EB4Full) % nslots;
-        Slot& sl = cache[h];
-        if (++looks % 65536 == 0) { g_zlook += 65536; g_zmiss += misses; misses = 0; }
-        if (sl.f != &z || sl.block != b) {
-                ++misses;
-                std::uint64_t const lo = b * ZBLOCK, n = std::min(ZBLOCK, z.size - lo);
-                ZSTD_decompressDCtx(dx, sl.data.data(), n, z.data.data() + z.off[b], z.off[b + 1] - z.off[b]);
-                sl.f = &z;
-                sl.block = b;
-        }
-        return sl.data[pos - b * ZBLOCK];
-}
 
 // The 8-bit sink: the four output files themselves (<metric>-wtm, <metric>-btm, wdl-wtm, wdl-btm under temporary names),
 // memory-mapped for the whole build of the material. A decided value goes straight into its stored form, the unsigned
@@ -321,8 +384,7 @@ std::uint16_t probe(Pos const& p0)
         Material const m = material_of(p);
         std::uint64_t const i = mat_index(m).index(p);
         if (m == g_current) return g_sink->read(p.stm, p);
-        if (g_zmode) return from_byte(g_metric, zbyte(m, BYTES + p.stm, i), std::uint8_t(zbyte(m, WDL + p.stm, i >> 2) >> (2 * (i & 3)) & 3));
-        return from_byte(g_metric, mat_file(m, BYTES + p.stm)[i], wdl_bits(mat_file(m, WDL + p.stm), i));
+        return from_byte(g_metric, input_byte(m, BYTES + p.stm, i), std::uint8_t(input_byte(m, WDL + p.stm, i >> 2) >> (2 * (i & 3)) & 3));
 }
 
 // win, draw or loss of a position for the side to move
@@ -333,8 +395,7 @@ std::uint8_t probe_wdl(Pos const& p0)
         Material const m = material_of(p);
         std::uint64_t const i = mat_index(m).index(p);
         if (m == g_current) return wdl_of(g_sink->read(p.stm, p));
-        if (g_zmode) return std::uint8_t(zbyte(m, WDL + p.stm, i >> 2) >> (2 * (i & 3)) & 3);
-        return wdl_bits(mat_file(m, WDL + p.stm), i);
+        return std::uint8_t(input_byte(m, WDL + p.stm, i >> 2) >> (2 * (i & 3)) & 3);
 }
 
 // the value of a move for the side making it: after a goal move only the outcome counts
@@ -906,15 +967,6 @@ bool build_material(std::string const& dir, Material c, ExecutionPolicy const& p
                 std::cout << std::endl;
         }
         open_successors(c);
-        if (g_zmode) {                                  // the inputs as compressed build-format files (a measurement)
-                std::uint64_t raw = 0, z = 0;
-                for (auto const& [key, ptr] : g_files) {
-                        compress_input(key.first, key.second, ptr, file_size(key.first, key.second));
-                        raw += file_size(key.first, key.second);
-                        z += g_zinputs[key].data.size();
-                }
-                std::cout << "compressed inputs: " << raw << " bytes raw, " << z << " in zstd blocks of 4 KiB" << std::endl;
-        }
         g_frozen = true;
         std::unique_ptr<DepthSink<std::uint16_t>> sink;
         if (g_group_files) sink = std::make_unique<GroupSink<std::uint16_t>>(dir, c, mi, groups);
@@ -994,6 +1046,8 @@ bool build_material(std::string const& dir, Material c, ExecutionPolicy const& p
                 std::filesystem::rename(pb + ".tmp", pb);
                 std::filesystem::rename(pw + ".tmp", pw);
         }
+        if (g_compressed)                               // the build format, compressed: <name>.z for each of the four files
+                for (int kind = 0; kind < 4; ++kind) compress_file(mat_path(dir, c, kind), file_size(c, kind), policy);
         g_sink = nullptr;
         g_frozen = false;
         g_stats.write = seconds_since(tw);
@@ -1003,7 +1057,6 @@ bool build_material(std::string const& dir, Material c, ExecutionPolicy const& p
                   << wins[1].load() << ", losses " << losses[0].load() << " / " << losses[1].load() << " (White / Black to move), longest " << longest.load()
                   << " plies, peak RSS " << peak_rss_mb() << " MB, " << sec << " s" << std::endl;
         print_stats(c, positions, groups.size(), sec);
-        if (g_zmode) std::cout << "compressed inputs: " << g_zlook.load() << " lookups, " << g_zmiss.load() << " block misses" << std::endl;
         return true;
 }
 
@@ -1086,13 +1139,13 @@ bool check_order(std::string const& dz, std::string const& dc, std::string const
                 std::uint64_t const size = mat_index(c).size;
                 for (int s : { 0, 1 }) {
                         std::uint64_t const ws = file_size(c, WDL + s);
-                        g_metric = Metric::dtz; auto const z = map_file(mat_path(dz, c, s), size), zw = map_file(mat_path(dz, c, WDL + s), ws);
-                        g_metric = Metric::dtc; auto const x = map_file(mat_path(dc, c, s), size), xw = map_file(mat_path(dc, c, WDL + s), ws);
-                        g_metric = Metric::dtm; auto const m = map_file(mat_path(dm, c, s), size), mw = map_file(mat_path(dm, c, WDL + s), ws);
+                        g_metric = Metric::dtz; auto const z = load_input(mat_path(dz, c, s), size), zw = load_input(mat_path(dz, c, WDL + s), ws);
+                        g_metric = Metric::dtc; auto const x = load_input(mat_path(dc, c, s), size), xw = load_input(mat_path(dc, c, WDL + s), ws);
+                        g_metric = Metric::dtm; auto const m = load_input(mat_path(dm, c, s), size), mw = load_input(mat_path(dm, c, WDL + s), ws);
                         for (std::uint64_t i = 0; i < size; ++i) {
-                                std::uint16_t const zv = from_byte(Metric::dtz, z[i], wdl_bits(zw, i)),
-                                                    xv = from_byte(Metric::dtc, x[i], wdl_bits(xw, i)),
-                                                    mv = from_byte(Metric::dtm, m[i], wdl_bits(mw, i));
+                                std::uint16_t const zv = from_byte(Metric::dtz, z[i], wdl_bits(zw.data(), i)),
+                                                    xv = from_byte(Metric::dtc, x[i], wdl_bits(xw.data(), i)),
+                                                    mv = from_byte(Metric::dtm, m[i], wdl_bits(mw.data(), i));
                                 if (wdl_of(zv) != wdl_of(mv) || wdl_of(xv) != wdl_of(mv)) { ++bad; continue; }
                                 if (mv == 0) continue;
                                 (is_win(mv) ? wins : losses) += 1;
@@ -1101,10 +1154,10 @@ bool check_order(std::string const& dz, std::string const& dc, std::string const
                 }
                 for (int s : { 0, 1 }) {
                         std::uint64_t const ws = file_size(c, WDL + s);
-                        g_metric = Metric::dtz; auto const z = map_file(mat_path(dz, c, WDL + s), ws);
-                        g_metric = Metric::dtc; auto const x = map_file(mat_path(dc, c, WDL + s), ws);
-                        g_metric = Metric::dtm; auto const m = map_file(mat_path(dm, c, WDL + s), ws);
-                        bad_wdl += !std::equal(z, z + ws, m) || !std::equal(x, x + ws, m);
+                        g_metric = Metric::dtz; auto const z = load_input(mat_path(dz, c, WDL + s), ws);
+                        g_metric = Metric::dtc; auto const x = load_input(mat_path(dc, c, WDL + s), ws);
+                        g_metric = Metric::dtm; auto const m = load_input(mat_path(dm, c, WDL + s), ws);
+                        bad_wdl += z != m || x != m;
                 }
         }
         std::cout << "order: " << wins << " wins, " << losses << " losses, " << bad
@@ -1136,12 +1189,13 @@ int main(int argc, char* argv[])
                 for (Material const c : stored_materials_up_to(std::stoi(a[1]))) print_plan_row(c, memory_need(c));
                 return 0;
         }
-        if (a.size() >= 7 && a.size() <= 12 && a[0] == "build" && parse_metric(a[6])) {
+        if (a.size() >= 7 && a.size() <= 13 && a[0] == "build" && parse_metric(a[6])) {
                 bool par = false;                                       // the execution policy: par or seq
                 for (std::size_t i = 7; i < a.size(); ++i) {
                         if (a[i] == "seq" || a[i] == "par") par = a[i] == "par";
                         else if (a[i] == "scan" || a[i] == "frontier") g_frontier = a[i] == "frontier";
                         else if (a[i] == "cell8") { g_cell8 = true; g_frontier = false; }
+                        else if (a[i] == "raw" || a[i] == "compressed") g_compressed = a[i] == "compressed";
                         else if (a[i].starts_with("mem=")) g_mem_mb = std::stoull(a[i].substr(4));
                         else if (a[i] == "groups" || a[i] == "array" || a[i] == "bytes") { g_group_files = a[i] == "groups"; g_byte_sink = a[i] != "array"; g_sink_auto = false; }
                         else if (a[i] == "auto") g_sink_auto = true;
@@ -1155,7 +1209,7 @@ int main(int argc, char* argv[])
                 return check_all(a[1], std::stoi(a[2]), a.size() == 5 ? std::stoi(a[4]) : 4) ? 0 : 1;
         if (a.size() == 5 && a[0] == "cmp86" && parse_metric(a[4])) return compare_thompson86(a[1], a[2], std::stoi(a[3])) ? 0 : 1;
         if (a.size() == 5 && a[0] == "order") return check_order(a[1], a[2], a[3], std::stoi(a[4])) ? 0 : 1;
-        std::cerr << "usage: syzygy build <dir> wp bp wm bm dtm|dtc|dtz [seq|par] [frontier|scan|cell8] [auto|groups|bytes|array] [material|tempi|configuration] [mem=MB] | bench n [samples] | plan n dtm|dtc|dtz [granularity] | checkall <dir> n dtm|dtc|dtz [threads]"
+        std::cerr << "usage: syzygy build <dir> wp bp wm bm dtm|dtc|dtz [seq|par] [frontier|scan|cell8] [auto|groups|bytes|array] [compressed|raw] [material|tempi|configuration] [mem=MB] | bench n [samples] | plan n dtm|dtc|dtz [granularity] | checkall <dir> n dtm|dtc|dtz [threads]"
                      " | cmp86 <dir> <dir_thompson86> n dtm|dtc|dtz | order <dir_dtz> <dir_dtc> <dir_dtm> n" << std::endl;
         return 2;
 }

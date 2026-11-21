@@ -33,6 +33,8 @@ ROUNDS = config.get('rounds', 'frontier')
 SINK = config.get('sink', 'auto')          # the depth sink: auto (by the claim), groups (group files), bytes (8-bit, RAM), array (16-bit, RAM)
 GRANULARITY = config.get('granularity', 'material')  # material, tempi or configuration (below material: man moves exit)
 THREADS = int(config.get('threads', 4))
+STORE = config.get('store', 'compressed')  # compressed: each file as <name>.z (zstd blocks of 4 KiB, read through a block cache); raw: plain files
+SUF = '.z' if STORE == 'compressed' else ''
 
 
 def stored(m):
@@ -85,12 +87,12 @@ def sub(n):                                                            # wp-bp-w
 
 
 def files(m):
-    return [f'{D}/{sub(m)}-{k}' for k in (f'{METRIC}-wtm', f'{METRIC}-btm', 'wdl-wtm', 'wdl-btm')]
+    return [f'{D}/{sub(m)}-{k}{SUF}' for k in (f'{METRIC}-wtm', f'{METRIC}-btm', 'wdl-wtm', 'wdl-btm')]
 
 
 def inputs(m):
     kinds = ('dtm-wtm', 'dtm-btm', 'wdl-wtm', 'wdl-btm') if METRIC == 'dtm' else ('wdl-wtm', 'wdl-btm')
-    return [f'{D}/{sub(name(d))}-{k}' for d in deps(m) for k in kinds]
+    return [f'{D}/{sub(name(d))}-{k}{SUF}' for d in deps(m) for k in kinds]
 
 
 # the plan (src/snakemake_plan.py): memory budget, per-job claims from the engine's estimates, critical-path priorities
@@ -126,7 +128,7 @@ for _m in MATERIALS:
         params: m=_n.replace('-', ' ')
         resources: mem_mb=claim_mb(PLAN[_n], MEM)
         priority: PRIO[_n]
-        shell: '{ENGINE} build {D} {params.m} {METRIC} {POLICY} {ROUNDS} {SINK} {GRANULARITY} mem={resources.mem_mb} > {log} 2>&1'
+        shell: '{ENGINE} build {D} {params.m} {METRIC} {POLICY} {ROUNDS} {SINK} {STORE} {GRANULARITY} mem={resources.mem_mb} > {log} 2>&1'
 
 
 rule check:

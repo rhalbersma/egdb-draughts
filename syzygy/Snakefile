@@ -23,8 +23,10 @@
 # usage (from the root of the repo):
 #   snakemake -s syzygy/Snakefile --cores 10 --config engine=build/syzygy dir=data/syzygy pieces=12 metric=dtm rounds=cell8
 #   snakemake -s syzygy/Snakefile --cores 10 --config engine=build/syzygy_checkers dir=data/syzygy_checkers pieces=12 metric=dtm rounds=cell8
-# metric: dtm, dtc or dtz. policy=auto (default): the materials with at least par_min positions (default 5e7) build with
-# std::execution::par on all cores, alone; the others with seq, one core each, side by side; policy=par or seq for all.
+# metric: dtm, dtc or dtz. policy=auto (default): the largest materials (at least par_min positions; default 1 / (4 x
+# cores) of all the positions of the run, so only those at the end of the critical path) with std::execution::par on all
+# cores, alone; the rest seq on one core, as many side by side as --cores and the memory claims (--resources mem_mb=N)
+# allow. policy=fill: every job par, counted as one thread; policy=par or seq for all.
 # rounds=cell8: one byte per position and side, reductions every 240 codes (synthesis 7.5); rounds=scan: full scans as
 # rtbgen; default: frontier bit planes. stats=1: a <material>-<metric>.stats file per material (positions per number of
 # plies, the longest win and loss with a position). probe=1 (default): each material is converted into the probe format
@@ -38,13 +40,13 @@ BASE = config.get('dir', 'data/syzygy')
 N = int(config.get('pieces', 6))
 METRIC = config.get('metric', 'dtm')
 D = BASE                                   # depth files in <dir>/<metric>/..., wdl files in <dir>/wdl/... (shared)
-POLICY = config.get('policy', 'auto')   # auto: par on all cores for the large materials (par_min), seq for the rest
+POLICY = config.get('policy', 'auto')   # auto: the largest materials par on all cores, the rest seq side by side (see sched)
 ROUNDS = config.get('rounds', 'frontier')
 SINK = config.get('sink', 'auto')          # the depth sink: auto (by the claim), groups (group files), bytes (8-bit, RAM), array (16-bit, RAM)
 GRANULARITY = config.get('granularity', 'material')  # material, tempi or configuration (below material: man moves exit)
 import os
 THREADS = int(config.get('threads', 4))
-PAR_MIN = float(config.get('par_min', 5e7))  # materials with at least this many positions build with policy=par on all cores
+PAR_MIN = config.get('par_min')                # materials with at least this many positions build with policy=par on all cores
 STATS = 'stats' if str(config.get('stats', 0)) not in ('0', 'false', 'False') else ''   # stats=1: a .stats file per material
 PROBE = str(config.get('probe', 1)) not in ('0', 'false', 'False')    # convert every material into the probe format
 CHECK = str(config.get('check', 0)) not in ('0', 'false', 'False')    # checkall against egdb_6x6 at the end (keeps the build files)
@@ -139,6 +141,28 @@ wildcard_constraints:
     mat=r'\d\d-\d\d-\d\d-\d\d'
 
 
+def par_min():
+    # by default 1 / (4 cores) of all the positions of the run: only the few largest materials, at the end of the
+    # critical path, run alone on all cores; everything else runs on one core, as many side by side as cores and
+    # memory claims allow
+    if PAR_MIN is not None:
+        return float(PAR_MIN)
+    return sum(PLAN[name(m)]['positions'] for m in MATERIALS) / (4 * workflow.cores)
+
+
+def sched(n):
+    # (threads Snakemake counts, the engine's policy) for material n. auto (default): par on all cores, alone, for the
+    # materials of at least par_min positions, seq on one core for the rest, as many side by side as --cores and the
+    # memory claims (mem_mb) allow. fill: every job par but counted as one thread, so that memory and --cores decide how
+    # many run and the operating system shares the cores (measured no faster than auto on the 8-piece subset; it
+    # oversubscribes the small jobs). par: every job par and alone; seq: every job on one core
+    if POLICY == 'fill':
+        return 1, 'par'
+    if POLICY == 'par' or (POLICY == 'auto' and PLAN[n]['positions'] >= par_min()):
+        return workflow.cores, 'par'
+    return 1, 'seq'
+
+
 def probe_done(m):
     return f'{D}/probe/{METRIC}/{sub(m)}-{METRIC}.done'
 
@@ -187,8 +211,8 @@ for _m in MATERIALS:
         log: f'{D}/{METRIC}/{sub(_n)}-{METRIC}.log'
         resources: mem_mb=claim_mb(PLAN[_n], MEM)
         priority: PRIO[_n]
-        threads: workflow.cores if (POLICY == 'par' or (POLICY == 'auto' and PLAN[_n]['positions'] >= PAR_MIN)) else 1
-        params: m=_n.replace('-', ' '), policy=('par' if (POLICY == 'par' or (POLICY == 'auto' and PLAN[_n]['positions'] >= PAR_MIN)) else 'seq')
+        threads: sched(_n)[0]
+        params: m=_n.replace('-', ' '), policy=sched(_n)[1]
         shell: '{ENGINE} build {D} {params.m} {METRIC} {params.policy} {ROUNDS} {SINK} {STORE} {STATS} {GRANULARITY} mem={resources.mem_mb} > {log} 2>&1'
 
 
@@ -197,15 +221,14 @@ for _m in MATERIALS:
 if PROBE:
     for _m in MATERIALS:
         _n = name(_m)
-        _par = POLICY == 'par' or (POLICY == 'auto' and PLAN[_n]['positions'] >= PAR_MIN)
         rule:
             name: f'convert_{_n}'
             input: files(_n), [probe_done(name(d)) for d in deps(_m)]
             output: probe_done(_n)
             log: f'{D}/probe/{METRIC}/{sub(_n)}-{METRIC}.log'
             priority: PRIO[_n]
-            threads: workflow.cores if _par else 1
-            params: m=_n.replace('-', ' '), policy='par' if _par else 'seq',
+            threads: sched(_n)[0]
+            params: m=_n.replace('-', ' '), policy=sched(_n)[1],
                     drop=(f'rm -f {D}/wdl/{sub(_n)}-wdl-wtm{SUF} {D}/wdl/{sub(_n)}-wdl-btm{SUF}' if DROP_WDL and METRIC == 'dtm' else 'true')
             shell: '{ENGINE} convert {D} {params.m} {METRIC} {params.policy} verify={VERIFY} > {log} 2>&1 && touch {output} && {params.drop}'
 

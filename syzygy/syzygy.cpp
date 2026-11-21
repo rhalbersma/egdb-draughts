@@ -799,11 +799,12 @@ bool build_material(std::string const& dir, Material c, ExecutionPolicy const& p
         }
 
         // the four files, each written once, sequentially, in index order: the values gathered from the sink slot by
-        // slot, as unsigned bytes and wdl bits
-        std::uint64_t wins[2]{}, losses[2]{};
-        int longest = 0;
+        // slot, as unsigned bytes and wdl bits, a chunk at a time in parallel (blocks of 4096 slots own whole wdl bytes)
+        std::atomic<std::uint64_t> wins[2]{}, losses[2]{};
+        std::atomic<int> longest{ 0 };
+        std::atomic<bool> beyond{ false };
         auto const tw = std::chrono::steady_clock::now();
-        constexpr std::uint64_t chunk = std::uint64_t(1) << 20;         // slots per write, a multiple of 4
+        constexpr std::uint64_t chunk = std::uint64_t(1) << 24;         // slots per write, a multiple of 4
         for (int side : { 0, 1 }) {
                 std::string const pb = mat_path(dir, c, BYTES + side), pw = mat_path(dir, c, WDL + side);
                 std::ofstream fb(pb + ".tmp", std::ios::binary | std::ios::trunc), fw(pw + ".tmp", std::ios::binary | std::ios::trunc);
@@ -812,16 +813,24 @@ bool build_material(std::string const& dir, Material c, ExecutionPolicy const& p
                         std::uint64_t const hi = std::min(mi.size, lo + chunk);
                         bytes.assign(hi - lo, 0);
                         wdl.assign((hi - lo + 3) / 4, 0);
-                        for (std::uint64_t i = lo; i < hi; ++i) {
-                                std::uint16_t const v = sink->at(side, i);
-                                int const b = to_byte(g_metric, v);
-                                if (b > 255) { std::cerr << "value beyond one byte" << std::endl; return false; }
-                                bytes[i - lo] = std::uint8_t(b);
-                                wdl[(i - lo) >> 2] |= std::uint8_t(wdl_of(v) << (2 * ((i - lo) & 3)));
-                                wins[side] += is_win(v);
-                                losses[side] += is_loss(v);
-                                longest = std::max(longest, plies(v));
-                        }
+                        for_blocks(policy, hi - lo, [&](std::uint64_t a, std::uint64_t b) {
+                                std::uint64_t nw = 0, nl = 0;
+                                int lg = 0;
+                                for (std::uint64_t j = a; j < b; ++j) {
+                                        std::uint16_t const v = sink->at(side, lo + j);
+                                        int const by = to_byte(g_metric, v);
+                                        if (by > 255) { beyond.store(true, std::memory_order_relaxed); continue; }
+                                        bytes[j] = std::uint8_t(by);
+                                        wdl[j >> 2] |= std::uint8_t(wdl_of(v) << (2 * (j & 3)));
+                                        nw += is_win(v);
+                                        nl += is_loss(v);
+                                        lg = std::max(lg, plies(v));
+                                }
+                                wins[side].fetch_add(nw, std::memory_order_relaxed);
+                                losses[side].fetch_add(nl, std::memory_order_relaxed);
+                                for (int cur = longest.load(); lg > cur && !longest.compare_exchange_weak(cur, lg);) {}
+                        });
+                        if (beyond) { std::cerr << "value beyond one byte" << std::endl; return false; }
                         fb.write(reinterpret_cast<char const*>(bytes.data()), std::streamsize(bytes.size()));
                         fw.write(reinterpret_cast<char const*>(wdl.data()), std::streamsize(wdl.size()));
                 }
@@ -836,8 +845,8 @@ bool build_material(std::string const& dir, Material c, ExecutionPolicy const& p
         g_stats.write = seconds_since(tw);
         double const sec = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
         std::cout << "material " << c.name() << " " << metric_name() << (g_group_files ? " group files" : " array") << ": "
-                  << groups.size() << " groups, " << positions << " positions, " << mi.size << " slots, wins " << wins[0] << " / "
-                  << wins[1] << ", losses " << losses[0] << " / " << losses[1] << " (White / Black to move), longest " << longest
+                  << groups.size() << " groups, " << positions << " positions, " << mi.size << " slots, wins " << wins[0].load() << " / "
+                  << wins[1].load() << ", losses " << losses[0].load() << " / " << losses[1].load() << " (White / Black to move), longest " << longest.load()
                   << " plies, peak RSS " << peak_rss_mb() << " MB, " << sec << " s" << std::endl;
         print_stats(c, positions, groups.size(), sec);
         return true;

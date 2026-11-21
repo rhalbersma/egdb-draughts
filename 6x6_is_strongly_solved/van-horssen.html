@@ -1,20 +1,20 @@
 <!DOCTYPE html>
-<html lang="nl">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script>
 // the language of a site: its default, unless the visitor chose the other one on that site (remembered per site)
 (function () {
-  const key = 'lang:' + "strongly_solving_6x6";
-  try { const pref = localStorage.getItem(key); if (pref && pref !== "nl" && "../towards-12.html") location.replace("../towards-12.html" + location.hash); } catch (e) {}
+  const key = 'lang:' + "6x6_is_strongly_solved";
+  try { const pref = localStorage.getItem(key); if (pref && pref !== "en" && "nl/van-horssen.html") location.replace("nl/van-horssen.html" + location.hash); } catch (e) {}
   document.addEventListener('click', function (e) {
     const a = e.target.closest && e.target.closest('a[data-setlang]');
     if (a) { try { localStorage.setItem(key, a.dataset.setlang); } catch (err) {} }
   });
 })();
 </script>
-<title>Omvang en bouw · Strongly Solving 6×6</title>
+<title>Van Horssen (2016–2018) · 6×6 Is Strongly Solved</title>
 <style>
 :root {
   --bg: #fbfaf7; --fg: #1d1d1b; --muted: #6b6a66; --rule: #e3e0d8; --panel: #f3f1ec;
@@ -180,30 +180,32 @@ table.tbl th { color: var(--muted); font-weight: 600; }
 </style>
 </head>
 <body>
-<header><a class="brand" href="index.html">Strongly Solving 6×6</a><details class="menu"><summary>Hoofdstukken</summary><nav class="menu-panel"><a href="index.html">Overzicht</a><div class="mh">De opgeloste beginstand</div><a href="international.html">De openingsboom tot 4 ply</a><div class="mh">Eerdere oplossingen</div><a href="history.html">Perft en een zoektocht (2009, 2011)</a><a href="van-horssen.html">Van Horssen (2016–2018)</a><div class="mh">Sterk opgelost</div><a href="status.html">Elke stelling tot en met 12 stukken</a><a href="longest.html">De langste winst per aantal stukken</a><div class="mh">De databases tot en met 12 stukken</div><a href="towards-12.html" aria-current="page">Omvang en bouw</a><a href="compression.html">Hoe goed comprimeren de databases?</a></nav></details><a href="../../nl/index.html">Alle sites</a><span class="langs"><span class="flag cur" title="Nederlands" aria-current="true"><svg viewBox="0 0 9 6" aria-hidden="true"><rect width="9" height="6" fill="#21468B"/><rect width="9" height="4" fill="#fff"/><rect width="9" height="2" fill="#AE1C28"/></svg></span><a class="flag" href="../towards-12.html" hreflang="en" lang="en" data-setlang="en" title="English" aria-label="English"><svg viewBox="0 0 60 30" aria-hidden="true"><clipPath id="uk-t"><path d="M30,15h30v15zv15h-30zh-30v-15zv-15h30z"/></clipPath><path d="M0,0v30h60v-30z" fill="#012169"/><path d="M0,0L60,30M60,0L0,30" stroke="#fff" stroke-width="6"/><path d="M0,0L60,30M60,0L0,30" clip-path="url(#uk-t)" stroke="#C8102E" stroke-width="4"/><path d="M30,0v30M0,15h60" stroke="#fff" stroke-width="10"/><path d="M30,0v30M0,15h60" stroke="#C8102E" stroke-width="6"/></svg></a></span></header>
+<header><a class="brand" href="index.html">6×6 Is Strongly Solved</a><details class="menu"><summary>Chapters</summary><nav class="menu-panel"><a href="index.html">Overview</a><div class="mh">The solved start position</div><a href="international.html">The opening tree to 4 plies</a><div class="mh">Earlier solutions</div><a href="history.html">Perft and a search (2009, 2011)</a><a href="van-horssen.html" aria-current="page">Van Horssen (2016–2018)</a><div class="mh">Strongly solved</div><a href="status.html">Every position up to 12 pieces</a><a href="longest.html">The longest win per number of pieces</a><div class="mh">The databases up to 12 pieces</div><a href="towards-12.html">Size and build</a><a href="compression.html">How well do the databases compress?</a></nav></details><a href="../index.html">All sites</a><span class="langs"><a class="flag" href="nl/van-horssen.html" hreflang="nl" lang="nl" data-setlang="nl" title="Nederlands" aria-label="Nederlands"><svg viewBox="0 0 9 6" aria-hidden="true"><rect width="9" height="6" fill="#21468B"/><rect width="9" height="4" fill="#fff"/><rect width="9" height="2" fill="#AE1C28"/></svg></a><span class="flag cur" title="English" aria-current="true"><svg viewBox="0 0 60 30" aria-hidden="true"><clipPath id="uk-t"><path d="M30,15h30v15zv15h-30zh-30v-15zv-15h30z"/></clipPath><path d="M0,0v30h60v-30z" fill="#012169"/><path d="M0,0L60,30M60,0L0,30" stroke="#fff" stroke-width="6"/><path d="M0,0L60,30M60,0L0,30" clip-path="url(#uk-t)" stroke="#C8102E" stroke-width="4"/><path d="M30,0v30M0,15h60" stroke="#fff" stroke-width="10"/><path d="M30,0v30M0,15h60" stroke="#C8102E" stroke-width="6"/></svg></span></span></header>
 <div class="wrap">
   <aside class="side">
     <div id="board"></div>
     <div class="buttons">
-      <button id="start" data-tip="Begin van de variant (Home)" aria-label="Begin van de variant (Home)"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="2" height="10"/><path d="M14 3v10L5 8z"/></svg></button>
-      <button id="back" data-tip="Vorige stelling (←)" aria-label="Vorige stelling (←)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10.5 2.5 5 8l5.5 5.5" fill="none" stroke="currentColor" stroke-width="2.2"/></svg></button>
-      <button id="play" data-tip="Variant afspelen / pauzeren" aria-label="Variant afspelen / pauzeren"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11L13.5 8z"/></svg></button>
-      <button id="fwd" data-tip="Volgende stelling (→)" aria-label="Volgende stelling (→)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 2.5 11 8l-5.5 5.5" fill="none" stroke="currentColor" stroke-width="2.2"/></svg></button>
-      <button id="end" data-tip="Einde van de variant (End)" aria-label="Einde van de variant (End)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 3v10l9-5z"/><rect x="12" y="3" width="2" height="10"/></svg></button>
-      <button id="nums" data-tip="Veldnamen op het bord aan/uit" aria-label="Veldnamen op het bord aan/uit">#</button>
-      <button id="nota" data-tip="Wissel tussen numerieke (1, 2, …) en algebraïsche (a1, b2, …) notatie" aria-label="Wissel tussen numerieke (1, 2, …) en algebraïsche (a1, b2, …) notatie">1…18</button>
+      <button id="start" data-tip="Start of the line (Home)" aria-label="Start of the line (Home)"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="2" height="10"/><path d="M14 3v10L5 8z"/></svg></button>
+      <button id="back" data-tip="Previous position (←)" aria-label="Previous position (←)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10.5 2.5 5 8l5.5 5.5" fill="none" stroke="currentColor" stroke-width="2.2"/></svg></button>
+      <button id="play" data-tip="Play / pause the line" aria-label="Play / pause the line"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11L13.5 8z"/></svg></button>
+      <button id="fwd" data-tip="Next position (→)" aria-label="Next position (→)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 2.5 11 8l-5.5 5.5" fill="none" stroke="currentColor" stroke-width="2.2"/></svg></button>
+      <button id="end" data-tip="End of the line (End)" aria-label="End of the line (End)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 3v10l9-5z"/><rect x="12" y="3" width="2" height="10"/></svg></button>
+      <button id="nums" data-tip="Square names on the board on/off" aria-label="Square names on the board on/off">#</button>
+      <button id="nota" data-tip="Switch between numeric (1, 2, …) and algebraic (a1, b2, …) notation" aria-label="Switch between numeric (1, 2, …) and algebraic (a1, b2, …) notation">1…18</button>
     </div>
     <div class="panel" id="panel"></div>
   </aside>
   <main>
-<nav class="pager pager-top"><a href="longest.html">← De langste winst per aantal stukken</a><a href="compression.html">Hoe goed comprimeren de databases? →</a></nav>
-<p class="src">De databases tot en met 12 stukken</p><h1>Omvang en bouw</h1>
-<p>De databases tot en met 12 stukken bevatten elke legale stelling met hooguit 6 stukken per kant. Het aantal, met wit aan zet (tot en met 8 stukken precies de aantallen van Van Horssen):</p>
-<table class="tbl"><tr><th>Stukken</th><th>Stellingen (hooguit 6 per kant)</th><th>Cumulatief</th></tr><tr><td>≤ 10</td><td>18.379.036.017</td><td>18.379.036.017</td></tr><tr><td>11</td><td>22.071.836.160</td><td>40.450.872.177</td></tr><tr><td>12</td><td>23.385.567.744</td><td>63.836.439.921</td></tr></table>
-<h2>Geheugen</h2><p>Gebouwd wordt per slice: de schijven liggen vast, alleen de dammen variëren. De grootste slice is 6 dammen tegen 6, met 17.153.136 stellingen: bij 2 bits per stelling ruim 4 MB. Het geheugen voor het bouwen zelf is dus geen probleem. Het probleem is het snel opzoeken in de andere databases, bij slagen, schijfzetten en promoties: tot en met 11 stukken is dat ongecomprimeerd zo'n 10 GB, tot en met 12 stukken 16 GB. Daarom moeten de databases gecomprimeerd worden, met willekeurige toegang; zie de <a href="compression.html">volgende sectie</a>.</p><h2>De bouw</h2><p>Gebouwd eenheid voor eenheid (n stukken, waarvan m schijven) met <a href="https://github.com/rhalbersma/egdb-draughts/blob/main/strongly_solving_6x6/international/units_6x6.py"><code>units_6x6.py</code></a>: bouwen, elke stelling controleren tegen zijn opvolgers, comprimeren (zstd -19, blokken van 4 KiB), elk blok vergelijken met de ongecomprimeerde waarden en het controlegetal berekenen. Alle 88 eenheden tot en met 12 stukken samen kostten 26 uur en 37 minuten op 10 cores (Xeon E5-1650 v4, in een virtuele machine). Dat kan op één machine.</p>
-<nav class="pager"><a href="longest.html">← De langste winst per aantal stukken</a><a href="compression.html">Hoe goed comprimeren de databases? →</a></nav>
-<p class="src credit">De vorm van de analyses is ontleend aan die van Wieger Wesselink op <a href="https://10x10.org">10x10.org</a>.</p>
-<p class="legend">Klik op een zet om de stelling op het grote bord te zien; ‹ › (of de pijltjestoetsen) lopen door de variant, ⏮︎ ⏭︎ springen naar het begin en het einde, ▶︎ speelt hem af. Waarden gelden voor de partij aan zet; bij een zet voor wie hem doet, met n het aantal ply tot het einde van de partij, de zet meegeteld: W = winst (oneven), L = verlies (even), D = remise. <span style="color:var(--link);font-weight:600">Blauw</span> = hoofdvariant, <span style="color:var(--m2)">groen</span> = zijvariant, <em>cursief</em> = voortzetting van de database, <span class="q">?</span> = zet die volgens de database het resultaat verandert, met tussen [ ] de betere zet of de weerlegging (<span style="color:var(--db)">≡</span> = terug naar de stelling vóór die zet), <span style="color:var(--only)">*</span> = enige zet die de winst of de remise behoudt. De knop # zet de veldnamen op het grote bord aan of uit; de knop met het bereik van de veldnamen (bv. 1…18 of a1…f6 op 6×6) wisselt tussen numerieke en algebraïsche notatie, ook in de tekst.</p>
+<nav class="pager pager-top"><a href="history.html">← Perft and a search (2009, 2011)</a><a href="status.html">Every position up to 12 pieces →</a></nav>
+<p class="src">Earlier solutions</p><h1>Van Horssen (2016–2018)</h1>
+<p>Jan-Jaap van Horssen was the first to weakly solve 6×6 conclusively, in 2016, with proof-number search and the databases up to 8 pieces. He reported it on the forum on August 7, 2017 (thread <a href="https://damforum.nl/viewtopic.php?p=120014#p120014"><em>Breakthrough Draughts</em></a>), described it on August 13, 2017 in the thread <a href="https://damforum.nl/viewtopic.php?p=120080#p120080"><em>Complexity of Checkers and Draughts on board sizes 6x6/…/14x14</em></a> and published it in the ICGA Journal in 2018.</p>
+<h2>Comparison with Van Horssen (2018)</h2>
+<p>Jan-Jaap van Horssen weakly solved 6×6 earlier, in <em>Complexity of checkers and draughts on different board sizes</em>, ICGA Journal 40 (2018) 341–352: a win/draw/loss database up to 8 pieces and proof-number search from the start position. Our databases and opening tree are independent of his, and agree with him on every point:</p>
+<table class="tbl"><tr><th></th><th>Van Horssen (2018)</th><th>Here</th></tr><tr><td>Start position</td><td>draw</td><td>draw</td></tr><tr><td>First moves of white</td><td>all draw</td><td>all five draw</td></tr><tr><td>Replies of black</td><td>immediately losing replies</td><td>likewise, e.g. 1. <span class="mv" data-g="6x6" data-n="13-10" data-a="b2-a3">13-10</span> <span class="mv" data-g="6x6" data-n="4-7" data-a="a5-b4">4-7</span> (L60)</td></tr><tr><td>Deepest loss of black from the start position</td><td>61 ply</td><td>61 plies (2 + 59 after 1. <span class="mv" data-g="6x6" data-n="13-10" data-a="b2-a3">13-10</span> <span class="mv" data-g="6x6" data-n="4-7" data-a="a5-b4">4-7</span>)</td></tr><tr><td>Positions up to 3–8 pieces</td><td>31,155 · 512,910 · 5,789,784 · 48,881,249 · 322,389,233 · 1,617,366,257</td><td>exactly the same numbers</td></tr></table>
+<p>So we reproduce his databases up to 8 pieces. He proves the value of the start position (without a transposition table, to avoid graph-history problems); here the value of every position up to 12 pieces is known, with the exact distance to the end.</p>
+<nav class="pager"><a href="history.html">← Perft and a search (2009, 2011)</a><a href="status.html">Every position up to 12 pieces →</a></nav>
+<p class="src credit">The form of the analyses is taken from those by Wieger Wesselink on <a href="https://10x10.org">10x10.org</a>.</p>
+<p class="legend">Click a move to see the position on the large board; ‹ › (or the arrow keys) step through the line, ⏮︎ ⏭︎ jump to its start and end, ▶︎ plays it. Values are for the side to move; for a move, for the side making it, with n the number of plies to the end of the game, the move included: W = win (odd), L = loss (even), D = draw. <span style="color:var(--link);font-weight:600">Blue</span> = main line, <span style="color:var(--m2)">green</span> = side line, <em>italics</em> = continuation by the database, <span class="q">?</span> = a move that changes the result according to the database, with the better move or the refutation in [ ] (<span style="color:var(--db)">≡</span> = back to the position before that move), <span style="color:var(--only)">*</span> = the only move that keeps the win or the draw. The # button turns the square names on the large board on or off; the button with the range of the square names (e.g. 1…18 or a1…f6 on 6×6) switches between numeric and algebraic notation, in the text as well.</p>
   </main>
 </div>
 <script>
@@ -216,7 +218,7 @@ table.tbl th { color: var(--muted); font-weight: 600; }
   if (window.ResizeObserver) new ResizeObserver(set).observe(h);
 })();
 const POS = [];
-const UI = {"white": "wit", "black": "zwart", "tomove": "aan zet", "nomoves": "geen zetten: verloren"};
+const UI = {"white": "white", "black": "black", "tomove": "to move", "nomoves": "no moves: lost"};
 const GEOMS = {"6x6":{"w":6,"h":6,"sq":{"1":[1,5],"2":[3,5],"3":[5,5],"4":[0,4],"5":[2,4],"6":[4,4],"7":[1,3],"8":[3,3],"9":[5,3],"10":[0,2],"11":[2,2],"12":[4,2],"13":[1,1],"14":[3,1],"15":[5,1],"16":[0,0],"17":[2,0],"18":[4,0]},"lake":[],"pref":"num"}};
 // notation: 'std' = the standard notation of each board (numeric on 6x6, 8x8 checkers and 10x10), or 'num' / 'alg'
 let cur = 0, showNums = true, timer = null, notation = 'std';

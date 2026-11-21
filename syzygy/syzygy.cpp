@@ -268,7 +268,8 @@ constexpr std::uint8_t C_WON = 241, C_LOST = 242, C_FRONT_WIN = 243, C_FRONT_LOS
 
 struct Snapshot { int window; std::vector<char> z; };
 
-void solve_group_cell8(Group const& g, DepthSink<std::uint16_t>& sink, bool par)
+template<class ExecutionPolicy>
+void solve_group_cell8(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPolicy const& policy)
 {
         std::uint64_t const P = g.P, T = 2 * P;
         auto const pos = [&](std::uint64_t id) { return g.pos(id % P, int(id / P)); };
@@ -310,7 +311,7 @@ void solve_group_cell8(Group const& g, DepthSink<std::uint16_t>& sink, bool par)
         std::vector<std::vector<Entry>> ewin_b(nblocks), eloss_b(nblocks);
         std::atomic<int> max_seed{ 0 };
         auto const t0 = std::chrono::steady_clock::now();
-        for_blocks(par, T, [&](std::uint64_t lo, std::uint64_t hi) {
+        for_blocks(policy, T, [&](std::uint64_t lo, std::uint64_t hi) {
                 std::uint64_t const blk = lo / 4096;
                 int ms = 0;
                 for (std::uint64_t id = lo; id < hi; ++id) {
@@ -358,7 +359,7 @@ void solve_group_cell8(Group const& g, DepthSink<std::uint16_t>& sink, bool par)
                 return n >= 0 && n < int(by.size()) ? by[std::size_t(n)] : none;
         };
         auto const for_list = [&](List const& l, auto&& f) {
-                for_blocks(par, l.size(), [&](std::uint64_t lo, std::uint64_t hi) { for (auto j = lo; j < hi; ++j) f(l[j]); });
+                for_blocks(policy, l.size(), [&](std::uint64_t lo, std::uint64_t hi) { for (auto j = lo; j < hi; ++j) f(l[j]); });
         };
         auto const predecessors = [&](std::uint64_t q, auto&& f) {
                 std::uint64_t const off = (1 - q / P) * P;
@@ -371,7 +372,7 @@ void solve_group_cell8(Group const& g, DepthSink<std::uint16_t>& sink, bool par)
                 Snapshot s{ w - 1, {} };
                 ZSTD_CCtx* cx = ZSTD_createCCtx();
                 ZSTD_CCtx_setParameter(cx, ZSTD_c_compressionLevel, 1);
-                ZSTD_CCtx_setParameter(cx, ZSTD_c_nbWorkers, par ? 4 : 0);
+                ZSTD_CCtx_setParameter(cx, ZSTD_c_nbWorkers, is_parallel_policy<ExecutionPolicy> ? 4 : 0);
                 constexpr std::size_t B = std::size_t(1) << 20;
                 std::vector<std::uint8_t> stage(B);
                 std::vector<char> out(ZSTD_CStreamOutSize());
@@ -391,7 +392,7 @@ void solve_group_cell8(Group const& g, DepthSink<std::uint16_t>& sink, bool par)
                 ZSTD_freeCCtx(cx);
                 snaps.push_back(std::move(s));
                 int const last_ply = WP * w - 1;
-                for_blocks(par, T, [&](std::uint64_t lo, std::uint64_t hi) {
+                for_blocks(policy, T, [&](std::uint64_t lo, std::uint64_t hi) {
                         for (std::uint64_t id = lo; id < hi; ++id) {
                                 std::uint8_t const c = cell[id];
                                 if (c >= 1 && c <= 240) {
@@ -446,25 +447,25 @@ void solve_group_cell8(Group const& g, DepthSink<std::uint16_t>& sink, bool par)
                 std::uint8_t const cl = has_loss ? (front ? C_FRONT_LOSS : encode(loss(n - 1), w)) : 0;
                 for_list(at(eloss_at, n), [&](std::uint64_t id) { if (cell[id] == C_PENDING) cell[id] = 0; });
                 if (has_win && mark_changed) {                                  // losses in n: mark, then check once
-                        for_blocks(par, T, [&](std::uint64_t lo, std::uint64_t hi) {
+                        for_blocks(policy, T, [&](std::uint64_t lo, std::uint64_t hi) {
                                 for (std::uint64_t q = lo; q < hi; ++q)
                                         if (ld(q) == cw) predecessors(q, [&](std::uint64_t id) {
                                                 std::uint8_t z = 0;
                                                 std::atomic_ref<std::uint8_t>(cell[id]).compare_exchange_strong(z, C_CHANGED, std::memory_order_relaxed);
                                         });
                         });
-                        for_blocks(par, T, [&](std::uint64_t lo, std::uint64_t hi) {
+                        for_blocks(policy, T, [&](std::uint64_t lo, std::uint64_t hi) {
                                 for (std::uint64_t q = lo; q < hi; ++q)
                                         if (ld(q) == C_CHANGED) { st(q, 0); note(check_loss(q, n)); }
                         });
                 } else if (has_win)
-                        for_blocks(par, T, [&](std::uint64_t lo, std::uint64_t hi) {         // losses in n
+                        for_blocks(policy, T, [&](std::uint64_t lo, std::uint64_t hi) {         // losses in n
                                 for (std::uint64_t q = lo; q < hi; ++q)
                                         if (ld(q) == cw) predecessors(q, [&](std::uint64_t id) { note(check_loss(id, n)); });
                         });
                 for_list(at(eloss_at, n), [&](std::uint64_t id) { note(check_loss(id, n)); });
                 if (has_loss)
-                        for_blocks(par, T, [&](std::uint64_t lo, std::uint64_t hi) {         // wins in n
+                        for_blocks(policy, T, [&](std::uint64_t lo, std::uint64_t hi) {         // wins in n
                                 for (std::uint64_t q = lo; q < hi; ++q)
                                         if (ld(q) == cl) predecessors(q, [&](std::uint64_t id) { note(mark_win(id, n)); });
                         });
@@ -503,10 +504,9 @@ void solve_group_cell8(Group const& g, DepthSink<std::uint16_t>& sink, bool par)
                         }
                         windows[k] = { streams[k].buf.data(), snaps[k].window };
                 };
-                if (par) std::for_each(std::execution::par, ks.begin(), ks.end(), unpack);
-                else std::for_each(std::execution::seq, ks.begin(), ks.end(), unpack);
+                std::for_each(policy, ks.begin(), ks.end(), unpack);
                 windows.back() = { cell.data() + base, w };                    // the last window: the cells themselves
-                for_blocks(par, n, [&](std::uint64_t lo, std::uint64_t hi) {
+                for_blocks(policy, n, [&](std::uint64_t lo, std::uint64_t hi) {
                         for (std::uint64_t j = lo; j < hi; ++j) {
                                 std::uint16_t const v = std::transform_reduce(windows.begin(), windows.end(), std::uint16_t(0),
                                         [](std::uint16_t a, std::uint16_t b) { return a != 0 ? a : b; },
@@ -533,9 +533,10 @@ void solve_group_cell8(Group const& g, DepthSink<std::uint16_t>& sink, bool par)
 
 // The values go to the depth sink: frontier rounds never read them back, so they write straight into it; scan mode
 // finds its frontier by scanning the values, so it keeps them in an array of the group and hands them over at the end.
-void solve_group(Group const& g, DepthSink<std::uint16_t>& sink, bool par)
+template<class ExecutionPolicy>
+void solve_group(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPolicy const& policy)
 {
-        if (g_cell8) { solve_group_cell8(g, sink, par); return; }
+        if (g_cell8) { solve_group_cell8(g, sink, policy); return; }
         std::uint64_t const P = g.P, T = 2 * P;                 // position id = stm * P + index in the group
         auto const pos = [&](std::uint64_t id) { return g.pos(id % P, int(id / P)); };
         auto const id_of = [&](Pos const& p) { return std::uint64_t(p.stm) * P + g.index(p); };
@@ -553,7 +554,7 @@ void solve_group(Group const& g, DepthSink<std::uint16_t>& sink, bool par)
         std::vector<std::vector<Entry>> won_b(nblocks), lost_b(nblocks), ewin_b(nblocks), eloss_b(nblocks);
         Plane openp(T), lossable(T), exits_done(T);
         auto const t0 = std::chrono::steady_clock::now();
-        for_blocks(par, T, [&](std::uint64_t lo, std::uint64_t hi) {
+        for_blocks(policy, T, [&](std::uint64_t lo, std::uint64_t hi) {
                 std::uint64_t const blk = lo / 4096;
                 for (std::uint64_t id = lo; id < hi; ++id) {
                         Pos const p = pos(id);
@@ -604,7 +605,7 @@ void solve_group(Group const& g, DepthSink<std::uint16_t>& sink, bool par)
                 return n >= 0 && n < int(by.size()) ? by[std::size_t(n)] : none;
         };
         auto const for_list = [&](List const& l, auto&& f) {
-                for_blocks(par, l.size(), [&](std::uint64_t lo, std::uint64_t hi) { for (auto j = lo; j < hi; ++j) f(l[j]); });
+                for_blocks(policy, l.size(), [&](std::uint64_t lo, std::uint64_t hi) { for (auto j = lo; j < hi; ++j) f(l[j]); });
         };
         auto const predecessors = [&](std::uint64_t q, auto&& f) {             // the other side to move
                 std::uint64_t const off = (1 - q / P) * P;
@@ -633,13 +634,13 @@ void solve_group(Group const& g, DepthSink<std::uint16_t>& sink, bool par)
                         std::atomic<bool> found{ false };
                         auto const note = [&](bool b) { if (b) found.store(true, std::memory_order_relaxed); };
                         for_list(at(eloss_at, n), [&](std::uint64_t id) { exits_done.set_atomic(id); });   // exits lost by n
-                        for_blocks(par, T, [&](std::uint64_t lo, std::uint64_t hi) {         // losses in n
+                        for_blocks(policy, T, [&](std::uint64_t lo, std::uint64_t hi) {         // losses in n
                                 for (std::uint64_t q = lo; q < hi; ++q)
                                         if (n > 1 && load(v[q]) == win(n - 1))            // win(0) would be 0
                                                 predecessors(q, [&](std::uint64_t id) { note(check_loss(id, n)); });
                         });
                         for_list(at(eloss_at, n), [&](std::uint64_t id) { note(check_loss(id, n)); });
-                        for_blocks(par, T, [&](std::uint64_t lo, std::uint64_t hi) {         // wins in n
+                        for_blocks(policy, T, [&](std::uint64_t lo, std::uint64_t hi) {         // wins in n
                                 for (std::uint64_t q = lo; q < hi; ++q)
                                         if (load(v[q]) == loss(n - 1))
                                                 predecessors(q, [&](std::uint64_t id) { note(mark_win(id, n)); });
@@ -650,7 +651,7 @@ void solve_group(Group const& g, DepthSink<std::uint16_t>& sink, bool par)
                                 break;
                         }
                 }
-                for_blocks(par, T, [&](std::uint64_t lo, std::uint64_t hi) {         // hand the values to the sink
+                for_blocks(policy, T, [&](std::uint64_t lo, std::uint64_t hi) {         // hand the values to the sink
                         for (std::uint64_t id = lo; id < hi; ++id)
                                 if (v[id] != 0) sink.put(int(id / P), id % P, pos(id), v[id]);
                 });
@@ -687,23 +688,23 @@ void solve_group(Group const& g, DepthSink<std::uint16_t>& sink, bool par)
                                         if (openp.test(id) && lossable.test(id) && exits_done.test(id) && !won.test(id) && !lost.test(id))
                                                 cand.set_atomic(id);
                                 };
-                                won_prev.for_each_par(par, [&](std::uint64_t q) { predecessors(q, mark); });
+                                won_prev.for_each_par(policy, [&](std::uint64_t q) { predecessors(q, mark); });
                                 for_list(at(won_at, n - 1), [&](std::uint64_t q) { predecessors(q, mark); });
                                 for_list(at(eloss_at, n), mark);
-                                cand.for_each_par(par, lose);
-                                for_blocks(par, cand.w.size(), [&](std::uint64_t lo, std::uint64_t hi) { std::fill(cand.w.begin() + std::ptrdiff_t(lo), cand.w.begin() + std::ptrdiff_t(hi), 0); });
+                                cand.for_each_par(policy, lose);
+                                for_blocks(policy, cand.w.size(), [&](std::uint64_t lo, std::uint64_t hi) { std::fill(cand.w.begin() + std::ptrdiff_t(lo), cand.w.begin() + std::ptrdiff_t(hi), 0); });
                         } else {
-                                won_prev.for_each_par(par, [&](std::uint64_t q) { predecessors(q, lose); });
+                                won_prev.for_each_par(policy, [&](std::uint64_t q) { predecessors(q, lose); });
                                 for_list(at(won_at, n - 1), [&](std::uint64_t q) { predecessors(q, lose); });
                                 for_list(at(eloss_at, n), lose);
                         }
                         // wins in n: the predecessors of the losses in n - 1, and the exits winning in n
-                        lost_prev.for_each_par(par, [&](std::uint64_t q) { predecessors(q, gain); });
+                        lost_prev.for_each_par(policy, [&](std::uint64_t q) { predecessors(q, gain); });
                         for_list(at(lost_at, n - 1), [&](std::uint64_t q) { predecessors(q, gain); });
                         for_list(at(ewin_at, n), gain);
                         // commit level n: the new wins and losses, and the pass-0 decisions of level n
-                        won_new.for_each_par(par, [&](std::uint64_t q) { won.set(q); });
-                        lost_new.for_each_par(par, [&](std::uint64_t q) { lost.set(q); });
+                        won_new.for_each_par(policy, [&](std::uint64_t q) { won.set(q); });
+                        lost_new.for_each_par(policy, [&](std::uint64_t q) { lost.set(q); });
                         for_list(at(won_at, n), [&](std::uint64_t q) { won.set_atomic(q); });
                         for_list(at(lost_at, n), [&](std::uint64_t q) { lost.set_atomic(q); });
                         std::swap(won_prev, won_new);
@@ -762,7 +763,8 @@ MemoryNeed memory_need(Material c)
         return m;
 }
 
-bool build_material(std::string const& dir, Material c, bool par)
+template<class ExecutionPolicy>
+bool build_material(std::string const& dir, Material c, ExecutionPolicy const& policy)
 {
         if (!stored(c)) { std::cerr << c.name() << " is the mirror of a stored material" << std::endl; return false; }
         std::filesystem::create_directories(dir + "/" + c.tree());
@@ -791,7 +793,7 @@ bool build_material(std::string const& dir, Material c, bool par)
         std::uint64_t positions = 0;
         for (std::size_t k = 0; k < groups.size(); ++k) {
                 sink->begin_group(k, groups[k]);
-                solve_group(groups[k], *sink, par);
+                solve_group(groups[k], *sink, policy);
                 sink->end_group();
                 positions += 2 * groups[k].P;
         }
@@ -971,7 +973,7 @@ int main(int argc, char* argv[])
                 return 0;
         }
         if (a.size() >= 7 && a.size() <= 12 && a[0] == "build" && parse_metric(a[6])) {
-                bool par = false;                                       // std::execution::par for every pass, else seq
+                bool par = false;                                       // the execution policy: par or seq
                 for (std::size_t i = 7; i < a.size(); ++i) {
                         if (a[i] == "seq" || a[i] == "par") par = a[i] == "par";
                         else if (a[i] == "scan" || a[i] == "frontier") g_frontier = a[i] == "frontier";
@@ -982,7 +984,8 @@ int main(int argc, char* argv[])
                         else if (parse_granularity(a[i])) {}
                         else { std::cerr << "unknown option " << a[i] << std::endl; return 2; }
                 }
-                return build_material(a[1], mat_at(2), par) ? 0 : 1;
+                bool const ok = par ? build_material(a[1], mat_at(2), std::execution::par) : build_material(a[1], mat_at(2), std::execution::seq);
+                return ok ? 0 : 1;
         }
         if ((a.size() == 4 || a.size() == 5) && a[0] == "checkall" && parse_metric(a[3]))
                 return check_all(a[1], std::stoi(a[2]), a.size() == 5 ? std::stoi(a[4]) : 4) ? 0 : 1;

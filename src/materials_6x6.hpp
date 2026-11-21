@@ -18,6 +18,8 @@
 #include <atomic>
 #include <filesystem>
 #include <execution>
+#include <new>
+#include <type_traits>
 #include <map>
 #include <string>
 #include <tuple>
@@ -252,18 +254,34 @@ std::uint8_t const* map_file(std::string const& path, std::size_t size)
 
 // ---------------------------------------------------------------- seq or par, over blocks of positions
 //
-// Every pass is one std::for_each over blocks of B indices, sequential or parallel (par: std::execution::par, else seq;
-// passed down from the build's option). The default, 4096, is a whole number of 64-bit words, so a block owns the words
-// of its positions in every bit plane: a pass that writes bit planes needs B a multiple of 64 (or atomic writes).
-template<std::uint64_t B = 4096, class F>
-void for_blocks(bool par, std::uint64_t n, F&& f)
+// Every pass is one std::for_each over blocks of B indices, with the build's execution policy (std::execution::seq or
+// std::execution::par, chosen once in main and passed down). The default, 4096, is a whole number of 64-bit words, so a
+// block owns the words of its positions in every bit plane: a pass that writes bit planes needs B a multiple of 64 (or
+// atomic writes).
+// The cache line, as the compiler knows it for the target (64 bytes on x86-64). A block of B indices covers B / 8 bytes
+// of a bit plane and B bytes of a byte array: with B a multiple of 8 lines, no two blocks share a cache line in any of
+// them, so parallel blocks never write the same line (no false sharing) and own whole 64-bit words.
+// (GCC warns that the value follows -march/-mtune, which matters only where it enters an ABI; here it is only asserted)
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Winterference-size"
+#endif
+inline constexpr std::size_t cache_line = std::hardware_destructive_interference_size;
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
+
+template<class ExecutionPolicy>
+constexpr bool is_parallel_policy = !std::is_same_v<std::remove_cvref_t<ExecutionPolicy>, std::execution::sequenced_policy>;
+
+template<std::uint64_t B = 4096, class ExecutionPolicy, class F>
+void for_blocks(ExecutionPolicy&& policy, std::uint64_t n, F&& f)
 {
-        static_assert(B > 0, "for_blocks: a block holds at least one index");
+        static_assert(B > 0 && B % (8 * cache_line) == 0, "for_blocks: a block covers whole cache lines of every bit plane");
         std::vector<std::uint64_t> starts;
         for (std::uint64_t s = 0; s < n; s += B) starts.push_back(s);
         auto const run = [&](std::uint64_t s) { f(s, std::min(n, s + B)); };
-        if (par) std::for_each(std::execution::par, starts.begin(), starts.end(), run);
-        else std::for_each(std::execution::seq, starts.begin(), starts.end(), run);
+        std::for_each(policy, starts.begin(), starts.end(), run);
 }
 
 struct Plane {
@@ -275,16 +293,18 @@ struct Plane {
         {
                 std::atomic_ref<std::uint64_t>(w[i >> 6]).fetch_or(std::uint64_t(1) << (i & 63), std::memory_order_relaxed);
         }
-        template<class F> void for_each_par(bool par, F&& f) const      // over the set bits, one std::for_each over words
+        template<class ExecutionPolicy, class F>
+        void for_each_par(ExecutionPolicy&& policy, F&& f) const        // over the set bits, one std::for_each over words
         {
-                for_blocks(par, w.size(), [&](std::uint64_t lo, std::uint64_t hi) {
+                for_blocks(policy, w.size(), [&](std::uint64_t lo, std::uint64_t hi) {
                         for (std::uint64_t k = lo; k < hi; ++k)
                                 for (std::uint64_t b = w[k]; b; b &= b - 1) f(k * 64 + std::uint64_t(std::countr_zero(b)));
                 });
         }
-        void mask_par(bool par, Plane const& keep, bool complement)     // this &= keep (or ~keep), one std::for_each over words
+        template<class ExecutionPolicy>
+        void mask_par(ExecutionPolicy&& policy, Plane const& keep, bool complement)     // this &= keep (or ~keep), one std::for_each over words
         {
-                for_blocks(par, w.size(), [&](std::uint64_t lo, std::uint64_t hi) {
+                for_blocks(policy, w.size(), [&](std::uint64_t lo, std::uint64_t hi) {
                         for (std::uint64_t k = lo; k < hi; ++k) w[k] &= complement ? ~keep.w[k] : keep.w[k];
                 });
         }

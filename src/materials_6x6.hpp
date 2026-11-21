@@ -255,7 +255,7 @@ std::uint8_t const* map_file(std::string const& path, std::size_t size)
 // ---------------------------------------------------------------- seq or par, over blocks of positions
 //
 // Every pass is one std::for_each over blocks of B indices, with the build's execution policy (std::execution::seq or
-// std::execution::par, chosen once in main and passed down). The default, 4096, is a whole number of 64-bit words, so a
+// std::execution::par, chosen once in main and passed down). The default, block_size, is a whole number of 64-bit words, so a
 // block owns the words of its positions in every bit plane: a pass that writes bit planes needs B a multiple of 64 (or
 // atomic writes).
 // The cache line, as the compiler knows it for the target (64 bytes on x86-64). A block of B indices covers B / 8 bytes
@@ -271,10 +271,19 @@ inline constexpr std::size_t cache_line = std::hardware_destructive_interference
 #pragma GCC diagnostic pop
 #endif
 
+// The default block: 4096 indices (8 cache lines of a bit plane). Passes with per-block state (pass 0's lists) size and
+// index it by block_size and num_blocks, so they always agree with for_blocks. EGDB_BLOCK_SIZE overrides it at compile
+// time, to measure.
+#ifndef EGDB_BLOCK_SIZE
+#define EGDB_BLOCK_SIZE 4096
+#endif
+inline constexpr std::uint64_t block_size = EGDB_BLOCK_SIZE;
+constexpr std::uint64_t num_blocks(std::uint64_t n) { return (n + block_size - 1) / block_size; }
+
 template<class ExecutionPolicy>
 constexpr bool is_parallel_policy = !std::is_same_v<std::remove_cvref_t<ExecutionPolicy>, std::execution::sequenced_policy>;
 
-template<std::uint64_t B = 4096, class ExecutionPolicy, class F>
+template<std::uint64_t B = block_size, class ExecutionPolicy, class F>
 void for_blocks(ExecutionPolicy&& policy, std::uint64_t n, F&& f)
 {
         static_assert(B > 0 && B % (8 * cache_line) == 0, "for_blocks: a block covers whole cache lines of every bit plane");

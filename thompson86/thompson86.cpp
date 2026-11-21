@@ -244,13 +244,13 @@ void solve_group(Group const& g, DepthSink<std::uint8_t>& sink, ExecutionPolicy 
 {
         std::uint64_t const P = g.P;
         Plane open_w(P), open_b(P), lossable(P), exits_done(P), won(P), lost(P);
-        std::uint64_t const nblocks = (P + 4095) / 4096;
+        std::uint64_t const nblocks = num_blocks(P);
         std::vector<std::vector<Seed>> win_b(nblocks), loss_b(nblocks), exit_b(nblocks);    // per block, merged after
 
         // pass 0: forward over every position, both sides to move; exits are looked up in finished groups and materials
         auto const t0 = std::chrono::steady_clock::now();
         for_blocks(policy, P, [&](std::uint64_t lo, std::uint64_t hi) {
-                std::uint64_t const blk = lo / 4096;
+                std::uint64_t const blk = lo / block_size;
                 for (std::uint64_t i = lo; i < hi; ++i) {
                         Pos const p = g.pos(i, 0);
                         bool in = false;
@@ -465,7 +465,7 @@ bool build_material(std::string const& dir, Material c, ExecutionPolicy const& p
         }
 
         // the four files of the material, each written once, sequentially, in index order: the bytes gathered from the
-        // sink slot by slot, the bits from the bytes, a chunk at a time in parallel (blocks of 4096 slots own whole bytes
+        // sink slot by slot, the bits from the bytes, a chunk at a time in parallel (blocks of block_size slots own whole bytes
         // of bits)
         std::atomic<std::uint64_t> wins{ 0 }, losses{ 0 };
         std::atomic<int> longest{ 0 }, longest_loss{ 0 };

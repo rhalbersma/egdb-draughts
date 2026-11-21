@@ -376,12 +376,12 @@ void solve_group_cell8(Group const& g, DepthSink<std::uint16_t>& sink, Execution
 
         // pass 0: decided positions get their code (or C_DEFER), the others a status; the exits by level in lists
         struct Entry { std::uint32_t level, id; };
-        std::uint64_t const nblocks = (T + 4095) / 4096;
+        std::uint64_t const nblocks = num_blocks(T);
         std::vector<std::vector<Entry>> ewin_b(nblocks), eloss_b(nblocks);
         std::atomic<int> max_seed{ 0 };
         auto const t0 = std::chrono::steady_clock::now();
         for_blocks(policy, T, [&](std::uint64_t lo, std::uint64_t hi) {
-                std::uint64_t const blk = lo / 4096;
+                std::uint64_t const blk = lo / block_size;
                 int ms = 0;
                 for (std::uint64_t id = lo; id < hi; ++id) {
                         Pos const p = pos(id);
@@ -617,14 +617,14 @@ void solve_group(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPolicy
 
         // pass 0: every position looks up its moves out of the group. Decided ones get their value; the others leave
         // bits (has a move inside; every exit loses; no exits) and, by level, their fastest win and slowest loss through
-        // an exit. A block of 4096 positions owns the words of its bits and has its own lists, merged by level after.
+        // an exit. A block (block_size positions) owns the words of its bits and has its own lists, merged by level after.
         struct Entry { std::uint32_t level, id; };
-        std::uint64_t const nblocks = (T + 4095) / 4096;
+        std::uint64_t const nblocks = num_blocks(T);
         std::vector<std::vector<Entry>> won_b(nblocks), lost_b(nblocks), ewin_b(nblocks), eloss_b(nblocks);
         Plane openp(T), lossable(T), exits_done(T);
         auto const t0 = std::chrono::steady_clock::now();
         for_blocks(policy, T, [&](std::uint64_t lo, std::uint64_t hi) {
-                std::uint64_t const blk = lo / 4096;
+                std::uint64_t const blk = lo / block_size;
                 for (std::uint64_t id = lo; id < hi; ++id) {
                         Pos const p = pos(id);
                         auto const ml = moves(p);
@@ -871,7 +871,7 @@ bool build_material(std::string const& dir, Material c, ExecutionPolicy const& p
         }
 
         // the four files, each written once, sequentially, in index order: the values gathered from the sink slot by
-        // slot, as unsigned bytes and wdl bits, a chunk at a time in parallel (blocks of 4096 slots own whole wdl bytes).
+        // slot, as unsigned bytes and wdl bits, a chunk at a time in parallel (blocks of block_size slots own whole wdl bytes).
         // The 8-bit sink holds the files already: only the counts are gathered, and the files renamed
         std::atomic<std::uint64_t> wins[2]{}, losses[2]{};
         std::atomic<int> longest{ 0 };

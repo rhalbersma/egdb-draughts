@@ -39,9 +39,12 @@ CHAPTERS = [
     ('3 tegen 2 op 9×8', '3 against 2 on 9×8', [
         ('vesting.html', 'Twee vallen om de vesting te breken', 'Two traps to break the fortress'),
         ('vesting-pariteit.html', 'De winst is niet strategisch, de pariteit doet ertoe', 'The win is non-strategic, parity matters')]),
+    ('3 tegen 2 op 8×7', '3 against 2 on 8×7', [
+        ('vesting-8x7.html', 'De vallen', 'The traps'),
+        ('vesting-8x7-wit.html', 'Wit aan zet zonder directe val', 'White to move without an immediate trap')]),
+    ('3 tegen 2 op 7×7', '3 against 2 on 7×7', [
+        ('langste-7x7.html', 'Geen ontsnapping naar een andere dubbele hoek', 'No escape to another double corner')]),
     ('3 tegen 2 op andere borden', '3 against 2 on other boards', [
-        ('langste-7x7.html', 'De langste winst op 7×7', 'The longest win on 7×7'),
-        ('vesting-8x7.html', 'Langs de zijde van 7 valt de vesting op 8×7', 'Along the side of 7 the fortress falls on 8×7'),
         ('vesting-9x9.html', '9×9 onspeelbare hoeken: de val en de diagonaal', '9×9 unplayable corners: the trap and the diagonal'),
         ('afstandsregel.html', 'De afstandsregel', 'The distance rule')]),
     ('Conclusie', 'Conclusion', [
@@ -708,6 +711,9 @@ same side:</p>
         fig77, i77 = pg77.diagram(f77, t(f'7×7, wit aan zet: {v77}', f'7×7, white to move: {v77}'), gid=k77)
         h77, *_ = pg77.moves(f77, self.plan(line77), 1, False, 'm1', i77)
         body77 = [t(f'''
+<p>Op <a href="vesting-8x7-wit.html">8×7</a> verdringt wit een zwarte dam uit zijn dubbele hoek, en daar is geen andere
+dubbele hoek om naartoe te vluchten. Op 7×7 wel: kan de verdreven dam steeds naar een volgende dubbele hoek ontsnappen, zoals
+de zwarte dam bij <a href="twee-4x4.html">2 tegen 1 op 4×4</a>?</p>
 <p>Op 7×7 met onspeelbare hoekvelden is elke hoek een dubbele hoek: b1/a2, f1/g2, a6/b7 en g6/f7. De dubbele hoeken
 liggen 6 uit elkaar, aan dezelfde kant en diagonaal. Van de 28.276 rustige stellingen met zwart aan zet en beide zwarte
 dammen op de randvelden van twee dubbele hoeken zijn er maar 16 remise, en daarin heeft zwart een schot.</p>
@@ -719,6 +725,9 @@ met een offer de beslissing af: 26. b3-c2! b1×d3 27. f7-g6 f5-e6 28. d5×f7, en
 <p>Je zou kunnen denken dat zwart zo eindeloos van dubbele hoek naar dubbele hoek kan blijven vluchten, zoals de zwarte dam
 bij <a href="twee-4x4.html">2 tegen 1 op 4×4</a>, en dat het remise is. Maar 7×7 is daar niet klein genoeg voor: wit vangt
 de verdreven dam in de tweede dubbele hoek alsnog.</p>''', f'''
+<p>On <a href="vesting-8x7-wit.html">8×7</a> white drives a black king out of its double corner, and there is no other
+double corner to flee to. On 7×7 there is: can the expelled king keep escaping to a next double corner, like the black king
+in <a href="twee-4x4.html">2 against 1 on 4×4</a>?</p>
 <p>On 7×7 with unplayable corner squares every corner is a double corner: b1/a2, f1/g2, a6/b7 and g6/f7. The double
 corners are 6 apart, on the same side and diagonally. Of the 28,276 quiet positions with black to move and both black
 kings on the edge squares of two double corners only 16 are drawn, and in those black has a shot.</p>
@@ -730,9 +739,7 @@ b1/a2, but there white forces the decision with a sacrifice: 26. b3-c2! b1×d3 2
 wins.</p>
 <p>One might think that black could keep fleeing from double corner to double corner forever like this, as the black king
 does in <a href="twee-4x4.html">2 against 1 on 4×4</a>, and that it is a draw. But 7×7 is not small enough for that: white
-still catches the expelled king in the second double corner.</p>'''), fig77, f'<p class="var">{h77}</p>', '<div style="clear:both"></div>',
-                  t('<p>Op 8×7 bekijken we de twee dubbele hoeken langs de zijde van 7 apart.</p>',
-                    '<p>On 8×7 we look at the two double corners along the side of 7 on their own.</p>')]
+still catches the expelled king in the second double corner.</p>'''), fig77, f'<p class="var">{h77}</p>', '<div style="clear:both"></div>']
         self.write('langste-7x7.html', None, '\n'.join(body77), pg77, k77)
         # 8x7: one pair of double corners, along the side of 7 (6 apart, closer than on 8x8): the fortress falls
         k87, e87 = self.engine(8, 7, 'unplayable')
@@ -742,17 +749,15 @@ still catches the expelled king in the second double corner.</p>'''), fig77, f'<
         OW, OB = ['b3', 'c4', 'd7'], ['b1', 'a6']           # a trap at odd parity
         EW, EB = ['b3', 'c4', 'b5'], ['b1', 'b7']           # even parity: no trap, white drives a black king out
         body7 = [t('''
-<p>Op 8×8 liggen de twee dubbele hoeken 7 velden uit elkaar, en daar valt de vesting altijd. Op
-<a href="langste-7x7.html">7×7</a> vluchtte zwart naar twee dubbele hoeken langs een zijde van 7, maar 6 uit elkaar. Op
-8×7 zijn er precies twee dubbele hoeken, b1/a2 en b7/a6, allebei langs de zijde van 7, en
+<p>Op 8×8 liggen de twee dubbele hoeken 7 velden uit elkaar, en daar valt de vesting altijd. Op 9×8 liggen ze 8 uit elkaar,
+en daar beslist de oppositie. Op 8×7 zijn er precies twee dubbele hoeken, b1/a2 en b7/a6, allebei langs de zijde van 7, en
 ze liggen maar 6 uit elkaar. (Met speelbare in plaats van onspeelbare hoekvelden is 8×7 het spiegelbeeld, met de dubbele
 hoeken langs de h-lijn.)</p>
 <p>Met zwart aan zet en beide zwarte dammen op de randvelden van hun dubbele hoeken (rustige stellingen) is bij oneven
 pariteit elke stelling verloren (3.172), en bij even pariteit alle op 4 na (3.153 van de 3.157). Maar het gaat op twee
 verschillende manieren: bij oneven pariteit zijn er 8 vallen, bij even pariteit geen enkele.</p>''', '''
-<p>On 8×8 the two double corners are 7 squares apart, and there the fortress always falls. On
-<a href="langste-7x7.html">7×7</a> black fled to two double corners along a side of 7, only 6 apart. On 8×7 there are
-exactly two double corners, b1/a2 and b7/a6, both along the side of 7, and they are
+<p>On 8×8 the two double corners are 7 squares apart, and there the fortress always falls. On 9×8 they are 8 apart, and
+there the opposition decides. On 8×7 there are exactly two double corners, b1/a2 and b7/a6, both along the side of 7, and they are
 only 6 apart. (With playable instead of unplayable corner squares 8×7 is the mirror image, with the double corners along
 the h-file.)</p>
 <p>With black to move and both black kings on the edge squares of their double corners (quiet positions) every position is
@@ -808,9 +813,62 @@ are 8 traps, at even parity not a single one.</p>''')]
             assert (rank_parity(e87, e87.fen(W, B, 'B')) == 0) == even
         for W in (['b5', 'c4', 'd5'], ['b5', 'c4', 'd3'], ['b3', 'c4', 'd5'], ['b3', 'c4', 'd3']):
             assert e87.analyse(e87.fen(W, ['a2', 'a6'], 'B'))[0] == 'D'
-        body7.append(t('<p>Wat er gebeurt als de dubbele hoeken 8 uit elkaar liggen, zagen we op <a href="vesting.html">9×8</a>.</p>',
-                       '<p>What happens when the double corners are 8 apart, we saw on <a href="vesting.html">9×8</a>.</p>'))
+        body7.append(t('<p>En met wit aan zet, als er geen directe val is? Dat staat op de <a href="vesting-8x7-wit.html">volgende '
+                       'pagina</a>.</p>',
+                       '<p>And with white to move, when there is no immediate trap? That is on the <a href="vesting-8x7-wit.html">'
+                       'next page</a>.</p>'))
         self.write('vesting-8x7.html', None, '\n'.join(body7), pg7, k87)
+        # white to move in the passive trap: no immediate exchange and no tempo change along the edge, but white drives a
+        # black king out of its double corner (the invasion of the previous page, at the other parity)
+        pgw = self.page((k87, e87))
+        fw = e87.fen(OW, OB, 'W')
+        vw, legalw = e87.analyse(fw)
+        assert vw.startswith('W') and self.exchange(e87, fw) is None
+        figw, iw = pgw.diagram(fw, t(f'{name}, passieve val 2, wit aan zet: {vw}', f'{name}, passive trap 2, white to move: {vw}'),
+                               gid=k87)
+        linew = '1. d7-c6 a6-b7 2. c6-b5 b7-a6 3. b3-a2! b1-c2 4. a2-b1 c2-b3 5. c4xa2 a6xc4'
+        hw, _, fend, _ = pgw.moves(fw, self.plan(linew), 1, False, 'm1', iw)
+        assert fend[0] == 'W' and e87.analyse(fend)[0].startswith('W') and all(
+            len([x for x in side[1:].split(',') if x]) == n for side, n in zip(fend.split(':')[1:], (2, 1)))
+        f = fw                              # after 2. ... b7-a6: the invasion of the previous page after 1. ... b7-a6
+        for mv in [m for m, _ in self.plan(linew)][:4]:
+            f = next(x[2] for x in e87.analyse(f)[1] if x[0] == mv[0])
+        same = lambda a, b: a[0] == b[0] and [set(x[1:].split(',')) for x in a.split(':')[1:]] == [set(x[1:].split(',')) for x in b.split(':')[1:]]
+        assert same(f, e87.fen(EW, ['b1', 'a6'], 'W'))
+        bodyw = [t('<p>Met wit aan zet geeft de passieve val geen directe ruil. Op <a href="val-pariteit.html">8×8</a> '
+                   'wisselt wit dan van tempo op de diagonaal. Op <a href="vesting-pariteit.html">9×8</a> lukt dat langs de '
+                   'rand niet, en is de passieve val met wit aan zet remise. Op 8×7 lukt een tempowissel langs de rand '
+                   'evenmin, maar wit wint toch: hij verdringt een zwarte dam uit zijn dubbele hoek, zoals bij even pariteit '
+                   'op de <a href="vesting-8x7.html">vorige pagina</a>.</p>',
+                   '<p>With white to move the passive trap gives no immediate exchange. On <a href="val-pariteit.html">8×8</a> '
+                   'white then changes the tempo on the diagonal. On <a href="vesting-pariteit.html">9×8</a> that does not '
+                   'work along the edge, and the passive trap with white to move is a draw. On 8×7 a tempo change along the '
+                   'edge does not work either, but white wins all the same: he drives a black king out of its double corner, '
+                   'as at even parity on the <a href="vesting-8x7.html">previous page</a>.</p>'),
+                 figw,
+                 t('<p>Wit loopt met zijn derde dam over terwijl zwart pendelt, en na 2. … b7-a6 staat de stelling van het '
+                   'binnendringen op de vorige pagina op het bord: wit bezet het vrije randveld naast de zwarte dam op b1, '
+                   'die zijn dubbele hoek uit moet en niet meer terug kan: ',
+                   '<p>White walks his third king over while black shuttles, and after 2. … b7-a6 the position of the '
+                   'invasion on the previous page is on the board: white occupies the free edge square next to the black king '
+                   'on b1, which has to leave its double corner and cannot come back: ')
+                 + hw + t(', en 2 tegen 1 wint. Alle zetten van wit: ', ', and 2 against 1 wins. All moves of white: ')
+                 + self.moves_list(pgw, iw, legalw, '1. ') + '.</p>', '<div style="clear:both"></div>',
+                 # counted over every quiet position with white to move and the black kings on the edge squares of
+                 # b1/a2 and b7/a6: 8,281, all won, 111 of them with an exchange at once
+                 t('<p>Met wit aan zet en beide zwarte dammen op de randvelden van hun dubbele hoeken (rustige stellingen) '
+                   'zijn alle 8.281 stellingen gewonnen voor wit, bij beide pariteiten, en maar 111 daarvan met een directe '
+                   'ruil. Op 8×7 valt de vesting dus met beide kleuren aan zet: waar een val noch een tempowissel helpt, '
+                   'liggen de dubbele hoeken dicht genoeg bij elkaar om een zwarte dam eruit te verdringen.</p>'
+                   '<p>Maar kan zo\'n verdreven dam niet naar een andere dubbele hoek vluchten? Op 8×7 is er geen andere; '
+                   'op <a href="langste-7x7.html">7×7</a> wel.</p>',
+                   '<p>With white to move and both black kings on the edge squares of their double corners (quiet positions) '
+                   'all 8,281 positions are won for white, at both parities, and only 111 of them with an exchange at once. On '
+                   '8×7 the fortress therefore falls with either side to move: where neither a trap nor a tempo change helps, '
+                   'the double corners are close enough together to drive a black king out.</p>'
+                   '<p>But can such an expelled king not flee to another double corner? On 8×7 there is none; on '
+                   '<a href="langste-7x7.html">7×7</a> there is.</p>')]
+        self.write('vesting-8x7-wit.html', None, '\n'.join(bodyw), pgw, k87)
         # the distance rule, with the two pairs of 9x7 that are 8 apart
         k97, e97 = self.engine(9, 7, 'unplayable')
         name = t('9×7 onspeelbare hoeken', '9×7 unplayable corners')
@@ -910,7 +968,8 @@ are 8 traps, at even parity not a single one.</p>''')]
             '<tr><td>9×8</td><td>100% remise (8.228)</td><td>0% remise (8.244)</td></tr>'
             '<tr><td>10×9</td><td>100% (18.420)</td><td>0% (18.440)</td></tr>'
             '<tr><td>11×10</td><td>100% (37.030)</td><td>100% (37.050)</td></tr></table>'
-            '<p>Zie <a href="val.html">de val</a> en <a href="langste-7x7.html">3 tegen 2 op andere borden</a>.</p>',
+            '<p>Zie de vallen op <a href="val.html">8×8</a>, <a href="vesting.html">9×8</a> en <a href="vesting-8x7.html">8×7</a>, '
+            'en <a href="langste-7x7.html">7×7</a>.</p>',
             '<p>The traps per board, with black to move and both black kings on the edge squares of two double corners '
             '(counted with <a href="https://github.com/rhalbersma/egdb-draughts/blob/main/checkers/traps.py"><code>traps.py</code></a>):</p>'
             '<table class="tbl"><tr><th>Board</th><th>Traps at even parity</th><th>Traps at odd parity</th><th>Consequence</th></tr>'
@@ -922,7 +981,8 @@ are 8 traps, at even parity not a single one.</p>''')]
             '<tr><td>9×8</td><td>100% draws (8,228)</td><td>0% draws (8,244)</td></tr>'
             '<tr><td>10×9</td><td>100% (18,420)</td><td>0% (18,440)</td></tr>'
             '<tr><td>11×10</td><td>100% (37,030)</td><td>100% (37,050)</td></tr></table>'
-            '<p>See <a href="val.html">the trap</a> and <a href="langste-7x7.html">3 against 2 on other boards</a>.</p>'),
+            '<p>See the traps on <a href="val.html">8×8</a>, <a href="vesting.html">9×8</a> and <a href="vesting-8x7.html">8×7</a>, '
+            'and <a href="langste-7x7.html">7×7</a>.</p>'),
             self.page((k89, e89)), None)
 
 

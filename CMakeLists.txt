@@ -90,3 +90,12 @@ target_compile_features(syzygy PRIVATE cxx_std_23)
 target_compile_options(syzygy PRIVATE
     $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -march=native>
 )
+
+# the same builder with the rules of English checkers on the same 6x6 board
+add_executable(syzygy_checkers syzygy/syzygy.cpp)
+target_compile_definitions(syzygy_checkers PRIVATE EGDB_6X6_CHECKERS=1)
+target_link_libraries(syzygy_checkers PRIVATE xstd::bits OpenMP::OpenMP_CXX ${ZSTD_LIBRARY} TBB::tbb)
+target_compile_features(syzygy_checkers PRIVATE cxx_std_23)
+target_compile_options(syzygy_checkers PRIVATE
+    $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -march=native>
+)

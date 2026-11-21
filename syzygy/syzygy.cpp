@@ -56,7 +56,7 @@
 //
 // build: g++-14 -std=c++23 -O2 -march=native -fopenmp -I<xstd-bits>/include -I<xstd-ints>/include
 //        -I<xstd-misc>/include syzygy/syzygy.cpp -lzstd -ltbb -o syzygy
-// usage: syzygy build <dir> wp bp wm bm <metric> [seq|par] [frontier|scan|cell8] [auto|groups|bytes|array] [compressed|raw] [material|tempi|configuration] [mem=MB]
+// usage: syzygy build <dir> wp bp wm bm <metric> [seq|par] [frontier|scan|cell8] [auto|groups|bytes|array] [compressed|raw] [stats] [material|tempi|configuration] [mem=MB]
 //                                                            build one material (its captures and promotions must exist);
 //                                                            the depth sink by the claim mem=MB (auto: the array if rung 0
 //                                                            fits, else group files), or as given; the granularity of
@@ -160,11 +160,10 @@ ZFile open_zfile(std::string const& path, std::uint64_t size)
         return z;
 }
 
-// a raw file, compressed into <path>.z (in parallel over the blocks), then removed
+// bytes in memory, written as <path>.z (compressed in parallel over the blocks, written once, sequentially)
 template<class ExecutionPolicy>
-void compress_file(std::string const& path, std::uint64_t size, ExecutionPolicy const& policy)
+void compress_buffer(std::uint8_t const* raw, std::uint64_t size, std::string const& path, ExecutionPolicy const& policy)
 {
-        std::uint8_t const* const raw = map_file(path, size);
         std::uint64_t const nb = (size + ZBLOCK - 1) / ZBLOCK;
         std::vector<std::vector<char>> parts(nb);
         std::vector<std::uint64_t> idx(nb);
@@ -176,7 +175,6 @@ void compress_file(std::string const& path, std::uint64_t size, ExecutionPolicy 
                 if (ZSTD_isError(r)) { std::cerr << "zstd: " << ZSTD_getErrorName(r) << std::endl; std::exit(1); }
                 parts[b].resize(r);
         });
-        ::munmap(const_cast<std::uint8_t*>(raw), size);
         std::vector<std::uint64_t> off(nb + 1, 0);
         for (std::uint64_t b = 0; b < nb; ++b) off[b + 1] = off[b] + parts[b].size();
         std::ofstream f(zpath(path) + ".tmp", std::ios::binary | std::ios::trunc);
@@ -188,6 +186,15 @@ void compress_file(std::string const& path, std::uint64_t size, ExecutionPolicy 
         if (!f) { std::cerr << "write failed " << zpath(path) << std::endl; std::exit(1); }
         f.close();
         std::filesystem::rename(zpath(path) + ".tmp", zpath(path));
+}
+
+// a raw file, compressed into <path>.z, then removed
+template<class ExecutionPolicy>
+void compress_file(std::string const& path, std::uint64_t size, ExecutionPolicy const& policy)
+{
+        std::uint8_t const* const raw = map_file(path, size);
+        compress_buffer(raw, size, path, policy);
+        ::munmap(const_cast<std::uint8_t*>(raw), size);
         std::filesystem::remove(path);
 }
 
@@ -309,13 +316,13 @@ std::uint16_t from_dtm_byte(std::uint8_t s) { return from_byte(Metric::dtm, s, 0
 
 std::uint8_t wdl_bits(std::uint8_t const* w, std::uint64_t i) { return std::uint8_t(w[i >> 2] >> (2 * (i & 3)) & 3); }
 
-// The 8-bit sink: the four output files themselves (<metric>-wtm, <metric>-btm, wdl-wtm, wdl-btm under temporary names),
-// memory-mapped for the whole build of the material. A decided value goes straight into its stored form, the unsigned
+// The 8-bit sink: the four output files in their stored form (<metric>-wtm, <metric>-btm, wdl-wtm, wdl-btm), held in
+// anonymous memory for the whole build of the material (zero pages until touched) and written once, sequentially, at the
+// end: compressed (<name>.z) or raw. No random writes ever reach the disk. A decided value goes straight into its stored form, the unsigned
 // depth byte (to_byte) and two wdl bits, at its slot of the material; a lookup into an earlier group decodes it again
 // (from_byte). 2.5 bytes per slot for both sides to move, against 4 for the 16-bit array, and no conversion pass at the
-// end: the files are complete once the last group is solved, and only renamed. Concurrent writers: the depth bytes are
-// distinct per position; four slots share a wdl byte, so the wdl bits are set with an atomic or. The pages are the
-// page cache's: the kernel writes them back, and may do so early under memory pressure.
+// end: the files are complete once the last group is solved, and only written out. Concurrent writers: the depth bytes are
+// distinct per position; four slots share a wdl byte, so the wdl bits are set with an atomic or.
 class ByteSink final : public DepthSink<std::uint16_t>
 {
         MatIndex const& mi_;
@@ -323,7 +330,6 @@ class ByteSink final : public DepthSink<std::uint16_t>
         std::uint8_t* map_[4]{};
         std::size_t size_[4]{};
         std::atomic<bool> beyond_{ false };
-        bool done_ = false;
 
         std::uint16_t value(int side, std::uint64_t i) const
         {
@@ -338,21 +344,15 @@ public:
                 for (int kind = 0; kind < 4; ++kind) {
                         path_[kind] = mat_path(dir, c, kind);
                         size_[kind] = file_size(c, kind);
-                        std::string const tmp = path_[kind] + ".tmp";
-                        int const fd = ::open(tmp.c_str(), O_RDWR | O_CREAT | O_TRUNC, 0644);
-                        if (fd < 0 || ::ftruncate(fd, off_t(size_[kind])) != 0) { std::cerr << "bytes sink: cannot create " << tmp << std::endl; std::exit(1); }
-                        void* const p = ::mmap(nullptr, size_[kind], PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-                        ::close(fd);
-                        if (p == MAP_FAILED) { std::cerr << "bytes sink: cannot map " << tmp << std::endl; std::exit(1); }
+                        void* const p = ::mmap(nullptr, size_[kind], PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+                        if (p == MAP_FAILED) { std::cerr << "bytes sink: cannot allocate " << size_[kind] << " bytes" << std::endl; std::exit(1); }
                         map_[kind] = static_cast<std::uint8_t*>(p);
                 }
         }
         ~ByteSink() override
         {
-                for (int kind = 0; kind < 4; ++kind) {
+                for (int kind = 0; kind < 4; ++kind)
                         if (map_[kind]) ::munmap(map_[kind], size_[kind]);
-                        if (!done_) std::filesystem::remove(path_[kind] + ".tmp");
-                }
         }
         void begin_group(std::size_t, Group const&) override {}
         void end_group() override {}
@@ -367,14 +367,21 @@ public:
         std::uint16_t read(int side, Pos const& p) const override { return value(side, mi_.index(p)); }
         std::uint16_t at(int side, std::uint64_t slot) const override { return value(side, slot); }
         bool beyond() const { return beyond_.load(); }
-        void finish()                                   // unmap, and give the files their final names
+        template<class ExecutionPolicy>
+        void finish(ExecutionPolicy const& policy)      // the four files, each written once, sequentially
         {
                 for (int kind = 0; kind < 4; ++kind) {
+                        if (g_compressed) compress_buffer(map_[kind], size_[kind], path_[kind], policy);
+                        else {
+                                std::ofstream f(path_[kind] + ".tmp", std::ios::binary | std::ios::trunc);
+                                f.write(reinterpret_cast<char const*>(map_[kind]), std::streamsize(size_[kind]));
+                                if (!f) { std::cerr << "write failed " << path_[kind] << std::endl; std::exit(1); }
+                                f.close();
+                                std::filesystem::rename(path_[kind] + ".tmp", path_[kind]);
+                        }
                         ::munmap(map_[kind], size_[kind]);
                         map_[kind] = nullptr;
-                        std::filesystem::rename(path_[kind] + ".tmp", path_[kind]);
                 }
-                done_ = true;
         }
 };
 
@@ -950,6 +957,64 @@ MemoryNeed memory_need(Material c)
         return m;
 }
 
+bool g_write_stats = false;                                     // the build option `stats`: a stats file per material
+
+// The stats file (build option stats), <material>-<metric>.stats next to the material's files: per side to move, the
+// legal positions won and lost in every number of plies (exact), the draws, and the longest win and loss with a
+// position (as rtbgen --stats). One pass over the sink in parallel blocks, before the files are closed.
+template<class ExecutionPolicy>
+void write_stats(std::string const& dir, Material c, MatIndex const& mi, DepthSink<std::uint16_t> const& sink, ExecutionPolicy const& policy)
+{
+        constexpr int MAXP = 4096;
+        struct Side {
+                std::vector<std::atomic<std::uint64_t>> win, loss;
+                std::atomic<std::uint64_t> draws{ 0 };
+                std::mutex mx;
+                int longest_win = -1, longest_loss = -1;
+                std::uint64_t slot_win = 0, slot_loss = 0;
+                Side() : win(MAXP), loss(MAXP) {}
+        };
+        std::array<Side, 2> st;
+        for (int side : { 0, 1 }) {
+                Side& S = st[std::size_t(side)];
+                for_blocks(policy, mi.size, [&](std::uint64_t a, std::uint64_t b) {
+                        std::vector<std::uint32_t> w, l;
+                        std::uint64_t d = 0, sw = 0, sl = 0;
+                        int lw = -1, ll = -1;
+                        for (std::uint64_t j = a; j < b; ++j) {
+                                std::uint16_t const v = sink.at(side, j);
+                                if (v == 0) { Pos p; d += mi.pos(j, side, p); continue; }      // a legal slot: a draw
+                                int const n = std::min(plies(v), MAXP - 1);
+                                auto& h = is_win(v) ? w : l;
+                                if (int(h.size()) <= n) h.resize(std::size_t(n) + 1, 0);
+                                ++h[std::size_t(n)];
+                                if (is_win(v) && plies(v) > lw) { lw = plies(v); sw = j; }
+                                if (is_loss(v) && plies(v) > ll) { ll = plies(v); sl = j; }
+                        }
+                        for (std::size_t n = 0; n < w.size(); ++n) if (w[n]) S.win[n].fetch_add(w[n], std::memory_order_relaxed);
+                        for (std::size_t n = 0; n < l.size(); ++n) if (l[n]) S.loss[n].fetch_add(l[n], std::memory_order_relaxed);
+                        S.draws.fetch_add(d, std::memory_order_relaxed);
+                        std::lock_guard lock(S.mx);
+                        if (lw > S.longest_win || (lw == S.longest_win && sw < S.slot_win)) { S.longest_win = lw; S.slot_win = sw; }
+                        if (ll > S.longest_loss || (ll == S.longest_loss && sl < S.slot_loss)) { S.longest_loss = ll; S.slot_loss = sl; }
+                });
+        }
+        std::ofstream f(c.path(dir) + "-" + metric_name() + ".stats");
+        f << "# " << c.name() << " " << metric_name() << ": legal positions per side to move; plies exact\n";
+        for (int side : { 0, 1 }) {
+                Side& S = st[std::size_t(side)];
+                char const* const tm = side == 0 ? "wtm" : "btm";
+                std::uint64_t nw = 0, nl = 0;
+                for (int n = 0; n < MAXP; ++n) { nw += S.win[std::size_t(n)]; nl += S.loss[std::size_t(n)]; }
+                f << tm << "\twins\t" << nw << "\n" << tm << "\tdraws\t" << S.draws.load() << "\n" << tm << "\tlosses\t" << nl << "\n";
+                for (int n = 0; n < MAXP; ++n) if (S.win[std::size_t(n)]) f << tm << "\twin\t" << n << "\t" << S.win[std::size_t(n)].load() << "\n";
+                for (int n = 0; n < MAXP; ++n) if (S.loss[std::size_t(n)]) f << tm << "\tloss\t" << n << "\t" << S.loss[std::size_t(n)].load() << "\n";
+                Pos p;
+                if (S.longest_win >= 0 && mi.pos(S.slot_win, side, p)) f << tm << "\tlongest win\t" << S.longest_win << "\t" << fen_of(p) << "\n";
+                if (S.longest_loss >= 0 && mi.pos(S.slot_loss, side, p)) f << tm << "\tlongest loss\t" << S.longest_loss << "\t" << fen_of(p) << "\n";
+        }
+}
+
 template<class ExecutionPolicy>
 bool build_material(std::string const& dir, Material c, ExecutionPolicy const& policy)
 {
@@ -1011,7 +1076,6 @@ bool build_material(std::string const& dir, Material c, ExecutionPolicy const& p
                                 losses[side].fetch_add(nl, std::memory_order_relaxed);
                                 for (int cur = longest.load(); lg > cur && !longest.compare_exchange_weak(cur, lg);) {}
                         });
-                bytes_sink->finish();
         }
         for (int side : { 0, 1 }) {
                 if (bytes_sink) break;
@@ -1049,7 +1113,9 @@ bool build_material(std::string const& dir, Material c, ExecutionPolicy const& p
                 std::filesystem::rename(pb + ".tmp", pb);
                 std::filesystem::rename(pw + ".tmp", pw);
         }
-        if (g_compressed)                               // the build format, compressed: <name>.z for each of the four files
+        if (g_write_stats) write_stats(dir, c, mi, *sink, policy);
+        if (bytes_sink) bytes_sink->finish(policy);     // the four files from memory, compressed or raw
+        else if (g_compressed)                          // the build format, compressed: <name>.z for each of the four files
                 for (int kind = 0; kind < 4; ++kind) compress_file(mat_path(dir, c, kind), file_size(c, kind), policy);
         g_sink = nullptr;
         g_frozen = false;
@@ -1192,13 +1258,14 @@ int main(int argc, char* argv[])
                 for (Material const c : stored_materials_up_to(std::stoi(a[1]))) print_plan_row(c, memory_need(c));
                 return 0;
         }
-        if (a.size() >= 7 && a.size() <= 13 && a[0] == "build" && parse_metric(a[6])) {
+        if (a.size() >= 7 && a.size() <= 14 && a[0] == "build" && parse_metric(a[6])) {
                 bool par = false;                                       // the execution policy: par or seq
                 for (std::size_t i = 7; i < a.size(); ++i) {
                         if (a[i] == "seq" || a[i] == "par") par = a[i] == "par";
                         else if (a[i] == "scan" || a[i] == "frontier") g_frontier = a[i] == "frontier";
                         else if (a[i] == "cell8") { g_cell8 = true; g_frontier = false; }
                         else if (a[i] == "raw" || a[i] == "compressed") g_compressed = a[i] == "compressed";
+                        else if (a[i] == "stats") g_write_stats = true;
                         else if (a[i].starts_with("mem=")) g_mem_mb = std::stoull(a[i].substr(4));
                         else if (a[i] == "groups" || a[i] == "array" || a[i] == "bytes") { g_group_files = a[i] == "groups"; g_byte_sink = a[i] != "array"; g_sink_auto = false; }
                         else if (a[i] == "auto") g_sink_auto = true;
@@ -1212,7 +1279,7 @@ int main(int argc, char* argv[])
                 return check_all(a[1], std::stoi(a[2]), a.size() == 5 ? std::stoi(a[4]) : 4) ? 0 : 1;
         if (a.size() == 5 && a[0] == "cmp86" && parse_metric(a[4])) return compare_thompson86(a[1], a[2], std::stoi(a[3])) ? 0 : 1;
         if (a.size() == 5 && a[0] == "order") return check_order(a[1], a[2], a[3], std::stoi(a[4])) ? 0 : 1;
-        std::cerr << "usage: syzygy build <dir> wp bp wm bm dtm|dtc|dtz [seq|par] [frontier|scan|cell8] [auto|groups|bytes|array] [compressed|raw] [material|tempi|configuration] [mem=MB] | bench n [samples] | plan n dtm|dtc|dtz [granularity] | checkall <dir> n dtm|dtc|dtz [threads]"
+        std::cerr << "usage: syzygy build <dir> wp bp wm bm dtm|dtc|dtz [seq|par] [frontier|scan|cell8] [auto|groups|bytes|array] [compressed|raw] [stats] [material|tempi|configuration] [mem=MB] | bench n [samples] | plan n dtm|dtc|dtz [granularity] | checkall <dir> n dtm|dtc|dtz [threads]"
                      " | cmp86 <dir> <dir_thompson86> n dtm|dtc|dtz | order <dir_dtz> <dir_dtc> <dir_dtm> n" << std::endl;
         return 2;
 }

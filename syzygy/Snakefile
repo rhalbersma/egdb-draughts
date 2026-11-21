@@ -3,15 +3,17 @@
 #    (See accompanying file LICENSE_1_0.txt or copy at
 #          http://www.boost.org/LICENSE_1_0.txt)
 
-# Syzygy style builds for 6x6 international draughts (syzygy.cpp), two-sided: one of each pair of a material and its
+# Syzygy style builds for 6x6 international draughts, or English checkers with the engine built for it (syzygy_checkers,
+# -DEGDB_6X6_CHECKERS=1), two-sided: one of each pair of a material and its
 # colour mirror (the 82 materials up to 6 pieces of strongly_solving_6x6/materials), built in the order of the DAG of
 # captures and promotions. A material is named wp-bp-wm-bm (white pieces, black pieces, white men, black men, two
 # digits each); inside, a tuple (wm, wk, bm, bk) with kings. Per material four files of full results,
 # 6x6/np/wp-bp/wm-bm-<kind>-<side to move> (np: the number of pieces): <metric>-wtm, <metric>-btm (one byte per slot)
-# and wdl-wtm, wdl-btm (two bits per slot). The depth bytes are unsigned: their signs are in the wdl files. A dtm build
-# reads dtm-wtm and dtm-btm of the materials it leads into, with their wdl files; a dtc or dtz build only their wdl
-# files (every move out of a material is a goal move there). The files of a metric go into <dir>/<metric>: the wdl
-# files are the same for all three.
+# and wdl-wtm, wdl-btm (two bits per slot), by default compressed (<name>.z, store=compressed; store=raw for plain
+# files). The dtm bytes carry their class (1 + plies, odd a win); dtc and dtz bytes take their sign from the wdl files.
+# A dtm build reads only dtm-wtm and dtm-btm of the materials it leads into; a dtc or dtz build only their wdl files
+# (every move out of a material is a goal move there). The files of a metric go into <dir>/<metric>: the wdl files are
+# the same for all three.
 #
 # Memory (synthesis 7.3): the engine's `plan` gives every material's need; each build claims its rung-0 need, or the
 # whole budget if that does not fit (the build then writes its depths to group files, rung 1, with sink=auto). Pass the
@@ -19,20 +21,26 @@
 # path. granularity=material|tempi|configuration sets the groups (tempi: the smallest largest group).
 #
 # usage (from the root of the repo):
-#   snakemake -s syzygy/Snakefile --cores 4 --config engine=build/syzygy dir=data/syzygy pieces=6 metric=dtz
-# metric: dtm, dtc or dtz; policy=par runs each build in parallel (std::execution::par); rounds=scan finds the frontier
-# by full scans as rtbgen (default: frontier bit planes)
+#   snakemake -s syzygy/Snakefile --cores 10 --config engine=build/syzygy dir=data/syzygy pieces=12 metric=dtm rounds=cell8
+#   snakemake -s syzygy/Snakefile --cores 10 --config engine=build/syzygy_checkers dir=data/syzygy_checkers pieces=12 metric=dtm rounds=cell8
+# metric: dtm, dtc or dtz. policy=auto (default): the materials with at least par_min positions (default 5e7) build with
+# std::execution::par on all cores, alone; the others with seq, one core each, side by side; policy=par or seq for all.
+# rounds=cell8: one byte per position and side, reductions every 240 codes (synthesis 7.5); rounds=scan: full scans as
+# rtbgen; default: frontier bit planes. stats=1: a <material>-<metric>.stats file per material (positions per number of
+# plies, the longest win and loss with a position).
 
 ENGINE = config.get('engine', 'build/syzygy')
 BASE = config.get('dir', 'data/syzygy')
 N = int(config.get('pieces', 6))
 METRIC = config.get('metric', 'dtm')
 D = f'{BASE}/{METRIC}'
-POLICY = config.get('policy', 'seq')
+POLICY = config.get('policy', 'auto')   # auto: par on all cores for the large materials (par_min), seq for the rest
 ROUNDS = config.get('rounds', 'frontier')
 SINK = config.get('sink', 'auto')          # the depth sink: auto (by the claim), groups (group files), bytes (8-bit, RAM), array (16-bit, RAM)
 GRANULARITY = config.get('granularity', 'material')  # material, tempi or configuration (below material: man moves exit)
 THREADS = int(config.get('threads', 4))
+PAR_MIN = float(config.get('par_min', 5e7))  # materials with at least this many positions build with policy=par on all cores
+STATS = 'stats' if str(config.get('stats', 0)) not in ('0', 'false', 'False') else ''   # stats=1: a .stats file per material
 STORE = config.get('store', 'compressed')  # compressed: each file as <name>.z (zstd blocks of 4 KiB, read through a block cache); raw: plain files
 SUF = '.z' if STORE == 'compressed' else ''
 
@@ -125,10 +133,11 @@ for _m in MATERIALS:
         input: inputs(_m)
         output: files(_n)
         log: f'{D}/{sub(_n)}-{METRIC}.log'
-        params: m=_n.replace('-', ' ')
         resources: mem_mb=claim_mb(PLAN[_n], MEM)
         priority: PRIO[_n]
-        shell: '{ENGINE} build {D} {params.m} {METRIC} {POLICY} {ROUNDS} {SINK} {STORE} {GRANULARITY} mem={resources.mem_mb} > {log} 2>&1'
+        threads: workflow.cores if (POLICY == 'par' or (POLICY == 'auto' and PLAN[_n]['positions'] >= PAR_MIN)) else 1
+        params: m=_n.replace('-', ' '), policy=('par' if (POLICY == 'par' or (POLICY == 'auto' and PLAN[_n]['positions'] >= PAR_MIN)) else 'seq')
+        shell: '{ENGINE} build {D} {params.m} {METRIC} {params.policy} {ROUNDS} {SINK} {STORE} {STATS} {GRANULARITY} mem={resources.mem_mb} > {log} 2>&1'
 
 
 rule check:

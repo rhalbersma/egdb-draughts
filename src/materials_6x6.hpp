@@ -354,7 +354,9 @@ struct Group {
         }
 };
 
-// the positions of the group from which a move inside the group leads to q: king unmoves, and in a wave man unmoves
+// the positions of the group from which a move inside the group leads to q: king unmoves (along a free diagonal with
+// long kings, one square with short kings: English checkers, egdb_6x6's LONG_KINGS), and in a wave man unmoves (men
+// move one square forward in both games). Captures and promotions leave the group, so their rules never enter here
 template<class F>
 void for_each_inside_predecessor(Group const& g, Pos const& q, F&& f)
 {
@@ -369,6 +371,7 @@ void for_each_inside_predecessor(Group const& g, Pos const& q, F&& f)
                                 pr.k[mover].insert(std::size_t(fr));
                                 pr.stm = mover;
                                 f(g.index(pr));
+                                if (!LONG_KINGS) break;                 // short kings: one square back
                         }
         if (!men_inside()) return;
         for (auto const t : q.m[mover])

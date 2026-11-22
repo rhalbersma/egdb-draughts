@@ -41,7 +41,8 @@ CHAPTERS = [
         ('val-pariteit.html', 'De winst is strategisch, de pariteit doet er niet toe', 'The win is strategic, parity does not matter'),
         ('blokkades.html', 'Uitzondering 1: de blokkades', 'Exception 1: the blockades'),
         ('curiosa.html', 'Uitzondering 2: twee curiosa', 'Exception 2: two curiosities'),
-        ('drie-langste.html', 'De langste winst', 'The longest win')]),
+        ('drie-langste.html', 'De langste winst', 'The longest win'),
+        ('drie-algemeen.html', 'De methode op andere borden', 'The method on other boards')]),
     ('3 tegen 2 op 9×8', '3 against 2 on 9×8', [
         ('vesting.html', 'Twee vallen om de vesting te breken', 'Two traps to break the fortress'),
         ('vesting-pariteit.html', 'De winst is niet strategisch, de pariteit doet ertoe', 'The win is non-strategic, parity matters')]),
@@ -543,6 +544,36 @@ d1/e2; with 6. c4-d3 white sets up a king, and after 6. … d1-e2 7. a4-b5! blac
               'with one of the <a href="val.html">two traps to break the fortress</a>.</p>'),
             '<div style="clear:both"></div>']
         flush('drie-langste.html')
+        # the method on other boards: unlike 2 against 1, the places of the double corners decide
+        body += [t('''
+<p>Bij 2 tegen 1 werkt het verdrijven van de dam op elk bord, behalve op borden van 5 hoog en op 4×4 (zie
+<a href="twee-algemeen.html">de methode op andere borden</a>). Bij 3 tegen 2 is dat anders: of wit een val kan bouwen of
+een dam kan verdrijven, hangt af van waar de dubbele hoeken liggen. Op 8×8 liggen ze diagonaal tegenover elkaar, 7 velden
+uit elkaar. De middelste witte dam van de <a href="val.html">val</a> slaat terug na de ruil in de ene hoek én in de
+andere, en door over te stappen naar de andere diagonaal <a href="val-pariteit.html">wisselt wit van tempo</a>. Daardoor
+valt de vesting bij beide pariteiten.</p>
+<p>Eerst een groter bord. Op <a href="vesting.html">9×8</a> liggen de dubbele hoeken aan dezelfde kant, 8 uit elkaar. Er
+zijn nog steeds twee vallen, maar langs de rand kan wit niet van tempo wisselen: de oppositie beslist, en de helft van de
+stellingen is remise. Op nog grotere borden houdt de vesting stand (zie <a href="afstandsregel.html">de
+afstandsregel</a>).</p>
+<p>Dan kleinere borden. Op <a href="vesting-8x7.html">8×7</a> liggen de twee dubbele hoeken langs de zijde van 7, 6 uit
+elkaar: bij oneven pariteit zijn er vallen, en bij even pariteit verdrijft wit een zwarte dam uit zijn dubbele hoek. Op
+<a href="langste-7x7.html">7×7</a> en <a href="langste-5x5.html">5×5</a> is elke hoek een dubbele hoek, en dan is de
+vraag of een verdreven dam naar een andere dubbele hoek kan ontsnappen.</p>''', '''
+<p>In 2 against 1 expelling the king works on every board, except on boards of height 5 and on 4×4 (see
+<a href="twee-algemeen.html">the method on other boards</a>). In 3 against 2 it is different: whether white can build a
+trap or expel a king depends on where the double corners are. On 8×8 they lie diagonally opposite, 7 squares apart. The
+middle white king of the <a href="val.html">trap</a> captures back after the exchange in the one corner and in the other,
+and by switching to the other diagonal <a href="val-pariteit.html">white changes the tempo</a>. Therefore the fortress
+falls at both parities.</p>
+<p>First a bigger board. On <a href="vesting.html">9×8</a> the double corners lie on the same side, 8 apart. There are
+still two traps, but along the edge white cannot change the tempo: the opposition decides, and half of the positions are
+drawn. On even bigger boards the fortress holds (see <a href="afstandsregel.html">the distance rule</a>).</p>
+<p>Then smaller boards. On <a href="vesting-8x7.html">8×7</a> the two double corners lie along the side of 7, 6 apart: at
+odd parity there are traps, and at even parity white expels a black king from its double corner. On
+<a href="langste-7x7.html">7×7</a> and <a href="langste-5x5.html">5×5</a> every corner is a double corner, and then the
+question is whether an expelled king can escape to another double corner.</p>''')]
+        flush('drie-algemeen.html')
         body, phases, pgp = self.traps88(pg, k88, e88)
         flush('val.html')
         body, pg = phases, pgp

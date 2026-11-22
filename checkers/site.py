@@ -26,47 +26,48 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 TITLE = {'nl': 'Checkers: 3 dammen tegen 2', 'en': 'Checkers: 3 kings against 2'}
 
-# the content in two parts (and the conclusion), with one chapter per board and one page per section:
+# the content in two parts, as on the site of Drie tegen een: the tables with a chapter per material, then the traps with
+# a chapter per board (2 against 1 first, then 3 against 2):
 # (part Dutch, part English, [(chapter Dutch, chapter English, [(file, Dutch, English)])])
 PARTS = [
-    ('2 tegen 1', '2 against 1', [
-        ('8×8', '8×8', [
-            ('twee-verdrijven.html', 'De dam verdrijven', 'Expelling the king'),
-            ('twee-blokkade.html', 'Uitzondering: de blokkade aan de rand', 'Exception: the blockade at the edge'),
-            ('twee-langste.html', 'De langste winst', 'The longest win'),
-            ('twee-algemeen.html', 'De methode op andere borden', 'The method on other boards')]),
-        ('5×5', '5×5', [
-            ('twee-5x5.html', 'De verdreven dam ontsnapt naar een andere hoek', 'The expelled king escapes to another corner'),
-            ('twee-5x5-val.html', 'Een val die werkt met wit en met zwart aan zet', 'A trap that works with white and with black to move')]),
-        ('4×4', '4×4', [
-            ('twee-4x4.html', 'Remise: de dam ontsnapt en er is geen val', 'A draw: the king escapes and there is no trap')])]),
-    ('3 tegen 2', '3 against 2', [
-        ('8×8', '8×8', [
-            ('val.html', 'Twee vallen om de vesting te breken', 'Two traps to break the fortress'),
-            ('val-pariteit.html', 'De winst is strategisch, de pariteit doet er niet toe', 'The win is strategic, parity does not matter'),
-            ('blokkades.html', 'Uitzondering 1: de blokkades', 'Exception 1: the blockades'),
-            ('curiosa.html', 'Uitzondering 2: twee curiosa', 'Exception 2: two curiosities'),
-            ('drie-langste.html', 'De langste winst', 'The longest win'),
-            ('drie-algemeen.html', 'De methode op andere borden', 'The method on other boards')]),
-        ('9×8', '9×8', [
-            ('vesting.html', 'Twee vallen om de vesting te breken', 'Two traps to break the fortress'),
-            ('vesting-pariteit.html', 'De winst is niet strategisch, de pariteit doet ertoe', 'The win is non-strategic, parity matters')]),
-        ('8×7', '8×7', [
-            ('vesting-8x7.html', 'Vier vallen om de vesting te breken', 'Four traps to break the fortress'),
-            ('vesting-8x7-wit.html', 'De winst is strategisch, de dam kan verdreven worden', 'The win is strategic, the king can be expelled')]),
-        ('9×7', '9×7', [
-            ('vesting-9x7.html', 'De oppositie beslist, ook op de diagonaal', 'The opposition decides, also on the diagonal')]),
-        ('9×9', '9×9', [
-            ('vesting-9x9.html', 'Remise: de diagonaal is te lang', 'Draw: the diagonal is too long')]),
-        ('7×7', '7×7', [
-            ('langste-7x7.html', 'Geen ontsnapping naar een andere dubbele hoek', 'No escape to another double corner')]),
-        ('5×5', '5×5', [
-            ('langste-5x5.html', 'De langste winst', 'The longest win'),
-            ('vallen-5x5.html', 'Veertig vallen om de vesting te breken', 'Forty traps to break the fortress'),
-            ('zetdwang-5x5.html', 'Uitzondering: zetdwang', 'Exception: zugzwang')])]),
-    (None, None, [
-        ('Conclusie', 'Conclusion', [
+    ('Tabellen', 'Tables', [
+        ('2 tegen 1', '2 against 1', [
+            ('tabel-twee.html', '2 dammen tegen 1 per bord', '2 kings against 1 per board')]),
+        ('3 tegen 2', '3 against 2', [
+            ('tabel-drie.html', '3 dammen tegen 2 per bord', '3 kings against 2 per board'),
             ('afstandsregel.html', 'De afstandsregel', 'The distance rule')])]),
+    ('Vallen', 'Traps', [
+        ('8×8', '8×8', [
+            ('twee-verdrijven.html', '2 tegen 1: de dam verdrijven', '2 against 1: expelling the king'),
+            ('twee-blokkade.html', '2 tegen 1, uitzondering: de blokkade aan de rand', '2 against 1, exception: the blockade at the edge'),
+            ('twee-langste.html', '2 tegen 1: de langste winst', '2 against 1: the longest win'),
+            ('twee-algemeen.html', '2 tegen 1: de methode op andere borden', '2 against 1: the method on other boards'),
+            ('val.html', '3 tegen 2: twee vallen om de vesting te breken', '3 against 2: two traps to break the fortress'),
+            ('val-pariteit.html', '3 tegen 2: de winst is strategisch, de pariteit doet er niet toe', '3 against 2: the win is strategic, parity does not matter'),
+            ('blokkades.html', '3 tegen 2, uitzondering 1: de blokkades', '3 against 2, exception 1: the blockades'),
+            ('curiosa.html', '3 tegen 2, uitzondering 2: twee curiosa', '3 against 2, exception 2: two curiosities'),
+            ('drie-langste.html', '3 tegen 2: de langste winst', '3 against 2: the longest win'),
+            ('drie-algemeen.html', '3 tegen 2: de methode op andere borden', '3 against 2: the method on other boards')]),
+        ('9×8', '9×8', [
+            ('vesting.html', '3 tegen 2: twee vallen om de vesting te breken', '3 against 2: two traps to break the fortress'),
+            ('vesting-pariteit.html', '3 tegen 2: de winst is niet strategisch, de pariteit doet ertoe', '3 against 2: the win is non-strategic, parity matters')]),
+        ('8×7', '8×7', [
+            ('vesting-8x7.html', '3 tegen 2: vier vallen om de vesting te breken', '3 against 2: four traps to break the fortress'),
+            ('vesting-8x7-wit.html', '3 tegen 2: de winst is strategisch, de dam kan verdreven worden', '3 against 2: the win is strategic, the king can be expelled')]),
+        ('9×7', '9×7', [
+            ('vesting-9x7.html', '3 tegen 2: de oppositie beslist, ook op de diagonaal', '3 against 2: the opposition decides, also on the diagonal')]),
+        ('9×9', '9×9', [
+            ('vesting-9x9.html', '3 tegen 2, remise: de diagonaal is te lang', '3 against 2, draw: the diagonal is too long')]),
+        ('7×7', '7×7', [
+            ('langste-7x7.html', '3 tegen 2: geen ontsnapping naar een andere dubbele hoek', '3 against 2: no escape to another double corner')]),
+        ('5×5', '5×5', [
+            ('twee-5x5.html', '2 tegen 1: de verdreven dam ontsnapt naar een andere hoek', '2 against 1: the expelled king escapes to another corner'),
+            ('twee-5x5-val.html', '2 tegen 1: een val die werkt met wit en met zwart aan zet', '2 against 1: a trap that works with white and with black to move'),
+            ('langste-5x5.html', '3 tegen 2: de langste winst', '3 against 2: the longest win'),
+            ('vallen-5x5.html', '3 tegen 2: veertig vallen om de vesting te breken', '3 against 2: forty traps to break the fortress'),
+            ('zetdwang-5x5.html', '3 tegen 2, uitzondering: zetdwang', '3 against 2, exception: zugzwang')]),
+        ('4×4', '4×4', [
+            ('twee-4x4.html', '2 tegen 1, remise: de dam ontsnapt en er is geen val', '2 against 1, a draw: the king escapes and there is no trap')])]),
 ]
 # every chapter: (part number, Dutch, English, sections)
 CHAPTERS = [(k, nl, en, secs) for k, (_, _, chapters) in enumerate(PARTS) for nl, en, secs in chapters]
@@ -91,8 +92,7 @@ RESULTS_32 = {
     10: ['(115)', '(109)', '(127)', '(131)', '(137)', '(143)', '(151)', '(155)', '(167)', '(169)'],
 }
 
-TEXT32 = {'nl': '''<h2>3 dammen tegen 2 per bord</h2>
-<p>De langste winst op elk bord, met een rij per lengte <em>L</em> en een kolom per <em>B</em> − <em>L</em>; klik op een
+TEXT32 = {'nl': '''<p>De langste winst op elk bord, met een rij per lengte <em>L</em> en een kolom per <em>B</em> − <em>L</em>; klik op een
 getal voor de stelling en speel de hele winst na.</p>
 {table}
 <p class="src">De kleur telt de rustige stellingen zoals bij 2 tegen 1, met wit en met zwart aan zet (op de grotere borden
@@ -110,9 +110,9 @@ met de andere. Daarnaast de kleine borden 4×4, 4×3 en 5×3, en 7×3 met speelb
 <li>Vesting: 8×6 en de borden van even lengte vanaf 10 breed (6% tot 8% van de rustige stellingen is remise met beide
 kanten aan zet), de oneven × oneven borden met onspeelbare hoeken vanaf 9×9 en 11×7 (17% tot 28%), en de borden van 3
 hoog vanaf 6×3 (behalve 7×3 met speelbare hoeken).</li>
-</ul>''',
-          'en': '''<h2>3 kings against 2 per board</h2>
-<p>The longest win on every board, with a row per height <em>H</em> and a column per <em>W</em> − <em>H</em>; click a
+</ul>
+<p>Waar de vesting valt en waar de oppositie beslist, vat <a href="afstandsregel.html">de afstandsregel</a> samen.</p>''',
+          'en': '''<p>The longest win on every board, with a row per height <em>H</em> and a column per <em>W</em> − <em>H</em>; click a
 number for the position and replay the whole win.</p>
 {table}
 <p class="src">The colour counts the quiet positions as for 2 against 1, with white and with black to move (on the larger
@@ -130,7 +130,8 @@ with the other. Also the small boards 4×4, 4×3 and 5×3, and 7×3 with playabl
 <li>Fortress: 8×6 and the boards of even height from width 10 (6% to 8% of the quiet positions are drawn with either side
 to move), the odd × odd boards with unplayable corners from 9×9 and 11×7 (17% to 28%), and the boards of height 3 from
 6×3 (except 7×3 with playable corners).</li>
-</ul>'''}
+</ul>
+<p>Where the fortress falls and where the opposition decides is summed up by <a href="afstandsregel.html">the distance rule</a>.</p>'''}
 
 
 # 2 kings against 1 per board: a row per height H, a column per W - H; the number is the longest win in plies (white to
@@ -150,8 +151,7 @@ RESULTS_21 = {
     10: ['41', '45', '49', '53', '57', '61', '65', '69', '73', '77'],
 }
 
-TEXT21 = {'nl': '''<h2>2 dammen tegen 1 per bord</h2>
-<p>De langste winst op elk bord, met een rij per lengte <em>L</em> en een kolom per <em>B</em> − <em>L</em>; klik op een
+TEXT21 = {'nl': '''<p>De langste winst op elk bord, met een rij per lengte <em>L</em> en een kolom per <em>B</em> − <em>L</em>; klik op een
 getal voor de stelling en speel de hele winst na.</p>
 {table}
 <p class="src">De kleur telt de rustige stellingen, met wit en met zwart aan zet: niemand kan slaan, wit aan zet kan direct
@@ -172,8 +172,7 @@ op 11×3 nog 76%. Wit op b3 en d3 en zwart op a2 is bijvoorbeeld remise met wit 
 af van wie aan zet is. Zonder blokkade is elke rustige stelling gewonnen: op de oneven × oneven borden vanaf 5×5, de
 borden van 4 hoog vanaf 5×4, 3×3 en 4×3.</li>
 </ul>''',
-          'en': '''<h2>2 kings against 1 per board</h2>
-<p>The longest win on every board, with a row per height <em>H</em> and a column per <em>W</em> − <em>H</em>; click a
+          'en': '''<p>The longest win on every board, with a row per height <em>H</em> and a column per <em>W</em> − <em>H</em>; click a
 number for the position and replay the whole win.</p>
 {table}
 <p class="src">The colour counts the quiet positions, with white and with black to move: nobody can capture, white to move
@@ -223,10 +222,10 @@ class Site:
         return key, self.engines[key]
 
     def chapter(self, c):
-        """the full name of chapter c, with its part: '3 tegen 2 op 8×8'"""
+        """the full name of chapter c, with its part: 'Tabel 3 tegen 2', 'Vallen op 8×8'"""
         k, nl, en, _ = CHAPTERS[c]
-        if PARTS[k][0] is None:
-            return nl if self.lang == 'nl' else en
+        if k == 0:
+            return f'Tabel {nl}' if self.lang == 'nl' else f'Table {en}'
         return f'{PARTS[k][0]} op {nl}' if self.lang == 'nl' else f'{PARTS[k][1]} on {en}'
 
     def nav(self, current=None):
@@ -355,12 +354,16 @@ class Site:
 vrije keuze tussen slagen. Op borden van elke afmeting, exact uitgerekend met
 <a href="https://github.com/rhalbersma/egdb-draughts/blob/main/src/egdb_fast.cpp"><code>egdb_fast</code></a>.
 Waarden in ply voor de partij aan zet: W = winst, L = verlies, D = remise; zuiver speltheoretisch, zonder
-zettenregels. Borden heten breedte × hoogte, zoals ze getekend zijn. Elke stelling is klikbaar.</p>''', '''
+zettenregels. Borden heten breedte × hoogte, zoals ze getekend zijn. Elke stelling is klikbaar.</p>
+<p>De site heeft twee delen: eerst de tabellen, met de uitkomst op elk bord voor 2 tegen 1 en voor 3 tegen 2, en
+daarna de vallen die die uitkomsten verklaren, met een hoofdstuk per bord.</p>''', '''
 <p>Endgames with kings only in English checkers: short kings (one square), mandatory capture and free choice among
 captures. On boards of any size, computed exactly with
 <a href="https://github.com/rhalbersma/egdb-draughts/blob/main/src/egdb_fast.cpp"><code>egdb_fast</code></a>. Values in
 plies for the side to move: W = win, L = loss, D = draw; purely game-theoretic, without move-count rules. Every position
-is clickable. Boards are named width × height, as drawn.</p>''')]
+is clickable. Boards are named width × height, as drawn.</p>
+<p>The site has two parts: first the tables, with the outcome on every board for 2 against 1 and for 3 against 2, and
+then the traps that explain those outcomes, with a chapter per board.</p>''')]
         toc = []
         for k, (pnl, pen, _) in enumerate(PARTS):
             toc.append(('<h2>' + esc(t(pnl, pen)) + '</h2>' if pnl else '') + '<ul class="toc">')
@@ -375,7 +378,7 @@ is clickable. Boards are named width × height, as drawn.</p>''')]
         fig, _ = pg.diagram('W:WK4,K8,K29:BK1,K28', t('8×8, zwart in beide dubbele hoeken: wit wint (W61)',
                                                        '8×8, black in both double corners: white wins (W61)'), gid=k88)
         body.insert(1, fig)
-        body += toc + [self.results(pg, RESULTS_21, TEXT21, 2, 1), self.results(pg, RESULTS_32, TEXT32, 3, 2)]
+        body += toc
 
         def flush(name):                # finish the page so far, start the next one
             nonlocal body, pg
@@ -383,6 +386,10 @@ is clickable. Boards are named width × height, as drawn.</p>''')]
             pg = self.page((k21, e21), (k44, e44), (k88, e88), (k521, e521))
             body = []
         flush('index.html')
+        body = [self.results(pg, RESULTS_21, TEXT21, 2, 1)]
+        flush('tabel-twee.html')
+        body = [self.results(pg, RESULTS_32, TEXT32, 3, 2)]
+        flush('tabel-drie.html')
         fen = self.longest_21(e21)
         v, _ = e21.analyse(fen)
         fig, i0 = pg.diagram(fen, t(f'8×8, 2 tegen 1, wit aan zet: {v}', f'8×8, 2 against 1, white to move: {v}'), gid=k21)
@@ -659,14 +666,14 @@ d1/e2; with 6. c4-d3 white sets up a king, and after 6. … d1-e2 7. a4-b5! blac
                    'methode werkt op elk bord, tenzij het veld a5 of c5 dan zelf in een dubbele hoek ligt. Op een bord van 5 '
                    'hoog is dat a5, op 4×4 c5. Met wit en met zwart aan zet wint wit zo zonder offer op 6×6, 7×7 (onspeelbare '
                    'hoeken), 8×8, 9×9 (onspeelbare hoeken) en 10×10; met wit aan zet lukt het op geen enkel bord van 5 hoog '
-                   '(5 tot en met 9 breed). Daarom volgen na 8×8 hoofdstukken over <a href="twee-5x5.html">5×5</a> en '
-                   '<a href="twee-4x4.html">4×4</a>.</p>',
+                   '(5 tot en met 9 breed). Daarom krijgen <a href="twee-5x5.html">5×5</a> en '
+                   '<a href="twee-4x4.html">4×4</a> elk een eigen hoofdstuk.</p>',
                    '<p>After 4. b8-a7 in <a href="twee-verdrijven.html">expelling the king</a> black has to leave the diagonal of the double corner (through a7 and b6): 4. … b6-a5. '
                    'This method works on every board, unless the square a5 or c5 is then itself in a double corner. On a '
                    'board of height 5 that is a5, on 4×4 c5. With white and with black to move white wins this way without '
                    'a sacrifice on 6×6, 7×7 (unplayable corners), 8×8, 9×9 (unplayable corners) and 10×10; with white to '
-                   'move it fails on every board of height 5 (5 to 9 wide). Hence chapters on <a href="twee-5x5.html">5×5</a> '
-                   'and <a href="twee-4x4.html">4×4</a> follow after 8×8.</p>'),
+                   'move it fails on every board of height 5 (5 to 9 wide). Hence <a href="twee-5x5.html">5×5</a> '
+                   'and <a href="twee-4x4.html">4×4</a> each get a chapter of their own.</p>'),
                  t('<p>Alle zetten van zwart: ', '<p>All moves of black: ') + self.moves_list(pg, i4, legal4, '4. … ') + '.</p>',
                  '<div style="clear:both"></div>']
         flush('twee-algemeen.html')
@@ -722,7 +729,7 @@ zwarte dam uit zijn dubbele hoek, en de vesting valt bij beide pariteiten.</p>
 <p>Op <a href="vesting-9x7.html">9×7</a> liggen twee dubbele hoeken ook diagonaal tegenover elkaar, 8 uit elkaar. De val
 op de diagonaal werkt, zoals op 8×8, maar er is geen tweede diagonaal om van tempo te wisselen: ook hier beslist de
 oppositie. Op <a href="vesting-9x9.html">9×9</a> is de diagonaal te lang: remise. Op nog grotere borden houdt de vesting
-stand (zie <a href="afstandsregel.html">de afstandsregel</a> in de conclusie).</p>
+stand (zie <a href="afstandsregel.html">de afstandsregel</a> bij de tabel van 3 tegen 2).</p>
 <p>Ten slotte de kleine borden <a href="langste-7x7.html">7×7</a> en <a href="langste-5x5.html">5×5</a>, waar elke hoek een
 dubbele hoek is: kan een verdreven dam daar naar een andere dubbele hoek ontsnappen?</p>''', '''
 <p>In 2 against 1 expelling the king works on every board, except on boards of height 5 and on 4×4 (see
@@ -740,7 +747,7 @@ double corner, and the fortress falls at both parities.</p>
 <p>On <a href="vesting-9x7.html">9×7</a> two double corners also lie diagonally opposite, 8 apart. The trap on the
 diagonal works, as on 8×8, but there is no second diagonal to change the tempo: here too the opposition decides. On
 <a href="vesting-9x9.html">9×9</a> the diagonal is too long: a draw. On even bigger boards the fortress holds (see
-<a href="afstandsregel.html">the distance rule</a> in the conclusion).</p>
+<a href="afstandsregel.html">the distance rule</a> with the table of 3 against 2).</p>
 <p>Finally the small boards <a href="langste-7x7.html">7×7</a> and <a href="langste-5x5.html">5×5</a>, where every corner
 is a double corner: can an expelled king escape to another double corner there?</p>''')]
         flush('drie-algemeen.html')
@@ -1752,10 +1759,10 @@ only one of the two shuttle moves.</p>'''), fig1,
                    f'<p>One square further, on e4, f5 and g6 ({v2}), it is the other way round: {hit2} is punished, '
                    f'{free2} is not. All moves of black: ') + self.moves_list(pg, i2, legal2, '1. … ')
                  + t('. Bij geen van beide pariteiten straft één opstelling beide pendelzetten, dus de vesting houdt: '
-                     'remise. De <a href="afstandsregel.html">afstandsregel</a> in de conclusie vat samen wanneer de vesting '
+                     'remise. De <a href="afstandsregel.html">afstandsregel</a> bij de tabel van 3 tegen 2 vat samen wanneer de vesting '
                      'valt.</p>',
                      '. At neither parity does one set-up punish both shuttle moves, so the fortress holds: a draw. The '
-                     '<a href="afstandsregel.html">distance rule</a> in the conclusion sums up when the fortress falls.</p>'),
+                     '<a href="afstandsregel.html">distance rule</a> with the table of 3 against 2 sums up when the fortress falls.</p>'),
                  '<div style="clear:both"></div>']
         return body
 

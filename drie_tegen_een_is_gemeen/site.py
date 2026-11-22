@@ -267,8 +267,7 @@ on the long diagonal (40 forks with black to move), and the exact limits of ever
 
     def twee(self):
         e56 = self.engine('5x6', '--width', 6, '--height', 5, '--corners', 'playable', '--white', 2, '--black', 1)
-        e57 = self.engine('5x7', '--width', 7, '--height', 5, '--corners', 'playable', '--white', 2, '--black', 1)
-        pg = self.page(('5x6', e56), ('5x7', e57))
+        pg = self.page(('5x6', e56))
         t = self.t
         body = [t('<h1>2 dammen tegen 1</h1>', '<h1>2 kings against 1</h1>'), self.results(pg, RESULTS_21, 2, 1),
                 t('<p class="note">Klik op een getal voor de langste winst op dat bord, op het grote bord; ‹ › lopen door de '
@@ -289,7 +288,9 @@ lijn(en) bezetten.</li>
 <ul><li><strong>6×5</strong> (nieuw);</li>
 <li><strong>7×5 speelbare hoeken</strong> (bekend);</li>
 <li>uitzonderingen vanwege vorken: met de enkele dam aan zet zijn er op 6×5 8 en op 7×5 16 stellingen met een dubbele
-aanval.</li></ul></li>
+aanval.</li></ul>
+Ruim 80% van alle rustige winsten op 6×5 en 7×5 eindigt met een offer waarna zwart <em>de hoek in</em> slaat; de tweede dam
+staat dan achter hem op de hoekdiagonaal.</li>
 <li><em>L</em> ≥ 6: alles is remise; de overige winsten zijn korte combinaties waarvan de lengte niet van de bordgrootte
 afhangt.</li>
 </ul>''', '''<ul>
@@ -299,34 +300,12 @@ diagonal(s).</li>
 <ul><li><strong>6×5</strong> (new);</li>
 <li><strong>7×5 playable corners</strong> (known);</li>
 <li>exceptions because of forks: with the single king to move there are 8 positions on 6×5 and 16 on 7×5 with a double
-attack.</li></ul></li>
+attack.</li></ul>
+More than 80% of all quiet wins on 6×5 and 7×5 end with a sacrifice after which black captures <em>into the corner</em>; the
+second king then stands behind it on the corner diagonal.</li>
 <li><em>L</em> ≥ 6: everything is drawn; the remaining wins are short combinations whose length does not depend on the board
 size.</li>
 </ul>''')]
-        fen = 'W:WK1,K8:BK7'
-        fig, i0 = pg.diagram(fen, t('6×5, wit aan zet', '6×5, white to move'), gid='5x6')
-        line = ('1. c3-d4 a3-c5 2. d4-b2 c5-e3 3. a5-b4 e3-c5 4. b4-a3 c5-e3 5. b2-e5 e3-f2 6. a3-c5 f2-e1 '
-                '7. e5-f4 e1-c3 8. f4-c1 c3-e5 9. c5-e3 e5-c3 10. c1-a3 c3-e5 11. e3-f4 e5-d4 12. a3-b2! d4xa1 '
-                '13. f4-e5 a1-b2 14. e5xa1')
-        h, *_ = pg.moves(fen, self.plan(line), 1, False, 'm1', i0)
-        v, _ = e56.analyse(fen)
-        body += [t('<h2>6×5: de langste winst</h2>', '<h2>6×5: the longest win</h2>'), fig,
-                 t(f'<p>Wit aan zet wint in {v[1:]} ply, de langste winst op dit bord:</p>',
-                   f'<p>White to move wins in {v[1:]} plies, the longest win on this board:</p>'), f'<p class="var">{h}</p>',
-                 t('<p>Het lange tempospel dient één doel: offeren zodat zwart <em>de hoek in</em> slaat, en dan de tweede '
-                   'dam achter hem op de hoekdiagonaal zetten. Ruim 80% van alle rustige winsten op 6×5 en 7×5 eindigt '
-                   'met een zwarte slag de hoek in.</p>',
-                   '<p>The long tempo play serves one purpose: sacrifice so that black captures <em>into the corner</em>, '
-                   'then place the second king behind it on the corner diagonal. More than 80% of all quiet wins on 6×5 '
-                   'and 7×5 end with black capturing into a corner.</p>')]
-        fen = 'W:WK1,K9:BK2'
-        fig, i0 = pg.diagram(fen, t('7×5 speelbare hoeken, wit aan zet', '7×5 playable corners, white to move'), gid='5x7')
-        line = ('1. c3-e5 c5-a3 2. a5-d2 a3-c5 3. d2-c1 c5-f2 4. e5-g3 f2-c5 5. c1-a3 c5-d4 6. a3-b2! d4xa1 '
-                '7. g3-e5 a1-b2 8. e5xa1')
-        h, *_ = pg.moves(fen, self.plan(line), 1, False, 'm1', i0)
-        body += [t('<h2>7×5 speelbare hoeken: hetzelfde slotmotief</h2>', '<h2>7×5 playable corners: the same final motif</h2>'), fig,
-                 t('<p>Op 7×5 speelbare hoeken verschijnt hetzelfde slotmotief na 15 ply:</p>',
-                   '<p>On 7×5 playable corners the same final motif appears after 15 plies:</p>'), f'<p class="var">{h}</p>']
         self.write('twee-tegen-een.html', '2 dammen tegen 1', '\n'.join(body), pg, '5x6')
 
     def drie(self):
@@ -378,28 +357,15 @@ extra kolom.</li>
 <li><strong>L = 7</strong>:
 <ul><li>de drie families: <em>B</em> = 8, 9 en 13, bij beide kleuringen gewonnen;</li>
 <li><em>B</em> = 7 (bij speelbare hoeken met de lange lijn), 10 en 11: al bekend uit het boek;</li>
-<li><em>B</em> = 12, 14 en 15 (speelbare hoeken): nieuwe vondsten. De langste winsten springen van 25 naar 35, 53 en 67 ply:
-de ruimte wordt krap;</li>
+<li><em>B</em> = 12, 14 en 15 (speelbare hoeken): nieuwe vondsten. De langste winsten springen van 25 naar 35, 53 en 67
+ply;</li>
 <li><em>B</em> ≥ 16: remise.</li></ul></li>
 <li><strong>L = 8</strong>:
 <ul><li>de drie families: <em>B</em> = 9, 10 en 15;</li>
 <li><em>B</em> = 8 (met de lange lijn) en 11: al bekend;</li>
 <li><em>B</em> ≥ 12, behalve 15: remise.</li></ul></li>
 <li><strong>L ≥ 9</strong>: alleen de families blijven over.</li>
-</ul>
-<h2>Vierkante borden: de lange lijn</h2>
-<p>Op vierkante borden met <em>L</em> ≥ 5 houdt de enkele dam de lange lijn(en). De rustige stellingen met drie dammen
-aan zet, gesplitst naar wie de lange lijn(en) bezet (remises / stellingen):</p>
-<table class="tbl"><tr><th>Bord</th><th>Wit op de lange lijn(en)</th><th>Niemand</th><th>Alleen zwart</th></tr>
-<tr><td>6×6</td><td>0 / 3.154</td><td>0 / 816</td><td>784 / 812</td></tr>
-<tr><td>8×8</td><td>0 / 33.364 (40 vorken met zwart aan zet)</td><td>0 / 17.184</td><td>10.696 / 11.084</td></tr>
-<tr><td>5×5 speelbare hoeken (twee diagonalen, wit op beide)</td><td>0 / 540</td><td></td><td></td></tr>
-<tr><td>7×7 speelbare hoeken (wit op beide)</td><td>0 / 6.032</td><td></td><td></td></tr>
-<tr><td>9×9 speelbare hoeken (wit op beide)</td><td>32.492 / 39.328</td><td></td><td></td></tr>
-<tr><td>10×10</td><td>177.548 / 206.466</td><td></td><td></td></tr></table>
-<p>Tot en met <em>L</em> = 8 beslist de lange lijn; vanaf <em>L</em> = 9 kunnen drie dammen niet winnen, ook niet als ze
-hem bezetten. Met één lange diagonaal komt de voorwaarde neer op "zwart bezet hem niet"; met twee diagonalen heeft wit
-er echt beide nodig.</p>''', '''<h2>The three families</h2>
+</ul>''', '''<h2>The three families</h2>
 <table class="tbl"><tr><th>Family</th><th>Result (L = 3 … 12)</th></tr>
 <tr><td><strong>B = L + 1</strong></td><td>won on every board</td></tr>
 <tr><td><strong>B = L + 2</strong></td><td>won, except the "wrong" colouring, unplayable corner squares, for L = 9 and 11</td></tr>
@@ -417,83 +383,16 @@ column.</li>
 <li><strong>L = 7</strong>:
 <ul><li>the three families: <em>B</em> = 8, 9 and 13, won with both colourings;</li>
 <li><em>B</em> = 7 (with playable corners provided the long diagonal is held), 10 and 11: already known from the book;</li>
-<li><em>B</em> = 12, 14 and 15 (playable corners): new findings. The longest wins jump from 25 to 35, 53 and 67 plies: the
-space becomes tight;</li>
+<li><em>B</em> = 12, 14 and 15 (playable corners): new findings. The longest wins jump from 25 to 35, 53 and 67
+plies;</li>
 <li><em>B</em> ≥ 16: drawn.</li></ul></li>
 <li><strong>L = 8</strong>:
 <ul><li>the three families: <em>B</em> = 9, 10 and 15;</li>
 <li><em>B</em> = 8 (with the long diagonal) and 11: already known;</li>
 <li><em>B</em> ≥ 12, except 15: drawn.</li></ul></li>
 <li><strong>L ≥ 9</strong>: only the families remain.</li>
-</ul>
-<h2>Square boards: the long diagonal</h2>
-<p>On square boards with <em>L</em> ≥ 5 the single king holds the long diagonal(s). Splitting the quiet positions with
-three kings to move by who occupies the long diagonal(s) (draws / positions):</p>
-<table class="tbl"><tr><th>Board</th><th>White on the long diagonal(s)</th><th>Nobody</th><th>Only black</th></tr>
-<tr><td>6×6</td><td>0 / 3,154</td><td>0 / 816</td><td>784 / 812</td></tr>
-<tr><td>8×8</td><td>0 / 33,364 (40 forks with black to move)</td><td>0 / 17,184</td><td>10,696 / 11,084</td></tr>
-<tr><td>5×5 playable corners (two diagonals, white on both)</td><td>0 / 540</td><td></td><td></td></tr>
-<tr><td>7×7 playable corners (white on both)</td><td>0 / 6,032</td><td></td><td></td></tr>
-<tr><td>9×9 playable corners (white on both)</td><td>32,492 / 39,328</td><td></td><td></td></tr>
-<tr><td>10×10</td><td>177,548 / 206,466</td><td></td><td></td></tr></table>
-<p>Up to <em>L</em> = 8 the long diagonal decides; from <em>L</em> = 9 on three kings cannot win even when they hold it.
-With one long diagonal the condition amounts to "black does not hold it"; with two diagonals white really needs
-both.</p>''')]
-        fen = self.longest(e, 3, 1)
-        if fen:
-            fig, i0 = pg.diagram(fen, t('8×8, wit aan zet', '8×8, white to move'))
-            v, _ = e.analyse(fen)
-            h, *_ = pg.best_line(fen, 80, start=i0)
-            body += [t('<h2>8×8: een langste winst</h2>', '<h2>8×8: a longest win</h2>'), fig,
-                     t(f'<p>Met wit op de lange lijn wint wit altijd. Een van de langste winsten ({v[1:]} ply):</p>',
-                       f'<p>With white on the long diagonal white always wins. One of the longest wins ({v[1:]} plies):</p>'),
-                     f'<p class="var">{h}</p>']
-            # after 9. h8-c3 (ply 17) the white kings form Petrov's triangle
-            k = i0
-            for _ in range(17):
-                k = pg.pos[k]['next']
-            tri = pg.pos[k]['f']
-            fig2, _ = pg.diagram(tri, t('na 9. h8-c3: de driehoek van Petrov', 'after 9. h8-c3: Petrov\'s triangle'))
-            body += ['<div style="clear:both"></div>', fig2, t(
-                '<p>Met 9. h8-c3 staat de <strong>driehoek van Petrov</strong>: de drie witte dammen vormen een driehoek '
-                'waarvan de punt naar de zwarte dam aan de rand wijst; het gebruikelijke diagram (wit d6, c3, e3 tegen '
-                'zwart d8) is hier gespiegeld in de lange lijn. Het is de klassieke methode waarmee drie dammen die de '
-                'lange lijn bezetten de enkele dam vangen. In het Russische damspel publiceerde A.D. Petrov haar in '
-                '1827, maar Pedro Ruiz Montero beschreef haar al in 1591; buiten Rusland heet ze ook de methode van '
-                'Montero (<a href="https://ru.wikipedia.org/wiki/%D0%A2%D1%80%D0%B5%D1%83%D0%B3%D0%BE%D0%BB%D1%8C%D0%BD%D0%B8%D0%BA_%D0%9F%D0%B5%D1%82%D1%80%D0%BE%D0%B2%D0%B0">Wikipedia</a>). Daarna is zwart snel uitgeteld: wit offert twee keer '
-                '(11. c5-f2 en 12. c3-a5) en slaat de zwarte dam met 13. a5×c3.</p>',
-                '<p>After 9. h8-c3 the white kings form <strong>Petrov\'s triangle</strong>: a triangle whose point is '
-                'aimed at the black king on the edge; the usual diagram (white d6, c3, e3 against black d8) is mirrored '
-                'in the long diagonal here. It is the classic method by which three kings holding the long diagonal '
-                'catch the single king. In Russian draughts A.D. Petrov published it in 1827, but Pedro Ruiz Montero '
-                'described it as early as 1591; outside Russia it is also known as Montero\'s method '
-                '(<a href="https://ru.wikipedia.org/wiki/%D0%A2%D1%80%D0%B5%D1%83%D0%B3%D0%BE%D0%BB%D1%8C%D0%BD%D0%B8%D0%BA_%D0%9F%D0%B5%D1%82%D1%80%D0%BE%D0%B2%D0%B0">Wikipedia</a>). After that black is soon counted out: white sacrifices twice '
-                '(11. c5-f2 and 12. c3-a5) and captures the black king with 13. a5×c3.</p>')]
+</ul>''')]
         self.write('drie-tegen-een.html', '3 dammen tegen 1', '\n'.join(body), pg, '8x8')
-
-    @staticmethod
-    def longest(e, nw, nb):
-        """a quiet position with white to move and the longest win (searched over the long diagonal setups
-        of 8x8: white kings on the long diagonal, black king anywhere), or None"""
-        sq = sorted(e.g['sq'])
-        name = {n: f'{chr(97 + f)}{r + 1}' for n, (f, r) in e.g['sq'].items()}
-        diag = [n for n in sq if e.g['sq'][n][0] == e.g['sq'][n][1]]
-        best = None
-        from itertools import combinations
-        for wk in combinations(diag, nw):
-            for b in sq:
-                if b in wk:
-                    continue
-                fen = e.fen([name[x] for x in wk], [name[b]])
-                v, legal = e.analyse(fen)
-                if v[0] != 'W' or any('x' in m[0] for m in legal):
-                    continue
-                _, bl = e.analyse('B' + fen[1:])
-                if any('x' in m[0] for m in bl):
-                    continue
-                if best is None or int(v[1:]) > best[0]:
-                    best = (int(v[1:]), fen)
-        return best[1] if best else None
 
     def traps(self):
         fams = [('10x11', 11, 10, ['b2', 'k9', 'i7'], 'L + 1', 'h10'),
@@ -604,31 +503,32 @@ capture.</p>''')]
     def lakes(self):
         e = self.engine('h8', '--board', 'international', '--lake', 'h8')
         pg = self.page(('h8', e))
-        rows = [('1 (b10)', 'a9, j2, i1', 'W', '<strong>W</strong>', '23', '0'),
-                ('2 (d10)', 'a7, j4, g1', 'D', '<strong>D</strong>', '(33)', '64.675'),
-                ('3 (f10)', 'j6, a5, e1', '?', '<strong>D</strong>', '(23)', '337.341'),
-                ('4 (h10)', 'j8, a3, c1', 'D', '<strong>D</strong>', '(29)', '66.013'),
-                ('5 (j10, Mertens)', 'a1', 'W', '<strong>W</strong>', '21', '0'),
-                ('7 (c9)', 'b8, i3, h2', 'W', '<strong>W</strong>', '25', '0'),
-                ('8 (e9)', 'b6, i5, f2', 'D', '<strong>D</strong>', '(31)', '64.192'),
-                ('9 (g9)', 'i7, b4, d2', 'D', '<strong>D</strong>', '(27)', '66.653'),
-                ('10 (i9)', 'b2', 'W', self.t('<strong>W als j10 leeg is</strong>', '<strong>W if j10 is empty</strong>'), '(19)',
-                 self.t('29.875, alle met een stuk op het geïsoleerde veld j10', '29,875, all with a piece on the isolated square j10')),
-                ('12 (d8)', 'c7, h4, g3', '?', '<strong>D</strong>', '(35)', '66.365'),
-                ('13 (f8)', 'h6, c5, e3', '?', '<strong>D</strong>', '(37)', '67.259'),
-                ('14 (h8)', 'c3', 'W', self.t('<strong>W op één zetdwang na</strong>', '<strong>W except one zugzwang</strong>'), '33',
-                 self.t('2 (één stelling en haar spiegelbeeld)', '2 (one position and its mirror image)')),
-                ('18 (e7)', 'd6, g5, f4', 'D', '<strong>D</strong>', '(35)', '67.660'),
-                ('19 (g7)', 'd4', '?', '<strong>W</strong>', '33', '0'),
-                ('23 (f6)', 'e5', 'W', '<strong>W</strong>', '35', '0')]
         t = self.t
-        if self.lang == 'en':
-            rows = [tuple(c.replace('.', ',') if i == 5 and c[:1].isdigit() else c for i, c in enumerate(r)) for r in rows]
-        tbl = [t('<table class="tbl"><tr><th>Weg</th><th>Symmetrische velden</th><th>Boek</th><th>Database</th>'
-                 '<th>Langste winst</th><th>Rustige remises (3 dammen aan zet)</th></tr>',
-                 '<table class="tbl"><tr><th>Removed</th><th>Symmetric squares</th><th>Book</th><th>Database</th>'
-                 '<th>Longest win</th><th>Quiet draws (3 kings to move)</th></tr>')]
-        tbl += [f'<tr>{"".join(f"<td>{c}</td>" for c in r)}</tr>' for r in rows]
+        # one square per symmetry class: (number, square, book, database, longest win, condition); the longest win is
+        # clickable, with its main line
+        rows = [(1, 'b10', 'W', 'W', 23, ''), (2, 'd10', 'D', 'D', 33, ''), (3, 'f10', '?', 'D', 23, ''),
+                (4, 'h10', 'D', 'D', 29, ''), (5, 'j10', 'W', 'W', 21, ''), (7, 'c9', 'W', 'W', 25, ''),
+                (8, 'e9', 'D', 'D', 31, ''), (9, 'g9', 'D', 'D', 27, ''),
+                (10, 'i9', 'W', 'W', 19, t('als j10 leeg is', 'if j10 is empty')),
+                (12, 'd8', '?', 'D', 35, ''), (13, 'f8', '?', 'D', 37, ''),
+                (14, 'h8', 'W', 'W', 33, t('op één zetdwang na', 'except one zugzwang')),
+                (18, 'e7', 'D', 'D', 35, ''), (19, 'g7', '?', 'W', 33, ''), (23, 'f6', 'W', 'W', 35, '')]
+        tbl = [t('<table class="tbl"><tr><th>Veld</th><th>Boek</th><th>Database (langste winst)</th></tr>',
+                 '<table class="tbl"><tr><th>Square</th><th>Book</th><th>Database (longest win)</th></tr>')]
+        for num, sq, book, db, n, condition in rows:
+            drawn = db == 'D'
+            gid = f'10x10-{sq}'
+            el = e if sq == 'h8' else self.engine(gid, '--board', 'international', '--lake', sq)
+            if gid not in pg.geoms:
+                pg.use(gid, el, el.g)
+            assert el.longest and el.analyse(el.longest)[0] == f'W{n}', (sq, n, el.longest)
+            i = pg.add(el.longest, gid=gid)
+            pg.best_line(el.longest, n, start=i)
+            link = f'<a class="m1" href="#" data-i="{i}" title="10×10 {t("zonder", "without")} {sq}: W{n}">{n}</a>'
+            cell = f'<span class="res-{"draw" if drawn else "win"}">' + (f'({link})' if drawn else link) + '</span>'
+            # the removed square in the notation of the page (numeric on 10×10, algebraic after the switch)
+            name = f'<span class="mv" data-g="h8" data-n="{num}" data-a="{sq}">{num}</span>'
+            tbl.append(f'<tr><td>{name}</td><td>{book}</td><td><strong>{db}</strong> {cell} {condition}</td></tr>')
         tbl.append('</table>')
         fen = 'W:WK4,K5,K10:BK15'
         fig, i0 = pg.diagram(fen, t('10×10 zonder h8, wit aan zet', '10×10 without h8, white to move'))
@@ -640,8 +540,10 @@ capture.</p>''')]
         vb, _ = e.analyse(fb)
         hb, *_ = pg.best_line(fb, 40, start=ib)
         body = [t('<h1>10×10 met één veld weg</h1>', '<h1>10×10 with one square removed</h1>'),
-                t('<p>Eén veld per symmetrieklasse (de 4 symmetrieën van het bord geven 15 klassen), 3 dammen tegen 1:</p>',
-                  '<p>One square per symmetry class (the 4 symmetries of the board give 15 classes), 3 kings against 1:</p>'),
+                t('<p>Eén veld per symmetrieklasse (de 4 symmetrieën van het bord geven 15 klassen), 3 dammen tegen 1. Klik '
+                  'op een getal voor de langste winst op het grote bord; ‹ › lopen door de winst en ▶︎ speelt hem af:</p>',
+                  '<p>One square per symmetry class (the 4 symmetries of the board give 15 classes), 3 kings against 1. Click '
+                  'a number for the longest win on the large board; ‹ › step through the win and ▶︎ plays it:</p>'),
                 '\n'.join(tbl), t('''<ul>
 <li>Zonder i9 is j10 geïsoleerd: een dam daar kan nooit zetten en nooit geslagen worden.</li>
 <li>De enige uitzondering zonder h8 staat hieronder.</li></ul>''', '''<ul>

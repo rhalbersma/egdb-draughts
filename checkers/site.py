@@ -12,6 +12,8 @@ usage: site.py [--engine build/egdb_fast] [--out _site/checkers]
 """
 
 import argparse
+import gzip
+import json
 import re
 import sys
 from pathlib import Path
@@ -19,7 +21,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(ROOT / 'common'))
-from sitekit import FastEngine, Page, esc, lang_link, menu, write_page   # noqa: E402
+from sitekit import CachedEngine, FastEngine, Page, esc, lang_link, menu, write_page   # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 TITLE = {'nl': 'Checkers: 3 dammen tegen 2', 'en': 'Checkers: 3 kings against 2'}
@@ -73,38 +75,62 @@ PAGES = [('index.html', 'Overzicht', 'Overview', None)] + [(f, nl, en, c) for c,
                                                         for f, nl, en in secs]
 
 
-TABLE32 = {'nl': '''<h2>3 dammen tegen 2 per bord</h2>
-<table class="tbl"><tr><th>Bord</th><th>Rustige remises (3 dammen aan zet)</th><th>Langste winst</th>
-<th>Zwart in beide dubbele hoeken: remises</th></tr>
-<tr><td>7×6</td><td>273</td><td>63</td><td>0%</td></tr>
-<tr><td>8×7</td><td>792 (0,16%)</td><td>75</td><td>0%</td></tr>
-<tr><td>8×8</td><td>1.252 (0,11%)</td><td>67</td><td>0%</td></tr>
-<tr><td>9×8</td><td>87.670 (4,0%)</td><td>79</td><td>50% (oppositie)</td></tr>
-<tr><td>10×9</td><td>344.907 (4,4%)</td><td>93</td><td>50% (oppositie)</td></tr>
-<tr><td>10×8</td><td>288.748</td><td>97</td><td>~100%</td></tr>
-<tr><td>10×10</td><td>1.012.242 (7,1%)</td><td>115</td><td>~100%</td></tr>
-<tr><td>11×10</td><td>1.810.258 (7,5%)</td><td>109</td><td>~100%</td></tr>
-<tr><td>12×10</td><td>2.744.990</td><td>127</td><td>~100%</td></tr>
-<tr><td>9×7 onspeelbare hoeken (vier dubbele hoeken)</td><td>124.148 (13,2%)</td><td>93</td><td>zie <a href="vesting.html">vesting</a></td></tr>
-<tr><td>9×9 onspeelbare hoeken (vier dubbele hoeken)</td><td>1.201.460 (29,5%)</td><td>99</td><td>zie <a href="vesting.html">vesting</a></td></tr>
-</table>
-<p>Op borden met twee oneven zijden zijn de vier hoekvelden óf alle vier speelbaar óf alle vier onspeelbaar; bij onspeelbare hoekvelden is elke hoek een dubbele hoek.</p>''',
-           'en': '''<h2>3 kings against 2 per board</h2>
-<table class="tbl"><tr><th>Board</th><th>Quiet draws (3 kings to move)</th><th>Longest win</th>
-<th>Black in both double corners: draws</th></tr>
-<tr><td>7×6</td><td>273</td><td>63</td><td>0%</td></tr>
-<tr><td>8×7</td><td>792 (0.16%)</td><td>75</td><td>0%</td></tr>
-<tr><td>8×8</td><td>1,252 (0.11%)</td><td>67</td><td>0%</td></tr>
-<tr><td>9×8</td><td>87,670 (4.0%)</td><td>79</td><td>50% (opposition)</td></tr>
-<tr><td>10×9</td><td>344,907 (4.4%)</td><td>93</td><td>50% (opposition)</td></tr>
-<tr><td>10×8</td><td>288,748</td><td>97</td><td>~100%</td></tr>
-<tr><td>10×10</td><td>1,012,242 (7.1%)</td><td>115</td><td>~100%</td></tr>
-<tr><td>11×10</td><td>1,810,258 (7.5%)</td><td>109</td><td>~100%</td></tr>
-<tr><td>12×10</td><td>2,744,990</td><td>127</td><td>~100%</td></tr>
-<tr><td>9×7 unplayable corners (four double corners)</td><td>124,148 (13.2%)</td><td>93</td><td>see <a href="vesting.html">fortress</a></td></tr>
-<tr><td>9×9 unplayable corners (four double corners)</td><td>1,201,460 (29.5%)</td><td>99</td><td>see <a href="vesting.html">fortress</a></td></tr>
-</table>
-<p>On boards with two odd sides the four corner squares are either all playable or all unplayable; with unplayable corner squares every corner is a double corner.</p>'''}
+# 3 kings against 2 per board, heights 3 to 10 and widths up to height + 9, from longest32.json.gz (built by
+# longest32.py): the number is the longest win in plies (white to move), unplayable/playable corner squares on boards with
+# two odd sides, '–' where 5 kings do not fit. Counted over the quiet positions as in the 2-1 table: (21) = drawn with
+# either side to move in at least 4% of them (black in his fortress); 21* = the outcome depends on the side to move in at
+# least 8% of them (the opposition); 21 = won
+RESULTS_32 = {
+    3: ['–/–', '9*', '19*/11*', '(25)', '(23)/23*', '(35)', '(39)/(33)', '(53)', '(51)/(37)', '(65)'],
+    4: ['19*', '25', '31', '35', '49', '49', '67', '73', '93', '105'],
+    5: ['35/15', '33', '51/27', '47', '81*/43', '61', '95*/55', '75', '109*/67', '91'],
+    6: ['51', '63', '(59)', '65*', '(77)', '(75)', '(85)', '(93)', '(101)', '(111)'],
+    7: ['85/39', '75', '93*/49', '87', '(117)/65', '101', '(137)/79', '117', '(161)/91', '133'],
+    8: ['67', '79*', '(97)', '(97)', '(107)', '(111)', '(123)', '(123)', '(137)', '(139)'],
+    9: ['(99)/63', '93*', '(117)/79', '101*', '(129)/91', '115*', '(145)/103', '131*', '(159)/115', '145*'],
+    10: ['(115)', '(109)', '(127)', '(131)', '(137)', '(143)', '(151)', '(155)', '(167)', '(169)'],
+}
+
+TEXT32 = {'nl': '''<h2>3 dammen tegen 2 per bord</h2>
+<p>De langste winst op elk bord, met een rij per lengte <em>L</em> en een kolom per <em>B</em> − <em>L</em>; klik op een
+getal voor de stelling en speel de hele winst na.</p>
+{table}
+<p class="src">De kleur telt de rustige stellingen zoals bij 2 tegen 1, met wit en met zwart aan zet (op de grotere borden
+in een steekproef van 3000). <span class="res-win">67</span> = gewonnen, de langste winst duurt 67 ply ·
+<span class="res-diag">79*</span> = in ten minste 8% van de rustige stellingen hangt de uitkomst af van wie aan zet is: de
+oppositie · <span class="res-draw">(97)</span> = in ten minste 4% van de rustige stellingen is het remise, wie er ook aan
+zet is: zwart zit in zijn vesting (het getal is de langste winst) · <code>99/63</code> = onspeelbare/speelbare
+hoekvelden; bij onspeelbare hoekvelden is elke hoek een dubbele hoek · – = 5 dammen passen niet.</p>
+<ul>
+<li>Gewonnen: 8×8, 8×7, 7×7, 7×6 en 6×6, de borden van 4 hoog vanaf 5×4, de borden van 5 en 7 hoog (met onspeelbare
+hoeken alleen 5×5, 7×5 en 7×7), en de borden van 9 hoog met speelbare hoeken.</li>
+<li>Oppositie: 9×8 en de borden van 9 hoog met even breedte, 9×6, 9×7 met onspeelbare hoeken en de borden van 5 hoog met
+onspeelbare hoeken vanaf 9×5; op 10% tot 33% van de rustige stellingen wint wit met de ene kant aan zet en is het remise
+met de andere. Daarnaast de kleine borden 4×4, 4×3 en 5×3, en 7×3 met speelbare hoeken.</li>
+<li>Vesting: 8×6 en de borden van even lengte vanaf 10 breed (6% tot 8% van de rustige stellingen is remise met beide
+kanten aan zet), de oneven × oneven borden met onspeelbare hoeken vanaf 9×9 en 11×7 (17% tot 28%), en de borden van 3
+hoog vanaf 6×3 (behalve 7×3 met speelbare hoeken).</li>
+</ul>''',
+          'en': '''<h2>3 kings against 2 per board</h2>
+<p>The longest win on every board, with a row per height <em>H</em> and a column per <em>W</em> − <em>H</em>; click a
+number for the position and replay the whole win.</p>
+{table}
+<p class="src">The colour counts the quiet positions as for 2 against 1, with white and with black to move (on the larger
+boards in a sample of 3000). <span class="res-win">67</span> = won, the longest win takes 67 plies ·
+<span class="res-diag">79*</span> = in at least 8% of the quiet positions the outcome depends on the side to move: the
+opposition · <span class="res-draw">(97)</span> = in at least 4% of the quiet positions it is a draw whichever side is to
+move: black sits in his fortress (the number is the longest win) · <code>99/63</code> = unplayable/playable corner
+squares; with unplayable corner squares every corner is a double corner · – = 5 kings do not fit.</p>
+<ul>
+<li>Won: 8×8, 8×7, 7×7, 7×6 and 6×6, the boards of height 4 from 5×4, the boards of height 5 and 7 (with unplayable
+corners only 5×5, 7×5 and 7×7), and the boards of height 9 with playable corners.</li>
+<li>Opposition: 9×8 and the boards of height 9 with even width, 9×6, 9×7 with unplayable corners and the boards of height 5
+with unplayable corners from 9×5; in 10% to 33% of the quiet positions white wins with one side to move and it is a draw
+with the other. Also the small boards 4×4, 4×3 and 5×3, and 7×3 with playable corners.</li>
+<li>Fortress: 8×6 and the boards of even height from width 10 (6% to 8% of the quiet positions are drawn with either side
+to move), the odd × odd boards with unplayable corners from 9×9 and 11×7 (17% to 28%), and the boards of height 3 from
+6×3 (except 7×3 with playable corners).</li>
+</ul>'''}
 
 
 # 2 kings against 1 per board: a row per height H, a column per W - H; the number is the longest win in plies (white to
@@ -263,23 +289,33 @@ class Site:
                     best = (int(v[1:]), fen)
         return best[1]
 
-    def results21(self, pg):
-        """the 2-1 results per board as a table, a row per H and a column per W - H; every number links to a position
-        with the longest win on that board, shown on the large board, with the whole win to replay"""
+    def results(self, pg, table, text, nw, nb):
+        """the results per board as a table, a row per H and a column per W - H; every number links to a position with
+        the longest win on that board, shown on the large board, with the whole win to replay. 2-1 from the databases,
+        3-2 from longest32.json.gz (the 3-2 databases of all boards take an hour)"""
         t = self.t
-        head = '<tr><th>' + t('L \\ B − L', 'H \\ W − H') + '</th>' + ''.join(f'<th>{d}</th>' for d in range(len(next(iter(RESULTS_21.values()))))) + '</tr>'
+        stored = json.loads(gzip.decompress((HERE / 'longest32.json.gz').read_bytes())) if (nw, nb) == (3, 2) else None
+        ncol = len(next(iter(table.values())))
+        head = '<tr><th>' + t('L \\ B − L', 'H \\ W − H') + '</th>' + ''.join(f'<th>{d}</th>' for d in range(ncol)) + '</tr>'
         rows = []
-        for h, cells in RESULTS_21.items():
+        for h, cells in table.items():
             tds = []
             for d, cell in enumerate(cells):
                 parts = cell.split('/')
                 links = []
                 for k, part in enumerate(parts):
+                    if part == '–':                    # 5 kings do not fit
+                        links.append(part)
+                        continue
                     n = int(re.sub(r'\D', '', part))
                     kind = 'draw' if part.startswith('(') else 'diag' if '*' in part else 'win'
                     w = h + d
                     corners = 'unplayable' if len(parts) == 2 and k == 0 else 'playable'
-                    gid, e = self.engine(w, h, corners, 2, 1)
+                    if stored is None:
+                        gid, e = self.engine(w, h, corners, nw, nb)
+                    else:
+                        gid = f'{w}x{h} {corners} {nw}-{nb} stored'
+                        e = self.engines.setdefault(gid, CachedEngine(stored[f'{w}x{h} {corners}']))
                     if gid not in pg.geoms:
                         pg.use(gid, e, e.g)
                     fen = e.longest if e.longest and e.analyse(e.longest)[0] == f'W{n}' else self.longest_any(e, n)
@@ -292,7 +328,7 @@ class Site:
                                  + '</span>')
                 tds.append('<td>' + '/'.join(links) + '</td>')
             rows.append(f'<tr><th>{h}</th>' + ''.join(tds) + '</tr>')
-        return TEXT21[self.lang].replace('{table}', '<table class="tbl results">' + head + ''.join(rows) + '</table>')
+        return text[self.lang].replace('{table}', '<table class="tbl results">' + head + ''.join(rows) + '</table>')
 
     @staticmethod
     def longest_any(e, n):
@@ -339,7 +375,7 @@ is clickable. Boards are named width × height, as drawn.</p>''')]
         fig, _ = pg.diagram('W:WK4,K8,K29:BK1,K28', t('8×8, zwart in beide dubbele hoeken: wit wint (W61)',
                                                        '8×8, black in both double corners: white wins (W61)'), gid=k88)
         body.insert(1, fig)
-        body += toc + [self.results21(pg), TABLE32[self.lang]]
+        body += toc + [self.results(pg, RESULTS_21, TEXT21, 2, 1), self.results(pg, RESULTS_32, TEXT32, 3, 2)]
 
         def flush(name):                # finish the page so far, start the next one
             nonlocal body, pg

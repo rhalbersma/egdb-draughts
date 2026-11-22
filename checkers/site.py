@@ -49,11 +49,13 @@ PARTS = [
         ('9×8', '9×8', [
             ('vesting.html', 'Twee vallen om de vesting te breken', 'Two traps to break the fortress'),
             ('vesting-pariteit.html', 'De winst is niet strategisch, de pariteit doet ertoe', 'The win is non-strategic, parity matters')]),
-        ('9×9', '9×9', [
-            ('vesting-9x9.html', 'Remise: de diagonaal is te lang', 'Draw: the diagonal is too long')]),
         ('8×7', '8×7', [
             ('vesting-8x7.html', 'Vier vallen om de vesting te breken', 'Four traps to break the fortress'),
             ('vesting-8x7-wit.html', 'De winst is strategisch, de dam kan verdreven worden', 'The win is strategic, the king can be expelled')]),
+        ('9×7', '9×7', [
+            ('vesting-9x7.html', 'De oppositie beslist, ook op de diagonaal', 'The opposition decides, also on the diagonal')]),
+        ('9×9', '9×9', [
+            ('vesting-9x9.html', 'Remise: de diagonaal is te lang', 'Draw: the diagonal is too long')]),
         ('7×7', '7×7', [
             ('langste-7x7.html', 'Geen ontsnapping naar een andere dubbele hoek', 'No escape to another double corner')]),
         ('5×5', '5×5', [
@@ -568,30 +570,36 @@ een dam kan verdrijven, hangt af van waar de dubbele hoeken liggen. Op 8×8 ligg
 uit elkaar. De middelste witte dam van de <a href="val.html">val</a> slaat terug na de ruil in de ene hoek én in de
 andere, en door over te stappen naar de andere diagonaal <a href="val-pariteit.html">wisselt wit van tempo</a>. Daardoor
 valt de vesting bij beide pariteiten.</p>
-<p>Eerst grotere borden. Op <a href="vesting.html">9×8</a> liggen de dubbele hoeken aan dezelfde kant, 8 uit elkaar. Er
-zijn nog steeds twee vallen, maar langs de rand kan wit niet van tempo wisselen: de oppositie beslist, en de helft van de
-stellingen is remise. Op <a href="vesting-9x9.html">9×9</a> met onspeelbare hoekvelden werkt de val voor twee dubbele
-hoeken aan dezelfde kant, maar de diagonaal is te lang. Op nog grotere borden houdt de vesting stand (zie
-<a href="afstandsregel.html">de afstandsregel</a> in de conclusie).</p>
-<p>Dan kleinere borden. Op <a href="vesting-8x7.html">8×7</a> liggen de twee dubbele hoeken langs de zijde van 7, 6 uit
-elkaar: bij oneven pariteit zijn er vallen, en bij even pariteit verdrijft wit een zwarte dam uit zijn dubbele hoek. Op
-<a href="langste-7x7.html">7×7</a> en <a href="langste-5x5.html">5×5</a> is elke hoek een dubbele hoek, en dan is de
-vraag of een verdreven dam naar een andere dubbele hoek kan ontsnappen.</p>''', '''
+<p>Op <a href="vesting.html">9×8</a> komt de oppositie erbij. De dubbele hoeken liggen aan dezelfde kant, 8 uit elkaar; er
+zijn nog steeds twee vallen, maar langs de rand kan wit niet van tempo wisselen. De oppositie beslist, en de helft van de
+stellingen is remise.</p>
+<p>Op <a href="vesting-8x7.html">8×7</a>, een kleiner bord, liggen de twee dubbele hoeken langs de zijde van 7, 6 uit
+elkaar. Ook daar kan wit niet van tempo wisselen, maar een klein bord geeft wit een strategisch middel: wit verdrijft een
+zwarte dam uit zijn dubbele hoek, en de vesting valt bij beide pariteiten.</p>
+<p>Op <a href="vesting-9x7.html">9×7</a> liggen twee dubbele hoeken ook diagonaal tegenover elkaar, 8 uit elkaar. De val
+op de diagonaal werkt, zoals op 8×8, maar er is geen tweede diagonaal om van tempo te wisselen: ook hier beslist de
+oppositie. Op <a href="vesting-9x9.html">9×9</a> is de diagonaal te lang: remise. Op nog grotere borden houdt de vesting
+stand (zie <a href="afstandsregel.html">de afstandsregel</a> in de conclusie).</p>
+<p>Ten slotte de kleine borden <a href="langste-7x7.html">7×7</a> en <a href="langste-5x5.html">5×5</a>, waar elke hoek een
+dubbele hoek is: kan een verdreven dam daar naar een andere dubbele hoek ontsnappen?</p>''', '''
 <p>In 2 against 1 expelling the king works on every board, except on boards of height 5 and on 4×4 (see
 <a href="twee-algemeen.html">the method on other boards</a>). In 3 against 2 it is different: whether white can build a
 trap or expel a king depends on where the double corners are. On 8×8 they lie diagonally opposite, 7 squares apart. The
 middle white king of the <a href="val.html">trap</a> captures back after the exchange in the one corner and in the other,
 and by switching to the other diagonal <a href="val-pariteit.html">white changes the tempo</a>. Therefore the fortress
 falls at both parities.</p>
-<p>First bigger boards. On <a href="vesting.html">9×8</a> the double corners lie on the same side, 8 apart. There are
-still two traps, but along the edge white cannot change the tempo: the opposition decides, and half of the positions are
-drawn. On <a href="vesting-9x9.html">9×9</a> with unplayable corner squares the trap works for two double corners on the
-same side, but the diagonal is too long. On even bigger boards the fortress holds (see
+<p>On <a href="vesting.html">9×8</a> the opposition comes in. The double corners lie on the same side, 8 apart; there are
+still two traps, but along the edge white cannot change the tempo. The opposition decides, and half of the positions are
+drawn.</p>
+<p>On <a href="vesting-8x7.html">8×7</a>, a smaller board, the two double corners lie along the side of 7, 6 apart. There
+too white cannot change the tempo, but a small board gives white a strategic resource: white expels a black king from its
+double corner, and the fortress falls at both parities.</p>
+<p>On <a href="vesting-9x7.html">9×7</a> two double corners also lie diagonally opposite, 8 apart. The trap on the
+diagonal works, as on 8×8, but there is no second diagonal to change the tempo: here too the opposition decides. On
+<a href="vesting-9x9.html">9×9</a> the diagonal is too long: a draw. On even bigger boards the fortress holds (see
 <a href="afstandsregel.html">the distance rule</a> in the conclusion).</p>
-<p>Then smaller boards. On <a href="vesting-8x7.html">8×7</a> the two double corners lie along the side of 7, 6 apart: at
-odd parity there are traps, and at even parity white expels a black king from its double corner. On
-<a href="langste-7x7.html">7×7</a> and <a href="langste-5x5.html">5×5</a> every corner is a double corner, and then the
-question is whether an expelled king can escape to another double corner.</p>''')]
+<p>Finally the small boards <a href="langste-7x7.html">7×7</a> and <a href="langste-5x5.html">5×5</a>, where every corner
+is a double corner: can an expelled king escape to another double corner there?</p>''')]
         flush('drie-algemeen.html')
         body, phases, pgp = self.traps88(pg, k88, e88)
         flush('val.html')
@@ -1158,23 +1166,25 @@ are 8 traps, at even parity not a single one.</p>''')]
         k97, e97 = self.engine(9, 7, 'unplayable')
         name = t('9×7 onspeelbare hoeken', '9×7 unplayable corners')
         pga = self.page((k97, e97))
-        rulebody = [t('<p>Op 9×7 met onspeelbare hoekvelden zijn er vier dubbele hoeken: b1/a2, h1/i2, b7/a6 en h7/i6. '
-                      'Langs de zijde van 7 liggen ze 6 uit elkaar, zoals op <a href="vesting-8x7.html">8×7</a>; de twee '
-                      'andere soorten paren liggen 8 uit elkaar: langs de lange kant, zoals op 9×8, en diagonaal. Bij beide zijn er 2 vallen bij even pariteit en geen bij oneven: de oppositie beslist. '
-                      'Langs de lange kant zijn het dezelfde twee vallen als op 9×8, de actieve val 1 en de passieve val 2:</p>',
-                      '<p>On 9×7 with unplayable corner squares there are four double corners: b1/a2, h1/i2, b7/a6 and '
-                      'h7/i6. Along the side of 7 they are 6 apart, as on <a href="vesting-8x7.html">8×7</a>; the two other '
-                      'kinds of pairs are 8 apart: along the long side, as on 9×8, and diagonally. '
-                      'For both there are 2 traps at even parity and none at odd: the opposition decides. Along the long side '
-                      'they are the same two traps as on 9×8, the active trap 1 and the passive trap 2:</p>')]
-        rulebody += self.trap_blocks(pga, k97, e97, name + ',', t('lange kant', 'long side'),
-                                     [(['d1', 'e2', 'f1'], ['b1', 'h1']), (['c2', 'e2', 'g2'], ['a2', 'i2'])],
-                                     partner)
+        # the long side has the two traps of 9x8 (asserted, not shown): every shuttle move allows an exchange
+        for W, B in ((['d1', 'e2', 'f1'], ['b1', 'h1']), (['c2', 'e2', 'g2'], ['a2', 'i2'])):
+            for b in B:
+                assert self.exchange(e97, e97.fen(W, [partner[b] if x == b else x for x in B], 'W'))
         self.active_passive(e97, (['d1', 'e2', 'f1'], ['b1', 'h1']), (['c2', 'e2', 'g2'], ['a2', 'i2']))
-        rulebody.append(t('<p>Diagonaal: op <a href="vesting-9x9.html">9×9</a> is de diagonaal te lang, op 9×7 niet. De drie '
-                          'witte dammen staan op een rij op de verbindingsdiagonaal b1–h7, net als op 8×8:</p>',
-                          '<p>Diagonally: on <a href="vesting-9x9.html">9×9</a> the diagonal is too long, on 9×7 it is not. The '
-                          'three white kings stand in a row on the connecting diagonal b1–h7, as on 8×8:</p>'))
+        rulebody = [t('<p>Op 9×7 met onspeelbare hoekvelden zijn er vier dubbele hoeken: b1/a2, h1/i2, b7/a6 en h7/i6. '
+                      'Langs de korte zijde liggen ze 6 uit elkaar, zoals op <a href="vesting-8x7.html">8×7</a>, en daar '
+                      'valt de vesting; langs de lange zijde liggen ze 8 uit elkaar, zoals op <a href="vesting.html">9×8</a>, '
+                      'met dezelfde twee vallen bij één pariteit, en daar beslist de oppositie. Nieuw zijn de dubbele hoeken '
+                      'die diagonaal tegenover elkaar liggen, ook 8 uit elkaar.</p>',
+                      '<p>On 9×7 with unplayable corner squares there are four double corners: b1/a2, h1/i2, b7/a6 and '
+                      'h7/i6. Along the short side they are 6 apart, as on <a href="vesting-8x7.html">8×7</a>, and there the '
+                      'fortress falls; along the long side they are 8 apart, as on <a href="vesting.html">9×8</a>, with the '
+                      'same two traps at one parity, and there the opposition decides. What is new are the double corners '
+                      'that lie diagonally opposite, also 8 apart.</p>')]
+        rulebody.append(t('<p>Diagonaal: op 9×7 is de diagonaal kort genoeg (op <a href="vesting-9x9.html">9×9</a> is hij te '
+                          'lang). De drie witte dammen staan op een rij op de verbindingsdiagonaal b1–h7, net als op 8×8:</p>',
+                          '<p>Diagonally: on 9×7 the diagonal is short enough (on <a href="vesting-9x9.html">9×9</a> it is too '
+                          'long). The three white kings stand in a row on the connecting diagonal b1–h7, as on 8×8:</p>'))
         rulebody += self.trap_blocks(pga, k97, e97, name + ',', t('diagonaal', 'diagonal'), [(['d3', 'e4', 'f5'], ['b1', 'h7'])], partner)
         rulebody.append(t('<p>Toch beslist hier de oppositie, want er is geen val op een tweede diagonaal. Op 8×8 verbinden twee '
                           'diagonalen de dubbele hoeken, één voor elke helft, en door van de ene naar de andere over te stappen '
@@ -1238,7 +1248,13 @@ are 8 traps, at even parity not a single one.</p>''')]
         assert diag('b1', 'h7') and not diag('a2', 'i6') and all(diag('b1', x) for x in ('c2', 'e4', 'g6', 'd3', 'f5'))
         for W, B in ((['c2', 'e2', 'g2'], ['a2', 'i2']), (['d3', 'e4', 'f5'], ['b1', 'h7']), (['c2', 'e4', 'g6'], ['a2', 'i6'])):
             assert rank_parity(e97, e97.fen(W, B, 'B')) == 0 and e97.analyse(e97.fen(W, B, 'B'))[0][0] == 'L'
-        self.write('afstandsregel.html', None, body[rule] + '\n' + '\n'.join(rulebody), pga, k97)
+        self.write('vesting-9x7.html', None, '\n'.join(rulebody), pga, k97)
+        self.write('afstandsregel.html', None, body[rule] + t(
+            '<p>Zie de borden zelf: <a href="vesting-8x7.html">8×7</a>, <a href="val.html">8×8</a>, '
+            '<a href="vesting.html">9×8</a>, <a href="vesting-9x7.html">9×7</a> en <a href="vesting-9x9.html">9×9</a>.</p>',
+            '<p>See the boards themselves: <a href="vesting-8x7.html">8×7</a>, <a href="val.html">8×8</a>, '
+            '<a href="vesting.html">9×8</a>, <a href="vesting-9x7.html">9×7</a> and <a href="vesting-9x9.html">9×9</a>.</p>'),
+            self.page((k97, e97)))
         # the conclusion (for now: the traps per board)
         t = self.t
         self.write('conclusie.html', None, t(
@@ -1247,14 +1263,18 @@ are 8 traps, at even parity not a single one.</p>''')]
             '<table class="tbl"><tr><th>Bord</th><th>Vallen bij even pariteit</th><th>Vallen bij oneven pariteit</th><th>Gevolg</th></tr>'
             '<tr><td>8×8</td><td>2</td><td>2</td><td>de vesting valt altijd</td></tr>'
             '<tr><td>9×8, 10×9</td><td>0</td><td>2</td><td>de oppositie beslist: de helft remise</td></tr>'
+            '<tr><td>8×7</td><td>0</td><td>8</td><td>de vesting valt: bij even pariteit verdrijft wit een dam</td></tr>'
+            '<tr><td>9×7, lange kant en diagonaal</td><td>2</td><td>0</td><td>de oppositie beslist</td></tr>'
+            '<tr><td>9×9, zelfde kant</td><td colspan="2">2 bij één van de twee pariteiten</td><td>de oppositie beslist</td></tr>'
+            '<tr><td>9×9, diagonaal</td><td>0</td><td>0</td><td>de vesting houdt</td></tr>'
             '<tr><td>10×10</td><td>0</td><td>0</td><td>de vesting houdt</td></tr></table>'
             '<p>Zwart in beide dubbele hoeken, zwart aan zet (rustige stellingen):</p>'
             '<table class="tbl"><tr><th>Bord</th><th>Even pariteit</th><th>Oneven pariteit</th></tr>'
             '<tr><td>9×8</td><td>100% remise (8.228)</td><td>0% remise (8.244)</td></tr>'
             '<tr><td>10×9</td><td>100% (18.420)</td><td>0% (18.440)</td></tr>'
             '<tr><td>11×10</td><td>100% (37.030)</td><td>100% (37.050)</td></tr></table>'
-            '<p>Zie de vallen op <a href="val.html">8×8</a>, <a href="vesting.html">9×8</a>, <a href="vesting-9x9.html">9×9</a> en '
-            '<a href="vesting-8x7.html">8×7</a>, en de langste winsten op <a href="langste-7x7.html">7×7</a> en '
+            '<p>Zie de vallen op <a href="val.html">8×8</a>, <a href="vesting.html">9×8</a>, <a href="vesting-8x7.html">8×7</a>, '
+            '<a href="vesting-9x7.html">9×7</a> en <a href="vesting-9x9.html">9×9</a>, en de langste winsten op <a href="langste-7x7.html">7×7</a> en '
             '<a href="langste-5x5.html">5×5</a>. De <a href="afstandsregel.html">afstandsregel</a> op de volgende pagina vat '
             'samen wanneer de vesting valt.</p>',
             '<p>The traps per board, with black to move and both black kings on the edge squares of two double corners '
@@ -1262,14 +1282,18 @@ are 8 traps, at even parity not a single one.</p>''')]
             '<table class="tbl"><tr><th>Board</th><th>Traps at even parity</th><th>Traps at odd parity</th><th>Consequence</th></tr>'
             '<tr><td>8×8</td><td>2</td><td>2</td><td>the fortress always falls</td></tr>'
             '<tr><td>9×8, 10×9</td><td>0</td><td>2</td><td>the opposition decides: half are draws</td></tr>'
+            '<tr><td>8×7</td><td>0</td><td>8</td><td>the fortress falls: at even parity white expels a king</td></tr>'
+            '<tr><td>9×7, long side and diagonal</td><td>2</td><td>0</td><td>the opposition decides</td></tr>'
+            '<tr><td>9×9, same side</td><td colspan="2">2 at one of the two parities</td><td>the opposition decides</td></tr>'
+            '<tr><td>9×9, diagonal</td><td>0</td><td>0</td><td>the fortress holds</td></tr>'
             '<tr><td>10×10</td><td>0</td><td>0</td><td>the fortress holds</td></tr></table>'
             '<p>Black in both double corners, black to move (quiet positions):</p>'
             '<table class="tbl"><tr><th>Board</th><th>Even parity</th><th>Odd parity</th></tr>'
             '<tr><td>9×8</td><td>100% draws (8,228)</td><td>0% draws (8,244)</td></tr>'
             '<tr><td>10×9</td><td>100% (18,420)</td><td>0% (18,440)</td></tr>'
             '<tr><td>11×10</td><td>100% (37,030)</td><td>100% (37,050)</td></tr></table>'
-            '<p>See the traps on <a href="val.html">8×8</a>, <a href="vesting.html">9×8</a>, <a href="vesting-9x9.html">9×9</a> and '
-            '<a href="vesting-8x7.html">8×7</a>, and the longest wins on <a href="langste-7x7.html">7×7</a> and '
+            '<p>See the traps on <a href="val.html">8×8</a>, <a href="vesting.html">9×8</a>, <a href="vesting-8x7.html">8×7</a>, '
+            '<a href="vesting-9x7.html">9×7</a> and <a href="vesting-9x9.html">9×9</a>, and the longest wins on <a href="langste-7x7.html">7×7</a> and '
             '<a href="langste-5x5.html">5×5</a>. The <a href="afstandsregel.html">distance rule</a> on the next page sums up '
             'when the fortress falls.</p>'),
             self.page((k89, e89)), None)
@@ -1604,11 +1628,11 @@ opposite.</p>''')]
         (v1, fig1, i1, legal1, hit1, free1), (v2, fig2, i2, legal2, hit2, free2) = figs
         body += [t('''
 <p>Bij twee diagonaal tegenover elkaar liggende dubbele hoeken staan de zwarte dammen op b1 en i8 aan de twee
-uiteinden van de diagonaal b1–i8. Op 8×8 staat de val precies zo: drie witte dammen op een rij midden op de
+uiteinden van de diagonaal b1–i8. Op 8×8 en op <a href="vesting-9x7.html">9×7</a> staat de val precies zo: drie witte dammen op een rij midden op de
 verbindingsdiagonaal, met 5 velden tussen de zwarte dammen. Op 9×9 zijn dat er 6, en die afstand is te lang: de drie
 dammen kunnen maar één van de twee pendelzetten straffen.</p>''', '''
 <p>With two diagonally opposite double corners the black kings on b1 and i8 stand at the two ends of the diagonal
-b1–i8. On 8×8 the trap stands exactly like that: three white kings in a row in the middle of the connecting diagonal,
+b1–i8. On 8×8 and on <a href="vesting-9x7.html">9×7</a> the trap stands exactly like that: three white kings in a row in the middle of the connecting diagonal,
 with 5 squares between the black kings. On 9×9 there are 6, and that distance is too long: the three kings can punish
 only one of the two shuttle moves.</p>'''), fig1,
                  t(f'<p>Met wit op d3, e4 en f5 ({v1}) wordt {hit1} gestraft, maar {free1} niet: de dammen staan te ver '
@@ -1643,9 +1667,6 @@ def main():
         s.vesting()
         s.board55()
         # pages that were renamed or merged
-        (out / 'vesting-9x7.html').write_text('<!DOCTYPE html><meta charset="utf-8"><meta http-equiv="refresh" '
-                                              'content="0; url=vesting-8x7.html"><link rel="canonical" href="vesting-8x7.html">'
-                                              '<title>Checkers</title><a href="vesting-8x7.html">vesting-8x7.html</a>\n')
         (out / 'val-race.html').write_text('<!DOCTYPE html><meta charset="utf-8"><meta http-equiv="refresh" '
                                            'content="0; url=val.html"><link rel="canonical" href="val.html">'
                                            '<title>Checkers</title><a href="val.html">val.html</a>\n')

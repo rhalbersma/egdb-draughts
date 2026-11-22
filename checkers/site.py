@@ -29,7 +29,8 @@ CHAPTERS = [
     ('2 tegen 1 op 8×8', '2 against 1 on 8×8', [
         ('twee-verdrijven.html', 'De dam verdrijven', 'Driving out the king'),
         ('twee-langste.html', 'De langste winst', 'The longest win'),
-        ('twee-blokkade.html', 'Uitzondering: de blokkade aan de rand', 'Exception: the blockade at the edge')]),
+        ('twee-blokkade.html', 'Uitzondering: de blokkade aan de rand', 'Exception: the blockade at the edge'),
+        ('twee-algemeen.html', 'De methode op andere borden', 'The method on other boards')]),
     ('2 tegen 1 op 5×5', '2 against 1 on 5×5', [
         ('twee-5x5.html', 'De verdreven dam ontsnapt naar een andere hoek', 'The expelled king escapes to another corner'),
         ('twee-5x5-val.html', 'Een val die werkt met wit en met zwart aan zet', 'A trap that works with white and with black to move')]),
@@ -484,20 +485,29 @@ d1/e2; with 6. c4-d3 white sets up a king, and after 6. … d1-e2 7. a4-b5! blac
                    'position is then the mirror image of the one with white to move, mirrored in the diagonal that cuts '
                    'the double corner in half, and white '
                    'drives the king out of the corner again, now along the top edge to the single corner h8.</p>'),
-                 f'<p class="var">{hb}</p>', '<div style="clear:both"></div>',
-                 t('<p>Na 4. b8-a7 moet zwart de diagonaal van de dubbele hoek (door a7 en b6) verlaten: 4. … b6-a5. Deze '
+                 f'<p class="var">{hb}</p>', '<div style="clear:both"></div>']
+        flush('twee-verdrijven.html')
+        # the method on other boards: after 4. b8-a7 black has to leave the diagonal of the double corner
+        f4 = e21.fen(['a7', 'd6'], ['b6'], 'B')
+        v4, legal4 = e21.analyse(f4)
+        assert max((m for m in legal4), key=lambda m: int(m[1][1:]))[0] == 'b6-a5'
+        fig4, i4 = pg.diagram(f4, t(f'8×8, 2 tegen 1, na 4. b8-a7, zwart aan zet: {v4}',
+                                    f'8×8, 2 against 1, after 4. b8-a7, black to move: {v4}'), gid=k21)
+        body += [fig4, t('<p>Na 4. b8-a7 in <a href="twee-verdrijven.html">de dam verdrijven</a> moet zwart de diagonaal van de dubbele hoek (door a7 en b6) verlaten: 4. … b6-a5. Deze '
                    'methode werkt op elk bord, tenzij het veld a5 of c5 dan zelf in een dubbele hoek ligt. Op een bord van 5 '
                    'hoog is dat a5, op 4×4 c5. Met wit en met zwart aan zet wint wit zo zonder offer op 6×6, 7×7 (onspeelbare '
                    'hoeken), 8×8, 9×9 (onspeelbare hoeken) en 10×10; met wit aan zet lukt het op geen enkel bord van 5 hoog '
                    '(5 tot en met 9 breed). Daarom volgen na 8×8 hoofdstukken over <a href="twee-5x5.html">5×5</a> en '
                    '<a href="twee-4x4.html">4×4</a>.</p>',
-                   '<p>After 4. b8-a7 black has to leave the diagonal of the double corner (through a7 and b6): 4. … b6-a5. '
+                   '<p>After 4. b8-a7 in <a href="twee-verdrijven.html">driving out the king</a> black has to leave the diagonal of the double corner (through a7 and b6): 4. … b6-a5. '
                    'This method works on every board, unless the square a5 or c5 is then itself in a double corner. On a '
                    'board of height 5 that is a5, on 4×4 c5. With white and with black to move white wins this way without '
                    'a sacrifice on 6×6, 7×7 (unplayable corners), 8×8, 9×9 (unplayable corners) and 10×10; with white to '
                    'move it fails on every board of height 5 (5 to 9 wide). Hence chapters on <a href="twee-5x5.html">5×5</a> '
-                   'and <a href="twee-4x4.html">4×4</a> follow after 8×8.</p>')]
-        flush('twee-verdrijven.html')
+                   'and <a href="twee-4x4.html">4×4</a> follow after 8×8.</p>'),
+                 t('<p>Alle zetten van zwart: ', '<p>All moves of black: ') + self.moves_list(pg, i4, legal4, '4. … ') + '.</p>',
+                 '<div style="clear:both"></div>']
+        flush('twee-algemeen.html')
         # the longest win: black flees to both double corners and white builds the trap there
         fen = 'W:WK3,K4,K30:BK11,K13'
         v, _ = e88.analyse(fen)

@@ -64,7 +64,6 @@ PARTS = [
             ('zetdwang-5x5.html', 'Uitzondering: zetdwang', 'Exception: zugzwang')])]),
     (None, None, [
         ('Conclusie', 'Conclusion', [
-            ('conclusie.html', 'De vallen per bord', 'The traps per board'),
             ('afstandsregel.html', 'De afstandsregel', 'The distance rule')])]),
 ]
 # every chapter: (part number, Dutch, English, sections)
@@ -1255,48 +1254,6 @@ are 8 traps, at even parity not a single one.</p>''')]
             '<p>See the boards themselves: <a href="vesting-8x7.html">8×7</a>, <a href="val.html">8×8</a>, '
             '<a href="vesting.html">9×8</a>, <a href="vesting-9x7.html">9×7</a> and <a href="vesting-9x9.html">9×9</a>.</p>'),
             self.page((k97, e97)))
-        # the conclusion (for now: the traps per board)
-        t = self.t
-        self.write('conclusie.html', None, t(
-            '<p>De vallen per bord, met zwart aan zet en beide zwarte dammen op de randvelden van twee dubbele hoeken '
-            '(geteld met <a href="https://github.com/rhalbersma/egdb-draughts/blob/main/checkers/traps.py"><code>traps.py</code></a>):</p>'
-            '<table class="tbl"><tr><th>Bord</th><th>Vallen bij even pariteit</th><th>Vallen bij oneven pariteit</th><th>Gevolg</th></tr>'
-            '<tr><td>8×8</td><td>2</td><td>2</td><td>de vesting valt altijd</td></tr>'
-            '<tr><td>9×8, 10×9</td><td>0</td><td>2</td><td>de oppositie beslist: de helft remise</td></tr>'
-            '<tr><td>8×7</td><td>0</td><td>8</td><td>de vesting valt: bij even pariteit verdrijft wit een dam</td></tr>'
-            '<tr><td>9×7, lange kant en diagonaal</td><td>2</td><td>0</td><td>de oppositie beslist</td></tr>'
-            '<tr><td>9×9, zelfde kant</td><td colspan="2">2 bij één van de twee pariteiten</td><td>de oppositie beslist</td></tr>'
-            '<tr><td>9×9, diagonaal</td><td>0</td><td>0</td><td>de vesting houdt</td></tr>'
-            '<tr><td>10×10</td><td>0</td><td>0</td><td>de vesting houdt</td></tr></table>'
-            '<p>Zwart in beide dubbele hoeken, zwart aan zet (rustige stellingen):</p>'
-            '<table class="tbl"><tr><th>Bord</th><th>Even pariteit</th><th>Oneven pariteit</th></tr>'
-            '<tr><td>9×8</td><td>100% remise (8.228)</td><td>0% remise (8.244)</td></tr>'
-            '<tr><td>10×9</td><td>100% (18.420)</td><td>0% (18.440)</td></tr>'
-            '<tr><td>11×10</td><td>100% (37.030)</td><td>100% (37.050)</td></tr></table>'
-            '<p>Zie de vallen op <a href="val.html">8×8</a>, <a href="vesting.html">9×8</a>, <a href="vesting-8x7.html">8×7</a>, '
-            '<a href="vesting-9x7.html">9×7</a> en <a href="vesting-9x9.html">9×9</a>, en de langste winsten op <a href="langste-7x7.html">7×7</a> en '
-            '<a href="langste-5x5.html">5×5</a>. De <a href="afstandsregel.html">afstandsregel</a> op de volgende pagina vat '
-            'samen wanneer de vesting valt.</p>',
-            '<p>The traps per board, with black to move and both black kings on the edge squares of two double corners '
-            '(counted with <a href="https://github.com/rhalbersma/egdb-draughts/blob/main/checkers/traps.py"><code>traps.py</code></a>):</p>'
-            '<table class="tbl"><tr><th>Board</th><th>Traps at even parity</th><th>Traps at odd parity</th><th>Consequence</th></tr>'
-            '<tr><td>8×8</td><td>2</td><td>2</td><td>the fortress always falls</td></tr>'
-            '<tr><td>9×8, 10×9</td><td>0</td><td>2</td><td>the opposition decides: half are draws</td></tr>'
-            '<tr><td>8×7</td><td>0</td><td>8</td><td>the fortress falls: at even parity white expels a king</td></tr>'
-            '<tr><td>9×7, long side and diagonal</td><td>2</td><td>0</td><td>the opposition decides</td></tr>'
-            '<tr><td>9×9, same side</td><td colspan="2">2 at one of the two parities</td><td>the opposition decides</td></tr>'
-            '<tr><td>9×9, diagonal</td><td>0</td><td>0</td><td>the fortress holds</td></tr>'
-            '<tr><td>10×10</td><td>0</td><td>0</td><td>the fortress holds</td></tr></table>'
-            '<p>Black in both double corners, black to move (quiet positions):</p>'
-            '<table class="tbl"><tr><th>Board</th><th>Even parity</th><th>Odd parity</th></tr>'
-            '<tr><td>9×8</td><td>100% draws (8,228)</td><td>0% draws (8,244)</td></tr>'
-            '<tr><td>10×9</td><td>100% (18,420)</td><td>0% (18,440)</td></tr>'
-            '<tr><td>11×10</td><td>100% (37,030)</td><td>100% (37,050)</td></tr></table>'
-            '<p>See the traps on <a href="val.html">8×8</a>, <a href="vesting.html">9×8</a>, <a href="vesting-8x7.html">8×7</a>, '
-            '<a href="vesting-9x7.html">9×7</a> and <a href="vesting-9x9.html">9×9</a>, and the longest wins on <a href="langste-7x7.html">7×7</a> and '
-            '<a href="langste-5x5.html">5×5</a>. The <a href="afstandsregel.html">distance rule</a> on the next page sums up '
-            'when the fortress falls.</p>'),
-            self.page((k89, e89)), None)
 
 
     def board55(self):
@@ -1667,6 +1624,9 @@ def main():
         s.vesting()
         s.board55()
         # pages that were renamed or merged
+        (out / 'conclusie.html').write_text('<!DOCTYPE html><meta charset="utf-8"><meta http-equiv="refresh" '
+                                            'content="0; url=afstandsregel.html"><link rel="canonical" href="afstandsregel.html">'
+                                            '<title>Checkers</title><a href="afstandsregel.html">afstandsregel.html</a>\n')
         (out / 'val-race.html').write_text('<!DOCTYPE html><meta charset="utf-8"><meta http-equiv="refresh" '
                                            'content="0; url=val.html"><link rel="canonical" href="val.html">'
                                            '<title>Checkers</title><a href="val.html">val.html</a>\n')

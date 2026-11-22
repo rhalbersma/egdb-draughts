@@ -283,19 +283,25 @@ on the long diagonal (40 forks with black to move), and the exact limits of ever
                   '39,402 draws (<a href="https://mdgsoftware.nl/draughts/stats/details-0201.html">2 against 1</a>); with the single king to move 3,240 wins, 54,988 '
                   'draws and 572 losses (<a href="https://mdgsoftware.nl/draughts/stats/details-0102.html">1 against 2</a>).</p>'),
                 t('''<ul>
-<li>Voor <em>L</em> ≤ 4 (gedegenereerde borden) winnen twee dammen altijd, op de vierkante borden als ze de lange
+<li><em>L</em> ≤ 4 (gedegenereerde borden): twee dammen winnen altijd, op de vierkante borden als ze de lange
 lijn(en) bezetten.</li>
-<li>Voor <em>L</em> ≥ 5 zijn maar twee borden gewonnen: <strong>6×5</strong> (nieuw) en <strong>7×5 speelbare hoeken</strong>
-(bekend). Vanaf <em>L</em> = 6 is alles remise; de overige winsten zijn korte combinaties waarvan de lengte niet van
-de bordgrootte afhangt.</li>
-<li>Met de enkele dam aan zet zijn er op 6×5 (8) en 7×5 (16) een paar uitzonderingen: dubbele aanvallen (vorken).</li>
+<li><em>L</em> = 5: maar twee borden zijn gewonnen.
+<ul><li><strong>6×5</strong> (nieuw);</li>
+<li><strong>7×5 speelbare hoeken</strong> (bekend);</li>
+<li>uitzonderingen vanwege vorken: met de enkele dam aan zet zijn er op 6×5 8 en op 7×5 16 stellingen met een dubbele
+aanval.</li></ul></li>
+<li><em>L</em> ≥ 6: alles is remise; de overige winsten zijn korte combinaties waarvan de lengte niet van de bordgrootte
+afhangt.</li>
 </ul>''', '''<ul>
-<li>For <em>L</em> ≤ 4 (degenerate boards) two kings always win, on the square boards provided they hold the long
+<li><em>L</em> ≤ 4 (degenerate boards): two kings always win, on the square boards provided they hold the long
 diagonal(s).</li>
-<li>For <em>L</em> ≥ 5 only two boards are won: <strong>6×5</strong> (new) and <strong>7×5 playable corners</strong> (known). From
-<em>L</em> = 6 on everything is drawn, and the remaining wins are short combinations whose length does not depend on the
-board size.</li>
-<li>With the single king to move there are a few exceptions on 6×5 (8) and 7×5 (16): double attacks (forks).</li>
+<li><em>L</em> = 5: only two boards are won.
+<ul><li><strong>6×5</strong> (new);</li>
+<li><strong>7×5 playable corners</strong> (known);</li>
+<li>exceptions because of forks: with the single king to move there are 8 positions on 6×5 and 16 on 7×5 with a double
+attack.</li></ul></li>
+<li><em>L</em> ≥ 6: everything is drawn; the remaining wins are short combinations whose length does not depend on the board
+size.</li>
 </ul>''')]
         fen = 'W:WK1,K8:BK7'
         fig, i0 = pg.diagram(fen, t('6×5, wit aan zet', '6×5, white to move'), gid='5x6')

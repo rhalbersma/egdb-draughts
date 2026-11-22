@@ -1180,10 +1180,8 @@ are 8 traps, at even parity not a single one.</p>''')]
                       'fortress falls; along the long side they are 8 apart, as on <a href="vesting.html">9×8</a>, with the '
                       'same two traps at one parity, and there the opposition decides. What is new are the double corners '
                       'that lie diagonally opposite, also 8 apart.</p>')]
-        rulebody.append(t('<p>Diagonaal: op 9×7 is de diagonaal kort genoeg (op <a href="vesting-9x9.html">9×9</a> is hij te '
-                          'lang). De drie witte dammen staan op een rij op de verbindingsdiagonaal b1–h7, net als op 8×8:</p>',
-                          '<p>Diagonally: on 9×7 the diagonal is short enough (on <a href="vesting-9x9.html">9×9</a> it is too '
-                          'long). The three white kings stand in a row on the connecting diagonal b1–h7, as on 8×8:</p>'))
+        rulebody.append(t('<p>De drie witte dammen staan op een rij op de verbindingsdiagonaal b1–h7, net als op 8×8:</p>',
+                          '<p>The three white kings stand in a row on the connecting diagonal b1–h7, as on 8×8:</p>'))
         rulebody += self.trap_blocks(pga, k97, e97, name + ',', t('diagonaal', 'diagonal'), [(['d3', 'e4', 'f5'], ['b1', 'h7'])], partner)
         rulebody.append(t('<p>Toch beslist hier de oppositie, want er is geen val op een tweede diagonaal. Op 8×8 verbinden twee '
                           'diagonalen de dubbele hoeken, één voor elke helft, en door van de ene naar de andere over te stappen '

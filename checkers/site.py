@@ -56,6 +56,8 @@ PARTS = [
             ('vesting-8x7-wit.html', '3 tegen 2: de winst is strategisch, de dam kan verdreven worden', '3 against 2: the win is strategic, the king can be expelled')]),
         ('9×7', '9×7', [
             ('vesting-9x7.html', '3 tegen 2: de oppositie beslist, ook op de diagonaal', '3 against 2: the opposition decides, also on the diagonal')]),
+        ('8×6', '8×6', [
+            ('vesting-8x6.html', '3 tegen 2, remise: de diagonaal is te kort', '3 against 2, draw: the diagonal is too short')]),
         ('9×9', '9×9', [
             ('vesting-9x9.html', '3 tegen 2, remise: de diagonaal is te lang', '3 against 2, draw: the diagonal is too long')]),
         ('7×7', '7×7', [
@@ -112,8 +114,8 @@ hoeken, geeft 98% tot 100% van de vestingstellingen hetzelfde patroon.</li>
 <li>De oppositie beslist als het paar 8 uit elkaar ligt: 9×8, 9×6, de borden van 9 hoog met even breedte, en 9×7 met
 onspeelbare hoeken.</li>
 <li>De vesting houdt als het paar verder uit elkaar ligt: 9×9 en de grotere oneven × oneven borden met onspeelbare
-hoeken, de borden van even lengte vanaf 10 breed, en 8×6, waar de dubbele hoeken diagonaal maar 7 uit elkaar
-liggen.</li>
+hoeken, de borden van even lengte vanaf 10 breed, en <a href="vesting-8x6.html">8×6</a>, waar de dubbele hoeken diagonaal
+maar 7 uit elkaar liggen, maar de diagonaal ertussen te kort is voor de val.</li>
 <li>Op 3 hoog delen de twee dubbele hoeken aan dezelfde kant een randveld, en is de uitkomst onregelmatig.</li>
 </ul>
 <p>Waar de vesting valt en waar de oppositie beslist, vat <a href="afstandsregel.html">de afstandsregel</a> samen.</p>''',
@@ -136,7 +138,8 @@ with unplayable corners, 98% to 100% of the fortress positions give the same pat
 <li>The opposition decides when the pair lies 8 apart: 9×8, 9×6, the boards of height 9 with even width, and 9×7 with
 unplayable corners.</li>
 <li>The fortress holds when the pair lies further apart: 9×9 and the larger odd × odd boards with unplayable corners, the
-boards of even height from width 10, and 8×6, where the double corners lie only 7 apart diagonally.</li>
+boards of even height from width 10, and <a href="vesting-8x6.html">8×6</a>, where the double corners lie only 7 apart
+diagonally, but the diagonal between them is too short for the trap.</li>
 <li>At height 3 the two double corners on the same side share an edge square, and the outcome is irregular.</li>
 </ul>
 <p>Where the fortress falls and where the opposition decides is summed up by <a href="afstandsregel.html">the distance rule</a>.</p>'''}
@@ -737,7 +740,8 @@ elkaar. Ook daar kan wit niet van tempo wisselen, maar een klein bord geeft wit 
 zwarte dam uit zijn dubbele hoek, en de vesting valt bij beide pariteiten.</p>
 <p>Op <a href="vesting-9x7.html">9×7</a> liggen twee dubbele hoeken ook diagonaal tegenover elkaar, 8 uit elkaar. De val
 op de diagonaal werkt, zoals op 8×8, maar er is geen tweede diagonaal om van tempo te wisselen: ook hier beslist de
-oppositie. Op <a href="vesting-9x9.html">9×9</a> is de diagonaal te lang: remise. Op nog grotere borden houdt de vesting
+oppositie. Op <a href="vesting-8x6.html">8×6</a> liggen de dubbele hoeken dichter bij elkaar, maar is de diagonaal
+ertussen te kort voor de val: remise. Op <a href="vesting-9x9.html">9×9</a> is de diagonaal te lang: ook remise. Op nog grotere borden houdt de vesting
 stand (zie <a href="afstandsregel.html">de afstandsregel</a> bij de tabel van 3 tegen 2).</p>
 <p>Ten slotte de kleine borden <a href="langste-7x7.html">7×7</a> en <a href="langste-5x5.html">5×5</a>, waar elke hoek een
 dubbele hoek is: kan een verdreven dam daar naar een andere dubbele hoek ontsnappen?</p>''', '''
@@ -755,7 +759,8 @@ too white cannot change the tempo, but a small board gives white a strategic res
 double corner, and the fortress falls at both parities.</p>
 <p>On <a href="vesting-9x7.html">9×7</a> two double corners also lie diagonally opposite, 8 apart. The trap on the
 diagonal works, as on 8×8, but there is no second diagonal to change the tempo: here too the opposition decides. On
-<a href="vesting-9x9.html">9×9</a> the diagonal is too long: a draw. On even bigger boards the fortress holds (see
+<a href="vesting-8x6.html">8×6</a> the double corners lie closer together, but the diagonal between them is too short
+for the trap: a draw. On <a href="vesting-9x9.html">9×9</a> the diagonal is too long: a draw as well. On even bigger boards the fortress holds (see
 <a href="afstandsregel.html">the distance rule</a> with the table of 3 against 2).</p>
 <p>Finally the small boards <a href="langste-7x7.html">7×7</a> and <a href="langste-5x5.html">5×5</a>, where every corner
 is a double corner: can an expelled king escape to another double corner there?</p>''')]
@@ -1078,7 +1083,7 @@ kant liggen. Bij een paar langs een zijde staat in de tabel eerst de lengte van 
 <table class="tbl"><tr><th>Paar</th><th>Borden</th><th>D × d</th><th>Vesting</th></tr>
 <tr><td>≤ 7 × H, verticaal</td><td>5×5; 7×5, 7×6, 7×7, 7×8, 7×9 en 7×10 tot en met 7×12</td><td>≤ 6 × 0</td><td>valt</td></tr>
 <tr><td>≤ 8 × 8, diagonaal</td><td>5×5, 6×6, 7×7, 8×8</td><td>≤ 7 × 7</td><td>valt</td></tr>
-<tr><td>8 × 6, diagonaal</td><td>8×6</td><td>7 × 5</td><td>houdt</td></tr>
+<tr><td>8 × 6, diagonaal</td><td><a href="vesting-8x6.html">8×6</a></td><td>7 × 5</td><td>houdt</td></tr>
 <tr><td>9 × H, verticaal</td><td>9×6, 9×7, 9×8, 9×9 en 9×10 tot en met 9×12</td><td>8 × 0</td><td>oppositie beslist</td></tr>
 <tr><td>9 × 7, diagonaal</td><td>9×7</td><td>8 × 6</td><td>oppositie beslist</td></tr>
 <tr><td>9 × 9, diagonaal</td><td>9×9</td><td>8 × 8</td><td>houdt</td></tr>
@@ -1096,7 +1101,7 @@ is called 7×8 here, since its pair lies along the side of 7.</p>
 <table class="tbl"><tr><th>Pair</th><th>Boards</th><th>D × d</th><th>Fortress</th></tr>
 <tr><td>≤ 7 × H, vertical</td><td>5×5; 7×5, 7×6, 7×7, 7×8, 7×9 and 7×10 to 7×12</td><td>≤ 6 × 0</td><td>falls</td></tr>
 <tr><td>≤ 8 × 8, diagonal</td><td>5×5, 6×6, 7×7, 8×8</td><td>≤ 7 × 7</td><td>falls</td></tr>
-<tr><td>8 × 6, diagonal</td><td>8×6</td><td>7 × 5</td><td>holds</td></tr>
+<tr><td>8 × 6, diagonal</td><td><a href="vesting-8x6.html">8×6</a></td><td>7 × 5</td><td>holds</td></tr>
 <tr><td>9 × H, vertical</td><td>9×6, 9×7, 9×8, 9×9 and 9×10 to 9×12</td><td>8 × 0</td><td>opposition decides</td></tr>
 <tr><td>9 × 7, diagonal</td><td>9×7</td><td>8 × 6</td><td>opposition decides</td></tr>
 <tr><td>9 × 9, diagonal</td><td>9×9</td><td>8 × 8</td><td>holds</td></tr>
@@ -1137,6 +1142,9 @@ fortress already holds at <em>D</em> = 7. The <a href="tabel-drie.html">table of
         rule = next(k for k, x in enumerate(body) if isinstance(x, str) and 'D × d' in x)
         self.write('vesting.html', None, '\n'.join(body[:rule] + trap2), pg, k89)
         self.write('vesting-9x9.html', None, '\n'.join(self.fortress99(pg9, k99, e99)), pg9, k99)
+        k86, e86 = self.engine(8, 6, 'playable')
+        pg86 = self.page((k86, e86))
+        self.write('vesting-8x6.html', None, '\n'.join(self.fortress86(pg86, k86, e86)), pg86, k86)
         # 7x7 with unplayable corners: the longest win (quiet start, white to move); black flees to two double corners on
         # the g-file and white expels one king from its double corner
         k77, e77 = self.engine(7, 7, 'unplayable')
@@ -1420,11 +1428,11 @@ are 8 traps, at even parity not a single one.</p>''')]
         self.write('vesting-9x7.html', None, '\n'.join(rulebody), pga, k97)
         self.write('afstandsregel.html', None, body[rule] + t(
             '<p>Zie de borden zelf: <a href="vesting-8x7.html">8×7</a>, <a href="val.html">8×8</a>, '
-            '<a href="vesting.html">9×8</a>, <a href="vesting-9x7.html">9×7</a>, <a href="vesting-9x9.html">9×9</a>, '
-            '<a href="langste-7x7.html">7×7</a> en <a href="langste-5x5.html">5×5</a>.</p>',
+            '<a href="vesting.html">9×8</a>, <a href="vesting-9x7.html">9×7</a>, <a href="vesting-8x6.html">8×6</a>, '
+            '<a href="vesting-9x9.html">9×9</a>, <a href="langste-7x7.html">7×7</a> en <a href="langste-5x5.html">5×5</a>.</p>',
             '<p>See the boards themselves: <a href="vesting-8x7.html">8×7</a>, <a href="val.html">8×8</a>, '
-            '<a href="vesting.html">9×8</a>, <a href="vesting-9x7.html">9×7</a>, <a href="vesting-9x9.html">9×9</a>, '
-            '<a href="langste-7x7.html">7×7</a> and <a href="langste-5x5.html">5×5</a>.</p>'),
+            '<a href="vesting.html">9×8</a>, <a href="vesting-9x7.html">9×7</a>, <a href="vesting-8x6.html">8×6</a>, '
+            '<a href="vesting-9x9.html">9×9</a>, <a href="langste-7x7.html">7×7</a> and <a href="langste-5x5.html">5×5</a>.</p>'),
             self.page((k97, e97)))
 
 
@@ -1724,6 +1732,65 @@ saves himself only with 1. … {draw[0]}; both corner moves lose. All moves of b
                         '<p>White stands in the set-up of the active trap 1, but black shuttles with the same king to and fro '
                         'and is not in the trap; white is to move: a draw. (Were black to shuttle with both kings, he would '
                         'stand in trap 1, with white to move, and white forces the exchange at once.)</p>'), '<div style="clear:both"></div>']
+
+    def fortress86(self, pg, k86, e86):
+        """8x6: the double corners g1/h2 and b6/a5 lie diagonally opposite, only 7 x 5 apart, and yet the fortress holds:
+        the connecting diagonal g1-b6 is too short for the trap of 8x8, and the other diagonal from h2 ends at d6"""
+        t = self.t
+        body = [t('''
+<p>Op 8×6 liggen de dubbele hoeken g1/h2 en b6/a5 diagonaal tegenover elkaar, 7 × 5 uit elkaar: dichterbij dan op 8×8.
+Volgens de <a href="afstandsregel.html">afstandsregel</a> zou de vesting dus moeten vallen, maar ze houdt: met de
+zwarte dammen in de twee dubbele hoeken is 98% van de rustige stellingen remise, wie er ook aan zet is, en de database
+vindt bij geen van beide pariteiten één val
+(<a href="https://github.com/rhalbersma/egdb-draughts/blob/main/checkers/traps.py"><code>traps.py</code></a>).</p>
+<p>Op 8×8 staat de <a href="val.html">val</a> met drie witte dammen op een rij midden op de diagonaal a7–g1 tussen de
+zwarte dammen, met aan beide kanten een vrij veld, b6 en f2. Pendelt zwart in de ene hoek, dan offert wit op het vrije
+veld naast de andere zwarte dam, en de middelste witte dam slaat terug. Op 8×6 verbindt de diagonaal g1–b6 de dubbele
+hoeken, maar b6 is zelf het randveld van de dubbele hoek: tussen de zwarte dammen liggen maar 4 velden, en met drie witte
+dammen erop blijft er maar één vrij.</p>''', '''
+<p>On 8×6 the double corners g1/h2 and b6/a5 lie diagonally opposite, 7 × 5 apart: closer than on 8×8. By the
+<a href="afstandsregel.html">distance rule</a> the fortress should therefore fall, but it holds: with the black kings in
+the two double corners 98% of the quiet positions are drawn, whichever side is to move, and the database finds not a
+single trap at either parity
+(<a href="https://github.com/rhalbersma/egdb-draughts/blob/main/checkers/traps.py"><code>traps.py</code></a>).</p>
+<p>On 8×8 the <a href="val.html">trap</a> stands with three white kings in a row in the middle of the diagonal a7–g1
+between the black kings, with a free square on both sides, b6 and f2. When black shuttles in the one corner, white offers
+on the free square next to the other black king, and the middle white king captures back. On 8×6 the diagonal g1–b6
+connects the double corners, but b6 is itself the edge square of the double corner: between the black kings there are
+only 4 squares, and with three white kings on them only one stays free.</p>''')]
+        figs = []
+        for W in (['c5', 'd4', 'e3'], ['d4', 'e3', 'f2']):
+            fen = e86.fen(W, ['b6', 'g1'], 'B')
+            v, legal = e86.analyse(fen)
+            fig, i0 = pg.diagram(fen, t(f'8×6, zwart aan zet: {v}', f'8×6, black to move: {v}'), gid=k86)
+            sh = self.shuttles(pg, k86, e86, i0, legal, {'b6-a5', 'g1-h2'})
+            assert v == 'D' and len(sh) == 2 and sorted(ok for _, ok, _ in sh) == [False, True]
+            hit = next(x for _, ok, x in sh if ok)
+            free = next(x for _, ok, x in sh if not ok)
+            figs.append((v, fig, i0, legal, hit, free))
+        (v1, fig1, i1, legal1, hit1, free1), (v2, fig2, i2, legal2, hit2, free2) = figs
+        body += [fig1,
+                 t(f'<p>Met wit op c5, d4 en e3 ({v1}) wordt {hit1} gestraft, net als op 8×8, maar {free1} niet: op 8×8 '
+                   f'offert wit dan op b6, maar hier staat de zwarte dam zelf op b6, en tussen c5 en b6 is geen veld meer '
+                   f'vrij. Alle zetten van zwart: ',
+                   f'<p>With white on c5, d4 and e3 ({v1}), {hit1} is punished, just as on 8×8, but {free1} is not: on 8×8 '
+                   f'white then offers on b6, but here the black king itself stands on b6, and between c5 and b6 no square '
+                   f'is free any more. All moves of black: ') + self.moves_list(pg, i1, legal1, '1. … ') + '.</p>',
+                 '<div style="clear:both"></div>', fig2,
+                 t(f'<p>Eén veld verder, op d4, e3 en f2 ({v2}), is het omgekeerd: {hit2} wordt gestraft, {free2} niet. '
+                   f'Alle zetten van zwart: ',
+                   f'<p>One square further, on d4, e3 and f2 ({v2}), it is the other way round: {hit2} is punished, '
+                   f'{free2} is not. All moves of black: ') + self.moves_list(pg, i2, legal2, '1. … ') + '.</p>',
+                 t('<p>Op 8×8 geeft de tweede diagonaal, b8–h2, de val bij de andere pariteit. Op 8×6 loopt de diagonaal '
+                   'vanaf h2 (h2–g3–f4–e5–d6) dood tegen de bovenrand en bereikt de andere dubbele hoek niet. Zo is er bij '
+                   'geen van beide pariteiten een val, en de vesting houdt: remise. De diagonaal is te kort, het tegenstuk '
+                   'van <a href="vesting-9x9.html">9×9</a>, waar hij te lang is.</p>',
+                   '<p>On 8×8 the second diagonal, b8–h2, gives the trap at the other parity. On 8×6 the diagonal from h2 '
+                   '(h2–g3–f4–e5–d6) runs into the top edge and does not reach the other double corner. So there is no trap '
+                   'at either parity, and the fortress holds: a draw. The diagonal is too short, the counterpart of '
+                   '<a href="vesting-9x9.html">9×9</a>, where it is too long.</p>'),
+                 '<div style="clear:both"></div>']
+        return body
 
     def fortress99(self, pg, k99, e99):
         """9x9 with unplayable corners: two double corners on the same side behave as on 9x8; the diagonal pair is a draw,

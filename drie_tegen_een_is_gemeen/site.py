@@ -504,18 +504,19 @@ capture.</p>''')]
         e = self.engine('h8', '--board', 'international', '--lake', 'h8')
         pg = self.page(('h8', e))
         t = self.t
-        # one square per symmetry class: (number, square, book, database, longest win, drawn); the longest win is
+        # one square per symmetry class: (number, square, book, database, longest win, condition); the longest win is
         # clickable, with its main line
-        rows = [(1, 'b10', 'W', 'W', 23, False), (2, 'd10', 'D', 'D', 33, True), (3, 'f10', '?', 'D', 23, True),
-                (4, 'h10', 'D', 'D', 29, True), (5, 'j10', 'W', 'W', 21, False), (7, 'c9', 'W', 'W', 25, False),
-                (8, 'e9', 'D', 'D', 31, True), (9, 'g9', 'D', 'D', 27, True),
-                (10, 'i9', 'W', t('W als j10 leeg is', 'W if j10 is empty'), 19, True),
-                (12, 'd8', '?', 'D', 35, True), (13, 'f8', '?', 'D', 37, True),
-                (14, 'h8', 'W', t('W op één zetdwang na', 'W except one zugzwang'), 33, False),
-                (18, 'e7', 'D', 'D', 35, True), (19, 'g7', '?', 'W', 33, False), (23, 'f6', 'W', 'W', 35, False)]
-        tbl = [t('<table class="tbl"><tr><th>Weg</th><th>Boek</th><th>Database (langste winst)</th></tr>',
-                 '<table class="tbl"><tr><th>Removed</th><th>Book</th><th>Database (longest win)</th></tr>')]
-        for num, sq, book, db, n, drawn in rows:
+        rows = [(1, 'b10', 'W', 'W', 23, ''), (2, 'd10', 'D', 'D', 33, ''), (3, 'f10', '?', 'D', 23, ''),
+                (4, 'h10', 'D', 'D', 29, ''), (5, 'j10', 'W', 'W', 21, ''), (7, 'c9', 'W', 'W', 25, ''),
+                (8, 'e9', 'D', 'D', 31, ''), (9, 'g9', 'D', 'D', 27, ''),
+                (10, 'i9', 'W', 'W', 19, t('als j10 leeg is', 'if j10 is empty')),
+                (12, 'd8', '?', 'D', 35, ''), (13, 'f8', '?', 'D', 37, ''),
+                (14, 'h8', 'W', 'W', 33, t('op één zetdwang na', 'except one zugzwang')),
+                (18, 'e7', 'D', 'D', 35, ''), (19, 'g7', '?', 'W', 33, ''), (23, 'f6', 'W', 'W', 35, '')]
+        tbl = [t('<table class="tbl"><tr><th>Veld</th><th>Boek</th><th>Database (langste winst)</th></tr>',
+                 '<table class="tbl"><tr><th>Square</th><th>Book</th><th>Database (longest win)</th></tr>')]
+        for num, sq, book, db, n, condition in rows:
+            drawn = db == 'D'
             gid = f'10x10-{sq}'
             el = e if sq == 'h8' else self.engine(gid, '--board', 'international', '--lake', sq)
             if gid not in pg.geoms:
@@ -527,7 +528,7 @@ capture.</p>''')]
             cell = f'<span class="res-{"draw" if drawn else "win"}">' + (f'({link})' if drawn else link) + '</span>'
             # the removed square in the notation of the page (numeric on 10×10, algebraic after the switch)
             name = f'<span class="mv" data-g="h8" data-n="{num}" data-a="{sq}">{num}</span>'
-            tbl.append(f'<tr><td>{name}</td><td>{book}</td><td><strong>{db}</strong> {cell}</td></tr>')
+            tbl.append(f'<tr><td>{name}</td><td>{book}</td><td><strong>{db}</strong> {cell} {condition}</td></tr>')
         tbl.append('</table>')
         fen = 'W:WK4,K5,K10:BK15'
         fig, i0 = pg.diagram(fen, t('10×10 zonder h8, wit aan zet', '10×10 without h8, white to move'))

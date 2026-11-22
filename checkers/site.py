@@ -122,8 +122,6 @@ RESULTS_21 = {
     8: ['33', '37', '41', '45', '49', '53', '57', '61', '65', '69', '73', '77'],
     9: ['37/17', '41', '45/21', '49', '53/25', '57', '61/29', '65', '69/33', '73', '77/37', '81'],
     10: ['41', '45', '49', '53', '57', '61', '65', '69', '73', '77', '81', '85'],
-    11: ['45/21', '49', '53/25', '57', '61/29', '65', '69/33', '73', '77/37', '81', '85/41', '89'],
-    12: ['49', '53', '57', '61', '65', '69', '73', '77', '81', '85', '89', '93'],
 }
 
 TEXT21 = {'nl': '''<h2>2 dammen tegen 1 per bord</h2>
@@ -360,7 +358,7 @@ is clickable. Boards are named width × height, as drawn.</p>''')]
 onafhankelijk van de bordgrootte; op 8×8 op spiegelingen na 3) zitten de twee witte dammen opgesloten in de enkele hoek en houdt de zwarte dam ze
 daar met oppositie. Op oneven × oneven borden met onspeelbare hoeken is er geen enkele hoek en dus geen blokkade; met
 speelbare hoeken verliest wit de blokkade zelfs, want zonder dubbele hoek wint bij 1 tegen 1 wie de oppositie heeft.</li></ul>
-<p>De <a href="index.html">tabel per bord</a> op het overzicht geeft de uitkomst op elk bord tot en met 23×12.</p>
+<p>De <a href="index.html">tabel per bord</a> op het overzicht geeft de uitkomst op elk bord tot en met 21×10.</p>
 <p>De langste winst groeit gestaag met het bord: 33 ply op 8×8, 41 op 10×10, 49 op 12×12, 61 op 15×12.</p>''', '''
 <p>2 against 1 is won on every board that is large enough, with two exceptions:</p>
 <ul><li><a href="twee-4x4.html">the 4×4 board</a>: there 2 against 1 is, surprisingly, a draw;</li>
@@ -368,7 +366,7 @@ speelbare hoeken verliest wit de blokkade zelfs, want zonder dubbele hoek wint b
 independent of the board size; on 8×8 up to symmetry 3) the two white kings are locked in the single corner and the black king keeps them there
 by opposition. On odd × odd boards with unplayable corners there is no single corner and so no blockade; with playable
 corners white even loses the blockade, since without a double corner 1 against 1 is won by the side with the opposition.</li></ul>
-<p>The <a href="index.html">table per board</a> in the overview gives the outcome on every board up to 23×12.</p>
+<p>The <a href="index.html">table per board</a> in the overview gives the outcome on every board up to 21×10.</p>
 <p>The longest win grows steadily with the board: 33 plies on 8×8, 41 on 10×10, 49 on 12×12, 61 on 15×12.</p>'''),
                  t(f'<p>De langste winst op 8×8 ({v[1:]} ply):</p>', f'<p>The longest win on 8×8 ({v[1:]} plies):</p>'),
                  f'<p class="var">{h}</p>',

@@ -26,13 +26,15 @@ TITLE = {'nl': 'Checkers: 3 dammen tegen 2', 'en': 'Checkers: 3 kings against 2'
 
 # the chapters, each with one page per section: (Dutch, English, [(file, Dutch, English)])
 CHAPTERS = [
-    ('2 tegen 1', '2 against 1', [
+    ('2 tegen 1 op 8×8', '2 against 1 on 8×8', [
         ('twee-verdrijven.html', 'De dam verdrijven', 'Driving out the king'),
-        ('twee-5x5.html', '5×5: de verdreven dam ontsnapt naar een andere hoek', '5×5: the expelled king escapes to another corner'),
-        ('twee-5x5-val.html', '5×5: een val die werkt met wit en met zwart aan zet', '5×5: a trap that works with white and with black to move'),
-        ('twee-4x4.html', 'Uitzondering 1: remise op 4×4', 'Exception 1: a draw on 4×4'),
-        ('twee-langste.html', 'De langste winst op 8×8', 'The longest win on 8×8'),
-        ('twee-blokkade.html', 'Uitzondering 2: de blokkade aan de rand', 'Exception 2: the blockade at the edge')]),
+        ('twee-langste.html', 'De langste winst', 'The longest win'),
+        ('twee-blokkade.html', 'Uitzondering: de blokkade aan de rand', 'Exception: the blockade at the edge')]),
+    ('2 tegen 1 op 5×5', '2 against 1 on 5×5', [
+        ('twee-5x5.html', 'De verdreven dam ontsnapt naar een andere hoek', 'The expelled king escapes to another corner'),
+        ('twee-5x5-val.html', 'Een val die werkt met wit en met zwart aan zet', 'A trap that works with white and with black to move')]),
+    ('2 tegen 1 op 4×4', '2 against 1 on 4×4', [
+        ('twee-4x4.html', 'Remise: de dam ontsnapt en er is geen val', 'A draw: the king escapes and there is no trap')]),
     ('3 tegen 2 op 8×8', '3 against 2 on 8×8', [
         ('drie-langste.html', 'De langste winst', 'The longest win'),
         ('blokkades.html', 'Uitzondering 1: de blokkades', 'Exception 1: the blockades'),
@@ -487,13 +489,14 @@ d1/e2; with 6. c4-d3 white sets up a king, and after 6. … d1-e2 7. a4-b5! blac
                    'methode werkt op elk bord, tenzij het veld a5 of c5 dan zelf in een dubbele hoek ligt. Op een bord van 5 '
                    'hoog is dat a5, op 4×4 c5. Met wit en met zwart aan zet wint wit zo zonder offer op 6×6, 7×7 (onspeelbare '
                    'hoeken), 8×8, 9×9 (onspeelbare hoeken) en 10×10; met wit aan zet lukt het op geen enkel bord van 5 hoog '
-                   '(5 tot en met 9 breed). Daarom eerst <a href="twee-5x5.html">5×5</a>, en dan <a href="twee-4x4.html">4×4</a>.</p>',
+                   '(5 tot en met 9 breed). Daarom volgen na 8×8 hoofdstukken over <a href="twee-5x5.html">5×5</a> en '
+                   '<a href="twee-4x4.html">4×4</a>.</p>',
                    '<p>After 4. b8-a7 black has to leave the diagonal of the double corner (through a7 and b6): 4. … b6-a5. '
                    'This method works on every board, unless the square a5 or c5 is then itself in a double corner. On a '
                    'board of height 5 that is a5, on 4×4 c5. With white and with black to move white wins this way without '
                    'a sacrifice on 6×6, 7×7 (unplayable corners), 8×8, 9×9 (unplayable corners) and 10×10; with white to '
-                   'move it fails on every board of height 5 (5 to 9 wide). Hence first <a href="twee-5x5.html">5×5</a>, '
-                   'and then <a href="twee-4x4.html">4×4</a>.</p>')]
+                   'move it fails on every board of height 5 (5 to 9 wide). Hence chapters on <a href="twee-5x5.html">5×5</a> '
+                   'and <a href="twee-4x4.html">4×4</a> follow after 8×8.</p>')]
         flush('twee-verdrijven.html')
         # the longest win: black flees to both double corners and white builds the trap there
         fen = 'W:WK3,K4,K30:BK11,K13'

@@ -28,8 +28,8 @@ TITLE = {'nl': 'Checkers: 3 dammen tegen 2', 'en': 'Checkers: 3 kings against 2'
 CHAPTERS = [
     ('2 tegen 1 op 8×8', '2 against 1 on 8×8', [
         ('twee-verdrijven.html', 'De dam verdrijven', 'Driving out the king'),
-        ('twee-langste.html', 'De langste winst', 'The longest win'),
         ('twee-blokkade.html', 'Uitzondering: de blokkade aan de rand', 'Exception: the blockade at the edge'),
+        ('twee-langste.html', 'De langste winst', 'The longest win'),
         ('twee-algemeen.html', 'De methode op andere borden', 'The method on other boards')]),
     ('2 tegen 1 op 5×5', '2 against 1 on 5×5', [
         ('twee-5x5.html', 'De verdreven dam ontsnapt naar een andere hoek', 'The expelled king escapes to another corner'),
@@ -37,11 +37,11 @@ CHAPTERS = [
     ('2 tegen 1 op 4×4', '2 against 1 on 4×4', [
         ('twee-4x4.html', 'Remise: de dam ontsnapt en er is geen val', 'A draw: the king escapes and there is no trap')]),
     ('3 tegen 2 op 8×8', '3 against 2 on 8×8', [
-        ('drie-langste.html', 'De langste winst', 'The longest win'),
+        ('val.html', 'Twee vallen om de vesting te breken', 'Two traps to break the fortress'),
+        ('val-pariteit.html', 'De winst is strategisch, de pariteit doet er niet toe', 'The win is strategic, parity does not matter'),
         ('blokkades.html', 'Uitzondering 1: de blokkades', 'Exception 1: the blockades'),
         ('curiosa.html', 'Uitzondering 2: twee curiosa', 'Exception 2: two curiosities'),
-        ('val.html', 'Twee vallen om de vesting te breken', 'Two traps to break the fortress'),
-        ('val-pariteit.html', 'De winst is strategisch, de pariteit doet er niet toe', 'The win is strategic, parity does not matter')]),
+        ('drie-langste.html', 'De langste winst', 'The longest win')]),
     ('3 tegen 2 op 9×8', '3 against 2 on 9×8', [
         ('vesting.html', 'Twee vallen om de vesting te breken', 'Two traps to break the fortress'),
         ('vesting-pariteit.html', 'De winst is niet strategisch, de pariteit doet ertoe', 'The win is non-strategic, parity matters')]),
@@ -538,11 +538,9 @@ d1/e2; with 6. c4-d3 white sets up a king, and after 6. … d1-e2 7. a4-b5! blac
             f'makes half of such positions a draw on 9×8 and 10×9, plays no role on 8×8.</p>'),
             f'<p class="var">{h}</p>',
             t('<p>Zwart probeert zijn toevlucht te zoeken in een vesting door beide dubbele hoeken te bezetten, maar wit '
-              'breekt de vesting. Hoe wit dat doet, analyseren we na de twee uitzonderingen, bij '
-              '<a href="val.html">twee vallen om de vesting te breken</a>.</p>',
-              '<p>Black tries to take refuge in a fortress by occupying both double corners, but white breaks the fortress. '
-              'How white achieves this is analysed after the two exceptions, at '
-              '<a href="val.html">two traps to break the fortress</a>.</p>'),
+              'breekt de vesting, met een van de <a href="val.html">twee vallen om de vesting te breken</a>.</p>',
+              '<p>Black tries to take refuge in a fortress by occupying both double corners, but white breaks the fortress, '
+              'with one of the <a href="val.html">two traps to break the fortress</a>.</p>'),
             '<div style="clear:both"></div>']
         flush('drie-langste.html')
         body, phases, pgp = self.traps88(pg, k88, e88)
@@ -668,13 +666,13 @@ king in the middle of the white kings (the third diagram).</p>''')]
     def traps88(self, pg, k88, e88):
         """two traps on 8x8, one at each parity: every shuttle move of black allows a forced exchange"""
         t = self.t
-        body = [t('<p>Bij <a href="twee-langste.html">2 tegen 1</a> is de dubbele hoek geen veilige haven: twee witte '
+        body = [t('<p>Bij <a href="twee-verdrijven.html">2 tegen 1</a> is de dubbele hoek geen veilige haven: twee witte '
                   'dammen winnen ook tegen een zwarte dam in de dubbele hoek. Twee zwarte dammen bezetten daarom beide dubbele '
                   'hoeken, en per hoek twee witte dammen zou betekenen dat pas 4 tegen 2 wint. Het 8×8-bord is echter precies '
                   'klein genoeg om 2 zwarte dammen met 3 dammen te vangen: in de val doet de middelste witte dam dubbel werk. '
                   'Hij slaat terug na de ruil in '
                   'de ene hoek én na die in de andere, in de eerste val hieronder vanaf d4, in de tweede vanaf e5.</p>',
-                  '<p>In <a href="twee-langste.html">2 against 1</a> the double corner is no safe haven: two white kings win '
+                  '<p>In <a href="twee-verdrijven.html">2 against 1</a> the double corner is no safe haven: two white kings win '
                   'against a black king in the double corner too. 2 black kings therefore occupy both double corners, and two '
                   'white kings per corner would mean only 4 against 2 is winning. However, the 8×8 board is just small enough '
                   'to capture 2 black kings with 3 kings: in the trap the middle white king does double duty. It captures back '

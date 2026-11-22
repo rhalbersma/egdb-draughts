@@ -195,7 +195,7 @@ On H = 7 the wrong colouring still wins (9×5 and 13×7 unplayable corners) beca
 * **H = 5, 6**: every non-square board is won (checked up to 16×5 and 17×6). Three kings in a column
   close off the full width and can be pushed along the board; the longest win grows by about 2 plies per extra column.
 * **H = 7**: won up to **14×7** and **15×7 playable corners** (book: up to 11×7). From W = 16 on it is drawn.
-  The longest wins jump from 25 to 35, 49, 53 and 67–73 plies: the space becomes tight.
+  The longest wins jump from 25 to 35, 49, 53 and 67–73 plies.
 * **H = 8**: won at W = 9, 10, 11 and 15 (= 2H − 1), drawn at W = 12–14 and 16–19.
 * **H ≥ 9**: only the families remain.
 

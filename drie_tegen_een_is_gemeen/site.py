@@ -59,15 +59,15 @@ RESULTS_31 = {
     12: ['(15)', '21', '25', '(27)', '(19)', '(31)', '(21)', '(21)', '(19)', '(21)', '', '27'],
 }
 
-LEGEND_EN = ('In the tables: <code>21</code> = won, longest win 21 plies · <code>21*</code> = won provided the stronger '
-             'side occupies the long diagonal(s) · <code>(21)</code> = drawn (the number is the longest win among the '
+LEGEND_EN = ('In the tables: <span class="res-win">21</span> = won, longest win 21 plies · <span class="res-diag">21*</span> '
+             '= won provided the stronger side occupies the long diagonal(s) · <span class="res-draw">(21)</span> = drawn (the number is the longest win among the '
              'positions that are won) · <code>13/15</code> = unplayable/playable corner squares. A board <em>B × L</em> is '
              'width × height, with <em>B</em> ≥ <em>L</em>; the tables have a row for every <em>L</em> and a column for '
              'every <em>B</em> − <em>L</em>. Playable = the corner squares are playable, unplayable = they are not (only '
              'relevant for odd × odd).')
 
-LEGEND = ('In de tabellen: <code>21</code> = gewonnen, langste winst 21 ply · <code>21*</code> = gewonnen als de '
-          'sterke partij de lange lijn(en) bezet · <code>(21)</code> = remise (het getal is de langste winst onder de '
+LEGEND = ('In de tabellen: <span class="res-win">21</span> = gewonnen, langste winst 21 ply · <span class="res-diag">21*</span> '
+          '= gewonnen als de sterke partij de lange lijn(en) bezet · <span class="res-draw">(21)</span> = remise (het getal is de langste winst onder de '
           'stellingen die wel gewonnen zijn) · <code>13/15</code> = onspeelbare/speelbare hoekvelden. Een bord <em>B × L</em> '
           'is breedte × lengte, met <em>B</em> ≥ <em>L</em>; de tabellen hebben een rij per <em>L</em> en een kolom per '
           '<em>B</em> − <em>L</em>. Speelbaar = de hoekvelden zijn speelbaar, onspeelbaar = niet (alleen van belang bij '
@@ -142,8 +142,10 @@ class Site:
                 links = []
                 for k, part in enumerate(parts):
                     n = int(re.sub(r'\D', '', part))
+                    # the colour of the result: won, won with the long diagonal(s), drawn (the hues of ggplot2)
+                    kind = 'draw' if part.startswith('(') else 'diag' if '*' in part else 'win'
                     if not clickable:
-                        links.append(esc(part))
+                        links.append(f'<span class="res-{kind}">{esc(part)}</span>')
                         continue
                     w = h + d
                     corners = 'unplayable' if len(parts) == 2 and k == 0 else 'playable'
@@ -156,7 +158,9 @@ class Site:
                     i = pg.add(e.longest, gid=gid)
                     label = f'{w}×{h}' + (t(' onspeelbare hoeken', ' unplayable corners') if corners == 'unplayable' else
                                           t(' speelbare hoeken', ' playable corners') if len(parts) == 2 else '')
-                    links.append(part.replace(str(n), f'<a class="m1" href="#" data-i="{i}" title="{label}: W{n}">{n}</a>', 1))
+                    links.append(f'<span class="res-{kind}">'
+                                 + part.replace(str(n), f'<a class="m1" href="#" data-i="{i}" title="{label}: W{n}">{n}</a>', 1)
+                                 + '</span>')
                 tds.append('<td>' + '/'.join(links) + '</td>')
             rows.append(f'<tr><th>{h}</th>' + ''.join(tds) + '</tr>')
         return '<table class="tbl results">' + head + ''.join(rows) + '</table>'

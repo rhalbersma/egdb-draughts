@@ -108,19 +108,20 @@ TABLE32 = {'nl': '''<h2>3 dammen tegen 2 per bord</h2>
 
 
 # 2 kings against 1 per board: a row per height H, a column per W - H; the number is the longest win in plies (white to
-# move), unplayable/playable corner squares on boards with two odd sides. 21 = every quiet position with white to move
-# is won; 21* = won except a handful of positions in which white is blocked (at most 6.3% of the quiet positions);
-# (21) = not won: black draws or even wins in a large part of the quiet positions (29% to 58%)
+# move), unplayable/playable corner squares on boards with two odd sides. Counted over the quiet positions with white to
+# move: nobody can capture, white has a move that loses no material, and black (to move) cannot create a fork.
+# 21 = every quiet position is won; 21* = won except the blockade in the single corners (both white kings within two
+# squares of a playable corner square); (21) = drawn: black holds in 36% to 56% of the quiet positions
 RESULTS_21 = {
-    3: ['3/(3)', '11', '(9)/(9)', '23*', '(17)/11*', '35*', '(25)/15*', '47*', '(33)/19*', '59*', '(41)/23*', '71*'],
-    4: ['(3)', '13*', '19', '19', '27', '27', '35', '35', '43', '43', '51', '51'],
-    5: ['13/9*', '23*', '31*/13*', '33*', '37*/17*', '41*', '45*/21*', '49*', '53*/25*', '57*', '61*/29*', '65*'],
+    3: ['3/3', '11', '(9)/9*', '23*', '(17)/11*', '35*', '(25)/15*', '47*', '(33)/19*', '59*', '(41)/23*', '71*'],
+    4: ['(3)', '13', '19', '19', '27', '27', '35', '35', '43', '43', '51', '51'],
+    5: ['13/9', '23*', '31/13', '33*', '37/17', '41*', '45/21', '49*', '53/25', '57*', '61/29', '65*'],
     6: ['27*', '31*', '33*', '37*', '41*', '45*', '49*', '53*', '57*', '61*', '65*', '69*'],
-    7: ['31/13*', '33*', '37/17*', '41*', '45/21*', '49*', '53/25*', '57*', '61/29*', '65*', '69/33*', '73*'],
+    7: ['31/13', '33*', '37/17', '41*', '45/21', '49*', '53/25', '57*', '61/29', '65*', '69/33', '73*'],
     8: ['33*', '37*', '41*', '45*', '49*', '53*', '57*', '61*', '65*', '69*', '73*', '77*'],
-    9: ['37/17*', '41*', '45/21*', '49*', '53/25*', '57*', '61/29*', '65*', '69/33*', '73*', '77/37*', '81*'],
+    9: ['37/17', '41*', '45/21', '49*', '53/25', '57*', '61/29', '65*', '69/33', '73*', '77/37', '81*'],
     10: ['41*', '45*', '49*', '53*', '57*', '61*', '65*', '69*', '73*', '77*', '81*', '85*'],
-    11: ['45/21*', '49*', '53/25*', '57*', '61/29*', '65*', '69/33*', '73*', '77/37*', '81*', '85/41*', '89*'],
+    11: ['45/21', '49*', '53/25', '57*', '61/29', '65*', '69/33', '73*', '77/37', '81*', '85/41', '89*'],
     12: ['49*', '53*', '57*', '61*', '65*', '69*', '73*', '77*', '81*', '85*', '89*', '93*'],
 }
 
@@ -128,52 +129,41 @@ TEXT21 = {'nl': '''<h2>2 dammen tegen 1 per bord</h2>
 <p>De langste winst op elk bord, met een rij per lengte <em>L</em> en een kolom per <em>B</em> − <em>L</em>; klik op een
 getal voor de stelling en speel de hele winst na.</p>
 {table}
-<p class="src">In de tabel: <span class="res-win">33</span> = elke rustige stelling met wit aan zet is gewonnen, de
-langste winst duurt 33 ply · <span class="res-diag">33*</span> = gewonnen, op een handvol stellingen na waarin wit
-vastzit, zoals <a href="twee-blokkade.html">de blokkade</a> in de enkele hoek (hooguit 6,3% van de rustige stellingen) ·
-<span class="res-draw">(33)</span> = niet gewonnen: zwart houdt remise of wint zelfs in een groot deel van de rustige
-stellingen (29% tot 58%; het getal is de langste winst) · <code>31/13</code> = onspeelbare/speelbare hoekvelden. Een bord <em>B</em> × <em>L</em>
-is breedte × lengte, met <em>B</em> ≥ <em>L</em>.</p>
+<p class="src">De kleur telt de rustige stellingen met wit aan zet: niemand kan slaan, wit heeft een zet zonder materiaal te
+verliezen, en zwart kan aan zet geen vork maken. <span class="res-win">33</span> = elke rustige stelling is gewonnen, de
+langste winst duurt 33 ply · <span class="res-diag">33*</span> = gewonnen, op <a href="twee-blokkade.html">de
+blokkade</a> in de enkele hoeken na · <span class="res-draw">(33)</span> = remise: zwart houdt stand in 36% tot 56% van
+de rustige stellingen (het getal is de langste winst) · <code>31/13</code> = onspeelbare/speelbare hoekvelden. Een bord
+<em>B</em> × <em>L</em> is breedte × lengte, met <em>B</em> ≥ <em>L</em>.</p>
 <ul>
-<li><em>L</em> = 3: met onspeelbare hoeken (oneven <em>B</em> ≥ 5) is het remise: zwart houdt remise in 36% tot 58% van
-de rustige stellingen. Ook 3×3 en 5×3 met speelbare hoeken zijn niet gewonnen (33% en 29%, veel daarvan zelfs verloren). 3×3 met
-onspeelbare hoeken en 4×3 zijn helemaal gewonnen, de andere borden op 10 of 20 stellingen na.</li>
-<li><em>L</em> = 4: <a href="twee-4x4.html">4×4</a> is remise (54% van de rustige stellingen), en op 5×4 zijn alleen twee
-stellingen remise (wit in de twee enkele hoeken, zwart ertussen). Vanaf 6×4 is elke stelling gewonnen: op een bord van 4 hoog bestaat de blokkade niet.</li>
-<li><em>L</em> = 5: <a href="twee-5x5-val.html">5×5 met onspeelbare hoeken</a> is helemaal gewonnen. Op de andere borden
-houdt zwart remise of wint hij zelfs in een handvol stellingen (1 tot 24, hooguit 4,3%), bijvoorbeeld met de twee witte
-dammen boven en onder in dezelfde kolom en de zwarte dam ertussen in het midden: zwart houdt de oppositie.</li>
-<li><em>L</em> ≥ 6: gewonnen, op de blokkade in de enkele hoeken na: 10 stellingen bij even <em>L</em>, 8 bij oneven
-<em>L</em> en even <em>B</em>. Op oneven × oneven borden met onspeelbare hoeken (vier dubbele hoeken) is er geen enkele
-hoek en dus geen blokkade. Met speelbare hoeken (vier enkele hoeken) zijn het 4 stellingen, en die verliest wit zelfs:
-hij moet een dam geven, en zonder dubbele hoek wint bij 1 tegen 1 wie de oppositie heeft.</li>
+<li>Alleen <a href="twee-4x4.html">4×4</a> en de oneven borden van 3 hoog met onspeelbare hoeken (5×3 tot en met 13×3)
+zijn remise. Op zo'n strook van 3 hoog kan een dam alleen op de middelste rij geslagen worden, en niet aan de rand.</li>
+<li>Op alle andere borden is elke rustige stelling gewonnen, op de blokkade in de enkele hoeken na: 4 stellingen per
+enkele hoek bij even <em>L</em> (op 3 hoog ook bij oneven <em>B</em> met speelbare hoeken), 3 bij oneven <em>L</em> ≥
+5.</li>
+<li>Zonder blokkade, dus helemaal gewonnen: 3×3 en 4×3, alle borden van 4 hoog vanaf 5×4, en alle oneven × oneven borden
+vanaf 5×5. Met onspeelbare hoeken is daar geen enkele hoek; met speelbare hoeken staat wit in de blokkade in zetdwang, en
+zo'n stelling is niet rustig.</li>
 </ul>''',
           'en': '''<h2>2 kings against 1 per board</h2>
 <p>The longest win on every board, with a row per height <em>H</em> and a column per <em>W</em> − <em>H</em>; click a
 number for the position and replay the whole win.</p>
 {table}
-<p class="src">In the table: <span class="res-win">33</span> = every quiet position with white to move is won, the longest
-win takes 33 plies · <span class="res-diag">33*</span> = won, except a handful of positions in which white is blocked,
-such as <a href="twee-blokkade.html">the blockade</a> in the single corner (at most 6.3% of the quiet positions) ·
-<span class="res-draw">(33)</span> = not won: black draws or even wins in a large part of the quiet positions (29% to 58%;
-the number is the longest win) · <code>31/13</code> = unplayable/playable corner squares. A board <em>W</em> × <em>H</em> is width ×
-height, with <em>W</em> ≥ <em>H</em>.</p>
+<p class="src">The colour counts the quiet positions with white to move: nobody can capture, white has a move that loses
+no material, and black to move cannot create a fork. <span class="res-win">33</span> = every quiet position is won, the
+longest win takes 33 plies · <span class="res-diag">33*</span> = won, except <a href="twee-blokkade.html">the
+blockade</a> in the single corners · <span class="res-draw">(33)</span> = drawn: black holds in 36% to 56% of the quiet
+positions (the number is the longest win) · <code>31/13</code> = unplayable/playable corner squares. A board <em>W</em> ×
+<em>H</em> is width × height, with <em>W</em> ≥ <em>H</em>.</p>
 <ul>
-<li><em>H</em> = 3: with unplayable corners (odd <em>W</em> ≥ 5) it is a draw: black draws in 36% to 58% of the quiet
-positions. 3×3 and 5×3 with playable corners are not won either (33% and 29%, many of them even lost). 3×3 with unplayable corners
-and 4×3 are won entirely, the other boards except 10 or 20 positions.</li>
-<li><em>H</em> = 4: <a href="twee-4x4.html">4×4</a> is a draw (54% of the quiet positions), and on 5×4 only two
-positions are drawn (white in the two single corners, black in between). From 6×4 on every position is won: on a board of height 4 the blockade does not
-exist.</li>
-<li><em>H</em> = 5: <a href="twee-5x5-val.html">5×5 with unplayable corners</a> is won entirely. On the other boards black
-draws or even wins in a handful of positions (1 to 24, at most 4.3%), for instance with the two white kings at the top
-and the bottom of the same file and the black king in the middle between them: black keeps the opposition.</li>
-<li><em>H</em> ≥ 6: won, except the blockade in the single corners: 10 positions for even <em>H</em>, 8 for odd
-<em>H</em> and even <em>W</em>. On odd × odd boards with unplayable corners (four double corners) there is no single
-corner and so no blockade. With playable corners (four single corners) there are 4 positions, and white even loses them:
-he has to give a king away, and without a double corner 1 against 1 is won by the side with the opposition.</li>
+<li>Only <a href="twee-4x4.html">4×4</a> and the odd boards of height 3 with unplayable corners (5×3 to 13×3) are drawn.
+On such a strip of height 3 a king can only be captured on the middle rank, and not at the edge.</li>
+<li>On all other boards every quiet position is won, except the blockade in the single corners: 4 positions per single
+corner for even <em>H</em> (at height 3 also for odd <em>W</em> with playable corners), 3 for odd <em>H</em> ≥ 5.</li>
+<li>Without a blockade, so won entirely: 3×3 and 4×3, every board of height 4 from 5×4 on, and every odd × odd board
+from 5×5 on. With unplayable corners there is no single corner; with playable corners white is in zugzwang in the
+blockade, and such a position is not quiet.</li>
 </ul>'''}
-
 
 def rank_parity(e, fen):
     """the parity of the sum of the rank numbers (1, 2, ...) of all pieces: 0 = even, 1 = odd"""

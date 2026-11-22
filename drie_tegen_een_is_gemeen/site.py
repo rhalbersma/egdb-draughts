@@ -531,12 +531,12 @@ capture.</p>''')]
             tbl.append(f'<tr><td>{name}</td><td>{book}</td><td><strong>{db}</strong> {cell} {condition}</td></tr>')
         tbl.append('</table>')
         fen = 'W:WK4,K5,K10:BK15'
-        fig, i0 = pg.diagram(fen, t('10×10 zonder h8, wit aan zet', '10×10 without h8, white to move'))
+        fig, i0 = pg.diagram(fen, t('10×10 zonder <span class="mv" data-g="h8" data-n="14" data-a="h8">14</span>, wit aan zet', '10×10 without <span class="mv" data-g="h8" data-n="14" data-a="h8">14</span>, white to move'))
         v, legal = e.analyse(fen)
         mv = ', '.join(f'<a class="m1" href="#" data-i="{pg.child(i0, m)}">1. {pg.label(pg.pos[i0]['g'], m)}</a> '
                        f'<span class="val">{m[1]}</span>' for m in legal)
         fb = 'B' + fen[1:]
-        figb, ib = pg.diagram(fb, t('10×10 zonder h8, zwart aan zet', '10×10 without h8, black to move'))
+        figb, ib = pg.diagram(fb, t('10×10 zonder <span class="mv" data-g="h8" data-n="14" data-a="h8">14</span>, zwart aan zet', '10×10 without <span class="mv" data-g="h8" data-n="14" data-a="h8">14</span>, black to move'))
         vb, _ = e.analyse(fb)
         hb, *_ = pg.best_line(fb, 40, start=ib)
         body = [t('<h1>10×10 met één veld weg</h1>', '<h1>10×10 with one square removed</h1>'),
@@ -546,10 +546,10 @@ capture.</p>''')]
                   'a number for the longest win on the large board; ‹ › step through the win and ▶︎ plays it:</p>'),
                 '\n'.join(tbl), t('''<ul>
 <li>Zonder i9 is j10 geïsoleerd: een dam daar kan nooit zetten en nooit geslagen worden.</li>
-<li>De enige uitzondering zonder h8 staat hieronder.</li></ul>''', '''<ul>
+<li>De enige uitzondering zonder <span class="mv" data-g="h8" data-n="14" data-a="h8">14</span> staat hieronder.</li></ul>''', '''<ul>
 <li>Removing i9 isolates j10: a king there can never move and never be captured.</li>
-<li>The single exception with h8 removed is shown below.</li></ul>'''),
-                t('<h2>Zonder h8: de zetdwang</h2>', '<h2>Without h8: the zugzwang</h2>'), fig,
+<li>The single exception with <span class="mv" data-g="h8" data-n="14" data-a="h8">14</span> removed is shown below.</li></ul>'''),
+                t('<h2>Zonder <span class="mv" data-g="h8" data-n="14" data-a="h8">14</span>: de zetdwang</h2>', '<h2>Without <span class="mv" data-g="h8" data-n="14" data-a="h8">14</span>: the zugzwang</h2>'), fig,
                 t(f'<p>Wit op h10, j10 en i9, zwart op j8, wit aan zet: {v}. i9 en j10 zitten vast en elke zet van h10 laat '
                   f'een dubbele slag toe (1. h10-g9 j8×h10×f8), en 1 tegen 1 is remise. Alle zetten: {mv}.</p>',
                   f'<p>White on h10, j10 and i9, black on j8, white to move: {v}. i9 and j10 are locked in, every move of '

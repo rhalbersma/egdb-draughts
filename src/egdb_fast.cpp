@@ -931,6 +931,24 @@ public:
                 std::cout << std::format("SUMMARY {}-{} {}x{} parity {} squares {} quiet-draws wtm {} btm {} max-win {} rules {}\n",
                         opt.target_w, opt.target_b, g.grid.width, g.grid.height, g.grid.parity, g.n,
                         st.both_quiet[0].d, st.both_quiet[1].d, max_win, flying_kings ? "international" : "checkers");
+                // a position with white to move and the longest win (both sides quiet if there is one), for the sites
+                auto const& sl = slices[static_cast<std::size_t>(opt.target_w)][static_cast<std::size_t>(opt.target_b)];
+                auto best = sl.size;
+                for (auto i = std::uint64_t{0}; i < sl.size; ++i) {
+                        if (sl.val[0][i] != max_win) { continue; }
+                        if (best == sl.size) { best = i; }
+                        if (sl.flags[i] == 0) { best = i; break; }
+                }
+                if (best < sl.size) {
+                        BB white, black;
+                        decode(sl, best, white, black);
+                        auto const kings = [&](BB const& set) {
+                                std::string s;
+                                for (std::size_t x : set) { s += std::format("{}K{}", s.empty() ? "" : ",", g.pdn[x]); }
+                                return s;
+                        };
+                        std::cout << std::format("LONGEST W:W{}:B{}\n", kings(white), kings(black));
+                }
                 std::cout << std::format("\ntotal time {:.1f}s, {} error(s)\n",
                         std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count(), errors);
 

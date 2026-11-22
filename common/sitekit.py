@@ -53,10 +53,13 @@ class FastEngine:
         self.args = [str(a) for a in args]
         self.p = subprocess.Popen([str(exe), *map(str, args), '--serve', '--no-text'], stdin=subprocess.PIPE,
                                   stdout=subprocess.PIPE, text=True, bufsize=1)
+        self.longest = None              # a position with white to move and the longest win
         while True:
             r = self.p.stdout.readline()
             if not r:
                 raise RuntimeError(f'egdb_fast {args} died')
+            if r.startswith('LONGEST '):
+                self.longest = r.split()[1]
             if r.strip() == 'ready':
                 break
         self.cache = {}

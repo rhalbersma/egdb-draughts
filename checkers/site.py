@@ -28,9 +28,10 @@ TITLE = {'nl': 'Checkers: 3 dammen tegen 2', 'en': 'Checkers: 3 kings against 2'
 CHAPTERS = [
     ('2 tegen 1', '2 against 1', [
         ('twee-verdrijven.html', 'De dam verdrijven', 'Driving out the king'),
+        ('twee-4x4.html', 'Uitzondering 1: remise op 4×4', 'Exception 1: a draw on 4×4'),
+        ('twee-5x5.html', 'Alleen dubbele hoeken: winst met een offer op 5×5', 'Only double corners: a win by sacrifice on 5×5'),
         ('twee-langste.html', 'De langste winst op 8×8', 'The longest win on 8×8'),
-        ('twee-blokkade.html', 'Uitzondering 1: de blokkade aan de rand', 'Exception 1: the blockade at the edge'),
-        ('twee-4x4.html', 'Uitzondering 2: remise op 4×4', 'Exception 2: a draw on 4×4')]),
+        ('twee-blokkade.html', 'Uitzondering 2: de blokkade aan de rand', 'Exception 2: the blockade at the edge')]),
     ('3 tegen 2 op 8×8', '3 against 2 on 8×8', [
         ('drie-langste.html', 'De langste winst', 'The longest win'),
         ('blokkades.html', 'Uitzondering 1: de blokkades', 'Exception 1: the blockades'),
@@ -190,7 +191,8 @@ class Site:
         k21, e21 = self.engine(8, 8, 'playable', 2, 1)
         k44, e44 = self.engine(4, 4, 'playable', 2, 1)
         k88, e88 = self.engine(8, 8, 'playable')
-        pg = self.page((k21, e21), (k44, e44), (k88, e88))
+        k521, e521 = self.engine(5, 5, 'unplayable', 2, 1)
+        pg = self.page((k21, e21), (k44, e44), (k88, e88), (k521, e521))
         t = self.t
         body = [f'<h1>{esc(TITLE[self.lang])}</h1>', t('''
 <p>Eindspelen met alleen dammen in het Engelse damspel (<em>checkers</em>): korte dammen (één veld), slagplicht en
@@ -216,7 +218,7 @@ is clickable. Boards are named width × height, as drawn.</p>''')]
         def flush(name):                # finish the page so far, start the next one
             nonlocal body, pg
             self.write(name, None, '\n'.join(body), pg, k88)
-            pg = self.page((k21, e21), (k44, e44), (k88, e88))
+            pg = self.page((k21, e21), (k44, e44), (k88, e88), (k521, e521))
             body = []
         flush('index.html')
         fen = self.longest_21(e21)
@@ -225,16 +227,16 @@ is clickable. Boards are named width × height, as drawn.</p>''')]
         h, *_ = pg.best_line(fen, 60, start=i0)
         body += [fig, t('''
 <p>2 tegen 1 is op elk voldoende groot bord gewonnen, met twee uitzonderingen:</p>
-<ul><li><a href="twee-blokkade.html">de blokkade aan de rand</a>: in een vast handjevol stellingen (8 of 10,
+<ul><li><a href="twee-4x4.html">het 4×4-bord</a>: daar is 2 tegen 1, verrassend, remise;</li>
+<li>en <a href="twee-blokkade.html">de blokkade aan de rand</a>: in een vast handjevol stellingen (8 of 10,
 onafhankelijk van de bordgrootte; op 8×8 op spiegelingen na 3) zitten de twee witte dammen opgesloten in de enkele hoek en houdt de zwarte dam ze
-daar met oppositie; op oneven × oneven borden met speelbare hoeken bestaat die blokkade niet;</li>
-<li>en, verrassend, <a href="twee-4x4.html">het 4×4-bord</a>: daar is 2 tegen 1 remise.</li></ul>
+daar met oppositie; op oneven × oneven borden met speelbare hoeken bestaat die blokkade niet.</li></ul>
 <p>De langste winst groeit gestaag met het bord: 33 ply op 8×8, 41 op 10×10, 49 op 12×12, 61 op 15×12.</p>''', '''
 <p>2 against 1 is won on every board that is large enough, with two exceptions:</p>
-<ul><li><a href="twee-blokkade.html">the blockade at the edge</a>: in a fixed handful of positions (8 or 10,
+<ul><li><a href="twee-4x4.html">the 4×4 board</a>: there 2 against 1 is, surprisingly, a draw;</li>
+<li>and <a href="twee-blokkade.html">the blockade at the edge</a>: in a fixed handful of positions (8 or 10,
 independent of the board size; on 8×8 up to symmetry 3) the two white kings are locked in the single corner and the black king keeps them there
-by opposition; on odd × odd boards with playable corners this blockade does not exist;</li>
-<li>and, surprisingly, <a href="twee-4x4.html">the 4×4 board</a>: there 2 against 1 is a draw.</li></ul>
+by opposition; on odd × odd boards with playable corners this blockade does not exist.</li></ul>
 <p>The longest win grows steadily with the board: 33 plies on 8×8, 41 on 10×10, 49 on 12×12, 61 on 15×12.</p>'''),
                  t(f'<p>De langste winst op 8×8 ({v[1:]} ply):</p>', f'<p>The longest win on 8×8 ({v[1:]} plies):</p>'),
                  f'<p class="var">{h}</p>',
@@ -294,6 +296,72 @@ by opposition; on odd × odd boards with playable corners this blockade does not
                    '<a href="twee-verdrijven.html">driving out the king</a>).</p>'),
                  '<div style="clear:both"></div>']
         flush('twee-4x4.html')
+        # 5x5 with unplayable corners: only double corners. 2 against 1 always wins, but hardly ever by driving the king
+        # out and catching it: white wins with a sacrifice (offer a king, black must capture, white captures back)
+        from itertools import combinations
+        sq55 = sorted(f'{chr(97 + f)}{r + 1}' for f, r in e521.g['sq'].values())
+        count = lambda f: tuple(len([x for x in side[1:].split(',') if x]) for side in f.split(':')[1:])
+        captures = lambda f: any(count(m[2]) != count(f) for m in e521.analyse(f)[1])
+        syms = [lambda f, r: (f, r), lambda f, r: (4 - f, r), lambda f, r: (f, 4 - r), lambda f, r: (4 - f, 4 - r),
+                lambda f, r: (r, f), lambda f, r: (4 - r, f), lambda f, r: (r, 4 - f), lambda f, r: (4 - r, 4 - f)]
+        tr = lambda s, g: (lambda f, r: f'{chr(97 + f)}{r + 1}')(*g(ord(s[0]) - 97, int(s[1:]) - 1))
+        canon = lambda W, B: min((tuple(sorted(tr(x, g) for x in W)), tuple(sorted(tr(x, g) for x in B))) for g in syms)
+        allpos = [(list(W), [b]) for W in combinations(sq55, 2) for b in sq55 if b not in W]
+        # white wins without a sacrifice: it captures the black king (or leaves it without a move) and black never captures
+        direct, changed = set(), True
+        fens = [e521.fen(W, B, s) for W, B in allpos for s in 'WB']
+        while changed:
+            changed = False
+            for f in fens:
+                if f in direct:
+                    continue
+                ms = e521.analyse(f)[1]
+                ok = (any(count(m[2])[1] == 0 or m[2] in direct for m in ms) if f[0] == 'W'
+                      else all(count(m[2])[0] == 2 and m[2] in direct for m in ms))
+                if ok:
+                    direct.add(f)
+                    changed = True
+        quiet = [(W, B) for W, B in allpos if not captures(e521.fen(W, B, 'W')) and not captures(e521.fen(W, B, 'B'))]
+        assert all(e521.analyse(e521.fen(W, B, 'W'))[0][0] == 'W' and e521.analyse(e521.fen(W, B, 'B'))[0][0] == 'L'
+                   for W, B in quiet)
+        orb = lambda xs: len({canon(W, B) for W, B in xs})
+        nq = orb(quiet)
+        dw = orb((W, B) for W, B in quiet if e521.fen(W, B, 'W') in direct)
+        db = orb((W, B) for W, B in quiet if e521.fen(W, B, 'B') in direct)
+        f55 = e521.fen(['a2', 'a4'], ['e2'], 'B')
+        v55 = e521.analyse(f55)[0]
+        line55 = '1. … e2-d3 2. a4-b5 d3-e2 3. b5-c4 e2-d1 4. a2-b3 d1-e2 5. b3-a4 e2-d1 6. c4-d3 d1-e2 7. a4-b5! e2xc4 8. b5xd3'
+        g = f55
+        for (mv,), _ in self.plan(line55):
+            ms = e521.analyse(g)[1]
+            m = next(x for x in ms if x[0] == mv)
+            w = g[0] == 'W'
+            assert m[1][0] == ('W' if w else 'L') and int(m[1][1:]) == (min if w else max)(
+                int(x[1][1:]) for x in ms if x[1][0] == m[1][0]), (mv, m[1])
+            g = m[2]
+        assert count(g) == (1, 0) and f55 not in direct
+        assert v55 == 'L' + str(max(int(e521.analyse(e521.fen(W, B, 'B'))[0][1:]) for W, B in quiet))
+        fig, i0 = pg.diagram(f55, t(f'5×5, 2 tegen 1, zwart aan zet: {v55}', f'5×5, 2 against 1, black to move: {v55}'), gid=k521)
+        h55, *_ = pg.moves(f55, self.plan(line55), 1, True, 'm1', i0)
+        body += [t(f'''
+<p>Op 5×5 met onspeelbare hoekvelden is elke hoek een dubbele hoek: b1/a2, d1/e2, a4/b5 en d5/e4. Zoals op
+<a href="twee-4x4.html">4×4</a> ligt de ontsnapping naar een andere dubbele hoek te dichtbij, en
+<a href="twee-verdrijven.html">de dam verdrijven</a> helpt bijna nooit: op spiegelen en draaien na zijn er {nq} rustige
+stellingen, en met wit aan zet wint wit er maar {dw} zonder offer, met zwart aan zet {db}. Toch is 2 tegen 1 hier, anders
+dan op 4×4, altijd gewonnen: wit wint met een offer. Hij biedt een dam aan, zwart moet slaan, en wit slaat terug.</p>
+<p>Hier pendelt zwart in de dubbele hoek d1/e2. Wit zet met 6. c4-d3 een dam klaar, en na 6. … d1-e2 7. a4-b5! moet zwart
+slaan: 7. … e2×c4 8. b5×d3, en zwart heeft niets meer. Dit is ook de langste winst met zwart aan zet ({v55[1:]} ply).</p>''',
+                   f'''
+<p>On 5×5 with unplayable corner squares every corner is a double corner: b1/a2, d1/e2, a4/b5 and d5/e4. As on
+<a href="twee-4x4.html">4×4</a> the escape to another double corner is too close, and
+<a href="twee-verdrijven.html">driving out the king</a> hardly ever works: up to mirrors and rotations there are {nq}
+quiet positions, and with white to move white wins only {dw} of them without a sacrifice, with black to move {db}. Still,
+unlike on 4×4, 2 against 1 always wins here: white wins with a sacrifice. He offers a king, black has to capture, and
+white captures back.</p>
+<p>Here black shuttles in the double corner d1/e2. With 6. c4-d3 white sets up a king, and after 6. … d1-e2 7. a4-b5!
+black has to capture: 7. … e2×c4 8. b5×d3, and black has nothing left. This is also the longest win with black to move
+({v55[1:]} plies).</p>'''), fig, f'<p class="var">{h55}</p>', '<div style="clear:both"></div>']
+        flush('twee-5x5.html')
         # driving out the king: the 4x4 draw position ported to the double corner a7/b8 of 8x8. With white to move white
         # drives the black king out as on 4x4, but there is no second double corner nearby to escape to; with black to
         # move black steps to the other edge square, the position is the mirror image in the diagonal a8-h1, and white
@@ -1136,7 +1204,7 @@ are 8 traps, at even parity not a single one.</p>''')]
 op een nog kleiner bord? Op 5×5 met onspeelbare hoekvelden zijn er maar 12 speelbare velden, en elke hoek is een dubbele
 hoek: b1/a2, d1/e2, a4/b5 en d5/e4. Het bord heeft 8 symmetrieën (spiegelen en draaien), en alle aantallen in dit
 hoofdstuk tellen stellingen op symmetrie na.</p>
-<p>Anders dan op <a href="twee-4x4.html">4×4</a> is 2 tegen 1 hier altijd gewonnen: wit wint alle {n21} rustige
+<p>Anders dan op <a href="twee-4x4.html">4×4</a> is <a href="twee-5x5.html">2 tegen 1</a> hier altijd gewonnen: wit wint alle {n21} rustige
 stellingen, met wit en met zwart aan zet. Ook 3 tegen 2 is bijna altijd gewonnen: van de {n(nq)} rustige stellingen met wit
 aan zet zijn er {dw} remise, met zwart aan zet {db}. Met zwart aan zet en beide zwarte dammen op de randvelden van twee
 dubbele hoeken zijn er {df} remise van de {n(nf)}. Die remises zijn geen vesting: zwart dwingt binnen 4 ply gelijk materiaal
@@ -1151,7 +1219,7 @@ maar daar beslist het offer 13. b3-c2! d1×b3 14. a4×c2, en 2 tegen 1 wint. Hoe
 it go on an even smaller board? On 5×5 with unplayable corner squares there are only 12 playable squares, and every corner
 is a double corner: b1/a2, d1/e2, a4/b5 and d5/e4. The board has 8 symmetries (mirrors and rotations), and all counts in
 this chapter count positions up to symmetry.</p>
-<p>Unlike on <a href="twee-4x4.html">4×4</a>, 2 against 1 always wins here: white wins all {n21} quiet positions,
+<p>Unlike on <a href="twee-4x4.html">4×4</a>, <a href="twee-5x5.html">2 against 1</a> always wins here: white wins all {n21} quiet positions,
 with white and with black to move. 3 against 2 too nearly always wins: of the {n(nq)} quiet positions with white to move
 {dw} are drawn, with black to move {db}. With black to move and both black kings on the edge squares of two double corners
 {df} of the {n(nf)} are drawn. These draws are no fortress: black forces equal material within 4 plies,

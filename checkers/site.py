@@ -27,7 +27,7 @@ TITLE = {'nl': 'Checkers: 3 dammen tegen 2', 'en': 'Checkers: 3 kings against 2'
 # the chapters, each with one page per section: (Dutch, English, [(file, Dutch, English)])
 CHAPTERS = [
     ('2 tegen 1 op 8×8', '2 against 1 on 8×8', [
-        ('twee-verdrijven.html', 'De dam verdrijven', 'Driving out the king'),
+        ('twee-verdrijven.html', 'De dam verdrijven', 'Expelling the king'),
         ('twee-blokkade.html', 'Uitzondering: de blokkade aan de rand', 'Exception: the blockade at the edge'),
         ('twee-langste.html', 'De langste winst', 'The longest win'),
         ('twee-algemeen.html', 'De methode op andere borden', 'The method on other boards')]),
@@ -47,7 +47,7 @@ CHAPTERS = [
         ('vesting-pariteit.html', 'De winst is niet strategisch, de pariteit doet ertoe', 'The win is non-strategic, parity matters')]),
     ('3 tegen 2 op 8×7', '3 against 2 on 8×7', [
         ('vesting-8x7.html', 'Vier vallen om de vesting te breken', 'Four traps to break the fortress'),
-        ('vesting-8x7-wit.html', 'De winst is strategisch, de dam kan verdreven worden', 'The win is strategic, the king can be driven out')]),
+        ('vesting-8x7-wit.html', 'De winst is strategisch, de dam kan verdreven worden', 'The win is strategic, the king can be expelled')]),
     ('3 tegen 2 op 7×7', '3 against 2 on 7×7', [
         ('langste-7x7.html', 'Geen ontsnapping naar een andere dubbele hoek', 'No escape to another double corner')]),
     ('3 tegen 2 op 5×5', '3 against 2 on 5×5', [
@@ -278,7 +278,7 @@ by opposition; on odd × odd boards with playable corners this blockade does not
             body += [fig, f'<p>{t(nl, en)}{t("Alle zetten van wit: ", "All moves of white: ")}'
                      f'{self.moves_list(pg, i0, legal, "1. ")}.</p>', '<div style="clear:both"></div>']
         flush('twee-blokkade.html')
-        # 4x4: the draw; driven out of one double corner, black escapes through the centre to the other one
+        # 4x4: the draw; expelled from one double corner, black escapes through the centre to the other one
         fen = 'W:WK6,K8:BK3'
         fig, i0 = pg.diagram(fen, t(f'4×4, 2 tegen 1, wit aan zet: {e44.analyse(fen)[0]}',
                                     f'4×4, 2 against 1, white to move: {e44.analyse(fen)[0]}'), gid=k44)
@@ -291,16 +291,16 @@ by opposition; on odd × odd boards with playable corners this blockade does not
                         'bord heeft twee dubbele hoeken met alleen de twee middenvelden ertussen. Drijft wit de zwarte dam met beide dammen uit de ene dubbele hoek, dan ontsnapt zwart door '
                         'het midden naar de andere:</p>',
                         '<p>On 4×4, 2 against 1 is a draw, unlike on <a href="twee-5x5.html">5×5</a>: there is no trap. The '
-                        'board has two double corners with only the two centre squares between them. If white drives the black king out of one double corner with both kings, black escapes '
+                        'board has two double corners with only the two centre squares between them. If white expels the black king from one double corner with both kings, black escapes '
                         'through the centre to the other one:</p>'),
                  f'<p class="var">{" ".join(parts)}</p>',
                  t('<p>Daarna begint het opnieuw in de andere hoek. Op 8×8 ligt de andere dubbele hoek te ver weg (zie '
                    '<a href="twee-verdrijven.html">de dam verdrijven</a>).</p>',
                    '<p>Then it starts again in the other corner. On 8×8 the other double corner is too far away (see '
-                   '<a href="twee-verdrijven.html">driving out the king</a>).</p>'),
+                   '<a href="twee-verdrijven.html">expelling the king</a>).</p>'),
                  '<div style="clear:both"></div>']
         flush('twee-4x4.html')
-        # 5x5 with unplayable corners: only double corners. Driving the king out as on 8x8 fails: it escapes to another
+        # 5x5 with unplayable corners: only double corners. Expelling the king as on 8x8 fails: it escapes to another
         # double corner, as on 4x4. Still 2 against 1 always wins, with a sacrifice (offer a king, black must capture,
         # white captures back); there is one trap, up to symmetry, that works with white and with black to move
         from itertools import combinations
@@ -351,7 +351,7 @@ by opposition; on odd × odd boards with playable corners this blockade does not
                     assert int(m[1][1:]) == (min if w else max)(int(x[1][1:]) for x in ms if x[1][0] == m[1][0]), (mv, m[1])
                 g = m[2]
             return g
-        # driving out as on 8x8 (the same set-up in the double corner a4/b5): the king escapes to the double corner b1/a2
+        # expelling as on 8x8 (the same set-up in the double corner a4/b5): the king escapes to the double corner b1/a2
         fd = e521.fen(['c2', 'd3'], ['a4'], 'W')
         vd = e521.analyse(fd)[0]
         lined = '1. d3-c4 a4-b5 2. c2-d3 b5-a4 3. c4-b5 a4-b3 4. b5-a4 b3-a2'
@@ -365,8 +365,8 @@ hier uit de dubbele hoek a4/b5 zoals op 8×8 (zie <a href="twee-verdrijven.html"
 zwart op a4. Na 3. c4-b5 moet de dam eruit (3. … a4-b3), maar na 4. b5-a4 ontsnapt hij met 4. … b3-a2 naar de dubbele hoek
 b1/a2: het veld waar hij heen moet, ligt hier zelf in een dubbele hoek. (De snelste winst, in {vd[1:]}
 ply, gaat met een offer.)</p>''', f'''
-<p>On 5×5 with unplayable corner squares every corner is a double corner: b1/a2, d1/e2, a4/b5 and d5/e4. White drives the
-black king out of the double corner a4/b5 here as on 8×8 (see <a href="twee-verdrijven.html">driving out the king</a>):
+<p>On 5×5 with unplayable corner squares every corner is a double corner: b1/a2, d1/e2, a4/b5 and d5/e4. White expels the
+black king from the double corner a4/b5 here as on 8×8 (see <a href="twee-verdrijven.html">expelling the king</a>):
 white on c2 and d3, black on a4. After 3. c4-b5 the king has to leave (3. … a4-b3), but after 4. b5-a4 it escapes with
 4. … b3-a2 to the double corner b1/a2: the square it has to go to is itself in a double corner here. (The
 fastest win, in {vd[1:]} plies, goes with a sacrifice.)</p>'''),
@@ -376,7 +376,7 @@ fastest win, in {vd[1:]} plies, goes with a sacrifice.)</p>'''),
 nooit. Op spiegelen en draaien na zijn er {nq} rustige stellingen, en met wit aan zet wint wit er maar {dw} zonder offer,
 met zwart aan zet {db}. In alle andere wint wit met een offer: hij biedt een dam aan, zwart moet slaan, en wit slaat terug.
 Hoe, staat bij <a href="twee-5x5-val.html">de val</a>.</p>''', f'''
-<p>Is 2 against 1 on 5×5 then a draw, as on <a href="twee-4x4.html">4×4</a>? No: all quiet positions are won. But driving out hardly ever works. Up to
+<p>Is 2 against 1 on 5×5 then a draw, as on <a href="twee-4x4.html">4×4</a>? No: all quiet positions are won. But expelling the king hardly ever works. Up to
 mirrors and rotations there are {nq} quiet positions, and with white to move white wins only {dw} of them without a
 sacrifice, with black to move {db}. In all the others white wins with a sacrifice: he offers a king, black has to capture,
 and white captures back. How is shown with <a href="twee-5x5-val.html">the trap</a>.</p>''')]
@@ -432,10 +432,10 @@ wit zet met 6. c4-d3 een dam klaar, en na 6. … d1-e2 7. a4-b5! moet zwart slaa
 d1/e2; with 6. c4-d3 white sets up a king, and after 6. … d1-e2 7. a4-b5! black has to capture: 7. … e2×c4 8. b5×d3.</p>'''),
                  fig55, f'<p class="var">{h55}</p>', '<div style="clear:both"></div>']
         flush('twee-5x5-val.html')
-        # driving out the king: the 4x4 draw position ported to the double corner a7/b8 of 8x8. With white to move white
-        # drives the black king out as on 4x4, but there is no second double corner nearby to escape to; with black to
+        # expelling the king: the 4x4 draw position ported to the double corner a7/b8 of 8x8. With white to move white
+        # expels the black king as on 4x4, but there is no second double corner nearby to escape to; with black to
         # move black steps to the other edge square, the position is the mirror image in the diagonal a8-h1, and white
-        # drives it out again
+        # expels it again
         def optimal(fen, text):         # every move of the line: white wins fastest, black defends longest
             f = fen
             for (mv,), _ in self.plan(text):
@@ -465,14 +465,14 @@ d1/e2; with 6. c4-d3 white sets up a king, and after 6. … d1-e2 7. a4-b5! blac
         body += [t('<p>Bij 2 tegen 1 vlucht de zwarte dam naar een dubbele hoek, en wit moet hem daaruit verdrijven. '
                    'Neem de remisestelling van <a href="twee-4x4.html">4×4</a> en zet die op het 8×8-bord: het 4×4-bord '
                    'past in de linkerbovenhoek, met zijn dubbele hoek op a7/b8. Wit staat op c5 en d6, zwart op a7.</p>',
-                   '<p>In 2 against 1 the black king flees to a double corner, and white has to drive it out. Take the '
+                   '<p>In 2 against 1 the black king flees to a double corner, and white has to expel it. Take the '
                    'drawn position of <a href="twee-4x4.html">4×4</a> and put it on the 8×8 board: the 4×4 board fits in '
                    'the top left corner, with its double corner on a7/b8. White is on c5 and d6, black on a7.</p>'),
                  figw,
                  t('<p>Met wit aan zet drijft wit de zwarte dam uit de dubbele hoek, precies als op 4×4: na 3. c7-b8 moet '
                    'hij eruit (3. … a7-b6). Op 4×4 ontsnapt zwart dan naar de andere dubbele hoek, maar op 8×8 ligt die '
                    'te ver weg, en wit vangt de dam aan de rand.</p>',
-                   '<p>With white to move white drives the black king out of the double corner, exactly as on 4×4: after '
+                   '<p>With white to move white expels the black king from the double corner, exactly as on 4×4: after '
                    '3. c7-b8 it has to leave (3. … a7-b6). On 4×4 black then escapes to the other double corner, but on '
                    '8×8 that one is too far away, and white catches the king at the edge.</p>'),
                  f'<p class="var">{hw}</p>', '<div style="clear:both"></div>',
@@ -484,7 +484,7 @@ d1/e2; with 6. c4-d3 white sets up a king, and after 6. … d1-e2 7. a4-b5! blac
                    '<p>With black to move black goes to the other edge square of the double corner (1. … a7-b8). The '
                    'position is then the mirror image of the one with white to move, mirrored in the diagonal that cuts '
                    'the double corner in half, and white '
-                   'drives the king out of the corner again, now along the top edge to the single corner h8.</p>'),
+                   'expels the king from the corner again, now along the top edge to the single corner h8.</p>'),
                  f'<p class="var">{hb}</p>', '<div style="clear:both"></div>']
         flush('twee-verdrijven.html')
         # the method on other boards: after 4. b8-a7 black has to leave the diagonal of the double corner
@@ -499,7 +499,7 @@ d1/e2; with 6. c4-d3 white sets up a king, and after 6. … d1-e2 7. a4-b5! blac
                    'hoeken), 8×8, 9×9 (onspeelbare hoeken) en 10×10; met wit aan zet lukt het op geen enkel bord van 5 hoog '
                    '(5 tot en met 9 breed). Daarom volgen na 8×8 hoofdstukken over <a href="twee-5x5.html">5×5</a> en '
                    '<a href="twee-4x4.html">4×4</a>.</p>',
-                   '<p>After 4. b8-a7 in <a href="twee-verdrijven.html">driving out the king</a> black has to leave the diagonal of the double corner (through a7 and b6): 4. … b6-a5. '
+                   '<p>After 4. b8-a7 in <a href="twee-verdrijven.html">expelling the king</a> black has to leave the diagonal of the double corner (through a7 and b6): 4. … b6-a5. '
                    'This method works on every board, unless the square a5 or c5 is then itself in a double corner. On a '
                    'board of height 5 that is a5, on 4×4 c5. With white and with black to move white wins this way without '
                    'a sacrifice on 6×6, 7×7 (unplayable corners), 8×8, 9×9 (unplayable corners) and 10×10; with white to '
@@ -909,7 +909,7 @@ same side:</p>
         self.write('vesting.html', None, '\n'.join(body[:rule] + trap2), pg, k89)
         self.write('vesting-9x9.html', None, '\n'.join(self.fortress99(pg9, k99, e99)), pg9, k99)
         # 7x7 with unplayable corners: the longest win (quiet start, white to move); black flees to two double corners on
-        # the g-file and white drives one king out of its double corner
+        # the g-file and white expels one king from its double corner
         k77, e77 = self.engine(7, 7, 'unplayable')
         pg77 = self.page((k77, e77))
         f77 = e77.fen(['b7', 'd7', 'a6'], ['d5', 'c4'], 'W')
@@ -945,7 +945,7 @@ met een offer de beslissing af: 26. b3-c2! b1×d3 27. f7-g6 f5-e6 28. d5×f7, en
 <p>Je zou kunnen denken dat zwart zo eindeloos van dubbele hoek naar dubbele hoek kan blijven vluchten, zoals de zwarte dam
 bij <a href="twee-4x4.html">2 tegen 1 op 4×4</a>, en dat het remise is. Maar 7×7 is daar niet klein genoeg voor: wit vangt
 de verdreven dam in de tweede dubbele hoek alsnog. Ook op <a href="langste-5x5.html">5×5</a> lukt het zwart niet.</p>''', f'''
-<p>On <a href="vesting-8x7-wit.html">8×7</a> white drives a black king out of its double corner, and there is no other
+<p>On <a href="vesting-8x7-wit.html">8×7</a> white expels a black king from its double corner, and there is no other
 double corner to flee to. On 7×7 there is: can the expelled king keep escaping to a next double corner, like the black king
 in <a href="twee-4x4.html">2 against 1 on 4×4</a>?</p>
 <p>On 7×7 with unplayable corner squares every corner is a double corner: b1/a2, f1/g2, a6/b7 and g6/f7. The double
@@ -953,7 +953,7 @@ corners are 6 apart, on the same side and diagonally. Of the 28,276 quiet positi
 kings on the edge squares of two double corners only 16 are drawn, and in those black has a shot.</p>
 <p>The longest win without a capture for either side in the start position takes {v77[1:]} plies. Black flees with both
 kings to the double corners along the g-file: after 13. … f3-g2 they stand on g6 and g2. White breaks the fortress by
-driving a black king out of its double corner: with 19. f3-g2! white occupies the free edge square next to the black king
+expelling a black king from its double corner: with 19. f3-g2! white occupies the free edge square next to the black king
 on f1, which leaves the corner (19. … f1-e2), and after 20. g2-f1 it cannot come back. It flees to the double corner
 b1/a2, but there white forces the decision with a sacrifice: 26. b3-c2! b1×d3 27. f7-g6 f5-e6 28. d5×f7, and 2 against 1
 wins.</p>
@@ -968,7 +968,7 @@ either.</p>'''), fig77, f'<p class="var">{h77}</p>', '<div style="clear:both"></
         partner = {'b1': 'a2', 'a2': 'b1', 'h1': 'i2', 'i2': 'h1', 'b7': 'a6', 'a6': 'b7', 'h7': 'i6', 'i6': 'h7'}
         name = '8×7'
         OW, OB = ['b3', 'c4', 'd7'], ['b1', 'a6']           # a trap at odd parity
-        EW, EB = ['b3', 'c4', 'b5'], ['b1', 'b7']           # even parity: no trap, white drives a black king out
+        EW, EB = ['b3', 'c4', 'b5'], ['b1', 'b7']           # even parity: no trap, white expels a black king
         body7 = [t('''
 <p>Op 8×8 liggen de twee dubbele hoeken 7 velden uit elkaar, en daar valt de vesting altijd. Op 9×8 liggen ze 8 uit elkaar,
 en daar beslist de oppositie. Op 8×7 zijn er precies twee dubbele hoeken, b1/a2 en b7/a6, allebei langs de zijde van 7, en
@@ -1021,10 +1021,10 @@ are 8 traps, at even parity not a single one.</p>''')]
                     'op de <a href="vesting-8x7-wit.html">volgende pagina</a>: door een zwarte dam uit zijn dubbele hoek te '
                     'verdringen.</p>',
                     '<p>At even parity there is no trap at all. How white wins there, and in the passive trap with white to move, '
-                    'is on the <a href="vesting-8x7-wit.html">next page</a>: by driving a black king out of its double '
+                    'is on the <a href="vesting-8x7-wit.html">next page</a>: by expelling a black king from its double '
                     'corner.</p>')]
         self.write('vesting-8x7.html', None, '\n'.join(body7), pg7, k87)
-        # driving a black king out of its double corner: at even parity (black to move), where there is no trap, and from the
+        # expelling a black king from its double corner: at even parity (black to move), where there is no trap, and from the
         # passive trap with white to move, where there is no immediate exchange and no tempo change along the edge
         pgv = self.page((k87, e87))
         fe = e87.fen(EW, EB, 'B')
@@ -1060,7 +1060,7 @@ are 8 traps, at even parity not a single one.</p>''')]
                    'dubbele hoeken liggen zo dicht bij elkaar dat wit erin kan binnendringen en een zwarte dam eruit '
                    'verdringt.</p>',
                    '<p>Where no trap helps, at even parity and in the passive trap with white to move, white still wins on 8×7: '
-                   'the double corners are so close together that white can invade them and drive a black king out.</p>'),
+                   'the double corners are so close together that white can invade them and expel a black king.</p>'),
                  fige, t('<p>Bij even pariteit, zwart aan zet: pendelt de ene zwarte dam, dan bezet wit het vrije randveld naast '
                          'de andere. Die heeft geen wachtzet meer en moet de dubbele hoek uit (de wachtzet met de eerste dam '
                          'verliest nog sneller). Daarna gaat wit zelf op het randveld staan dat de zwarte dam verliet, en die '
@@ -1100,7 +1100,7 @@ are 8 traps, at even parity not a single one.</p>''')]
                    '<p>With white to move and both black kings on the edge squares of their double corners (quiet positions) '
                    'all 8,281 positions are won for white, at both parities, and only 111 of them with an exchange at once. On '
                    '8×7 the fortress therefore falls with either side to move: where neither a trap nor a tempo change helps, '
-                   'the double corners are close enough together to drive a black king out.</p>'
+                   'the double corners are close enough together to expel a black king.</p>'
                    '<p>But can such an expelled king not flee to another double corner? On 8×7 there is none; on '
                    '<a href="langste-7x7.html">7×7</a> there is.</p>')]
         self.write('vesting-8x7-wit.html', None, '\n'.join(bodyv), pgv, k87)
@@ -1223,7 +1223,7 @@ are 8 traps, at even parity not a single one.</p>''')]
 
     def board55(self):
         """5x5 with unplayable corners (12 squares, every corner a double corner): 2 against 1 always wins, 3 against 2
-        nearly always, the longest win drives a black king out of its double corner, and the only draws are zugzwang"""
+        nearly always, the longest win expels a black king from its double corner, and the only draws are zugzwang"""
         from itertools import combinations
         from collections import Counter
         t = self.t

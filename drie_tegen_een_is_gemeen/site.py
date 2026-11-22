@@ -375,11 +375,16 @@ daar nog reikt. Hoe de families winnen, staat bij de <a href="vangstellingen.htm
 <li><strong>L = 5, 6</strong>: elk niet-vierkant bord is gewonnen (gecontroleerd tot en met 16×5 en 17×6). Drie dammen in
 een kolom sluiten de volle breedte af en worden over het bord geschoven; de langste winst groeit met ongeveer 2 ply per
 extra kolom.</li>
-<li><strong>L = 7</strong>: gewonnen tot en met <strong>14×7</strong> en <strong>15×7 speelbare hoeken</strong> (boek: tot 11×7).
-Vanaf <em>B</em> = 16 is het remise. De langste winsten springen van 25 naar 35, 49, 53 en 67–73 ply: de ruimte wordt
-krap.</li>
-<li><strong>L = 8</strong>: gewonnen bij <em>B</em> = 9, 10, 11 en 15 (= 2<em>L</em> − 1), remise bij
-<em>B</em> = 12–14 en 16–19.</li>
+<li><strong>L = 7</strong>:
+<ul><li>de drie families: <em>B</em> = 8, 9 en 13, bij beide kleuringen gewonnen;</li>
+<li><em>B</em> = 7 (bij speelbare hoeken met de lange lijn), 10 en 11: al bekend uit het boek;</li>
+<li><em>B</em> = 12, 14 en 15 (speelbare hoeken): nieuwe vondsten. De langste winsten springen van 25 naar 35, 53 en 67 ply:
+de ruimte wordt krap;</li>
+<li><em>B</em> ≥ 16: remise.</li></ul></li>
+<li><strong>L = 8</strong>:
+<ul><li>de drie families: <em>B</em> = 9, 10 en 15;</li>
+<li><em>B</em> = 8 (met de lange lijn) en 11: al bekend;</li>
+<li><em>B</em> ≥ 12, behalve 15: remise.</li></ul></li>
 <li><strong>L ≥ 9</strong>: alleen de families blijven over.</li>
 </ul>
 <h2>Vierkante borden: de lange lijn</h2>
@@ -409,11 +414,16 @@ positions</a>.</p>
 <li><strong>L = 5, 6</strong>: every non-square board is won (checked up to 16×5 and 17×6). Three kings in a column
 close off the full width and can be pushed along the board; the longest win grows by about 2 plies per extra
 column.</li>
-<li><strong>L = 7</strong>: won up to <strong>14×7</strong> and <strong>15×7 playable corners</strong> (book: up to 11×7). From
-<em>B</em> = 16 on it is drawn. The longest wins jump from 25 to 35, 49, 53 and 67–73 plies: the space becomes
-tight.</li>
-<li><strong>L = 8</strong>: won at <em>B</em> = 9, 10, 11 and 15 (= 2<em>L</em> − 1), drawn at <em>B</em> = 12–14 and
-16–19.</li>
+<li><strong>L = 7</strong>:
+<ul><li>the three families: <em>B</em> = 8, 9 and 13, won with both colourings;</li>
+<li><em>B</em> = 7 (with playable corners provided the long diagonal is held), 10 and 11: already known from the book;</li>
+<li><em>B</em> = 12, 14 and 15 (playable corners): new findings. The longest wins jump from 25 to 35, 53 and 67 plies: the
+space becomes tight;</li>
+<li><em>B</em> ≥ 16: drawn.</li></ul></li>
+<li><strong>L = 8</strong>:
+<ul><li>the three families: <em>B</em> = 9, 10 and 15;</li>
+<li><em>B</em> = 8 (with the long diagonal) and 11: already known;</li>
+<li><em>B</em> ≥ 12, except 15: drawn.</li></ul></li>
 <li><strong>L ≥ 9</strong>: only the families remain.</li>
 </ul>
 <h2>Square boards: the long diagonal</h2>

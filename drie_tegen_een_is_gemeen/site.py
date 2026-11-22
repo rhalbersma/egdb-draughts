@@ -194,8 +194,7 @@ class Site:
         body = [f'<h1>{TITLE}</h1>', fig, t('''
 <p>Eindspelen met alleen dammen, op borden van elke afmeting <em>B × L</em> (breedte × lengte, <em>B</em> ≥ <em>L</em>, met de families <em>B</em> = <em>L</em> + 1, <em>L</em> + 2 en 2<em>L</em> − 1, zoals in het boek), met internationale regels: vliegende
 dammen, slagplicht, meerslag en Turkse slag. Het boek <em>Drie tegen één is gemeen</em> van Gerrit L. de Bruijn en
-Aad N.J. Thoen (1988) vond zijn resultaten over drie dammen tegen één met de hand, op borden van elke grootte. De databases van
-<a href="https://github.com/rhalbersma/egdb-draughts/blob/main/src/egdb_fast.cpp"><code>egdb_fast</code></a>
+Aad N.J. Thoen (1988) vond zijn resultaten over drie dammen tegen één met de hand, op borden van elke grootte. De databases
 rekenen elke stelling exact uit, met de afstand tot het einde van de partij in ply, en bevestigen, verfijnen en
 breiden de resultaten van het boek uit.</p>
 <p>Elke stelling op deze site is klikbaar: het grote bord volgt, en eronder staan de waarde en alle zetten. W = winst,
@@ -211,8 +210,7 @@ manier.</p>''', '''
 <p>Endgames with kings only, on boards of any size <em>B × L</em> (width × height, <em>B</em> ≥ <em>L</em>, with the families <em>B</em> = <em>L</em> + 1, <em>L</em> + 2 and 2<em>L</em> − 1, as in the book), under international rules: flying kings, mandatory
 capture, majority capture and the Turkish strike. The Dutch book <em>Drie tegen één is gemeen</em> ("three against one is
 mean") by Gerrit L. de Bruijn and Aad N.J. Thoen (1988) found its results on three kings against one by hand, on boards
-of every size. The databases of
-<a href="https://github.com/rhalbersma/egdb-draughts/blob/main/src/egdb_fast.cpp"><code>egdb_fast</code></a> compute
+of every size. The databases compute
 every position exactly, with the distance to the end of the game in plies, and confirm, refine and extend the results
 of the book.</p>
 <p>Every position on this site is clickable: the large board follows, and below it are the value and all moves. W = win,
@@ -229,40 +227,49 @@ this: it mostly writes the shorter side first (10×11) and does not always draw 
         body.append('</ul>')
         body.append(t('''
 <h2>Vergelijking met het boek</h2>
-<p><strong>Bevestigd</strong>: alles wat het boek stellig beweert: 2 tegen 1 voor <em>L</em> ≤ 4 (met de
-voorwaarde van de lange lijn op 3×3 en 4×4) en op 7×5 speelbare hoeken; 3 tegen 1 op <em>L</em> = 5 en 6 voor elke
-<em>B</em> &gt; <em>L</em> (vierkante borden met de voorwaarde van de lange lijn, expliciet op 5×5 speelbare hoeken);
-<em>L</em> = 7 voor <em>B</em> = 7–11; <em>L</em> = 8 voor <em>B</em> = 9, 10, 11 en 15; de families
-<em>L</em> + 1, <em>L</em> + 2 en 2<em>L</em> − 1 met de kleuringsregel; de borden met een weggehaald veld 1, 2, 4, 5,
-7, 8, 9, 18 en 23.</p>
+<p><strong>Bevestigd</strong>: alles wat het boek stellig beweert.</p>
+<table class="tbl"><tr><th>Materiaal</th><th>Bord</th><th>Resultaat</th><th>Langste winst</th></tr>
+<tr><td>2-1</td><td><a href="twee-tegen-een.html"><em>L</em> ≤ 4</a></td><td>gewonnen (3×3 en 4×4 met de voorwaarde van de lange lijn)</td><td></td></tr>
+<tr><td>2-1</td><td><a href="twee-tegen-een.html">7×5 speelbare hoeken</a></td><td>gewonnen</td><td>15 ply</td></tr>
+<tr><td>3-1</td><td><a href="drie-tegen-een.html"><em>L</em> = 5 en 6, <em>B</em> &gt; <em>L</em></a></td><td>gewonnen</td><td></td></tr>
+<tr><td>3-1</td><td><a href="drie-tegen-een.html">5×5 speelbare hoeken, 6×6</a></td><td>gewonnen met de voorwaarde van de lange lijn</td><td></td></tr>
+<tr><td>3-1</td><td><a href="drie-tegen-een.html"><em>L</em> = 7, <em>B</em> = 7–11</a></td><td>gewonnen</td><td></td></tr>
+<tr><td>3-1</td><td><a href="drie-tegen-een.html"><em>L</em> = 8, <em>B</em> = 9, 10, 11 en 15</a></td><td>gewonnen</td><td></td></tr>
+<tr><td>3-1</td><td><a href="drie-tegen-een.html">de families <em>B</em> = <em>L</em> + 1, <em>L</em> + 2 en 2<em>L</em> − 1</a></td><td>gewonnen volgens de kleuringsregel</td><td></td></tr>
+<tr><td>3-1</td><td><a href="tien-zonder-veld.html">10×10 zonder veld</a> <span class="mv" data-g="h8" data-n="1" data-a="b10">1</span>, <span class="mv" data-g="h8" data-n="5" data-a="j10">5</span>, <span class="mv" data-g="h8" data-n="7" data-a="c9">7</span> of <span class="mv" data-g="h8" data-n="23" data-a="f6">23</span></td><td>gewonnen</td><td>23, 21, 25, 35</td></tr>
+<tr><td>3-1</td><td><a href="tien-zonder-veld.html">10×10 zonder veld</a> <span class="mv" data-g="h8" data-n="2" data-a="d10">2</span>, <span class="mv" data-g="h8" data-n="4" data-a="h10">4</span>, <span class="mv" data-g="h8" data-n="8" data-a="e9">8</span>, <span class="mv" data-g="h8" data-n="9" data-a="g9">9</span> of <span class="mv" data-g="h8" data-n="18" data-a="e7">18</span></td><td>remise</td><td></td></tr>
+</table>
 <p><strong>Nieuw</strong>:</p>
 <table class="tbl"><tr><th>Materiaal</th><th>Bord</th><th>Resultaat</th><th>Langste winst</th></tr>
 <tr><td>2-1</td><td><a href="twee-tegen-een.html">6×5</a></td><td>gewonnen</td><td>27 ply</td></tr>
 <tr><td>3-1</td><td>12×7, 13×7 onspeelbare hoeken, 14×7, 15×7 speelbare hoeken</td><td>gewonnen (algemene methode)</td><td>35, 49, 53, 67</td></tr>
 <tr><td>3-1</td><td>15×7 onspeelbare hoeken, 16×7, 17×7</td><td>remise: de grens van <em>L</em> = 7</td><td></td></tr>
-<tr><td>3-1</td><td><a href="tien-zonder-veld.html">10×10 zonder g7 (19)</a></td><td>gewonnen</td><td>33</td></tr>
-<tr><td>3-1</td><td><a href="tien-zonder-veld.html">10×10 zonder f10, d8, f8 (3, 12, 13)</a></td><td>remise</td><td></td></tr>
+<tr><td>3-1</td><td><a href="tien-zonder-veld.html">10×10 zonder veld <span class="mv" data-g="h8" data-n="19" data-a="g7">19</span></a></td><td>gewonnen</td><td>33</td></tr>
+<tr><td>3-1</td><td><a href="tien-zonder-veld.html">10×10 zonder velden <span class="mv" data-g="h8" data-n="3" data-a="f10">3</span>, <span class="mv" data-g="h8" data-n="12" data-a="d8">12</span> of <span class="mv" data-g="h8" data-n="13" data-a="f8">13</span></a></td><td>remise</td><td></td></tr>
 </table>
-<p><strong>Verfijnd</strong>: 10×10 zonder i9 (geïsoleerd veld j10), zonder h8 (één kunstmatige zetdwang), 8×8 met wit
-op de lange lijn (40 vorken met zwart aan zet), en de precieze grenzen van elke rij tot en met <em>L</em> = 12.</p>
 <p class="src">De programma's, de tabellen en de Engelse toelichting:
 <a href="https://github.com/rhalbersma/egdb-draughts">github.com/rhalbersma/egdb-draughts</a>.</p>''', '''
 <h2>Comparison with the book</h2>
-<p><strong>Confirmed</strong>: everything the book states firmly — 2-1 for <em>L</em> ≤ 4 (with the long-diagonal
-condition on 3×3 and 4×4) and on 7×5 playable corners; 3-1 on <em>L</em> = 5, 6 for every <em>B</em> &gt; <em>L</em> (square boards
-with the long-diagonal condition, explicit on 5×5 playable corners); <em>L</em> = 7 for <em>B</em> = 7–11; <em>L</em> = 8 for
-<em>B</em> = 9, 10, 11, 15; the families <em>L</em> + 1, <em>L</em> + 2 and 2<em>L</em> − 1 with the colouring rule; the
-boards with a square removed 1, 2, 4, 5, 7, 8, 9, 18, 23.</p>
+<p><strong>Confirmed</strong>: everything the book states firmly.</p>
+<table class="tbl"><tr><th>Material</th><th>Board</th><th>Result</th><th>Longest win</th></tr>
+<tr><td>2-1</td><td><a href="twee-tegen-een.html"><em>L</em> ≤ 4</a></td><td>won (3×3 and 4×4 with the long-diagonal condition)</td><td></td></tr>
+<tr><td>2-1</td><td><a href="twee-tegen-een.html">7×5 playable corners</a></td><td>won</td><td>15 plies</td></tr>
+<tr><td>3-1</td><td><a href="drie-tegen-een.html"><em>L</em> = 5 and 6, <em>B</em> &gt; <em>L</em></a></td><td>won</td><td></td></tr>
+<tr><td>3-1</td><td><a href="drie-tegen-een.html">5×5 playable corners, 6×6</a></td><td>won with the long-diagonal condition</td><td></td></tr>
+<tr><td>3-1</td><td><a href="drie-tegen-een.html"><em>L</em> = 7, <em>B</em> = 7–11</a></td><td>won</td><td></td></tr>
+<tr><td>3-1</td><td><a href="drie-tegen-een.html"><em>L</em> = 8, <em>B</em> = 9, 10, 11 and 15</a></td><td>won</td><td></td></tr>
+<tr><td>3-1</td><td><a href="drie-tegen-een.html">the families <em>B</em> = <em>L</em> + 1, <em>L</em> + 2 and 2<em>L</em> − 1</a></td><td>won by the colouring rule</td><td></td></tr>
+<tr><td>3-1</td><td><a href="tien-zonder-veld.html">10×10 without square</a> <span class="mv" data-g="h8" data-n="1" data-a="b10">1</span>, <span class="mv" data-g="h8" data-n="5" data-a="j10">5</span>, <span class="mv" data-g="h8" data-n="7" data-a="c9">7</span> or <span class="mv" data-g="h8" data-n="23" data-a="f6">23</span></td><td>won</td><td>23, 21, 25, 35</td></tr>
+<tr><td>3-1</td><td><a href="tien-zonder-veld.html">10×10 without square</a> <span class="mv" data-g="h8" data-n="2" data-a="d10">2</span>, <span class="mv" data-g="h8" data-n="4" data-a="h10">4</span>, <span class="mv" data-g="h8" data-n="8" data-a="e9">8</span>, <span class="mv" data-g="h8" data-n="9" data-a="g9">9</span> or <span class="mv" data-g="h8" data-n="18" data-a="e7">18</span></td><td>drawn</td><td></td></tr>
+</table>
 <p><strong>New</strong>:</p>
 <table class="tbl"><tr><th>Material</th><th>Board</th><th>Result</th><th>Longest win</th></tr>
 <tr><td>2-1</td><td><a href="twee-tegen-een.html">6×5</a></td><td>won</td><td>27 plies</td></tr>
 <tr><td>3-1</td><td>12×7, 13×7 unplayable corners, 14×7, 15×7 playable corners</td><td>won (general method)</td><td>35, 49, 53, 67</td></tr>
 <tr><td>3-1</td><td>15×7 unplayable corners, 16×7, 17×7</td><td>drawn: the limit of <em>L</em> = 7</td><td></td></tr>
-<tr><td>3-1</td><td><a href="tien-zonder-veld.html">10×10 without g7 (19)</a></td><td>won</td><td>33</td></tr>
-<tr><td>3-1</td><td><a href="tien-zonder-veld.html">10×10 without f10, d8, f8 (3, 12, 13)</a></td><td>drawn</td><td></td></tr>
+<tr><td>3-1</td><td><a href="tien-zonder-veld.html">10×10 without square <span class="mv" data-g="h8" data-n="19" data-a="g7">19</span></a></td><td>won</td><td>33</td></tr>
+<tr><td>3-1</td><td><a href="tien-zonder-veld.html">10×10 without squares <span class="mv" data-g="h8" data-n="3" data-a="f10">3</span>, <span class="mv" data-g="h8" data-n="12" data-a="d8">12</span> or <span class="mv" data-g="h8" data-n="13" data-a="f8">13</span></a></td><td>drawn</td><td></td></tr>
 </table>
-<p><strong>Refined</strong>: 10×10 without i9 (isolated square j10), without h8 (one artificial zugzwang), 8×8 with white
-on the long diagonal (40 forks with black to move), and the exact limits of every row up to <em>L</em> = 12.</p>
 <p class="src">The programs, the tables and the explanation:
 <a href="https://github.com/rhalbersma/egdb-draughts">github.com/rhalbersma/egdb-draughts</a>.</p>'''))
         self.write('index.html', 'Overzicht', '\n'.join(body), pg)

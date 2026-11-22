@@ -275,7 +275,14 @@ on the long diagonal (40 forks with black to move), and the exact limits of ever
                   'winst en ▶︎ speelt hem helemaal af.</p>',
                   '<p class="note">Click a number for the longest win on that board, on the large board; ‹ › step through '
                   'the win and ▶︎ plays it to the end.</p>'),
-                f'<p class="note">{t(LEGEND, LEGEND_EN)}</p>', t('''<ul>
+                f'<p class="note">{t(LEGEND, LEGEND_EN)}</p>',
+                t('<p>De 10×10-getallen komen overeen met de statistieken van mdgsoftware.nl: met twee dammen aan zet 19.398 '
+                  'winsten en 39.402 remises (<a href="https://mdgsoftware.nl/draughts/stats/details-0201.html">2 tegen 1</a>); met de enkele dam aan zet 3.240 '
+                  'winsten, 54.988 remises en 572 verliezen (<a href="https://mdgsoftware.nl/draughts/stats/details-0102.html">1 tegen 2</a>).</p>',
+                  '<p>The 10×10 numbers agree with the statistics of mdgsoftware.nl: with two kings to move 19,398 wins and '
+                  '39,402 draws (<a href="https://mdgsoftware.nl/draughts/stats/details-0201.html">2 against 1</a>); with the single king to move 3,240 wins, 54,988 '
+                  'draws and 572 losses (<a href="https://mdgsoftware.nl/draughts/stats/details-0102.html">1 against 2</a>).</p>'),
+                t('''<ul>
 <li>Voor <em>L</em> ≤ 4 (gedegenereerde borden) winnen twee dammen altijd, op de vierkante borden als ze de lange
 lijn(en) bezetten.</li>
 <li>Voor <em>L</em> ≥ 5 zijn maar twee borden gewonnen: <strong>6×5</strong> (nieuw) en <strong>7×5 speelbare hoeken</strong>
@@ -325,15 +332,29 @@ board size.</li>
                   'winst en ▶︎ speelt hem helemaal af.</p>',
                   '<p class="note">Click a number for the longest win on that board, on the large board; ‹ › step through '
                   'the win and ▶︎ plays it to the end.</p>'),
+                t('<p>De groene getallen op de diagonaal <em>B</em> − <em>L</em> = <em>L</em> − 1, dus <em>B</em> = '
+                  '2<em>L</em> − 1, zijn geen toeval: op die borden werkt een algemeen vangmechanisme, de V, waarmee drie '
+                  'dammen op elke bordgrootte winnen (bij oneven <em>L</em> vanaf 9 alleen met speelbare hoekvelden). Net zo '
+                  'zijn de kolommen <em>B</em> − <em>L</em> = 1 en 2 de families <em>B</em> = <em>L</em> + 1 en '
+                  '<em>L</em> + 2, elk met een eigen vangstelling. Hoe dat werkt, staat bij de '
+                  '<a href="vangstellingen.html">vangstellingen</a>.</p>',
+                  '<p>The green numbers on the diagonal <em>B</em> − <em>L</em> = <em>L</em> − 1, that is <em>B</em> = '
+                  '2<em>L</em> − 1, are no coincidence: on those boards a general trapping mechanism works, the V, with '
+                  'which three kings win on every board size (for odd <em>L</em> from 9 on only with playable corner '
+                  'squares). Likewise the columns <em>B</em> − <em>L</em> = 1 and 2 are the families <em>B</em> = '
+                  '<em>L</em> + 1 and <em>L</em> + 2, each with its own trapping position. How they work is shown at the '
+                  '<a href="vangstellingen.html">trapping positions</a>.</p>'),
                 f'<p class="note">{t(LEGEND, LEGEND_EN)} ' + t(
                     '† : op 8×8 zijn er 40 stellingen (2 op symmetrie na) met de enkele dam aan zet die remise maken met '
-                    'een vork, ook als wit de lange lijn bezet. Leeg: niet berekend.</p>',
+                    'een vork, ook als wit de lange lijn bezet.</p>',
                     '† : on 8×8 there are 40 positions (2 up to symmetry) with the single king to move that draw by a '
-                    'fork, even with white on the long diagonal. Blank: not computed.</p>'),
-                t('<p>De 10×10-getallen komen overeen met mdgsoftware.nl: met drie dammen aan zet 486.444 winsten en '
-                  '434.756 remises; met de enkele dam aan zet 16.812 winsten, 863.802 remises en 40.586 verliezen.</p>',
-                  '<p>The 10×10 numbers agree with mdgsoftware.nl: with three kings to move 486,444 wins and 434,756 '
-                  'draws; with the single king to move 16,812 wins, 863,802 draws and 40,586 losses.</p>'),
+                    'fork, even with white on the long diagonal.</p>'),
+                t('<p>De 10×10-getallen komen overeen met de statistieken van mdgsoftware.nl: met drie dammen aan zet '
+                  '486.444 winsten en 434.756 remises (<a href="https://mdgsoftware.nl/draughts/stats/details-0301.html">3 tegen 1</a>); met de enkele dam aan zet '
+                  '16.812 winsten, 863.802 remises en 40.586 verliezen (<a href="https://mdgsoftware.nl/draughts/stats/details-0103.html">1 tegen 3</a>).</p>',
+                  '<p>The 10×10 numbers agree with the statistics of mdgsoftware.nl: with three kings to move 486,444 wins '
+                  'and 434,756 draws (<a href="https://mdgsoftware.nl/draughts/stats/details-0301.html">3 against 1</a>); with the single king to move 16,812 wins, '
+                  '863,802 draws and 40,586 losses (<a href="https://mdgsoftware.nl/draughts/stats/details-0103.html">1 against 3</a>).</p>'),
                 t('''<h2>De drie families</h2>
 <table class="tbl"><tr><th>Familie</th><th>Resultaat (L = 3 … 12)</th></tr>
 <tr><td><strong>B = L + 1</strong></td><td>gewonnen op elk bord</td></tr>

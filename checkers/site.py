@@ -27,6 +27,7 @@ TITLE = {'nl': 'Checkers: 3 dammen tegen 2', 'en': 'Checkers: 3 kings against 2'
 # the chapters, each with one page per section: (Dutch, English, [(file, Dutch, English)])
 CHAPTERS = [
     ('2 tegen 1', '2 against 1', [
+        ('twee-verdrijven.html', 'De dam verdrijven', 'Driving out the king'),
         ('twee-langste.html', 'De langste winst op 8×8', 'The longest win on 8×8'),
         ('twee-blokkade.html', 'Uitzondering 1: de blokkade aan de rand', 'Exception 1: the blockade at the edge'),
         ('twee-4x4.html', 'Uitzondering 2: remise op 4×4', 'Exception 2: a draw on 4×4')]),
@@ -287,9 +288,67 @@ by opposition; on odd × odd boards with playable corners this blockade does not
                         'between them. If white drives the black king out of one double corner with both kings, black escapes '
                         'through the centre to the other one:</p>'),
                  f'<p class="var">{" ".join(parts)}</p>',
-                 t('<p>Daarna begint het opnieuw in de andere hoek.</p>', '<p>Then it starts again in the other corner.</p>'),
+                 t('<p>Daarna begint het opnieuw in de andere hoek. Op 8×8 ligt de andere dubbele hoek te ver weg (zie '
+                   '<a href="twee-verdrijven.html">de dam verdrijven</a>).</p>',
+                   '<p>Then it starts again in the other corner. On 8×8 the other double corner is too far away (see '
+                   '<a href="twee-verdrijven.html">driving out the king</a>).</p>'),
                  '<div style="clear:both"></div>']
         flush('twee-4x4.html')
+        # driving out the king: the 4x4 draw position ported to the double corner a7/b8 of 8x8. With white to move white
+        # drives the black king out as on 4x4, but there is no second double corner nearby to escape to; with black to
+        # move black steps to the other edge square, the position is the mirror image in the diagonal a8-h1, and white
+        # drives it out again
+        def optimal(fen, text):         # every move of the line: white wins fastest, black defends longest
+            f = fen
+            for (mv,), _ in self.plan(text):
+                ms = e21.analyse(f)[1]
+                m = next(x for x in ms if x[0] == mv)
+                w = f[0] == 'W'
+                assert m[1][0] == ('W' if w else 'L') and int(m[1][1:]) == (min if w else max)(
+                    int(x[1][1:]) for x in ms if x[1][0] == m[1][0]), (mv, m[1])
+                f = m[2]
+            return f
+        fw, fb = e21.fen(['c5', 'd6'], ['a7'], 'W'), e21.fen(['c5', 'd6'], ['a7'], 'B')
+        vw, vb = e21.analyse(fw)[0], e21.analyse(fb)[0]
+        linew = '1. d6-c7 a7-b8 2. c5-d6 b8-a7 3. c7-b8 a7-b6 4. b8-a7 b6-a5 5. d6-e5 a5-b4 6. e5-d4 b4-a5 7. d4-c3 a5-b6 8. a7xc5'
+        lineb = ('1. … a7-b8 2. c5-b6 b8-a7 3. d6-c5 a7-b8 4. b6-a7 b8-c7 5. a7-b8 c7-d8 6. c5-d4 d8-e7 7. d4-e5 e7-f8 '
+                 '8. e5-f6 f8-g7 9. f6xh8')
+        for fen, text in ((fw, linew), (fb, lineb)):
+            end = optimal(fen, text)
+            assert end.split(':')[2] == 'B'                 # the black king is captured
+        # after 1. ... a7-b8 the position is the mirror image in the diagonal a8-h1 of the one with white to move
+        mirror = lambda s: f'{chr(97 + 7 - (int(s[1:]) - 1))}{8 - (ord(s[0]) - 97)}'
+        assert sorted(map(mirror, ['c5', 'd6'])) == ['c5', 'd6'] and mirror('a7') == 'b8'
+        assert e21.analyse(e21.fen(['c5', 'd6'], ['b8'], 'W'))[0] == vw
+        figw, iw = pg.diagram(fw, t(f'8×8, 2 tegen 1, wit aan zet: {vw}', f'8×8, 2 against 1, white to move: {vw}'), gid=k21)
+        hw, *_ = pg.moves(fw, self.plan(linew), 1, False, 'm1', iw)
+        figb, ib = pg.diagram(fb, t(f'8×8, 2 tegen 1, zwart aan zet: {vb}', f'8×8, 2 against 1, black to move: {vb}'), gid=k21)
+        hb, *_ = pg.moves(fb, self.plan(lineb), 1, True, 'm1', ib)
+        body += [t('<p>Bij 2 tegen 1 vlucht de zwarte dam naar een dubbele hoek, en wit moet hem daaruit verdrijven. '
+                   'Neem de remisestelling van <a href="twee-4x4.html">4×4</a> en zet die op het 8×8-bord: het 4×4-bord '
+                   'past in de linkerbovenhoek, met zijn dubbele hoek op a7/b8. Wit staat op c5 en d6, zwart op a7.</p>',
+                   '<p>In 2 against 1 the black king flees to a double corner, and white has to drive it out. Take the '
+                   'drawn position of <a href="twee-4x4.html">4×4</a> and put it on the 8×8 board: the 4×4 board fits in '
+                   'the top left corner, with its double corner on a7/b8. White is on c5 and d6, black on a7.</p>'),
+                 figw,
+                 t('<p>Met wit aan zet drijft wit de zwarte dam uit de dubbele hoek, precies als op 4×4: na 3. c7-b8 moet '
+                   'hij eruit (3. … a7-b6). Op 4×4 ontsnapt zwart dan naar de andere dubbele hoek, maar op 8×8 ligt die '
+                   'te ver weg, en wit vangt de dam aan de rand.</p>',
+                   '<p>With white to move white drives the black king out of the double corner, exactly as on 4×4: after '
+                   '3. c7-b8 it has to leave (3. … a7-b6). On 4×4 black then escapes to the other double corner, but on '
+                   '8×8 that one is too far away, and white catches the king at the edge.</p>'),
+                 f'<p class="var">{hw}</p>', '<div style="clear:both"></div>',
+                 figb,
+                 t('<p>Met zwart aan zet gaat zwart naar het andere randveld van de dubbele hoek (1. … a7-b8). De stelling '
+                   'is dan het spiegelbeeld van die met wit aan zet, gespiegeld in de diagonaal die de dubbele hoek '
+                   'middendoor deelt, en wit drijft de dam opnieuw '
+                   'uit de hoek, nu langs de bovenrand naar de enkele hoek h8.</p>',
+                   '<p>With black to move black goes to the other edge square of the double corner (1. … a7-b8). The '
+                   'position is then the mirror image of the one with white to move, mirrored in the diagonal that cuts '
+                   'the double corner in half, and white '
+                   'drives the king out of the corner again, now along the top edge to the single corner h8.</p>'),
+                 f'<p class="var">{hb}</p>', '<div style="clear:both"></div>']
+        flush('twee-verdrijven.html')
         # the longest win: black flees to both double corners and white builds the trap there
         fen = 'W:WK3,K4,K30:BK11,K13'
         v, _ = e88.analyse(fen)

@@ -915,8 +915,8 @@ capture), on 9×8 every position is drawn at even parity (8,228 positions) and n
 <em>d</em> = kleinste coördinaatverschil; <em>d</em> = 0 als ze aan dezelfde kant liggen), niet of ze aan dezelfde
 kant liggen:</p>
 <table class="tbl"><tr><th>Paar</th><th>Borden</th><th>D × d</th><th>Vesting</th></tr>
-<tr><td>≤ 7 × H, verticaal</td><td>7×6, 8×7, 9×7 (onspeelbare hoeken)</td><td>6 × 0</td><td>valt</td></tr>
-<tr><td>8 × 8, diagonaal</td><td>8×8</td><td>7 × 7</td><td>valt</td></tr>
+<tr><td>≤ 7 × H, verticaal</td><td>7×6, 8×7, 9×7, 7×7, 5×5 (de laatste drie met onspeelbare hoeken)</td><td>≤ 6 × 0</td><td>valt</td></tr>
+<tr><td>≤ 8 × 8, diagonaal</td><td>8×8, 7×7, 6×6, 5×5</td><td>≤ 7 × 7</td><td>valt</td></tr>
 <tr><td>9 × H, verticaal</td><td>9×8, 10×9, 9×9 en 9×7 (onspeelbare hoeken)</td><td>8 × 0</td><td>oppositie beslist</td></tr>
 <tr><td>9 × 7, diagonaal</td><td>9×7 (onspeelbare hoeken)</td><td>8 × 6</td><td>oppositie beslist</td></tr>
 <tr><td>9 × 9, diagonaal</td><td>9×9 (onspeelbare hoeken)</td><td>8 × 8</td><td>houdt</td></tr>
@@ -927,8 +927,8 @@ kant liggen:</p>
 <em>d</em> = smallest coordinate difference; <em>d</em> = 0 when they are on the same side), not whether they lie on the
 same side:</p>
 <table class="tbl"><tr><th>Pair</th><th>Boards</th><th>D × d</th><th>Fortress</th></tr>
-<tr><td>≤ 7 × H, vertical</td><td>7×6, 8×7, 9×7 (unplayable corners)</td><td>6 × 0</td><td>falls</td></tr>
-<tr><td>8 × 8, diagonal</td><td>8×8</td><td>7 × 7</td><td>falls</td></tr>
+<tr><td>≤ 7 × H, vertical</td><td>7×6, 8×7, 9×7, 7×7, 5×5 (the last three with unplayable corners)</td><td>≤ 6 × 0</td><td>falls</td></tr>
+<tr><td>≤ 8 × 8, diagonal</td><td>8×8, 7×7, 6×6, 5×5</td><td>≤ 7 × 7</td><td>falls</td></tr>
 <tr><td>9 × H, vertical</td><td>9×8, 10×9, 9×9 and 9×7 (unplayable corners)</td><td>8 × 0</td><td>opposition decides</td></tr>
 <tr><td>9 × 7, diagonal</td><td>9×7 (unplayable corners)</td><td>8 × 6</td><td>opposition decides</td></tr>
 <tr><td>9 × 9, diagonal</td><td>9×9 (unplayable corners)</td><td>8 × 8</td><td>holds</td></tr>
@@ -1248,9 +1248,11 @@ are 8 traps, at even parity not a single one.</p>''')]
         self.write('vesting-9x7.html', None, '\n'.join(rulebody), pga, k97)
         self.write('afstandsregel.html', None, body[rule] + t(
             '<p>Zie de borden zelf: <a href="vesting-8x7.html">8×7</a>, <a href="val.html">8×8</a>, '
-            '<a href="vesting.html">9×8</a>, <a href="vesting-9x7.html">9×7</a> en <a href="vesting-9x9.html">9×9</a>.</p>',
+            '<a href="vesting.html">9×8</a>, <a href="vesting-9x7.html">9×7</a>, <a href="vesting-9x9.html">9×9</a>, '
+            '<a href="langste-7x7.html">7×7</a> en <a href="langste-5x5.html">5×5</a>.</p>',
             '<p>See the boards themselves: <a href="vesting-8x7.html">8×7</a>, <a href="val.html">8×8</a>, '
-            '<a href="vesting.html">9×8</a>, <a href="vesting-9x7.html">9×7</a> and <a href="vesting-9x9.html">9×9</a>.</p>'),
+            '<a href="vesting.html">9×8</a>, <a href="vesting-9x7.html">9×7</a>, <a href="vesting-9x9.html">9×9</a>, '
+            '<a href="langste-7x7.html">7×7</a> and <a href="langste-5x5.html">5×5</a>.</p>'),
             self.page((k97, e97)))
 
 

@@ -50,7 +50,7 @@ PARTS = [
             ('vesting.html', 'Twee vallen om de vesting te breken', 'Two traps to break the fortress'),
             ('vesting-pariteit.html', 'De winst is niet strategisch, de pariteit doet ertoe', 'The win is non-strategic, parity matters')]),
         ('9×9', '9×9', [
-            ('vesting-9x9.html', 'Onspeelbare hoeken: de val en de diagonaal', 'Unplayable corners: the trap and the diagonal')]),
+            ('vesting-9x9.html', 'Remise: de diagonaal is te lang', 'Draw: the diagonal is too long')]),
         ('8×7', '8×7', [
             ('vesting-8x7.html', 'Vier vallen om de vesting te breken', 'Four traps to break the fortress'),
             ('vesting-8x7-wit.html', 'De winst is strategisch, de dam kan verdreven worden', 'The win is strategic, the king can be expelled')]),

@@ -75,14 +75,14 @@ The fast version:
 | Database | `egdb` | `egdb_fast` |
 |---|---|---|
 | 10×10, 3-1 (with 2-1, 1-1) | 126 s | 0.5 s |
-| 10×12, 3-1 | 372 s | 1.7 s |
-| 9×17, 3-1 | ~40 min | 5.1 s |
-| 12×21, 3-1 (126 squares, 40 M positions) | — | 22 s |
+| 12×10, 3-1 | 372 s | 1.7 s |
+| 17×9, 3-1 | ~40 min | 5.1 s |
+| 21×12, 3-1 (126 squares, 40 M positions) | — | 22 s |
 | all 154 runs of the full re-run (international grid, lake boards, checkers) | many hours | 7 min |
-| 12×23, 3-1 (138 squares, 58 M positions, 3 blocks) | — | 101 s |
+| 23×12, 3-1 (138 squares, 58 M positions, 3 blocks) | — | 101 s |
 
 Against a hand-rolled `unsigned __int128` bitboard, `bit_fixed_set<64>` is exactly as fast (≤ 64 squares) and
-`bit_fixed_set<128>` ranges from 15% faster to 35% slower (65–128 squares; 10×12: 0.96 s vs 1.12 s, 9×17: 4.2 s vs 3.1 s).
+`bit_fixed_set<128>` ranges from 15% faster to 35% slower (65–128 squares; 12×10: 0.96 s vs 1.12 s, 17×9: 4.2 s vs 3.1 s).
 
 ### Usage
 
@@ -92,7 +92,7 @@ Requires a C++23 compiler (GCC 14 or later), CMake 3.30 or later, OpenMP and the
 ```
 cmake -B build && cmake --build build
 ./build/egdb_fast --board international --out data/international --query W:WK2,K10,K45:BK50
-./build/egdb_fast --width 15 --height 8 --corners playable           # 3-1 on 8×15
+./build/egdb_fast --width 15 --height 8 --corners playable           # 3-1 on 15×8
 ./build/egdb_fast --board international --lake g7                    # 10×10 without g7
 ./build/egdb_fast --width 9 --height 8 --rules checkers --white 3 --black 2
 ```
@@ -103,7 +103,7 @@ cmake -B build && cmake --build build
 
 ## Conventions
 
-* **Board** `W × H`: `W` is the shorter side, `H` the longer one. In the diagrams the long side is horizontal.
+* **Board** `W × H`: width × height, with `W ≥ H`; the diagrams show the boards this way, at least as wide as high. The tables have a row for every `H` and a column for every `W − H`. (The 1988 book mostly writes the shorter side first.)
 * **Corner squares** (tabula's `parity`): **playable** (parity 1) = the corner squares are playable
   (a1 is a dark square), **unplayable** (parity 0) = they are not. It only matters on boards with two odd sides.
   This only matters for odd × odd boards; otherwise both parities are mirror images.
@@ -119,25 +119,25 @@ cmake -B build && cmake --build build
 ## International draughts: 2 kings vs 1
 
 ```
- W \ H−W     0        1       2        3
- 3         3/3*       7      11/9      11
- 4          15*      13      13       21
- 5        (7)/(3)    27     (9)/15    (9)
- 6          (7)      (9)    (11)      (9)
- 7        (7)/(5)    (9)    (9)/(11)  (9)
- 8          (7)      (9)    (11)      (9)
- 9        (7)/(5)    (9)    (9)/(11)  (9)
-10          (7)      (9)    (11)      (9)
-11        (7)/(5)    (9)    (9)/(11)  (9)
-12          (7)      (9)    (11)      (9)
+ H \ W−H      0   1        2   3       4   5       6   7       8   9      10  11
+ 3         3/3*   7     11/9  11   13/13  15   19/17  19   21/23  23   27/25  27
+ 4          15*  13       13  21      27  37      43  47      51  57      61  65
+ 5      (7)/(3)  27   (9)/15 (9) (9)/(9) (9) (9)/(9) (9) (9)/(9) (9) (9)/(9) (9)
+ 6          (7) (9)     (11) (9)     (9) (9)     (9) (9)     (9) (9)     (9) (9)
+ 7      (7)/(5) (9) (9)/(11) (9) (9)/(9) (9) (9)/(9) (9) (9)/(9) (9) (9)/(9) (9)
+ 8          (7) (9)     (11) (9)     (9) (9)     (9) (9)     (9) (9)     (9) (9)
+ 9      (7)/(5) (9) (9)/(11) (9) (9)/(9) (9) (9)/(9) (9) (9)/(9) (9) (9)/(9) (9)
+10          (7) (9)     (11) (9)     (9) (9)     (9) (9)     (9) (9)     (9) (9)
+11      (7)/(5) (9) (9)/(11) (9) (9)/(9) (9) (9)/(9) (9) (9)/(9) (9) (9)/(9) (9)
+12          (7) (9)     (11) (9)     (9) (9)     (9) (9)     (9) (9)     (9) (9)
 ```
 
-* For `W ≤ 4` (degenerate boards) two kings always win, on the square boards provided they hold the long diagonal(s).
-* For `W ≥ 5` only two boards are won: **5×6** (new) and **5×7 playable corners** (known). From `W = 6` on everything is drawn,
+* For `H ≤ 4` (degenerate boards) two kings always win, on the square boards provided they hold the long diagonal(s).
+* For `H ≥ 5` only two boards are won: **6×5** (new) and **7×5 playable corners** (known). From `H = 6` on everything is drawn,
   and the remaining wins are short combinations whose length does not depend on the board size.
-* With the single king to move there are a few exceptions on 5×6 (8) and 5×7 (16): double attacks (forks).
+* With the single king to move there are a few exceptions on 6×5 (8) and 7×5 (16): double attacks (forks).
 
-**5×6, longest win (27 plies)**: `W:WK1,K8:BK7`
+**6×5, longest win (27 plies)**: `W:WK1,K8:BK7`
 ```
     +-------------+
   5 | W   .   .   |
@@ -152,7 +152,7 @@ cmake -B build && cmake --build build
 8. f4-c1 c3-e5 9. c5-e3 e5-c3 10. c1-a3 c3-e5 11. e3-f4 e5-d4 12. **a3-b2** d4xa1 13. f4-e5 a1-b2 14. e5xa1
 
 The long tempo play serves one purpose: sacrifice so that black captures *into the corner*, then place the
-second king behind it on the corner diagonal. On 5×7 playable corners the same final motif appears after 15 plies:
+second king behind it on the corner diagonal. On 7×5 playable corners the same final motif appears after 15 plies:
 `W:WK1,K9:BK2` 1. c3-e5 c5-a3 2. a5-d2 a3-c5 3. d2-c1 c5-f2 4. e5-g3 f2-c5 5. c1-a3 c5-d4 6. **a3-b2** d4xa1 7. g3-e5 a1-b2 8. e5xa1.
 More than 80% of all quiet wins on these two boards end with black capturing into a corner.
 
@@ -161,17 +161,17 @@ More than 80% of all quiet wins on these two boards end with black capturing int
 ## International draughts: 3 kings vs 1
 
 ```
- W \ H−W    0       1      2       3      4       5      6       7      8       9     10      11
- 3        0/3      5     7/9      9    9/11     13   15/15
- 4         9*     11     11      13     17      23     29      37
- 5      11/15*    23   13/13     15   17/15     17   19/19     21   23/23
- 6        17*     15     17      19     19      21     25      27     29      33
- 7      19/17*    19   21/19     23   25/25     35   49/21     53  (73)/67  (73) (73)/(43)
- 8        25*†    19     23      31    (23)    (33)   (21)     25    (19)    (19)   (21)    (19)
- 9     (15)/(15)  21  (19)/21   (27) (17)/(19) (31) (19)/(21) (21)  (19)/23  (19) (19)/(19) (21)
-10       (15)     21     25     (27)   (19)    (31)   (21)    (21)   (19)     27   (19)    (19)
-11     (15)/(15)  21  (19)/21   (27) (17)/(19) (31) (19)/(21) (21) (19)/(21) (19)  (19)/25  (19)
-12       (15)     21     25     (27)   (19)    (31)   (21)    (21)   (19)    (21)          27
+ H \ W−H        0  1       2    3         4    5         6    7         8    9        10   11
+ 3            0/3  5     7/9    9      9/11   13     15/15   17     19/19   21     23/23   25
+ 4             9* 11      11   13        17   23        29   37        45   49        55   59
+ 5         11/15* 23   13/13   15     17/15   17     19/19   21     23/23   25     27/25   29
+ 6            17* 15      17   19        19   21        25   27        29   33        37   39
+ 7         19/17* 19   21/19   23     25/25   35     49/21   53   (73)/67 (73) (73)/(43) (73)
+ 8           25*† 19      23   31      (23) (33)      (21)   25      (19) (19)      (21) (19)
+ 9      (15)/(15) 21 (19)/21 (27) (17)/(19) (31) (19)/(21) (21)   (19)/23 (19) (19)/(19) (21)
+10           (15) 21      25 (27)      (19) (31)      (21) (21)      (19)   27      (19) (19)
+11      (15)/(15) 21 (19)/21 (27) (17)/(19) (31) (19)/(21) (21) (19)/(21) (19)   (19)/25 (19)
+12           (15) 21      25 (27)      (19) (31)      (21) (21)      (19) (21)      (19)   27
 ```
 `†`: on 8×8 there are 40 positions (2 up to symmetry) with the single king to move that draw by a fork,
 even with white on the long diagonal. Blank: not computed.
@@ -181,27 +181,27 @@ with the single king to move 16,812 wins, 863,802 draws and 40,586 losses.
 
 ### The three families
 
-| Family | Result (W = 3 … 12) |
+| Family | Result (H = 3 … 12) |
 |---|---|
-| **H = W + 1** | won on every board |
-| **H = W + 2** | won, except the "wrong" colouring, unplayable corner squares, for W = 9 and 11 |
-| **H = 2W − 1** | won, except unplayable for W = 9 and 11 (10×19: 27 plies, 11×21 playable corners: 25 plies, 12×23: 27 plies) |
+| **W = H + 1** | won on every board |
+| **W = H + 2** | won, except the "wrong" colouring, unplayable corner squares, for H = 9 and 11 |
+| **W = 2H − 1** | won, except unplayable for H = 9 and 11 (19×10: 27 plies, 21×11 playable corners: 25 plies, 23×12: 27 plies) |
 
-The colouring rule of the book is confirmed: from W = 9 on, for odd W only the colouring with playable corner squares wins.
-On W = 7 the wrong colouring still wins (5×9 and 7×13 unplayable corners) because the general method still reaches that far.
+The colouring rule of the book is confirmed: from H = 9 on, for odd H only the colouring with playable corner squares wins.
+On H = 7 the wrong colouring still wins (9×5 and 13×7 unplayable corners) because the general method still reaches that far.
 
 ### The general method on narrow boards
 
-* **W = 5, 6**: every non-square board is won (checked up to 5×13 and 6×15). Three kings in a column
+* **H = 5, 6**: every non-square board is won (checked up to 16×5 and 17×6). Three kings in a column
   close off the full width and can be pushed along the board; the longest win grows by about 2 plies per extra column.
-* **W = 7**: won up to **7×14** and **7×15 playable corners** (book: up to 7×11). From H = 16 on it is drawn.
+* **H = 7**: won up to **14×7** and **15×7 playable corners** (book: up to 11×7). From W = 16 on it is drawn.
   The longest wins jump from 25 to 35, 49, 53 and 67–73 plies: the space becomes tight.
-* **W = 8**: won at H = 9, 10, 11 and 15 (= 2W − 1), drawn at H = 12–14 and 16–19.
-* **W ≥ 9**: only the families remain.
+* **H = 8**: won at W = 9, 10, 11 and 15 (= 2H − 1), drawn at W = 12–14 and 16–19.
+* **H ≥ 9**: only the families remain.
 
 ### Square boards: the long diagonal
 
-On square boards with W ≥ 5 the single king holds the long diagonal(s). Splitting the quiet positions with
+On square boards with H ≥ 5 the single king holds the long diagonal(s). Splitting the quiet positions with
 three kings to move by who occupies the long diagonal(s) (draws / positions):
 
 | Board | White on the long diagonal(s) | Nobody | Only black |
@@ -213,7 +213,7 @@ three kings to move by who occupies the long diagonal(s) (draws / positions):
 | 9×9 playable corners (white on both) | 32,492 / 39,328 | | |
 | 10×10 | 177,548 / 206,466 | | |
 
-Up to W = 8 the long line decides; from W = 9 on three kings cannot win even when they hold it.
+Up to H = 8 the long line decides; from H = 9 on three kings cannot win even when they hold it.
 With one long diagonal the condition amounts to "black does not hold it" (self-evident for a method that
 starts by occupying it); with two diagonals white really needs both.
 
@@ -227,16 +227,16 @@ Kept at the same place on every board size, the conversion always takes exactly 
 
 | Family | White kings | Boards checked | Black to move | White to move |
 |---|---|---|---|---|
-| **W + 1** | (2, 2), (H, W − 1), (H − 2, W − 3) — e.g. 10×11: b2, k9, i7 | 6×7 … 11×12 | 10 | 9 |
-| **W + 2** | (2, 2), (H, W − 2), (H − 2, W − 4) — e.g. 10×12: b2, l8, j6 | 6×8 … 10×12 | 12 | 11 |
-| **2W − 1** | (2, 2), (W, W − 2), (H − 1, 2) — e.g. 10×19: b2, j8, r2 | 5×9 … 9×17 | 8 | 7 |
+| **H + 1** | (2, 2), (W, H − 1), (W − 2, H − 3) — e.g. 11×10: b2, k9, i7 | 7×6 … 12×11 | 10 | 9 |
+| **H + 2** | (2, 2), (W, H − 2), (W − 2, H − 4) — e.g. 12×10: b2, l8, j6 | 8×6 … 12×10 | 12 | 11 |
+| **2H − 1** | (2, 2), (H, H − 2), (W − 1, 2) — e.g. 19×10: b2, j8, r2 | 9×5 … 17×9 | 8 | 7 |
 
-Coordinates are (file, rank) counted from (1, 1) = a1 at the bottom left; for 2W − 1, (2, 2) and (H − 1, 2) stand on the legs of the V and (W, W − 2) below its apex. No draw is left on any of these boards. The strong side builds the trapping position from an arbitrary position
-and then converts quickly: on 9×17 the longest win is 23 plies, of which at most 8 are the conversion.
+Coordinates are (file, rank) counted from (1, 1) = a1 at the bottom left; for 2H − 1, (2, 2) and (W − 1, 2) stand on the legs of the V and (H, H − 2) below its apex. No draw is left on any of these boards. The strong side builds the trapping position from an arbitrary position
+and then converts quickly: on 17×9 the longest win is 23 plies, of which at most 8 are the conversion.
 
-**The V** (only for `H = 2W − 1`): the diagonals from the two corners of one long side meet exactly in the
+**The V** (only for `W = 2H − 1`): the diagonals from the two corners of one long side meet exactly in the
 middle of the opposite side. Shorter, and the legs cross below the edge; longer, and they hit the edge at two different squares.
-On 6×11:
+On 11×6:
 ```
     +-----------------------+
   6 |   .   .   *   .   .   |
@@ -248,12 +248,12 @@ On 6×11:
     +-----------------------+
       a b c d e f g h i j k
 ```
-Even W always has the two corners; odd W has them only with playable corner squares. The trapping map is exactly symmetric about the apex file.
+Even H always has the two corners; odd H has them only with playable corner squares. The trapping map is exactly symmetric about the apex file.
 
-**W + 1 and W + 2**: the king at b2 stands on the long diagonal, whose other end is an entrance at the top right;
+**H + 1 and H + 2**: the king at b2 stands on the long diagonal, whose other end is an entrance at the top right;
 the two kings at the top right form a half trap with it and the upper one can close the long line.
 Black king top left: b2 sacrifices and black is caught. Black king bottom right: the second king sacrifices and the upper one closes in.
-On 10×11 (book diagram 8) every square of the black king is won with white to move within 5 plies,
+On 11×10 (10×11 in the book, diagram 8) every square of the black king is won with white to move within 5 plies,
 **except h10, the hatched square in the book, which takes 9 plies**:
 ```
     +---------------------------------------------+
@@ -305,23 +305,23 @@ One square per symmetry class (the 4 symmetries of the board give 15 classes):
 
 ## Comparison with the 1988 book
 
-**Confirmed**: everything the book states firmly — 2-1 for W ≤ 4 (with the long-line condition on 3×3 and 4×4) and on 5×7 playable corners;
-3-1 on W = 5, 6 for every H > W (square boards with the long-line condition, explicit on 5×5 playable corners);
-W = 7 for H = 7–11; W = 8 for H = 9, 10, 11, 15; the families W + 1, W + 2 and 2W − 1 with the colouring rule;
+**Confirmed**: everything the book states firmly — 2-1 for H ≤ 4 (with the long-line condition on 3×3 and 4×4) and on 7×5 playable corners;
+3-1 on H = 5, 6 for every W > H (square boards with the long-line condition, explicit on 5×5 playable corners);
+H = 7 for W = 7–11; H = 8 for W = 9, 10, 11, 15; the families H + 1, H + 2 and 2H − 1 with the colouring rule;
 the lake boards 1, 2, 4, 5, 7, 8, 9, 18, 23.
 
 **New**:
 
 | Material | Board | Result | Longest win |
 |---|---|---|---|
-| 2-1 | 5×6 | won | 27 plies |
-| 3-1 | 7×12, 7×13 unplayable corners, 7×14, 7×15 playable corners | won (general method) | 35, 49, 53, 67 |
-| 3-1 | 7×15 unplayable corners, 7×16, 7×17 | drawn: the limit of W = 7 | |
+| 2-1 | 6×5 | won | 27 plies |
+| 3-1 | 12×7, 13×7 unplayable corners, 14×7, 15×7 playable corners | won (general method) | 35, 49, 53, 67 |
+| 3-1 | 15×7 unplayable corners, 16×7, 17×7 | drawn: the limit of H = 7 | |
 | 3-1 | 10×10 without g7 (19) | won | 33 |
 | 3-1 | 10×10 without f10, d8, f8 (3, 12, 13) | drawn | |
 
 **Refined**: 10×10 without i9 (isolated j10), without h8 (one artificial zugzwang), 8×8 with white on the long line
-(40 forks with black to move), and the exact limits of every row up to W = 12.
+(40 forks with black to move), and the exact limits of every row up to H = 12.
 
 ---
 

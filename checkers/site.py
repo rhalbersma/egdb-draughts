@@ -111,17 +111,17 @@ TABLE32 = {'nl': '''<h2>3 dammen tegen 2 per bord</h2>
 # move), unplayable/playable corner squares on boards with two odd sides. Counted over the quiet positions: nobody can
 # capture, white to move has a move that loses no material, and black to move cannot create a fork; each with white and
 # with black to move. 21 = won (only the blockade in the single corners depends on the side to move); 21* = won provided
-# white has the opposition (73% to 100% of the quiet positions are won with one side to move and drawn with the other);
+# white has the opposition (76% to 100% of the quiet positions are won with one side to move and drawn with the other);
 # (21) = drawn with either side to move in a large part of the quiet positions (42% on 4x4)
 RESULTS_21 = {
-    3: ['3/3', '11', '9*/9', '23', '17*/11', '35', '25*/15', '47', '33*/19', '59', '41*/23', '71'],
-    4: ['(3)', '13', '19', '19', '27', '27', '35', '35', '43', '43', '51', '51'],
-    5: ['13/9', '23', '31/13', '33', '37/17', '41', '45/21', '49', '53/25', '57', '61/29', '65'],
-    6: ['27', '31', '33', '37', '41', '45', '49', '53', '57', '61', '65', '69'],
-    7: ['31/13', '33', '37/17', '41', '45/21', '49', '53/25', '57', '61/29', '65', '69/33', '73'],
-    8: ['33', '37', '41', '45', '49', '53', '57', '61', '65', '69', '73', '77'],
-    9: ['37/17', '41', '45/21', '49', '53/25', '57', '61/29', '65', '69/33', '73', '77/37', '81'],
-    10: ['41', '45', '49', '53', '57', '61', '65', '69', '73', '77', '81', '85'],
+    3: ['3/3', '11', '9*/9', '23', '17*/11', '35', '25*/15', '47', '33*/19', '59'],
+    4: ['(3)', '13', '19', '19', '27', '27', '35', '35', '43', '43'],
+    5: ['13/9', '23', '31/13', '33', '37/17', '41', '45/21', '49', '53/25', '57'],
+    6: ['27', '31', '33', '37', '41', '45', '49', '53', '57', '61'],
+    7: ['31/13', '33', '37/17', '41', '45/21', '49', '53/25', '57', '61/29', '65'],
+    8: ['33', '37', '41', '45', '49', '53', '57', '61', '65', '69'],
+    9: ['37/17', '41', '45/21', '49', '53/25', '57', '61/29', '65', '69/33', '73'],
+    10: ['41', '45', '49', '53', '57', '61', '65', '69', '73', '77'],
 }
 
 TEXT21 = {'nl': '''<h2>2 dammen tegen 1 per bord</h2>
@@ -131,17 +131,17 @@ getal voor de stelling en speel de hele winst na.</p>
 <p class="src">De kleur telt de rustige stellingen, met wit en met zwart aan zet: niemand kan slaan, wit aan zet kan direct
 materiaalverlies ontlopen, en zwart aan zet kan geen vork maken. <span class="res-win">33</span> = gewonnen, de langste
 winst duurt 33 ply; alleen in <a href="twee-blokkade.html">de blokkade</a> in de enkele hoeken hangt de uitkomst af van
-wie aan zet is · <span class="res-diag">33*</span> = gewonnen mits wit de oppositie heeft: in 73% tot 100% van de
+wie aan zet is · <span class="res-diag">33*</span> = gewonnen mits wit de oppositie heeft: in 76% tot 100% van de
 rustige stellingen wint wit met de ene kant aan zet en is het remise met de andere · <span class="res-draw">(33)</span> =
 remise, met beide kanten aan zet, in een groot deel van de rustige stellingen · <code>31/13</code> =
 onspeelbare/speelbare hoekvelden. Een bord <em>B</em> × <em>L</em> is breedte × lengte, met <em>B</em> ≥ <em>L</em>.</p>
 <ul>
 <li><a href="twee-4x4.html">4×4</a> is het enige bord dat echt remise is: 44 van de 104 rustige stellingen zijn remise,
 wie er ook aan zet is.</li>
-<li>Op de oneven borden van 3 hoog met onspeelbare hoeken (5×3 tot en met 13×3) beslist de oppositie. Elke damzet gaat
+<li>Op de oneven borden van 3 hoog met onspeelbare hoeken (5×3 tot en met 11×3) beslist de oppositie. Elke damzet gaat
 van een even naar een oneven rij of omgekeerd, dus niemand kan een tempo verliezen, en op zo'n strook, waar een dam alleen
 op de middelste rij geslagen kan worden, hangt bijna elke stelling af van wie aan zet is: op 5×3 elke rustige stelling,
-op 13×3 nog 73%. Wit op b3 en d3 en zwart op a2 is bijvoorbeeld remise met wit aan zet en verloren met zwart aan zet.</li>
+op 11×3 nog 76%. Wit op b3 en d3 en zwart op a2 is bijvoorbeeld remise met wit aan zet en verloren met zwart aan zet.</li>
 <li>Alle andere borden zijn gewonnen. Alleen in de blokkade in de enkele hoeken, een handvol stellingen, hangt de uitkomst
 af van wie aan zet is. Zonder blokkade is elke rustige stelling gewonnen: op de oneven × oneven borden vanaf 5×5, de
 borden van 4 hoog vanaf 5×4, 3×3 en 4×3.</li>
@@ -153,16 +153,16 @@ number for the position and replay the whole win.</p>
 <p class="src">The colour counts the quiet positions, with white and with black to move: nobody can capture, white to move
 can avoid losing material at once, and black to move cannot create a fork. <span class="res-win">33</span> = won, the
 longest win takes 33 plies; only in <a href="twee-blokkade.html">the blockade</a> in the single corners does the outcome
-depend on the side to move · <span class="res-diag">33*</span> = won provided white has the opposition: in 73% to 100% of
+depend on the side to move · <span class="res-diag">33*</span> = won provided white has the opposition: in 76% to 100% of
 the quiet positions white wins with one side to move and it is a draw with the other · <span class="res-draw">(33)</span>
 = drawn, with either side to move, in a large part of the quiet positions · <code>31/13</code> = unplayable/playable
 corner squares. A board <em>W</em> × <em>H</em> is width × height, with <em>W</em> ≥ <em>H</em>.</p>
 <ul>
 <li><a href="twee-4x4.html">4×4</a> is the only board that is really drawn: 44 of the 104 quiet positions are drawn,
 whichever side is to move.</li>
-<li>On the odd boards of height 3 with unplayable corners (5×3 to 13×3) the opposition decides. Every king move goes from an
+<li>On the odd boards of height 3 with unplayable corners (5×3 to 11×3) the opposition decides. Every king move goes from an
 even to an odd rank or back, so nobody can lose a tempo, and on such a strip, where a king can only be captured on the
-middle rank, nearly every position depends on the side to move: on 5×3 every quiet position, on 13×3 still 73%. White on
+middle rank, nearly every position depends on the side to move: on 5×3 every quiet position, on 11×3 still 76%. White on
 b3 and d3 and black on a2, for instance, is a draw with white to move and lost with black to move.</li>
 <li>All other boards are won. Only in the blockade in the single corners, a handful of positions, does the outcome depend
 on the side to move. Without a blockade every quiet position is won: on the odd × odd boards from 5×5, the boards of
@@ -267,7 +267,7 @@ class Site:
         """the 2-1 results per board as a table, a row per H and a column per W - H; every number links to a position
         with the longest win on that board, shown on the large board, with the whole win to replay"""
         t = self.t
-        head = '<tr><th>' + t('L \\ B − L', 'H \\ W − H') + '</th>' + ''.join(f'<th>{d}</th>' for d in range(12)) + '</tr>'
+        head = '<tr><th>' + t('L \\ B − L', 'H \\ W − H') + '</th>' + ''.join(f'<th>{d}</th>' for d in range(len(next(iter(RESULTS_21.values()))))) + '</tr>'
         rows = []
         for h, cells in RESULTS_21.items():
             tds = []
@@ -358,7 +358,7 @@ is clickable. Boards are named width × height, as drawn.</p>''')]
 onafhankelijk van de bordgrootte; op 8×8 op spiegelingen na 3) zitten de twee witte dammen opgesloten in de enkele hoek en houdt de zwarte dam ze
 daar met oppositie. Op oneven × oneven borden met onspeelbare hoeken is er geen enkele hoek en dus geen blokkade; met
 speelbare hoeken verliest wit de blokkade zelfs, want zonder dubbele hoek wint bij 1 tegen 1 wie de oppositie heeft.</li></ul>
-<p>De <a href="index.html">tabel per bord</a> op het overzicht geeft de uitkomst op elk bord tot en met 21×10.</p>
+<p>De <a href="index.html">tabel per bord</a> op het overzicht geeft de uitkomst op elk bord tot en met 19×10.</p>
 <p>De langste winst groeit gestaag met het bord: 33 ply op 8×8, 41 op 10×10, 49 op 12×12, 61 op 15×12.</p>''', '''
 <p>2 against 1 is won on every board that is large enough, with two exceptions:</p>
 <ul><li><a href="twee-4x4.html">the 4×4 board</a>: there 2 against 1 is, surprisingly, a draw;</li>
@@ -366,7 +366,7 @@ speelbare hoeken verliest wit de blokkade zelfs, want zonder dubbele hoek wint b
 independent of the board size; on 8×8 up to symmetry 3) the two white kings are locked in the single corner and the black king keeps them there
 by opposition. On odd × odd boards with unplayable corners there is no single corner and so no blockade; with playable
 corners white even loses the blockade, since without a double corner 1 against 1 is won by the side with the opposition.</li></ul>
-<p>The <a href="index.html">table per board</a> in the overview gives the outcome on every board up to 21×10.</p>
+<p>The <a href="index.html">table per board</a> in the overview gives the outcome on every board up to 19×10.</p>
 <p>The longest win grows steadily with the board: 33 plies on 8×8, 41 on 10×10, 49 on 12×12, 61 on 15×12.</p>'''),
                  t(f'<p>De langste winst op 8×8 ({v[1:]} ply):</p>', f'<p>The longest win on 8×8 ({v[1:]} plies):</p>'),
                  f'<p class="var">{h}</p>',

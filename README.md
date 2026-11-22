@@ -6,13 +6,14 @@ chequered board `W × H` (optionally with squares removed), for two rule sets:
 * **international draughts**: flying kings, mandatory capture, majority capture, Turkish strike;
 * **English checkers**: short kings (one square), mandatory capture, free choice among captures.
 
-The databases were used to check, extend and refine the results of a 1988 Dutch book on
-"three kings against one" on boards of every size, whose results were all found by hand.
+The databases were used to check, extend and refine the results of the 1988 Dutch book
+*Drie tegen één is gemeen* ("three against one is mean") by Gerrit L. de Bruijn and Aad N.J. Thoen,
+on three kings against one on boards of every size, whose results were all found by hand.
 This page collects the programs, the tables and the most interesting findings.
 
 > **Companion sites** with clickable diagrams: [Strategie der 36 velden](https://rhalbersma.github.io/egdb-draughts/strategie_der_36_velden/) ·
 > [6×6 Is Strongly Solved](https://rhalbersma.github.io/egdb-draughts/6x6_is_strongly_solved/) ·
-> [Drie tegen een is gemeen](https://rhalbersma.github.io/egdb-draughts/drie_tegen_een_is_gemeen/) ·
+> [Drie tegen één is gemeen](https://rhalbersma.github.io/egdb-draughts/drie_tegen_een_is_gemeen/) ·
 > [English checkers 3 vs 2](https://rhalbersma.github.io/egdb-draughts/checkers/).
 > The form of the analyses is taken from those by Wieger Wesselink on [10x10.org](https://10x10.org).
 >

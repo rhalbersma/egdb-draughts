@@ -4,7 +4,8 @@
 #    (See accompanying file LICENSE_1_0.txt or copy at
 #          http://www.boost.org/LICENSE_1_0.txt)
 
-"""Companion site (GitHub Pages) for the kings-only endgames of "Drie tegen een is gemeen" (1988): 2 kings
+"""Companion site (GitHub Pages) for the kings-only endgames of "Drie tegen één is gemeen" (Gerrit L. de Bruijn and
+Aad N.J. Thoen, 1988): 2 kings
 against 1 and 3 kings against 1 in international draughts on boards of every size, the trapping positions and
 10x10 with one square removed. Every position is clickable; the values come from egdb_fast --serve.
 
@@ -23,7 +24,7 @@ ROOT = HERE.parent
 sys.path.insert(0, str(ROOT / 'common'))
 from sitekit import CachedEngine, FastEngine, Page, esc, lang_link, menu, write_page   # noqa: E402
 
-TITLE = 'Drie tegen een is gemeen'
+TITLE = 'Drie tegen één is gemeen'
 
 PAGES = [
     ('index.html', 'Overzicht', 'Overview'),
@@ -192,8 +193,8 @@ class Site:
         fig, _ = pg.diagram('W:WK1,K8:BK7', t('6×5: twee dammen winnen (27 ply)', '6×5: two kings win (27 plies)'))
         body = [f'<h1>{TITLE}</h1>', fig, t('''
 <p>Eindspelen met alleen dammen, op borden van elke afmeting <em>B × L</em> (breedte × lengte, <em>B</em> ≥ <em>L</em>, met de families <em>B</em> = <em>L</em> + 1, <em>L</em> + 2 en 2<em>L</em> − 1, zoals in het boek), met internationale regels: vliegende
-dammen, slagplicht, meerslag en Turkse slag. Een Nederlands boek uit 1988 over drie dammen tegen één vond zijn
-resultaten met de hand, op borden van elke grootte. De databases van
+dammen, slagplicht, meerslag en Turkse slag. Het boek <em>Drie tegen één is gemeen</em> van Gerrit L. de Bruijn en
+Aad N.J. Thoen (1988) vond zijn resultaten over drie dammen tegen één met de hand, op borden van elke grootte. De databases van
 <a href="https://github.com/rhalbersma/egdb-draughts/blob/main/src/egdb_fast.cpp"><code>egdb_fast</code></a>
 rekenen elke stelling exact uit, met de afstand tot het einde van de partij in ply, en bevestigen, verfijnen en
 breiden de resultaten van het boek uit.</p>
@@ -208,8 +209,9 @@ breedte × lengte (kolommen × rijen): 11×10 is het bord met <em>B</em> = 11 en
 is daarin niet consequent: het schrijft de kortste zijde meestal eerst (10×11) en tekent de borden niet altijd op dezelfde
 manier.</p>''', '''
 <p>Endgames with kings only, on boards of any size <em>B × L</em> (width × height, <em>B</em> ≥ <em>L</em>, with the families <em>B</em> = <em>L</em> + 1, <em>L</em> + 2 and 2<em>L</em> − 1, as in the book), under international rules: flying kings, mandatory
-capture, majority capture and the Turkish strike. A Dutch book of 1988 on three kings against one, <em>Drie tegen een is
-gemeen</em> ("three against one is mean"), found its results by hand, on boards of every size. The databases of
+capture, majority capture and the Turkish strike. The Dutch book <em>Drie tegen één is gemeen</em> ("three against one is
+mean") by Gerrit L. de Bruijn and Aad N.J. Thoen (1988) found its results on three kings against one by hand, on boards
+of every size. The databases of
 <a href="https://github.com/rhalbersma/egdb-draughts/blob/main/src/egdb_fast.cpp"><code>egdb_fast</code></a> compute
 every position exactly, with the distance to the end of the game in plies, and confirm, refine and extend the results
 of the book.</p>

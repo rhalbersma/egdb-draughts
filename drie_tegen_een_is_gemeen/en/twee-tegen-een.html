@@ -213,12 +213,15 @@ table.results th, table.results td { text-align: center; padding: 4px 8px; white
 <p class="note">In the tables: <span class="res-win">21</span> = won, longest win 21 plies · <span class="res-diag">21*</span> = won provided the stronger side occupies the long diagonal(s) · <span class="res-draw">(21)</span> = drawn (the number is the longest win among the positions that are won) · <code>13/15</code> = unplayable/playable corner squares. A board <em>W × H</em> is width × height, with <em>W</em> ≥ <em>H</em>; the tables have a row for every <em>H</em> and a column for every <em>W</em> − <em>H</em>. Playable = the corner squares are playable, unplayable = they are not (only relevant for odd × odd).</p>
 <p>The 10×10 numbers agree with the statistics of mdgsoftware.nl: with two kings to move 19,398 wins and 39,402 draws (<a href="https://mdgsoftware.nl/draughts/stats/details-0201.html">2 against 1</a>); with the single king to move 3,240 wins, 54,988 draws and 572 losses (<a href="https://mdgsoftware.nl/draughts/stats/details-0102.html">1 against 2</a>).</p>
 <ul>
-<li>For <em>H</em> ≤ 4 (degenerate boards) two kings always win, on the square boards provided they hold the long
+<li><em>H</em> ≤ 4 (degenerate boards): two kings always win, on the square boards provided they hold the long
 diagonal(s).</li>
-<li>For <em>H</em> ≥ 5 only two boards are won: <strong>6×5</strong> (new) and <strong>7×5 playable corners</strong> (known). From
-<em>H</em> = 6 on everything is drawn, and the remaining wins are short combinations whose length does not depend on the
-board size.</li>
-<li>With the single king to move there are a few exceptions on 6×5 (8) and 7×5 (16): double attacks (forks).</li>
+<li><em>H</em> = 5: only two boards are won.
+<ul><li><strong>6×5</strong> (new);</li>
+<li><strong>7×5 playable corners</strong> (known);</li>
+<li>exceptions because of forks: with the single king to move there are 8 positions on 6×5 and 16 on 7×5 with a double
+attack.</li></ul></li>
+<li><em>H</em> ≥ 6: everything is drawn; the remaining wins are short combinations whose length does not depend on the board
+size.</li>
 </ul>
 <h2>6×5: the longest win</h2>
 <figure><a class="diagram" href="#" data-i="1970"><div class="smallboard" data-g="5x6" data-fen="W:WK1,K8:BK7"></div></a><figcaption>6×5, white to move</figcaption></figure>

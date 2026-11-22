@@ -914,25 +914,25 @@ capture), on 9×8 every position is drawn at even parity (8,228 positions) and n
 <p>Wat beslist, is de afstand tussen de hoeken van de dubbele hoeken die zwart bezet (<em>D</em> = grootste,
 <em>d</em> = kleinste coördinaatverschil; <em>d</em> = 0 als ze aan dezelfde kant liggen), niet of ze aan dezelfde
 kant liggen:</p>
-<table class="tbl"><tr><th>Borden</th><th>D × d</th><th>Vesting</th></tr>
-<tr><td>7×6, 8×7, 9×7 onspeelbare hoeken (verticaal paar)</td><td>6 × 0</td><td>valt</td></tr>
-<tr><td>8×8</td><td>7 × 7</td><td>valt</td></tr>
-<tr><td>9×8, 10×9, 9×9 onspeelbare hoeken (zelfde kant), 9×7 onspeelbare hoeken (horizontaal)</td><td>8 × 0</td><td>oppositie beslist</td></tr>
-<tr><td>9×7 onspeelbare hoeken (diagonaal paar)</td><td>8 × 6</td><td>oppositie beslist</td></tr>
-<tr><td>9×9 onspeelbare hoeken (diagonaal paar)</td><td>8 × 8</td><td>houdt</td></tr>
-<tr><td>10×8, 10×10, 11×10, 12×10</td><td>≥ 9</td><td>houdt</td></tr></table>
+<table class="tbl"><tr><th>Paar</th><th>Borden</th><th>D × d</th><th>Vesting</th></tr>
+<tr><td>≤ 7 × H, verticaal</td><td>7×6, 8×7, 9×7 (onspeelbare hoeken)</td><td>6 × 0</td><td>valt</td></tr>
+<tr><td>8 × 8, diagonaal</td><td>8×8</td><td>7 × 7</td><td>valt</td></tr>
+<tr><td>9 × H, verticaal</td><td>9×8, 10×9, 9×9 en 9×7 (onspeelbare hoeken)</td><td>8 × 0</td><td>oppositie beslist</td></tr>
+<tr><td>9 × 7, diagonaal</td><td>9×7 (onspeelbare hoeken)</td><td>8 × 6</td><td>oppositie beslist</td></tr>
+<tr><td>9 × 9, diagonaal</td><td>9×9 (onspeelbare hoeken)</td><td>8 × 8</td><td>houdt</td></tr>
+<tr><td>≥ 10 × H</td><td>10×8, 10×10, 11×10, 12×10</td><td>≥ 9</td><td>houdt</td></tr></table>
 <p><em>D</em> ≤ 7: de vesting valt · <em>D</em> = 8: de oppositie beslist, tenzij ook <em>d</em> = 8 ·
 <em>D</em> ≥ 9: de vesting houdt.</p>''', '''
 <p>What decides is the distance between the corners of the double corners black occupies (<em>D</em> = largest,
 <em>d</em> = smallest coordinate difference; <em>d</em> = 0 when they are on the same side), not whether they lie on the
 same side:</p>
-<table class="tbl"><tr><th>Boards</th><th>D × d</th><th>Fortress</th></tr>
-<tr><td>7×6, 8×7, 9×7 unplayable corners (vertical pair)</td><td>6 × 0</td><td>falls</td></tr>
-<tr><td>8×8</td><td>7 × 7</td><td>falls</td></tr>
-<tr><td>9×8, 10×9, 9×9 unplayable corners (same side), 9×7 unplayable corners (horizontal)</td><td>8 × 0</td><td>opposition decides</td></tr>
-<tr><td>9×7 unplayable corners (diagonal pair)</td><td>8 × 6</td><td>opposition decides</td></tr>
-<tr><td>9×9 unplayable corners (diagonal pair)</td><td>8 × 8</td><td>holds</td></tr>
-<tr><td>10×8, 10×10, 11×10, 12×10</td><td>≥ 9</td><td>holds</td></tr></table>
+<table class="tbl"><tr><th>Pair</th><th>Boards</th><th>D × d</th><th>Fortress</th></tr>
+<tr><td>≤ 7 × H, vertical</td><td>7×6, 8×7, 9×7 (unplayable corners)</td><td>6 × 0</td><td>falls</td></tr>
+<tr><td>8 × 8, diagonal</td><td>8×8</td><td>7 × 7</td><td>falls</td></tr>
+<tr><td>9 × H, vertical</td><td>9×8, 10×9, 9×9 and 9×7 (unplayable corners)</td><td>8 × 0</td><td>opposition decides</td></tr>
+<tr><td>9 × 7, diagonal</td><td>9×7 (unplayable corners)</td><td>8 × 6</td><td>opposition decides</td></tr>
+<tr><td>9 × 9, diagonal</td><td>9×9 (unplayable corners)</td><td>8 × 8</td><td>holds</td></tr>
+<tr><td>≥ 10 × H</td><td>10×8, 10×10, 11×10, 12×10</td><td>≥ 9</td><td>holds</td></tr></table>
 <p><em>D</em> ≤ 7: the fortress falls · <em>D</em> = 8: opposition decides, unless also <em>d</em> = 8 ·
 <em>D</em> ≥ 9: the fortress holds.</p>'''),
                 ]

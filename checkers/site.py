@@ -1573,54 +1573,23 @@ saves himself only with 1. … {draw[0]}; both corner moves lose. All moves of b
                         'stand in trap 1, with white to move, and white forces the exchange at once.)</p>'), '<div style="clear:both"></div>']
 
     def fortress99(self, pg, k99, e99):
-        """9x9 with unplayable corners: the trap works for two double corners on the same side, not for the diagonal pair"""
+        """9x9 with unplayable corners: two double corners on the same side behave as on 9x8; the diagonal pair is a draw,
+        the diagonal is too long for the trap"""
         t = self.t
+        # the pair on the same side (h1/i2 and h9/i8) has the two traps of 9x8: every shuttle move allows an exchange
+        for W, B in ((['i4', 'h5', 'i6'], ['i2', 'i8']), (['h3', 'h5', 'h7'], ['h1', 'h9'])):
+            partner = {'h1': 'i2', 'i2': 'h1', 'h9': 'i8', 'i8': 'h9'}
+            for b in B:
+                assert self.exchange(e99, e99.fen(W, [partner[b] if x == b else x for x in B], 'W'))
         body = [t('''
 <p>Op 9×9 met onspeelbare hoekvelden is elke hoek een dubbele hoek: b1/a2, h1/i2, a8/b9 en h9/i8. Twee dubbele hoeken
-aan dezelfde kant liggen even ver uit elkaar als op <a href="vesting.html">9×8</a>, en de <a href="val.html">val</a>
-werkt er net zo: bij één van de twee pariteiten, dus de oppositie beslist. Dat geldt op elk bord van 9 breed: op 9×10
-heeft het paar langs de rand van 9 dezelfde vallen, en op 9×11 met onspeelbare hoeken elk van de twee paren langs een
-rand van 9. Twee dubbele hoeken die diagonaal tegenover elkaar liggen, werken niet: daar is bij geen van beide
-pariteiten een val. De <a href="afstandsregel.html">afstandsregel</a> in de conclusie vat dat samen. De database
-telt de vallen met zwart aan zet en beide zwarte dammen op de randvelden van hun dubbele hoeken:</p>
-<table class="tbl"><tr><th>Zwart in</th><th>Vallen bij even pariteit</th><th>Vallen bij oneven pariteit</th><th>Gevolg</th></tr>
-<tr><td>twee dubbele hoeken aan dezelfde kant</td><td colspan="2">2 bij één van de twee pariteiten</td><td>de oppositie beslist</td></tr>
-<tr><td>twee diagonaal tegenover elkaar</td><td>0</td><td>0</td><td>de vesting houdt</td></tr></table>
-<p>Per paar dubbele hoeken zijn er 12.100 beginstellingen bij elke pariteit.</p>''', '''
+aan dezelfde kant liggen even ver uit elkaar als op <a href="vesting.html">9×8</a>, en daar gaat het net zo: de val werkt
+bij één van de twee pariteiten, en de oppositie beslist. Nieuw zijn de dubbele hoeken die diagonaal tegenover elkaar
+liggen.</p>''', '''
 <p>On 9×9 with unplayable corner squares every corner is a double corner: b1/a2, h1/i2, a8/b9 and h9/i8. Two double
-corners on the same side lie as far apart as on <a href="vesting.html">9×8</a>, and the <a href="val.html">trap</a>
-works there just the same: at one of the two parities, so the opposition decides. That holds on every board 9 wide: on
-9×10 the pair along the edge of 9 has the same traps, and on 9×11 with unplayable corners each of the two pairs along an
-edge of 9. Two diagonally opposite double corners do not work: there is no trap at either parity. The
-<a href="afstandsregel.html">distance rule</a> in the conclusion sums this up. The database counts the traps with black
-to move and both black kings on the edge squares of their double corners:</p>
-<table class="tbl"><tr><th>Black in</th><th>Traps at even parity</th><th>Traps at odd parity</th><th>Consequence</th></tr>
-<tr><td>two double corners on the same side</td><td colspan="2">2 at one of the two parities</td><td>the opposition decides</td></tr>
-<tr><td>two diagonally opposite ones</td><td>0</td><td>0</td><td>the fortress holds</td></tr></table>
-<p>Per pair of double corners there are 12,100 starting positions at each parity.</p>''')]
-        # the two traps for the pair of double corners along the i-file (h1/i2 and h9/i8)
-        body.append(t('<p>Voor twee dubbele hoeken aan dezelfde kant, h1/i2 en h9/i8, zijn er twee vallen. In elk ervan '
-                      'wordt elke pendelzet van zwart gestraft. Net als op 9×8 werken ze maar bij één van de twee pariteiten: '
-                      'de oppositie beslist.</p>',
-                      '<p>For two double corners on the same side, h1/i2 and h9/i8, there are two traps. In each of them '
-                      'every shuttle move of black is punished. As on 9×8 they work at only one of the two parities: the '
-                      'opposition decides.</p>'))
-        body += self.trap_blocks(pg, k99, e99, '9×9', t('onspeelbare hoeken', 'unplayable corners'),
-                                 [(['i4', 'h5', 'i6'], ['i2', 'i8']), (['h3', 'h5', 'h7'], ['h1', 'h9'])],
-                                 {'h1': 'i2', 'i2': 'h1', 'h9': 'i8', 'i8': 'h9'})
-        x99 = self.active_passive(e99, (['i4', 'h5', 'i6'], ['i2', 'i8']), (['h3', 'h5', 'h7'], ['h1', 'h9']))
-        body.append(t('<p>Ook hier gaan de twee vallen in elkaar over met een even aantal zetten (h3-i4 en h7-i6; de zwarte '
-                      'dammen pendelen), en liggen ze bij dezelfde pariteit. Val 1 is de actieve val (met wit aan zet ruilt '
-                      f'wit meteen: {x99}), val 2 de passieve, die alleen met zwart aan zet wint. Wit kan vanuit de passieve '
-                      'val het tempo niet wisselen: de winst is niet strategisch maar hangt af van de oppositie.</p>',
-                      '<p>Here too the two traps turn into each other with an even number of moves (h3-i4 and h7-i6; the '
-                      'black kings shuttle), and they lie at the same parity. Trap 1 is the active trap (with white to move '
-                      f'white exchanges at once: {x99}), trap 2 the passive one, which wins with black to move only. White '
-                      'cannot change the tempo from the passive trap: the win is not strategic but depends on the '
-                      'opposition.</p>'))
-        body += self.no_tempo(pg, k99, e99, t('9×9 onspeelbare hoeken', '9×9 unplayable corners'), ['h3', 'h5', 'h7'],
-                              ['h1', 'h9'], '1. h3-i4 h9-i8 2. h7-i6 i8-h9',
-                              t('de witte opstelling van val 1', 'the white set-up of trap 1'))
+corners on the same side lie as far apart as on <a href="vesting.html">9×8</a>, and there it goes just the same: the trap
+works at one of the two parities, and the opposition decides. What is new are the double corners that lie diagonally
+opposite.</p>''')]
         # the diagonal pair: the 8x8 trap (three kings in a row on the connecting diagonal) catches only one shuttle
         figs = []
         for W in (['d3', 'e4', 'f5'], ['e4', 'f5', 'g6']):
@@ -1651,8 +1620,11 @@ only one of the two shuttle moves.</p>'''), fig1,
                    f'Alle zetten van zwart: ',
                    f'<p>One square further, on e4, f5 and g6 ({v2}), it is the other way round: {hit2} is punished, '
                    f'{free2} is not. All moves of black: ') + self.moves_list(pg, i2, legal2, '1. … ')
-                 + t('. Bij geen van beide pariteiten straft één opstelling beide pendelzetten, dus de vesting houdt.</p>',
-                     '. At neither parity does one set-up punish both shuttle moves, so the fortress holds.</p>'),
+                 + t('. Bij geen van beide pariteiten straft één opstelling beide pendelzetten, dus de vesting houdt: '
+                     'remise. De <a href="afstandsregel.html">afstandsregel</a> in de conclusie vat samen wanneer de vesting '
+                     'valt.</p>',
+                     '. At neither parity does one set-up punish both shuttle moves, so the fortress holds: a draw. The '
+                     '<a href="afstandsregel.html">distance rule</a> in the conclusion sums up when the fortress falls.</p>'),
                  '<div style="clear:both"></div>']
         return body
 

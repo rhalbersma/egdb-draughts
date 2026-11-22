@@ -49,6 +49,8 @@ PARTS = [
         ('9×8', '9×8', [
             ('vesting.html', 'Twee vallen om de vesting te breken', 'Two traps to break the fortress'),
             ('vesting-pariteit.html', 'De winst is niet strategisch, de pariteit doet ertoe', 'The win is non-strategic, parity matters')]),
+        ('9×9', '9×9', [
+            ('vesting-9x9.html', 'Onspeelbare hoeken: de val en de diagonaal', 'Unplayable corners: the trap and the diagonal')]),
         ('8×7', '8×7', [
             ('vesting-8x7.html', 'Vier vallen om de vesting te breken', 'Four traps to break the fortress'),
             ('vesting-8x7-wit.html', 'De winst is strategisch, de dam kan verdreven worden', 'The win is strategic, the king can be expelled')]),
@@ -57,13 +59,11 @@ PARTS = [
         ('5×5', '5×5', [
             ('langste-5x5.html', 'De langste winst', 'The longest win'),
             ('vallen-5x5.html', 'Veertig vallen om de vesting te breken', 'Forty traps to break the fortress'),
-            ('zetdwang-5x5.html', 'Uitzondering: zetdwang', 'Exception: zugzwang')]),
-        ('andere borden', 'other boards', [
-            ('vesting-9x9.html', '9×9 onspeelbare hoeken: de val en de diagonaal', '9×9 unplayable corners: the trap and the diagonal'),
-            ('afstandsregel.html', 'De afstandsregel', 'The distance rule')])]),
+            ('zetdwang-5x5.html', 'Uitzondering: zetdwang', 'Exception: zugzwang')])]),
     (None, None, [
         ('Conclusie', 'Conclusion', [
-            ('conclusie.html', 'Conclusie', 'Conclusion')])]),
+            ('conclusie.html', 'De vallen per bord', 'The traps per board'),
+            ('afstandsregel.html', 'De afstandsregel', 'The distance rule')])]),
 ]
 # every chapter: (part number, Dutch, English, sections)
 CHAPTERS = [(k, nl, en, secs) for k, (_, _, chapters) in enumerate(PARTS) for nl, en, secs in chapters]
@@ -568,10 +568,11 @@ een dam kan verdrijven, hangt af van waar de dubbele hoeken liggen. Op 8×8 ligg
 uit elkaar. De middelste witte dam van de <a href="val.html">val</a> slaat terug na de ruil in de ene hoek én in de
 andere, en door over te stappen naar de andere diagonaal <a href="val-pariteit.html">wisselt wit van tempo</a>. Daardoor
 valt de vesting bij beide pariteiten.</p>
-<p>Eerst een groter bord. Op <a href="vesting.html">9×8</a> liggen de dubbele hoeken aan dezelfde kant, 8 uit elkaar. Er
+<p>Eerst grotere borden. Op <a href="vesting.html">9×8</a> liggen de dubbele hoeken aan dezelfde kant, 8 uit elkaar. Er
 zijn nog steeds twee vallen, maar langs de rand kan wit niet van tempo wisselen: de oppositie beslist, en de helft van de
-stellingen is remise. Op nog grotere borden houdt de vesting stand (zie <a href="afstandsregel.html">de
-afstandsregel</a>).</p>
+stellingen is remise. Op <a href="vesting-9x9.html">9×9</a> met onspeelbare hoekvelden werkt de val voor twee dubbele
+hoeken aan dezelfde kant, maar de diagonaal is te lang. Op nog grotere borden houdt de vesting stand (zie
+<a href="afstandsregel.html">de afstandsregel</a> in de conclusie).</p>
 <p>Dan kleinere borden. Op <a href="vesting-8x7.html">8×7</a> liggen de twee dubbele hoeken langs de zijde van 7, 6 uit
 elkaar: bij oneven pariteit zijn er vallen, en bij even pariteit verdrijft wit een zwarte dam uit zijn dubbele hoek. Op
 <a href="langste-7x7.html">7×7</a> en <a href="langste-5x5.html">5×5</a> is elke hoek een dubbele hoek, en dan is de
@@ -582,9 +583,11 @@ trap or expel a king depends on where the double corners are. On 8×8 they lie d
 middle white king of the <a href="val.html">trap</a> captures back after the exchange in the one corner and in the other,
 and by switching to the other diagonal <a href="val-pariteit.html">white changes the tempo</a>. Therefore the fortress
 falls at both parities.</p>
-<p>First a bigger board. On <a href="vesting.html">9×8</a> the double corners lie on the same side, 8 apart. There are
+<p>First bigger boards. On <a href="vesting.html">9×8</a> the double corners lie on the same side, 8 apart. There are
 still two traps, but along the edge white cannot change the tempo: the opposition decides, and half of the positions are
-drawn. On even bigger boards the fortress holds (see <a href="afstandsregel.html">the distance rule</a>).</p>
+drawn. On <a href="vesting-9x9.html">9×9</a> with unplayable corner squares the trap works for two double corners on the
+same side, but the diagonal is too long. On even bigger boards the fortress holds (see
+<a href="afstandsregel.html">the distance rule</a> in the conclusion).</p>
 <p>Then smaller boards. On <a href="vesting-8x7.html">8×7</a> the two double corners lie along the side of 7, 6 apart: at
 odd parity there are traps, and at even parity white expels a black king from its double corner. On
 <a href="langste-7x7.html">7×7</a> and <a href="langste-5x5.html">5×5</a> every corner is a double corner, and then the
@@ -1250,8 +1253,10 @@ are 8 traps, at even parity not a single one.</p>''')]
             '<tr><td>9×8</td><td>100% remise (8.228)</td><td>0% remise (8.244)</td></tr>'
             '<tr><td>10×9</td><td>100% (18.420)</td><td>0% (18.440)</td></tr>'
             '<tr><td>11×10</td><td>100% (37.030)</td><td>100% (37.050)</td></tr></table>'
-            '<p>Zie de vallen op <a href="val.html">8×8</a>, <a href="vesting.html">9×8</a> en <a href="vesting-8x7.html">8×7</a>, '
-            'en de langste winsten op <a href="langste-7x7.html">7×7</a> en <a href="langste-5x5.html">5×5</a>.</p>',
+            '<p>Zie de vallen op <a href="val.html">8×8</a>, <a href="vesting.html">9×8</a>, <a href="vesting-9x9.html">9×9</a> en '
+            '<a href="vesting-8x7.html">8×7</a>, en de langste winsten op <a href="langste-7x7.html">7×7</a> en '
+            '<a href="langste-5x5.html">5×5</a>. De <a href="afstandsregel.html">afstandsregel</a> op de volgende pagina vat '
+            'samen wanneer de vesting valt.</p>',
             '<p>The traps per board, with black to move and both black kings on the edge squares of two double corners '
             '(counted with <a href="https://github.com/rhalbersma/egdb-draughts/blob/main/checkers/traps.py"><code>traps.py</code></a>):</p>'
             '<table class="tbl"><tr><th>Board</th><th>Traps at even parity</th><th>Traps at odd parity</th><th>Consequence</th></tr>'
@@ -1263,8 +1268,10 @@ are 8 traps, at even parity not a single one.</p>''')]
             '<tr><td>9×8</td><td>100% draws (8,228)</td><td>0% draws (8,244)</td></tr>'
             '<tr><td>10×9</td><td>100% (18,420)</td><td>0% (18,440)</td></tr>'
             '<tr><td>11×10</td><td>100% (37,030)</td><td>100% (37,050)</td></tr></table>'
-            '<p>See the traps on <a href="val.html">8×8</a>, <a href="vesting.html">9×8</a> and <a href="vesting-8x7.html">8×7</a>, '
-            'and the longest wins on <a href="langste-7x7.html">7×7</a> and <a href="langste-5x5.html">5×5</a>.</p>'),
+            '<p>See the traps on <a href="val.html">8×8</a>, <a href="vesting.html">9×8</a>, <a href="vesting-9x9.html">9×9</a> and '
+            '<a href="vesting-8x7.html">8×7</a>, and the longest wins on <a href="langste-7x7.html">7×7</a> and '
+            '<a href="langste-5x5.html">5×5</a>. The <a href="afstandsregel.html">distance rule</a> on the next page sums up '
+            'when the fortress falls.</p>'),
             self.page((k89, e89)), None)
 
 
@@ -1574,7 +1581,7 @@ aan dezelfde kant liggen even ver uit elkaar als op <a href="vesting.html">9×8<
 werkt er net zo: bij één van de twee pariteiten, dus de oppositie beslist. Dat geldt op elk bord van 9 breed: op 9×10
 heeft het paar langs de rand van 9 dezelfde vallen, en op 9×11 met onspeelbare hoeken elk van de twee paren langs een
 rand van 9. Twee dubbele hoeken die diagonaal tegenover elkaar liggen, werken niet: daar is bij geen van beide
-pariteiten een val. De <a href="afstandsregel.html">afstandsregel</a> op de volgende pagina vat dat samen. De database
+pariteiten een val. De <a href="afstandsregel.html">afstandsregel</a> in de conclusie vat dat samen. De database
 telt de vallen met zwart aan zet en beide zwarte dammen op de randvelden van hun dubbele hoeken:</p>
 <table class="tbl"><tr><th>Zwart in</th><th>Vallen bij even pariteit</th><th>Vallen bij oneven pariteit</th><th>Gevolg</th></tr>
 <tr><td>twee dubbele hoeken aan dezelfde kant</td><td colspan="2">2 bij één van de twee pariteiten</td><td>de oppositie beslist</td></tr>
@@ -1585,7 +1592,7 @@ corners on the same side lie as far apart as on <a href="vesting.html">9×8</a>,
 works there just the same: at one of the two parities, so the opposition decides. That holds on every board 9 wide: on
 9×10 the pair along the edge of 9 has the same traps, and on 9×11 with unplayable corners each of the two pairs along an
 edge of 9. Two diagonally opposite double corners do not work: there is no trap at either parity. The
-<a href="afstandsregel.html">distance rule</a> on the next page sums this up. The database counts the traps with black
+<a href="afstandsregel.html">distance rule</a> in the conclusion sums this up. The database counts the traps with black
 to move and both black kings on the edge squares of their double corners:</p>
 <table class="tbl"><tr><th>Black in</th><th>Traps at even parity</th><th>Traps at odd parity</th><th>Consequence</th></tr>
 <tr><td>two double corners on the same side</td><td colspan="2">2 at one of the two parities</td><td>the opposition decides</td></tr>

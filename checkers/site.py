@@ -913,28 +913,34 @@ capture), on 9×8 every position is drawn at even parity (8,228 positions) and n
                 t('''
 <p>Wat beslist, is de afstand tussen de hoeken van de dubbele hoeken die zwart bezet (<em>D</em> = grootste,
 <em>d</em> = kleinste coördinaatverschil; <em>d</em> = 0 als ze aan dezelfde kant liggen), niet of ze aan dezelfde
-kant liggen:</p>
+kant liggen. Bij een paar langs een zijde staat in de tabel eerst de lengte van die zijde en dan de andere zijde: het bord
+8×7 heet hier 7×8, want zijn paar ligt langs de zijde van 7.</p>
 <table class="tbl"><tr><th>Paar</th><th>Borden</th><th>D × d</th><th>Vesting</th></tr>
-<tr><td>≤ 7 × H, verticaal</td><td>7×6, 8×7, 9×7, 7×7, 5×5 (de laatste drie met onspeelbare hoeken)</td><td>≤ 6 × 0</td><td>valt</td></tr>
-<tr><td>≤ 8 × 8, diagonaal</td><td>8×8, 7×7, 6×6, 5×5</td><td>≤ 7 × 7</td><td>valt</td></tr>
-<tr><td>9 × H, verticaal</td><td>9×8, 10×9, 9×9 en 9×7 (onspeelbare hoeken)</td><td>8 × 0</td><td>oppositie beslist</td></tr>
-<tr><td>9 × 7, diagonaal</td><td>9×7 (onspeelbare hoeken)</td><td>8 × 6</td><td>oppositie beslist</td></tr>
-<tr><td>9 × 9, diagonaal</td><td>9×9 (onspeelbare hoeken)</td><td>8 × 8</td><td>houdt</td></tr>
-<tr><td>≥ 10 × H</td><td>10×8, 10×10, 11×10, 12×10</td><td>≥ 9</td><td>houdt</td></tr></table>
+<tr><td>≤ 7 × H, verticaal</td><td>5×5; 7×5, 7×6, 7×7, 7×8, 7×9 en 7×10 tot en met 7×12</td><td>≤ 6 × 0</td><td>valt</td></tr>
+<tr><td>≤ 8 × 8, diagonaal</td><td>5×5, 6×6, 7×7, 8×8</td><td>≤ 7 × 7</td><td>valt</td></tr>
+<tr><td>9 × H, verticaal</td><td>9×6, 9×7, 9×8, 9×9 en 9×10 tot en met 9×12</td><td>8 × 0</td><td>oppositie beslist</td></tr>
+<tr><td>9 × 7, diagonaal</td><td>9×7</td><td>8 × 6</td><td>oppositie beslist</td></tr>
+<tr><td>9 × 9, diagonaal</td><td>9×9</td><td>8 × 8</td><td>houdt</td></tr>
+<tr><td>11 × H, verticaal</td><td>11×6 tot en met 11×12</td><td>10 × 0</td><td>houdt</td></tr>
+<tr><td>≥ 10, overige paren</td><td>10×8, 10×10, 11×10, 12×10 (zoals getekend)</td><td>≥ 9</td><td>houdt</td></tr>
+<tr><td>9 × 5, 11 × 5, verticaal</td><td>9×5, 11×5</td><td>8 × 0, 10 × 0</td><td>valt</td></tr></table>
 <p><em>D</em> ≤ 7: de vesting valt · <em>D</em> = 8: de oppositie beslist, tenzij ook <em>d</em> = 8 ·
-<em>D</em> ≥ 9: de vesting houdt.</p>''', '''
+<em>D</em> ≥ 9: de vesting houdt. Behalve als de andere zijde 5 is: dan valt de vesting ook bij <em>D</em> = 8 en 10.</p>''', '''
 <p>What decides is the distance between the corners of the double corners black occupies (<em>D</em> = largest,
 <em>d</em> = smallest coordinate difference; <em>d</em> = 0 when they are on the same side), not whether they lie on the
-same side:</p>
+same side. For a pair along a side the table first gives the length of that side and then the other side: the board 8×7
+is called 7×8 here, since its pair lies along the side of 7.</p>
 <table class="tbl"><tr><th>Pair</th><th>Boards</th><th>D × d</th><th>Fortress</th></tr>
-<tr><td>≤ 7 × H, vertical</td><td>7×6, 8×7, 9×7, 7×7, 5×5 (the last three with unplayable corners)</td><td>≤ 6 × 0</td><td>falls</td></tr>
-<tr><td>≤ 8 × 8, diagonal</td><td>8×8, 7×7, 6×6, 5×5</td><td>≤ 7 × 7</td><td>falls</td></tr>
-<tr><td>9 × H, vertical</td><td>9×8, 10×9, 9×9 and 9×7 (unplayable corners)</td><td>8 × 0</td><td>opposition decides</td></tr>
-<tr><td>9 × 7, diagonal</td><td>9×7 (unplayable corners)</td><td>8 × 6</td><td>opposition decides</td></tr>
-<tr><td>9 × 9, diagonal</td><td>9×9 (unplayable corners)</td><td>8 × 8</td><td>holds</td></tr>
-<tr><td>≥ 10 × H</td><td>10×8, 10×10, 11×10, 12×10</td><td>≥ 9</td><td>holds</td></tr></table>
+<tr><td>≤ 7 × H, vertical</td><td>5×5; 7×5, 7×6, 7×7, 7×8, 7×9 and 7×10 to 7×12</td><td>≤ 6 × 0</td><td>falls</td></tr>
+<tr><td>≤ 8 × 8, diagonal</td><td>5×5, 6×6, 7×7, 8×8</td><td>≤ 7 × 7</td><td>falls</td></tr>
+<tr><td>9 × H, vertical</td><td>9×6, 9×7, 9×8, 9×9 and 9×10 to 9×12</td><td>8 × 0</td><td>opposition decides</td></tr>
+<tr><td>9 × 7, diagonal</td><td>9×7</td><td>8 × 6</td><td>opposition decides</td></tr>
+<tr><td>9 × 9, diagonal</td><td>9×9</td><td>8 × 8</td><td>holds</td></tr>
+<tr><td>11 × H, vertical</td><td>11×6 to 11×12</td><td>10 × 0</td><td>holds</td></tr>
+<tr><td>≥ 10, other pairs</td><td>10×8, 10×10, 11×10, 12×10 (as drawn)</td><td>≥ 9</td><td>holds</td></tr>
+<tr><td>9 × 5, 11 × 5, vertical</td><td>9×5, 11×5</td><td>8 × 0, 10 × 0</td><td>falls</td></tr></table>
 <p><em>D</em> ≤ 7: the fortress falls · <em>D</em> = 8: opposition decides, unless also <em>d</em> = 8 ·
-<em>D</em> ≥ 9: the fortress holds.</p>'''),
+<em>D</em> ≥ 9: the fortress holds. Except when the other side is 5: then the fortress also falls at <em>D</em> = 8 and 10.</p>'''),
                 ]
         # the other of the two traps on 9x8 (the trap of the previous page is the first), on a page of its own
         pgp = self.page((k89, e89))

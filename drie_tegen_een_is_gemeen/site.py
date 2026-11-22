@@ -35,30 +35,30 @@ PAGES = [
 
 # the results per board: a row per L (height), a column per B − L (width − height); '21' = won, longest win 21 plies,
 # '(21)' = drawn (the longest win among the won positions), '*' = won if the strong side holds the long diagonal(s),
-# '13/15' = unplayable/playable corner squares, '' = not in the table
+# '13/15' = unplayable/playable corner squares
 RESULTS_21 = {
-    3: ['3/3*', '7', '11/9', '11'],
-    4: ['15*', '13', '13', '21'],
-    5: ['(7)/(3)', '27', '(9)/15', '(9)'],
-    6: ['(7)', '(9)', '(11)', '(9)'],
-    7: ['(7)/(5)', '(9)', '(9)/(11)', '(9)'],
-    8: ['(7)', '(9)', '(11)', '(9)'],
-    9: ['(7)/(5)', '(9)', '(9)/(11)', '(9)'],
-    10: ['(7)', '(9)', '(11)', '(9)'],
-    11: ['(7)/(5)', '(9)', '(9)/(11)', '(9)'],
-    12: ['(7)', '(9)', '(11)', '(9)'],
+    3: ['3/3*', '7', '11/9', '11', '13/13', '15', '19/17', '19', '21/23', '23', '27/25', '27'],
+    4: ['15*', '13', '13', '21', '27', '37', '43', '47', '51', '57', '61', '65'],
+    5: ['(7)/(3)', '27', '(9)/15', '(9)', '(9)/(9)', '(9)', '(9)/(9)', '(9)', '(9)/(9)', '(9)', '(9)/(9)', '(9)'],
+    6: ['(7)', '(9)', '(11)', '(9)', '(9)', '(9)', '(9)', '(9)', '(9)', '(9)', '(9)', '(9)'],
+    7: ['(7)/(5)', '(9)', '(9)/(11)', '(9)', '(9)/(9)', '(9)', '(9)/(9)', '(9)', '(9)/(9)', '(9)', '(9)/(9)', '(9)'],
+    8: ['(7)', '(9)', '(11)', '(9)', '(9)', '(9)', '(9)', '(9)', '(9)', '(9)', '(9)', '(9)'],
+    9: ['(7)/(5)', '(9)', '(9)/(11)', '(9)', '(9)/(9)', '(9)', '(9)/(9)', '(9)', '(9)/(9)', '(9)', '(9)/(9)', '(9)'],
+    10: ['(7)', '(9)', '(11)', '(9)', '(9)', '(9)', '(9)', '(9)', '(9)', '(9)', '(9)', '(9)'],
+    11: ['(7)/(5)', '(9)', '(9)/(11)', '(9)', '(9)/(9)', '(9)', '(9)/(9)', '(9)', '(9)/(9)', '(9)', '(9)/(9)', '(9)'],
+    12: ['(7)', '(9)', '(11)', '(9)', '(9)', '(9)', '(9)', '(9)', '(9)', '(9)', '(9)', '(9)'],
 }
 RESULTS_31 = {
-    3: ['0/3', '5', '7/9', '9', '9/11', '13', '15/15', '', '', '', '', ''],
-    4: ['9*', '11', '11', '13', '17', '23', '29', '37', '', '', '', ''],
-    5: ['11/15*', '23', '13/13', '15', '17/15', '17', '19/19', '21', '23/23', '', '', ''],
-    6: ['17*', '15', '17', '19', '19', '21', '25', '27', '29', '33', '', ''],
-    7: ['19/17*', '19', '21/19', '23', '25/25', '35', '49/21', '53', '(73)/67', '(73)', '(73)/(43)', ''],
+    3: ['0/3', '5', '7/9', '9', '9/11', '13', '15/15', '17', '19/19', '21', '23/23', '25'],
+    4: ['9*', '11', '11', '13', '17', '23', '29', '37', '45', '49', '55', '59'],
+    5: ['11/15*', '23', '13/13', '15', '17/15', '17', '19/19', '21', '23/23', '25', '27/25', '29'],
+    6: ['17*', '15', '17', '19', '19', '21', '25', '27', '29', '33', '37', '39'],
+    7: ['19/17*', '19', '21/19', '23', '25/25', '35', '49/21', '53', '(73)/67', '(73)', '(73)/(43)', '(73)'],
     8: ['25*†', '19', '23', '31', '(23)', '(33)', '(21)', '25', '(19)', '(19)', '(21)', '(19)'],
     9: ['(15)/(15)', '21', '(19)/21', '(27)', '(17)/(19)', '(31)', '(19)/(21)', '(21)', '(19)/23', '(19)', '(19)/(19)', '(21)'],
     10: ['(15)', '21', '25', '(27)', '(19)', '(31)', '(21)', '(21)', '(19)', '27', '(19)', '(19)'],
     11: ['(15)/(15)', '21', '(19)/21', '(27)', '(17)/(19)', '(31)', '(19)/(21)', '(21)', '(19)/(21)', '(19)', '(19)/25', '(19)'],
-    12: ['(15)', '21', '25', '(27)', '(19)', '(31)', '(21)', '(21)', '(19)', '(21)', '', '27'],
+    12: ['(15)', '21', '25', '(27)', '(19)', '(31)', '(21)', '(21)', '(19)', '(21)', '(19)', '27'],
 }
 
 LEGEND_EN = ('In the tables: <span class="res-win">21</span> = won, longest win 21 plies · <span class="res-diag">21*</span> '
@@ -345,7 +345,7 @@ speelbare hoekvelden. Tot en met <em>L</em> = 7 wint de verkeerde kleuring nog (
 daar nog reikt. Hoe de families winnen, staat bij de <a href="vangstellingen.html">vangstellingen</a>.</p>
 <h2>De algemene methode op smalle borden</h2>
 <ul>
-<li><strong>L = 5, 6</strong>: elk niet-vierkant bord is gewonnen (gecontroleerd tot 13×5 en 15×6). Drie dammen in
+<li><strong>L = 5, 6</strong>: elk niet-vierkant bord is gewonnen (gecontroleerd tot en met 16×5 en 17×6). Drie dammen in
 een kolom sluiten de volle breedte af en worden over het bord geschoven; de langste winst groeit met ongeveer 2 ply per
 extra kolom.</li>
 <li><strong>L = 7</strong>: gewonnen tot en met <strong>14×7</strong> en <strong>15×7 speelbare hoeken</strong> (boek: tot 11×7).
@@ -379,7 +379,7 @@ method still reaches that far. How the families win is shown with the <a href="v
 positions</a>.</p>
 <h2>The general method on narrow boards</h2>
 <ul>
-<li><strong>L = 5, 6</strong>: every non-square board is won (checked up to 13×5 and 15×6). Three kings in a column
+<li><strong>L = 5, 6</strong>: every non-square board is won (checked up to 16×5 and 17×6). Three kings in a column
 close off the full width and can be pushed along the board; the longest win grows by about 2 plies per extra
 column.</li>
 <li><strong>L = 7</strong>: won up to <strong>14×7</strong> and <strong>15×7 playable corners</strong> (book: up to 11×7). From

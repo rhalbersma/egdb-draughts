@@ -6,7 +6,7 @@
 <script>
 // the language of a site: its default, unless the visitor chose the other one on that site (remembered per site)
 (function () {
-  const key = 'lang:' + "d3";
+  const key = 'lang:' + "drie_tegen_een_is_gemeen";
   try { const pref = localStorage.getItem(key); if (pref && pref !== "en" && "../tien-zonder-veld.html") location.replace("../tien-zonder-veld.html" + location.hash); } catch (e) {}
   document.addEventListener('click', function (e) {
     const a = e.target.closest && e.target.closest('a[data-setlang]');
@@ -121,6 +121,9 @@ figure { float: right; margin: 4px 0 12px 20px; text-align: center; }
 figure .smallboard { width: 150px; }
 .diag figure { clear: right; width: 210px; }            /* the diagrams of a section below each other, not side by side */
 figcaption { font: 13px system-ui, sans-serif; color: var(--muted); margin-top: 4px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 16px 12px; clear: both; margin: 16px 0; }
+.grid figure { float: none; margin: 0; }                /* diagrams in reading order, aligned in rows */
+.grid figure a.diagram { display: inline-block; }   /* each board centred over its caption (the figure centres its text) */
 p.var { margin: 10px 0; }
 .verdict { font: 13px system-ui, sans-serif; padding: 1px 7px; border-radius: 10px; margin-left: 6px; white-space: nowrap; }
 .verdict.ok { background: rgba(60,140,60,.15); }
@@ -157,6 +160,11 @@ pre.tbl { font: 13px/1.45 ui-monospace, Menlo, Consolas, monospace; background: 
 table.tbl { border-collapse: collapse; font: 14px/1.4 system-ui, sans-serif; margin: 10px 0; display: block; max-width: 100%; overflow-x: auto; }   /* a wide table scrolls within itself, the page keeps the width of the screen */
 table.tbl th, table.tbl td { border-bottom: 1px solid var(--rule); padding: 4px 10px 4px 0; text-align: left; vertical-align: top; }
 table.tbl th { color: var(--muted); font-weight: 600; }
+table.results th, table.results td { text-align: center; padding: 4px 8px; white-space: nowrap; }   /* results per board: numbers in aligned columns */
+.res-win, .res-diag, .res-draw { padding: 1px 5px; border-radius: 4px; }   /* results: the default hues of ggplot2 as light backgrounds */
+.res-win { background: rgba(0, 186, 56, 0.22); }     /* #00BA38: won */
+.res-diag { background: rgba(97, 156, 255, 0.28); }  /* #619CFF: won with the long diagonal(s) */
+.res-draw { background: rgba(248, 118, 109, 0.28); } /* #F8766D: drawn */
 .hub { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin: 20px 0; }
 .hub a.card { display: block; border: 1px solid var(--rule); border-radius: 8px; padding: 14px 16px; background: var(--panel);
   color: var(--fg); text-decoration: none; }

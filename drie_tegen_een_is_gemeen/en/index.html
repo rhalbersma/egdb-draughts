@@ -6,7 +6,7 @@
 <script>
 // the language of a site: its default, unless the visitor chose the other one on that site (remembered per site)
 (function () {
-  const key = 'lang:' + "d3";
+  const key = 'lang:' + "drie_tegen_een_is_gemeen";
   try { const pref = localStorage.getItem(key); if (pref && pref !== "en" && "../index.html") location.replace("../index.html" + location.hash); } catch (e) {}
   document.addEventListener('click', function (e) {
     const a = e.target.closest && e.target.closest('a[data-setlang]');
@@ -121,6 +121,9 @@ figure { float: right; margin: 4px 0 12px 20px; text-align: center; }
 figure .smallboard { width: 150px; }
 .diag figure { clear: right; width: 210px; }            /* the diagrams of a section below each other, not side by side */
 figcaption { font: 13px system-ui, sans-serif; color: var(--muted); margin-top: 4px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 16px 12px; clear: both; margin: 16px 0; }
+.grid figure { float: none; margin: 0; }                /* diagrams in reading order, aligned in rows */
+.grid figure a.diagram { display: inline-block; }   /* each board centred over its caption (the figure centres its text) */
 p.var { margin: 10px 0; }
 .verdict { font: 13px system-ui, sans-serif; padding: 1px 7px; border-radius: 10px; margin-left: 6px; white-space: nowrap; }
 .verdict.ok { background: rgba(60,140,60,.15); }
@@ -157,6 +160,11 @@ pre.tbl { font: 13px/1.45 ui-monospace, Menlo, Consolas, monospace; background: 
 table.tbl { border-collapse: collapse; font: 14px/1.4 system-ui, sans-serif; margin: 10px 0; display: block; max-width: 100%; overflow-x: auto; }   /* a wide table scrolls within itself, the page keeps the width of the screen */
 table.tbl th, table.tbl td { border-bottom: 1px solid var(--rule); padding: 4px 10px 4px 0; text-align: left; vertical-align: top; }
 table.tbl th { color: var(--muted); font-weight: 600; }
+table.results th, table.results td { text-align: center; padding: 4px 8px; white-space: nowrap; }   /* results per board: numbers in aligned columns */
+.res-win, .res-diag, .res-draw { padding: 1px 5px; border-radius: 4px; }   /* results: the default hues of ggplot2 as light backgrounds */
+.res-win { background: rgba(0, 186, 56, 0.22); }     /* #00BA38: won */
+.res-diag { background: rgba(97, 156, 255, 0.28); }  /* #619CFF: won with the long diagonal(s) */
+.res-draw { background: rgba(248, 118, 109, 0.28); } /* #F8766D: drawn */
 .hub { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin: 20px 0; }
 .hub a.card { display: block; border: 1px solid var(--rule); border-radius: 8px; padding: 14px 16px; background: var(--panel);
   color: var(--fg); text-decoration: none; }
@@ -202,7 +210,7 @@ table.tbl th { color: var(--muted); font-weight: 600; }
 <h1>Drie tegen een is gemeen</h1>
 <figure><a class="diagram" href="#" data-i="0"><div class="smallboard" data-g="5x6" data-fen="W:WK1,K8:BK7"></div></a><figcaption>6×5: two kings win (27 plies)</figcaption></figure>
 
-<p>Endgames with kings only, on boards of any size <em>W × H</em> (<em>W</em> ≤ <em>H</em>, with the families <em>H</em> = <em>W</em> + 1, <em>W</em> + 2 and 2<em>W</em> − 1, as in the book), under international rules: flying kings, mandatory
+<p>Endgames with kings only, on boards of any size <em>W × H</em> (width × height, <em>W</em> ≥ <em>H</em>, with the families <em>W</em> = <em>H</em> + 1, <em>H</em> + 2 and 2<em>H</em> − 1, as in the book), under international rules: flying kings, mandatory
 capture, majority capture and the Turkish strike. A Dutch book of 1988 on three kings against one, <em>Drie tegen een is
 gemeen</em> ("three against one is mean"), found its results by hand, on boards of every size. The databases of
 <a href="https://github.com/rhalbersma/egdb-draughts/blob/main/src/egdb_fast.cpp"><code>egdb_fast</code></a> compute
@@ -213,9 +221,10 @@ L = loss, with the number of plies to the end of the game; D = draw. Purely game
 rules.</p>
 <p>Since these are endgames with kings only, without men and so without a front or back, it does not matter which way
 the board lies: turning it over the diagonal through a1 changes no value, and the colouring of the corner squares stays the same too.
-The diagrams therefore show the boards on their side: <em>H</em> files wide and <em>W</em> ranks high. At the diagrams
-they are named <em>H</em> × <em>W</em>, files × ranks: 11×10 is the board with <em>W</em> = 10 and
-<em>H</em> = 11 from the family <em>H</em> = <em>W</em> + 1.</p>
+We therefore lay every board down, at least as wide as it is high, and call it <em>W</em> × <em>H</em>, width × height
+(files × ranks): 11×10 is the board with <em>W</em> = 11 and <em>H</em> = 10 from the family <em>W</em> = <em>H</em> + 1.
+The tables have a row for every <em>H</em> and a column for every <em>W</em> − <em>H</em>. The book is not consistent in
+this: it mostly writes the shorter side first (10×11) and does not always draw the boards the same way.</p>
 <h2>Contents</h2><ul class="toc">
 <li><a href="twee-tegen-een.html">2 kings against 1</a></li>
 <li><a href="drie-tegen-een.html">3 kings against 1</a></li>
@@ -224,21 +233,21 @@ they are named <em>H</em> × <em>W</em>, files × ranks: 11×10 is the board wit
 </ul>
 
 <h2>Comparison with the book</h2>
-<p><strong>Confirmed</strong>: everything the book states firmly — 2-1 for <em>W</em> ≤ 4 (with the long-diagonal
-condition on 3×3 and 4×4) and on 7×5 playable corners; 3-1 on <em>W</em> = 5, 6 for every <em>H</em> &gt; <em>W</em> (square boards
-with the long-diagonal condition, explicit on 5×5 playable corners); <em>W</em> = 7 for <em>H</em> = 7–11; <em>W</em> = 8 for
-<em>H</em> = 9, 10, 11, 15; the families <em>W</em> + 1, <em>W</em> + 2 and 2<em>W</em> − 1 with the colouring rule; the
+<p><strong>Confirmed</strong>: everything the book states firmly — 2-1 for <em>H</em> ≤ 4 (with the long-diagonal
+condition on 3×3 and 4×4) and on 7×5 playable corners; 3-1 on <em>H</em> = 5, 6 for every <em>W</em> &gt; <em>H</em> (square boards
+with the long-diagonal condition, explicit on 5×5 playable corners); <em>H</em> = 7 for <em>W</em> = 7–11; <em>H</em> = 8 for
+<em>W</em> = 9, 10, 11, 15; the families <em>H</em> + 1, <em>H</em> + 2 and 2<em>H</em> − 1 with the colouring rule; the
 boards with a square removed 1, 2, 4, 5, 7, 8, 9, 18, 23.</p>
 <p><strong>New</strong>:</p>
 <table class="tbl"><tr><th>Material</th><th>Board</th><th>Result</th><th>Longest win</th></tr>
 <tr><td>2-1</td><td><a href="twee-tegen-een.html">6×5</a></td><td>won</td><td>27 plies</td></tr>
-<tr><td>3-1</td><td>7×12, 7×13 unplayable corners, 7×14, 7×15 playable corners</td><td>won (general method)</td><td>35, 49, 53, 67</td></tr>
-<tr><td>3-1</td><td>7×15 unplayable corners, 7×16, 7×17</td><td>drawn: the limit of <em>W</em> = 7</td><td></td></tr>
+<tr><td>3-1</td><td>12×7, 13×7 unplayable corners, 14×7, 15×7 playable corners</td><td>won (general method)</td><td>35, 49, 53, 67</td></tr>
+<tr><td>3-1</td><td>15×7 unplayable corners, 16×7, 17×7</td><td>drawn: the limit of <em>H</em> = 7</td><td></td></tr>
 <tr><td>3-1</td><td><a href="tien-zonder-veld.html">10×10 without g7 (19)</a></td><td>won</td><td>33</td></tr>
 <tr><td>3-1</td><td><a href="tien-zonder-veld.html">10×10 without f10, d8, f8 (3, 12, 13)</a></td><td>drawn</td><td></td></tr>
 </table>
 <p><strong>Refined</strong>: 10×10 without i9 (isolated square j10), without h8 (one artificial zugzwang), 8×8 with white
-on the long diagonal (40 forks with black to move), and the exact limits of every row up to <em>W</em> = 12.</p>
+on the long diagonal (40 forks with black to move), and the exact limits of every row up to <em>H</em> = 12.</p>
 <p class="src">The programs, the tables and the explanation:
 <a href="https://github.com/rhalbersma/egdb-draughts">github.com/rhalbersma/egdb-draughts</a>.</p>
 <nav class="pager"><span></span><a href="twee-tegen-een.html">2 kings against 1 →</a></nav>

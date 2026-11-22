@@ -6,7 +6,7 @@
 <script>
 // the language of a site: its default, unless the visitor chose the other one on that site (remembered per site)
 (function () {
-  const key = 'lang:' + "d3";
+  const key = 'lang:' + "drie_tegen_een_is_gemeen";
   try { const pref = localStorage.getItem(key); if (pref && pref !== "nl" && "en/index.html") location.replace("en/index.html" + location.hash); } catch (e) {}
   document.addEventListener('click', function (e) {
     const a = e.target.closest && e.target.closest('a[data-setlang]');
@@ -121,6 +121,9 @@ figure { float: right; margin: 4px 0 12px 20px; text-align: center; }
 figure .smallboard { width: 150px; }
 .diag figure { clear: right; width: 210px; }            /* the diagrams of a section below each other, not side by side */
 figcaption { font: 13px system-ui, sans-serif; color: var(--muted); margin-top: 4px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 16px 12px; clear: both; margin: 16px 0; }
+.grid figure { float: none; margin: 0; }                /* diagrams in reading order, aligned in rows */
+.grid figure a.diagram { display: inline-block; }   /* each board centred over its caption (the figure centres its text) */
 p.var { margin: 10px 0; }
 .verdict { font: 13px system-ui, sans-serif; padding: 1px 7px; border-radius: 10px; margin-left: 6px; white-space: nowrap; }
 .verdict.ok { background: rgba(60,140,60,.15); }
@@ -157,6 +160,11 @@ pre.tbl { font: 13px/1.45 ui-monospace, Menlo, Consolas, monospace; background: 
 table.tbl { border-collapse: collapse; font: 14px/1.4 system-ui, sans-serif; margin: 10px 0; display: block; max-width: 100%; overflow-x: auto; }   /* a wide table scrolls within itself, the page keeps the width of the screen */
 table.tbl th, table.tbl td { border-bottom: 1px solid var(--rule); padding: 4px 10px 4px 0; text-align: left; vertical-align: top; }
 table.tbl th { color: var(--muted); font-weight: 600; }
+table.results th, table.results td { text-align: center; padding: 4px 8px; white-space: nowrap; }   /* results per board: numbers in aligned columns */
+.res-win, .res-diag, .res-draw { padding: 1px 5px; border-radius: 4px; }   /* results: the default hues of ggplot2 as light backgrounds */
+.res-win { background: rgba(0, 186, 56, 0.22); }     /* #00BA38: won */
+.res-diag { background: rgba(97, 156, 255, 0.28); }  /* #619CFF: won with the long diagonal(s) */
+.res-draw { background: rgba(248, 118, 109, 0.28); } /* #F8766D: drawn */
 .hub { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin: 20px 0; }
 .hub a.card { display: block; border: 1px solid var(--rule); border-radius: 8px; padding: 14px 16px; background: var(--panel);
   color: var(--fg); text-decoration: none; }
@@ -202,7 +210,7 @@ table.tbl th { color: var(--muted); font-weight: 600; }
 <h1>Drie tegen een is gemeen</h1>
 <figure><a class="diagram" href="#" data-i="0"><div class="smallboard" data-g="5x6" data-fen="W:WK1,K8:BK7"></div></a><figcaption>6×5: twee dammen winnen (27 ply)</figcaption></figure>
 
-<p>Eindspelen met alleen dammen, op borden van elke afmeting <em>B × L</em> (<em>B</em> ≤ <em>L</em>, met de families <em>L</em> = <em>B</em> + 1, <em>B</em> + 2 en 2<em>B</em> − 1, zoals in het boek), met internationale regels: vliegende
+<p>Eindspelen met alleen dammen, op borden van elke afmeting <em>B × L</em> (breedte × lengte, <em>B</em> ≥ <em>L</em>, met de families <em>B</em> = <em>L</em> + 1, <em>L</em> + 2 en 2<em>L</em> − 1, zoals in het boek), met internationale regels: vliegende
 dammen, slagplicht, meerslag en Turkse slag. Een Nederlands boek uit 1988 over drie dammen tegen één vond zijn
 resultaten met de hand, op borden van elke grootte. De databases van
 <a href="https://github.com/rhalbersma/egdb-draughts/blob/main/src/egdb_fast.cpp"><code>egdb_fast</code></a>
@@ -213,9 +221,11 @@ L = verlies, met het aantal ply tot het einde van de partij; D = remise. Zuiver 
 zettenregels.</p>
 <p>Omdat het eindspelen met alleen dammen zijn, zonder schijven en dus zonder voor- of achterkant, maakt het niet uit
 hoe het bord ligt: kantelen in de diagonaal door a1 verandert geen enkele waarde, en ook de kleuring van de hoekvelden blijft
-gelijk. De diagrammen tonen de borden daarom gekanteld, liggend: <em>L</em> kolommen breed en <em>B</em> rijen hoog. Bij de
-diagrammen heten ze <em>L</em> × <em>B</em>, kolommen × rijen: 11×10 is het bord met <em>B</em> = 10 en
-<em>L</em> = 11 uit de familie <em>L</em> = <em>B</em> + 1.</p>
+gelijk. Wij leggen elk bord daarom liggend neer, minstens zo breed als hoog, en noemen het <em>B</em> × <em>L</em>,
+breedte × lengte (kolommen × rijen): 11×10 is het bord met <em>B</em> = 11 en <em>L</em> = 10 uit de familie
+<em>B</em> = <em>L</em> + 1. De tabellen hebben een rij per <em>L</em> en een kolom per <em>B</em> − <em>L</em>. Het boek
+is daarin niet consequent: het schrijft de kortste zijde meestal eerst (10×11) en tekent de borden niet altijd op dezelfde
+manier.</p>
 <h2>Inhoud</h2><ul class="toc">
 <li><a href="twee-tegen-een.html">2 dammen tegen 1</a></li>
 <li><a href="drie-tegen-een.html">3 dammen tegen 1</a></li>
@@ -224,22 +234,22 @@ diagrammen heten ze <em>L</em> × <em>B</em>, kolommen × rijen: 11×10 is het b
 </ul>
 
 <h2>Vergelijking met het boek</h2>
-<p><strong>Bevestigd</strong>: alles wat het boek stellig beweert: 2 tegen 1 voor <em>B</em> ≤ 4 (met de
-voorwaarde van de lange lijn op 3×3 en 4×4) en op 7×5 speelbare hoeken; 3 tegen 1 op <em>B</em> = 5 en 6 voor elke
-<em>L</em> &gt; <em>B</em> (vierkante borden met de voorwaarde van de lange lijn, expliciet op 5×5 speelbare hoeken);
-<em>B</em> = 7 voor <em>L</em> = 7–11; <em>B</em> = 8 voor <em>L</em> = 9, 10, 11 en 15; de families
-<em>B</em> + 1, <em>B</em> + 2 en 2<em>B</em> − 1 met de kleuringsregel; de borden met een weggehaald veld 1, 2, 4, 5,
+<p><strong>Bevestigd</strong>: alles wat het boek stellig beweert: 2 tegen 1 voor <em>L</em> ≤ 4 (met de
+voorwaarde van de lange lijn op 3×3 en 4×4) en op 7×5 speelbare hoeken; 3 tegen 1 op <em>L</em> = 5 en 6 voor elke
+<em>B</em> &gt; <em>L</em> (vierkante borden met de voorwaarde van de lange lijn, expliciet op 5×5 speelbare hoeken);
+<em>L</em> = 7 voor <em>B</em> = 7–11; <em>L</em> = 8 voor <em>B</em> = 9, 10, 11 en 15; de families
+<em>L</em> + 1, <em>L</em> + 2 en 2<em>L</em> − 1 met de kleuringsregel; de borden met een weggehaald veld 1, 2, 4, 5,
 7, 8, 9, 18 en 23.</p>
 <p><strong>Nieuw</strong>:</p>
 <table class="tbl"><tr><th>Materiaal</th><th>Bord</th><th>Resultaat</th><th>Langste winst</th></tr>
 <tr><td>2-1</td><td><a href="twee-tegen-een.html">6×5</a></td><td>gewonnen</td><td>27 ply</td></tr>
-<tr><td>3-1</td><td>7×12, 7×13 onspeelbare hoeken, 7×14, 7×15 speelbare hoeken</td><td>gewonnen (algemene methode)</td><td>35, 49, 53, 67</td></tr>
-<tr><td>3-1</td><td>7×15 onspeelbare hoeken, 7×16, 7×17</td><td>remise: de grens van <em>B</em> = 7</td><td></td></tr>
+<tr><td>3-1</td><td>12×7, 13×7 onspeelbare hoeken, 14×7, 15×7 speelbare hoeken</td><td>gewonnen (algemene methode)</td><td>35, 49, 53, 67</td></tr>
+<tr><td>3-1</td><td>15×7 onspeelbare hoeken, 16×7, 17×7</td><td>remise: de grens van <em>L</em> = 7</td><td></td></tr>
 <tr><td>3-1</td><td><a href="tien-zonder-veld.html">10×10 zonder g7 (19)</a></td><td>gewonnen</td><td>33</td></tr>
 <tr><td>3-1</td><td><a href="tien-zonder-veld.html">10×10 zonder f10, d8, f8 (3, 12, 13)</a></td><td>remise</td><td></td></tr>
 </table>
 <p><strong>Verfijnd</strong>: 10×10 zonder i9 (geïsoleerd veld j10), zonder h8 (één kunstmatige zetdwang), 8×8 met wit
-op de lange lijn (40 vorken met zwart aan zet), en de precieze grenzen van elke rij tot en met <em>B</em> = 12.</p>
+op de lange lijn (40 vorken met zwart aan zet), en de precieze grenzen van elke rij tot en met <em>L</em> = 12.</p>
 <p class="src">De programma's, de tabellen en de Engelse toelichting:
 <a href="https://github.com/rhalbersma/egdb-draughts">github.com/rhalbersma/egdb-draughts</a>.</p>
 <nav class="pager"><span></span><a href="twee-tegen-een.html">2 dammen tegen 1 →</a></nav>

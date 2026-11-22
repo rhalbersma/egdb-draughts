@@ -24,45 +24,51 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 TITLE = {'nl': 'Checkers: 3 dammen tegen 2', 'en': 'Checkers: 3 kings against 2'}
 
-# the chapters, each with one page per section: (Dutch, English, [(file, Dutch, English)])
-CHAPTERS = [
-    ('2 tegen 1 op 8×8', '2 against 1 on 8×8', [
-        ('twee-verdrijven.html', 'De dam verdrijven', 'Expelling the king'),
-        ('twee-blokkade.html', 'Uitzondering: de blokkade aan de rand', 'Exception: the blockade at the edge'),
-        ('twee-langste.html', 'De langste winst', 'The longest win'),
-        ('twee-algemeen.html', 'De methode op andere borden', 'The method on other boards')]),
-    ('2 tegen 1 op 5×5', '2 against 1 on 5×5', [
-        ('twee-5x5.html', 'De verdreven dam ontsnapt naar een andere hoek', 'The expelled king escapes to another corner'),
-        ('twee-5x5-val.html', 'Een val die werkt met wit en met zwart aan zet', 'A trap that works with white and with black to move')]),
-    ('2 tegen 1 op 4×4', '2 against 1 on 4×4', [
-        ('twee-4x4.html', 'Remise: de dam ontsnapt en er is geen val', 'A draw: the king escapes and there is no trap')]),
-    ('3 tegen 2 op 8×8', '3 against 2 on 8×8', [
-        ('val.html', 'Twee vallen om de vesting te breken', 'Two traps to break the fortress'),
-        ('val-pariteit.html', 'De winst is strategisch, de pariteit doet er niet toe', 'The win is strategic, parity does not matter'),
-        ('blokkades.html', 'Uitzondering 1: de blokkades', 'Exception 1: the blockades'),
-        ('curiosa.html', 'Uitzondering 2: twee curiosa', 'Exception 2: two curiosities'),
-        ('drie-langste.html', 'De langste winst', 'The longest win'),
-        ('drie-algemeen.html', 'De methode op andere borden', 'The method on other boards')]),
-    ('3 tegen 2 op 9×8', '3 against 2 on 9×8', [
-        ('vesting.html', 'Twee vallen om de vesting te breken', 'Two traps to break the fortress'),
-        ('vesting-pariteit.html', 'De winst is niet strategisch, de pariteit doet ertoe', 'The win is non-strategic, parity matters')]),
-    ('3 tegen 2 op 8×7', '3 against 2 on 8×7', [
-        ('vesting-8x7.html', 'Vier vallen om de vesting te breken', 'Four traps to break the fortress'),
-        ('vesting-8x7-wit.html', 'De winst is strategisch, de dam kan verdreven worden', 'The win is strategic, the king can be expelled')]),
-    ('3 tegen 2 op 7×7', '3 against 2 on 7×7', [
-        ('langste-7x7.html', 'Geen ontsnapping naar een andere dubbele hoek', 'No escape to another double corner')]),
-    ('3 tegen 2 op 5×5', '3 against 2 on 5×5', [
-        ('langste-5x5.html', 'De langste winst', 'The longest win'),
-        ('vallen-5x5.html', 'Veertig vallen om de vesting te breken', 'Forty traps to break the fortress'),
-        ('zetdwang-5x5.html', 'Uitzondering: zetdwang', 'Exception: zugzwang')]),
-    ('3 tegen 2 op andere borden', '3 against 2 on other boards', [
-        ('vesting-9x9.html', '9×9 onspeelbare hoeken: de val en de diagonaal', '9×9 unplayable corners: the trap and the diagonal'),
-        ('afstandsregel.html', 'De afstandsregel', 'The distance rule')]),
-    ('Conclusie', 'Conclusion', [
-        ('conclusie.html', 'Conclusie', 'Conclusion')]),
+# the content in two parts (and the conclusion), with one chapter per board and one page per section:
+# (part Dutch, part English, [(chapter Dutch, chapter English, [(file, Dutch, English)])])
+PARTS = [
+    ('2 tegen 1', '2 against 1', [
+        ('8×8', '8×8', [
+            ('twee-verdrijven.html', 'De dam verdrijven', 'Expelling the king'),
+            ('twee-blokkade.html', 'Uitzondering: de blokkade aan de rand', 'Exception: the blockade at the edge'),
+            ('twee-langste.html', 'De langste winst', 'The longest win'),
+            ('twee-algemeen.html', 'De methode op andere borden', 'The method on other boards')]),
+        ('5×5', '5×5', [
+            ('twee-5x5.html', 'De verdreven dam ontsnapt naar een andere hoek', 'The expelled king escapes to another corner'),
+            ('twee-5x5-val.html', 'Een val die werkt met wit en met zwart aan zet', 'A trap that works with white and with black to move')]),
+        ('4×4', '4×4', [
+            ('twee-4x4.html', 'Remise: de dam ontsnapt en er is geen val', 'A draw: the king escapes and there is no trap')])]),
+    ('3 tegen 2', '3 against 2', [
+        ('8×8', '8×8', [
+            ('val.html', 'Twee vallen om de vesting te breken', 'Two traps to break the fortress'),
+            ('val-pariteit.html', 'De winst is strategisch, de pariteit doet er niet toe', 'The win is strategic, parity does not matter'),
+            ('blokkades.html', 'Uitzondering 1: de blokkades', 'Exception 1: the blockades'),
+            ('curiosa.html', 'Uitzondering 2: twee curiosa', 'Exception 2: two curiosities'),
+            ('drie-langste.html', 'De langste winst', 'The longest win'),
+            ('drie-algemeen.html', 'De methode op andere borden', 'The method on other boards')]),
+        ('9×8', '9×8', [
+            ('vesting.html', 'Twee vallen om de vesting te breken', 'Two traps to break the fortress'),
+            ('vesting-pariteit.html', 'De winst is niet strategisch, de pariteit doet ertoe', 'The win is non-strategic, parity matters')]),
+        ('8×7', '8×7', [
+            ('vesting-8x7.html', 'Vier vallen om de vesting te breken', 'Four traps to break the fortress'),
+            ('vesting-8x7-wit.html', 'De winst is strategisch, de dam kan verdreven worden', 'The win is strategic, the king can be expelled')]),
+        ('7×7', '7×7', [
+            ('langste-7x7.html', 'Geen ontsnapping naar een andere dubbele hoek', 'No escape to another double corner')]),
+        ('5×5', '5×5', [
+            ('langste-5x5.html', 'De langste winst', 'The longest win'),
+            ('vallen-5x5.html', 'Veertig vallen om de vesting te breken', 'Forty traps to break the fortress'),
+            ('zetdwang-5x5.html', 'Uitzondering: zetdwang', 'Exception: zugzwang')]),
+        ('andere borden', 'other boards', [
+            ('vesting-9x9.html', '9×9 onspeelbare hoeken: de val en de diagonaal', '9×9 unplayable corners: the trap and the diagonal'),
+            ('afstandsregel.html', 'De afstandsregel', 'The distance rule')])]),
+    (None, None, [
+        ('Conclusie', 'Conclusion', [
+            ('conclusie.html', 'Conclusie', 'Conclusion')])]),
 ]
+# every chapter: (part number, Dutch, English, sections)
+CHAPTERS = [(k, nl, en, secs) for k, (_, _, chapters) in enumerate(PARTS) for nl, en, secs in chapters]
 # every page in reading order: (file, Dutch, English, chapter number or None)
-PAGES = [('index.html', 'Overzicht', 'Overview', None)] + [(f, nl, en, c) for c, (_, _, secs) in enumerate(CHAPTERS)
+PAGES = [('index.html', 'Overzicht', 'Overview', None)] + [(f, nl, en, c) for c, (_, _, _, secs) in enumerate(CHAPTERS)
                                                         for f, nl, en in secs]
 
 
@@ -128,11 +134,15 @@ class Site:
         return key, self.engines[key]
 
     def chapter(self, c):
-        return CHAPTERS[c][0] if self.lang == 'nl' else CHAPTERS[c][1]
+        """the full name of chapter c, with its part: '3 tegen 2 op 8×8'"""
+        k, nl, en, _ = CHAPTERS[c]
+        if PARTS[k][0] is None:
+            return nl if self.lang == 'nl' else en
+        return f'{PARTS[k][0]} op {nl}' if self.lang == 'nl' else f'{PARTS[k][1]} on {en}'
 
     def nav(self, current=None):
         groups = [('', [(PAGES[0][0], self.title(0))])] + [
-            (self.chapter(c), [(f, nl if self.lang == 'nl' else en) for f, nl, en in secs]) for c, (_, _, secs) in enumerate(CHAPTERS)]
+            (self.chapter(c), [(f, nl if self.lang == 'nl' else en) for f, nl, en in secs]) for c, (_, _, _, secs) in enumerate(CHAPTERS)]
         home = '../index.html' if self.lang == 'en' else '../../nl/index.html'      # English: default, Dutch in nl/
         alt = f'nl/{current}' if self.lang == 'en' else f'../{current}'
         return (f'<a class="brand" href="index.html">{esc(TITLE[self.lang])}</a>'
@@ -210,15 +220,21 @@ captures. On boards of any size, computed exactly with
 <a href="https://github.com/rhalbersma/egdb-draughts/blob/main/src/egdb_fast.cpp"><code>egdb_fast</code></a>. Values in
 plies for the side to move: W = win, L = loss, D = draw; purely game-theoretic, without move-count rules. Every position
 is clickable. Boards are named width × height, as drawn.</p>''')]
-        toc = ['<h2>' + t('Hoofdstukken', 'Chapters') + '</h2><ul class="toc">']
-        for c, (_, _, secs) in enumerate(CHAPTERS):
-            links = [f'<a href="{f}">{esc(nl if self.lang == "nl" else en)}</a>' for f, nl, en in secs]
-            items = links[0] if len(links) == 1 else '<ul class="sub">' + ''.join(f'<li>{x}</li>' for x in links) + '</ul>'
-            toc.append(f'<li><span class="h">{esc(self.chapter(c))}</span>{items}</li>')
+        toc = []
+        for k, (pnl, pen, _) in enumerate(PARTS):
+            toc.append(('<h2>' + esc(t(pnl, pen)) + '</h2>' if pnl else '') + '<ul class="toc">')
+            for c, (part, cnl, cen, secs) in enumerate(CHAPTERS):
+                if part != k:
+                    continue
+                links = [f'<a href="{f}">{esc(nl if self.lang == "nl" else en)}</a>' for f, nl, en in secs]
+                items = links[0] if len(links) == 1 else '<ul class="sub">' + ''.join(f'<li>{x}</li>' for x in links) + '</ul>'
+                name = t(cnl, cen)
+                toc.append(f'<li><span class="h">{esc(name[0].upper() + name[1:])}</span>{items}</li>')
+            toc.append('</ul>')
         fig, _ = pg.diagram('W:WK4,K8,K29:BK1,K28', t('8×8, zwart in beide dubbele hoeken: wit wint (W61)',
                                                        '8×8, black in both double corners: white wins (W61)'), gid=k88)
         body.insert(1, fig)
-        body += toc + ['</ul>', TABLE32[self.lang]]
+        body += toc + [TABLE32[self.lang]]
 
         def flush(name):                # finish the page so far, start the next one
             nonlocal body, pg

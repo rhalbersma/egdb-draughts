@@ -156,6 +156,7 @@ class Site:
                         pg.use(gid, e, e.g)
                     assert e.longest and e.analyse(e.longest)[0] == f'W{n}', (gid, part, e.longest)
                     i = pg.add(e.longest, gid=gid)
+                    pg.best_line(e.longest, n, start=i)     # the main line: the whole win can be replayed
                     label = f'{w}×{h}' + (t(' onspeelbare hoeken', ' unplayable corners') if corners == 'unplayable' else
                                           t(' speelbare hoeken', ' playable corners') if len(parts) == 2 else '')
                     links.append(f'<span class="res-{kind}">'
@@ -263,8 +264,10 @@ on the long diagonal (40 forks with black to move), and the exact limits of ever
         pg = self.page(('5x6', e56), ('5x7', e57))
         t = self.t
         body = [t('<h1>2 dammen tegen 1</h1>', '<h1>2 kings against 1</h1>'), self.results(pg, RESULTS_21, 2, 1),
-                t('<p class="note">Klik op een getal voor de langste winst op dat bord, op het grote bord.</p>',
-                  '<p class="note">Click a number for the longest win on that board, on the large board.</p>'),
+                t('<p class="note">Klik op een getal voor de langste winst op dat bord, op het grote bord; ‹ › lopen door de '
+                  'winst en ▶︎ speelt hem helemaal af.</p>',
+                  '<p class="note">Click a number for the longest win on that board, on the large board; ‹ › step through '
+                  'the win and ▶︎ plays it to the end.</p>'),
                 f'<p class="note">{t(LEGEND, LEGEND_EN)}</p>', t('''<ul>
 <li>Voor <em>L</em> ≤ 4 (gedegenereerde borden) winnen twee dammen altijd, op de vierkante borden als ze de lange
 lijn(en) bezetten.</li>

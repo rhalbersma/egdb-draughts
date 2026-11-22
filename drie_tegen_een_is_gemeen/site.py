@@ -12,6 +12,8 @@ usage: site.py [--engine build/egdb_fast] [--out _site/drie_tegen_een_is_gemeen]
 """
 
 import argparse
+import gzip
+import json
 import re
 import sys
 from pathlib import Path
@@ -19,7 +21,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(ROOT / 'common'))
-from sitekit import FastEngine, Page, esc, lang_link, menu, write_page   # noqa: E402
+from sitekit import CachedEngine, FastEngine, Page, esc, lang_link, menu, write_page   # noqa: E402
 
 TITLE = 'Drie tegen een is gemeen'
 
@@ -132,6 +134,8 @@ class Site:
         """the results per board as a table, a row per L and a column per B − L; every number links to a position with
         the longest win on that board (clickable), shown on the large board"""
         t = self.t
+        # 3-1: the longest wins stored by longest31.py (the databases of the largest boards take minutes each)
+        stored = json.loads(gzip.decompress((HERE / 'longest31.json.gz').read_bytes())) if (nw, nb) == (3, 1) else None
         ncol = len(next(iter(table.values())))
         head = '<tr><th>L \\ B − L</th>' + ''.join(f'<th>{d}</th>' for d in range(ncol)) + '</tr>'
         rows = []
@@ -144,14 +148,17 @@ class Site:
                     n = int(re.sub(r'\D', '', part))
                     # the colour of the result: won, won with the long diagonal(s), drawn (the hues of ggplot2)
                     kind = 'draw' if part.startswith('(') else 'diag' if '*' in part else 'win'
-                    if not clickable:
+                    if not clickable or n == 0:        # 0: no position is won (3×3 unplayable corners)
                         links.append(f'<span class="res-{kind}">{esc(part)}</span>')
                         continue
                     w = h + d
                     corners = 'unplayable' if len(parts) == 2 and k == 0 else 'playable'
                     gid = f'{w}x{h}' + (' unplayable' if corners == 'unplayable' else '')
-                    e = self.engine(f'{nw}-{nb} {gid}', '--width', w, '--height', h, '--corners', corners,
-                                    '--white', nw, '--black', nb)
+                    if stored is not None:
+                        e = self.engines.setdefault(f'{nw}-{nb} {gid}', CachedEngine(stored[f'{w}x{h} {corners}']))
+                    else:
+                        e = self.engine(f'{nw}-{nb} {gid}', '--width', w, '--height', h, '--corners', corners,
+                                        '--white', nw, '--black', nb)
                     if gid not in pg.geoms:
                         pg.use(gid, e, e.g)
                     assert e.longest and e.analyse(e.longest)[0] == f'W{n}', (gid, part, e.longest)
@@ -313,7 +320,11 @@ board size.</li>
         e = self.engine('8x8', '--width', 8, '--height', 8, '--corners', 'playable')
         pg = self.page(('8x8', e))
         t = self.t
-        body = [t('<h1>3 dammen tegen 1</h1>', '<h1>3 kings against 1</h1>'), self.results(pg, RESULTS_31, 3, 1, clickable=False),
+        body = [t('<h1>3 dammen tegen 1</h1>', '<h1>3 kings against 1</h1>'), self.results(pg, RESULTS_31, 3, 1),
+                t('<p class="note">Klik op een getal voor de langste winst op dat bord, op het grote bord; ‹ › lopen door de '
+                  'winst en ▶︎ speelt hem helemaal af.</p>',
+                  '<p class="note">Click a number for the longest win on that board, on the large board; ‹ › step through '
+                  'the win and ▶︎ plays it to the end.</p>'),
                 f'<p class="note">{t(LEGEND, LEGEND_EN)} ' + t(
                     '† : op 8×8 zijn er 40 stellingen (2 op symmetrie na) met de enkele dam aan zet die remise maken met '
                     'een vork, ook als wit de lange lijn bezet. Leeg: niet berekend.</p>',

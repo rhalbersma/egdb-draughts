@@ -113,6 +113,32 @@ class FastEngine:
         return f"{stm}:W{','.join('K' + str(num[s]) for s in white)}:B{','.join('K' + str(num[s]) for s in black)}"
 
 
+class CachedEngine:
+    """the analyses of a few positions of one board, stored from FastEngine (geometry, longest win, analyses), so that
+    a site can show them without building the databases again"""
+
+    def __init__(self, entry):
+        self.g = dict(entry['g'], sq={int(n): fr for n, fr in entry['g']['sq'].items()})
+        self.longest = entry['longest']
+        self.cache = {fen: (v, [tuple(m) for m in moves]) for fen, (v, moves) in entry['analyses'].items()}
+
+    def analyse(self, fen):
+        return self.cache[fen]
+
+    @staticmethod
+    def entry(e, plies):
+        """the stored form of FastEngine e: its longest win and the analyses along the main line (fastest win, longest
+        defence, as Page.best_line plays it)"""
+        analyses, fen = {}, e.longest
+        for _ in range(plies + 1):
+            v, legal = e.analyse(fen)
+            analyses[fen] = [v, [list(m) for m in legal]]
+            if not legal:
+                break
+            fen = legal[0][2]
+        return {'g': e.g, 'longest': e.longest, 'analyses': analyses}
+
+
 class Page:
     def __init__(self):
         self.pos = []          # {'f', 'last', 'prev', 'next', 'o': oracle, 'g': geometry id}

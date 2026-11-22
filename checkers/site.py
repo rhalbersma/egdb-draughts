@@ -107,6 +107,68 @@ TABLE32 = {'nl': '''<h2>3 dammen tegen 2 per bord</h2>
 <p>On boards with two odd sides the four corner squares are either all playable or all unplayable; with unplayable corner squares every corner is a double corner.</p>'''}
 
 
+# 2 kings against 1 per board: a row per height H, a column per W - H; the number is the longest win in plies (white to
+# move), unplayable/playable corner squares on boards with two odd sides. 21 = every quiet position with white to move
+# is won; 21* = won except the blockade in the single corners; (21) = other quiet positions are not won
+RESULTS_21 = {
+    3: ['3/(3)', '11', '(9)/(9)', '(23)', '(17)/(11)', '(35)', '(25)/(15)', '(47)', '(33)/(19)', '(59)', '(41)/(23)', '(71)'],
+    4: ['(3)', '(13)', '19', '19', '27', '27', '35', '35', '43', '43', '51', '51'],
+    5: ['13/(9)', '(23)', '(31)/(13)', '(33)', '(37)/(17)', '(41)', '(45)/(21)', '(49)', '(53)/(25)', '(57)', '(61)/(29)', '(65)'],
+    6: ['27*', '31*', '33*', '37*', '41*', '45*', '49*', '53*', '57*', '61*', '65*', '69*'],
+    7: ['31/13*', '33*', '37/17*', '41*', '45/21*', '49*', '53/25*', '57*', '61/29*', '65*', '69/33*', '73*'],
+    8: ['33*', '37*', '41*', '45*', '49*', '53*', '57*', '61*', '65*', '69*', '73*', '77*'],
+    9: ['37/17*', '41*', '45/21*', '49*', '53/25*', '57*', '61/29*', '65*', '69/33*', '73*', '77/37*', '81*'],
+    10: ['41*', '45*', '49*', '53*', '57*', '61*', '65*', '69*', '73*', '77*', '81*', '85*'],
+    11: ['45/21*', '49*', '53/25*', '57*', '61/29*', '65*', '69/33*', '73*', '77/37*', '81*', '85/41*', '89*'],
+    12: ['49*', '53*', '57*', '61*', '65*', '69*', '73*', '77*', '81*', '85*', '89*', '93*'],
+}
+
+TEXT21 = {'nl': '''<h2>2 dammen tegen 1 per bord</h2>
+<p>De langste winst op elk bord, met een rij per lengte <em>L</em> en een kolom per <em>B</em> − <em>L</em>; klik op een
+getal voor de stelling en speel de hele winst na.</p>
+{table}
+<p class="src">In de tabel: <span class="res-win">33</span> = elke rustige stelling met wit aan zet is gewonnen, de
+langste winst duurt 33 ply · <span class="res-diag">33*</span> = gewonnen, op <a href="twee-blokkade.html">de blokkade</a>
+in de enkele hoeken na · <span class="res-draw">(33)</span> = ook andere rustige stellingen zijn remise of zelfs verloren
+(het getal is de langste winst) · <code>31/13</code> = onspeelbare/speelbare hoekvelden. Een bord <em>B</em> × <em>L</em>
+is breedte × lengte, met <em>B</em> ≥ <em>L</em>.</p>
+<ul>
+<li><em>L</em> = 3: alleen 3×3 met onspeelbare hoeken en 4×3 zijn gewonnen; op de andere borden van 3 hoog is er te weinig
+ruimte.</li>
+<li><em>L</em> = 4: <a href="twee-4x4.html">4×4</a> is remise, en op 5×4 zijn twee stellingen remise (wit in de twee
+enkele hoeken, zwart ertussen). Vanaf 6×4 is elke stelling gewonnen: op een bord van 4 hoog bestaat de blokkade niet.</li>
+<li><em>L</em> = 5: alleen <a href="twee-5x5-val.html">5×5 met onspeelbare hoeken</a> is gewonnen. Op de andere borden
+houdt zwart remise of wint hij zelfs in een handvol stellingen dat met de breedte groeit, bijvoorbeeld met de twee witte
+dammen boven en onder in dezelfde kolom en de zwarte dam ertussen in het midden: zwart houdt de oppositie.</li>
+<li><em>L</em> ≥ 6: gewonnen, op de blokkade in de enkele hoeken na: 10 stellingen bij even <em>L</em>, 8 bij oneven
+<em>L</em> en even <em>B</em>. Op oneven × oneven borden met onspeelbare hoeken (vier dubbele hoeken) is er geen enkele
+hoek en dus geen blokkade. Met speelbare hoeken (vier enkele hoeken) zijn het 4 stellingen, en die verliest wit zelfs:
+hij moet een dam geven, en zonder dubbele hoek wint bij 1 tegen 1 wie de oppositie heeft.</li>
+</ul>''',
+          'en': '''<h2>2 kings against 1 per board</h2>
+<p>The longest win on every board, with a row per height <em>H</em> and a column per <em>W</em> − <em>H</em>; click a
+number for the position and replay the whole win.</p>
+{table}
+<p class="src">In the table: <span class="res-win">33</span> = every quiet position with white to move is won, the longest
+win takes 33 plies · <span class="res-diag">33*</span> = won, except <a href="twee-blokkade.html">the blockade</a> in the
+single corners · <span class="res-draw">(33)</span> = other quiet positions are drawn or even lost too (the number is the
+longest win) · <code>31/13</code> = unplayable/playable corner squares. A board <em>W</em> × <em>H</em> is width ×
+height, with <em>W</em> ≥ <em>H</em>.</p>
+<ul>
+<li><em>H</em> = 3: only 3×3 with unplayable corners and 4×3 are won; the other boards of height 3 are too cramped.</li>
+<li><em>H</em> = 4: <a href="twee-4x4.html">4×4</a> is a draw, and on 5×4 two positions are drawn (white in the two
+single corners, black in between). From 6×4 on every position is won: on a board of height 4 the blockade does not
+exist.</li>
+<li><em>H</em> = 5: only <a href="twee-5x5-val.html">5×5 with unplayable corners</a> is won. On the other boards black
+draws or even wins in a handful of positions that grows with the width, for instance with the two white kings at the top
+and the bottom of the same file and the black king in the middle between them: black keeps the opposition.</li>
+<li><em>H</em> ≥ 6: won, except the blockade in the single corners: 10 positions for even <em>H</em>, 8 for odd
+<em>H</em> and even <em>W</em>. On odd × odd boards with unplayable corners (four double corners) there is no single
+corner and so no blockade. With playable corners (four single corners) there are 4 positions, and white even loses them:
+he has to give a king away, and without a double corner 1 against 1 is won by the side with the opposition.</li>
+</ul>'''}
+
+
 def rank_parity(e, fen):
     """the parity of the sum of the rank numbers (1, 2, ...) of all pieces: 0 = even, 1 = odd"""
     sq = {int(n): fr for n, fr in e.g['sq'].items()}
@@ -201,6 +263,48 @@ class Site:
                     best = (int(v[1:]), fen)
         return best[1]
 
+    def results21(self, pg):
+        """the 2-1 results per board as a table, a row per H and a column per W - H; every number links to a position
+        with the longest win on that board, shown on the large board, with the whole win to replay"""
+        t = self.t
+        head = '<tr><th>' + t('L \\ B − L', 'H \\ W − H') + '</th>' + ''.join(f'<th>{d}</th>' for d in range(12)) + '</tr>'
+        rows = []
+        for h, cells in RESULTS_21.items():
+            tds = []
+            for d, cell in enumerate(cells):
+                parts = cell.split('/')
+                links = []
+                for k, part in enumerate(parts):
+                    n = int(re.sub(r'\D', '', part))
+                    kind = 'draw' if part.startswith('(') else 'diag' if '*' in part else 'win'
+                    w = h + d
+                    corners = 'unplayable' if len(parts) == 2 and k == 0 else 'playable'
+                    gid, e = self.engine(w, h, corners, 2, 1)
+                    if gid not in pg.geoms:
+                        pg.use(gid, e, e.g)
+                    fen = e.longest if e.longest and e.analyse(e.longest)[0] == f'W{n}' else self.longest_any(e, n)
+                    i = pg.add(fen, gid=gid)
+                    pg.best_line(fen, n, start=i)      # the main line: the whole win can be replayed
+                    label = f'{w}×{h}' + (t(' onspeelbare hoeken', ' unplayable corners') if corners == 'unplayable' else
+                                          t(' speelbare hoeken', ' playable corners') if len(parts) == 2 else '')
+                    links.append(f'<span class="res-{kind}">'
+                                 + part.replace(str(n), f'<a class="m1" href="#" data-i="{i}" title="{label}: W{n}">{n}</a>', 1)
+                                 + '</span>')
+                tds.append('<td>' + '/'.join(links) + '</td>')
+            rows.append(f'<tr><th>{h}</th>' + ''.join(tds) + '</tr>')
+        return TEXT21[self.lang].replace('{table}', '<table class="tbl results">' + head + ''.join(rows) + '</table>')
+
+    @staticmethod
+    def longest_any(e, n):
+        """a 2-1 position with white to move and a win in n plies (egdb_fast reports none on a few boards of height 3)"""
+        from itertools import combinations
+        name = {k: f'{chr(97 + f)}{r + 1}' for k, (f, r) in e.g['sq'].items()}
+        for wk in combinations(sorted(name), 2):
+            for b in name:
+                if b not in wk and e.analyse(fen := e.fen([name[x] for x in wk], [name[b]]))[0] == f'W{n}':
+                    return fen
+        raise AssertionError(f'no win in {n} plies')
+
     # ---- pages -------------------------------------------------------------------
 
     def index(self):
@@ -235,7 +339,7 @@ is clickable. Boards are named width × height, as drawn.</p>''')]
         fig, _ = pg.diagram('W:WK4,K8,K29:BK1,K28', t('8×8, zwart in beide dubbele hoeken: wit wint (W61)',
                                                        '8×8, black in both double corners: white wins (W61)'), gid=k88)
         body.insert(1, fig)
-        body += toc + [TABLE32[self.lang]]
+        body += toc + [self.results21(pg), TABLE32[self.lang]]
 
         def flush(name):                # finish the page so far, start the next one
             nonlocal body, pg
@@ -252,13 +356,17 @@ is clickable. Boards are named width × height, as drawn.</p>''')]
 <ul><li><a href="twee-4x4.html">het 4×4-bord</a>: daar is 2 tegen 1, verrassend, remise;</li>
 <li>en <a href="twee-blokkade.html">de blokkade aan de rand</a>: in een vast handjevol stellingen (8 of 10,
 onafhankelijk van de bordgrootte; op 8×8 op spiegelingen na 3) zitten de twee witte dammen opgesloten in de enkele hoek en houdt de zwarte dam ze
-daar met oppositie; op oneven × oneven borden met speelbare hoeken bestaat die blokkade niet.</li></ul>
+daar met oppositie. Op oneven × oneven borden met onspeelbare hoeken is er geen enkele hoek en dus geen blokkade; met
+speelbare hoeken verliest wit de blokkade zelfs, want zonder dubbele hoek wint bij 1 tegen 1 wie de oppositie heeft.</li></ul>
+<p>De <a href="index.html">tabel per bord</a> op het overzicht geeft de uitkomst op elk bord tot en met 23×12.</p>
 <p>De langste winst groeit gestaag met het bord: 33 ply op 8×8, 41 op 10×10, 49 op 12×12, 61 op 15×12.</p>''', '''
 <p>2 against 1 is won on every board that is large enough, with two exceptions:</p>
 <ul><li><a href="twee-4x4.html">the 4×4 board</a>: there 2 against 1 is, surprisingly, a draw;</li>
 <li>and <a href="twee-blokkade.html">the blockade at the edge</a>: in a fixed handful of positions (8 or 10,
 independent of the board size; on 8×8 up to symmetry 3) the two white kings are locked in the single corner and the black king keeps them there
-by opposition; on odd × odd boards with playable corners this blockade does not exist.</li></ul>
+by opposition. On odd × odd boards with unplayable corners there is no single corner and so no blockade; with playable
+corners white even loses the blockade, since without a double corner 1 against 1 is won by the side with the opposition.</li></ul>
+<p>The <a href="index.html">table per board</a> in the overview gives the outcome on every board up to 23×12.</p>
 <p>The longest win grows steadily with the board: 33 plies on 8×8, 41 on 10×10, 49 on 12×12, 61 on 15×12.</p>'''),
                  t(f'<p>De langste winst op 8×8 ({v[1:]} ply):</p>', f'<p>The longest win on 8×8 ({v[1:]} plies):</p>'),
                  f'<p class="var">{h}</p>',

@@ -29,7 +29,8 @@ CHAPTERS = [
     ('2 tegen 1', '2 against 1', [
         ('twee-verdrijven.html', 'De dam verdrijven', 'Driving out the king'),
         ('twee-4x4.html', 'Uitzondering 1: remise op 4×4', 'Exception 1: a draw on 4×4'),
-        ('twee-5x5.html', 'Alleen dubbele hoeken: winst met een offer op 5×5', 'Only double corners: a win by sacrifice on 5×5'),
+        ('twee-5x5.html', '5×5: de verdreven dam ontsnapt naar een andere hoek', '5×5: the expelled king escapes to another corner'),
+        ('twee-5x5-val.html', '5×5: een val die werkt met wit en met zwart aan zet', '5×5: a trap that works with white and with black to move'),
         ('twee-langste.html', 'De langste winst op 8×8', 'The longest win on 8×8'),
         ('twee-blokkade.html', 'Uitzondering 2: de blokkade aan de rand', 'Exception 2: the blockade at the edge')]),
     ('3 tegen 2 op 8×8', '3 against 2 on 8×8', [
@@ -296,8 +297,9 @@ by opposition; on odd × odd boards with playable corners this blockade does not
                    '<a href="twee-verdrijven.html">driving out the king</a>).</p>'),
                  '<div style="clear:both"></div>']
         flush('twee-4x4.html')
-        # 5x5 with unplayable corners: only double corners. 2 against 1 always wins, but hardly ever by driving the king
-        # out and catching it: white wins with a sacrifice (offer a king, black must capture, white captures back)
+        # 5x5 with unplayable corners: only double corners. Driving the king out as on 8x8 fails: it escapes to another
+        # double corner, as on 4x4. Still 2 against 1 always wins, with a sacrifice (offer a king, black must capture,
+        # white captures back); there is one trap, up to symmetry, that works with white and with black to move
         from itertools import combinations
         sq55 = sorted(f'{chr(97 + f)}{r + 1}' for f, r in e521.g['sq'].values())
         count = lambda f: tuple(len([x for x in side[1:].split(',') if x]) for side in f.split(':')[1:])
@@ -328,40 +330,100 @@ by opposition; on odd × odd boards with playable corners this blockade does not
         nq = orb(quiet)
         dw = orb((W, B) for W, B in quiet if e521.fen(W, B, 'W') in direct)
         db = orb((W, B) for W, B in quiet if e521.fen(W, B, 'B') in direct)
+
+        def checked(fen, text, white_best=True):
+            """play the line: black defends longest, white keeps the win (fastest if white_best)"""
+            g = fen
+            for (mv,), _ in self.plan(text):
+                ms = e521.analyse(g)[1]
+                m = next(x for x in ms if x[0] == mv)
+                w = g[0] == 'W'
+                assert m[1][0] == ('W' if w else 'L'), (mv, m[1])
+                if not w or white_best:
+                    assert int(m[1][1:]) == (min if w else max)(int(x[1][1:]) for x in ms if x[1][0] == m[1][0]), (mv, m[1])
+                g = m[2]
+            return g
+        # driving out as on 8x8 (the same set-up in the double corner a4/b5): the king escapes to the double corner b1/a2
+        fd = e521.fen(['c2', 'd3'], ['a4'], 'W')
+        vd = e521.analyse(fd)[0]
+        lined = '1. d3-c4 a4-b5 2. c2-d3 b5-a4 3. c4-b5 a4-b3 4. b5-a4 b3-a2'
+        end = checked(fd, lined, white_best=False)
+        assert end.split(':')[0] == 'W' and count(end) == (2, 1)
+        figd, idd = pg.diagram(fd, t(f'5×5, 2 tegen 1, wit aan zet: {vd}', f'5×5, 2 against 1, white to move: {vd}'), gid=k521)
+        hd, *_ = pg.moves(fd, self.plan(lined), 1, False, 'm1', idd)
+        body += [t(f'''
+<p>Op 5×5 met onspeelbare hoekvelden is elke hoek een dubbele hoek: b1/a2, d1/e2, a4/b5 en d5/e4. Wit drijft de zwarte dam
+hier uit de dubbele hoek a4/b5 zoals op 8×8 (zie <a href="twee-verdrijven.html">de dam verdrijven</a>): wit op c2 en d3,
+zwart op a4. Na 3. c4-b5 moet de dam eruit (3. … a4-b3), maar na 4. b5-a4 ontsnapt hij met 4. … b3-a2 naar de dubbele hoek
+b1/a2. Zoals op <a href="twee-4x4.html">4×4</a> ligt de volgende dubbele hoek te dichtbij. (De snelste winst, in {vd[1:]}
+ply, gaat met een offer.)</p>''', f'''
+<p>On 5×5 with unplayable corner squares every corner is a double corner: b1/a2, d1/e2, a4/b5 and d5/e4. White drives the
+black king out of the double corner a4/b5 here as on 8×8 (see <a href="twee-verdrijven.html">driving out the king</a>):
+white on c2 and d3, black on a4. After 3. c4-b5 the king has to leave (3. … a4-b3), but after 4. b5-a4 it escapes with
+4. … b3-a2 to the double corner b1/a2. As on <a href="twee-4x4.html">4×4</a> the next double corner is too close. (The
+fastest win, in {vd[1:]} plies, goes with a sacrifice.)</p>'''),
+                 figd, f'<p class="var">{hd}</p>', '<div style="clear:both"></div>',
+                 t(f'''
+<p>Is 2 tegen 1 op 5×5 dan remise, zoals op 4×4? Nee: alle rustige stellingen zijn gewonnen. Maar verdrijven helpt bijna
+nooit. Op spiegelen en draaien na zijn er {nq} rustige stellingen, en met wit aan zet wint wit er maar {dw} zonder offer,
+met zwart aan zet {db}. In alle andere wint wit met een offer: hij biedt een dam aan, zwart moet slaan, en wit slaat terug.
+Hoe, staat bij <a href="twee-5x5-val.html">de val</a>.</p>''', f'''
+<p>Is 2 against 1 on 5×5 then a draw, as on 4×4? No: all quiet positions are won. But driving out hardly ever works. Up to
+mirrors and rotations there are {nq} quiet positions, and with white to move white wins only {dw} of them without a
+sacrifice, with black to move {db}. In all the others white wins with a sacrifice: he offers a king, black has to capture,
+and white captures back. How is shown with <a href="twee-5x5-val.html">the trap</a>.</p>''')]
+        flush('twee-5x5.html')
+
+        # the trap: white to move strikes at once with a sacrifice, black to move every move allows one (or a capture)
+        def strike(f):
+            for o in e521.analyse(f)[1]:
+                if count(o[2]) != (2, 1):
+                    continue
+                rs = e521.analyse(o[2])[1]
+                if rs and all(count(r[2]) == (1, 1) and any(count(x[2]) == (1, 0) for x in e521.analyse(r[2])[1]) for r in rs):
+                    return o
+            return None
+        edges = ['b1', 'a2', 'd1', 'e2', 'a4', 'b5', 'd5', 'e4']
+        traps = {canon(W, B) for W, B in quiet if B[0] in edges and strike(e521.fen(W, B, 'W'))
+                 and all(strike(m[2]) or any(count(x[2]) == (2, 0) for x in e521.analyse(m[2])[1])
+                         for m in e521.analyse(e521.fen(W, B, 'B'))[1])}
+        assert traps == {canon(['b3', 'e4'], ['b1'])}
+        ftb, ftw = e521.fen(['b3', 'e4'], ['b1'], 'B'), e521.fen(['b3', 'e4'], ['b1'], 'W')
+        vtb, legaltb = e521.analyse(ftb)
+        vtw = e521.analyse(ftw)[0]
+        linetw = '1. b3-c2! b1xd3 2. e4xc2'
+        assert count(checked(ftw, linetw)) == (1, 0)
+        lineta = '1. … b1-a2 2. e4-d5! a2xc4 3. d5xb3'
+        assert count(checked(ftb, lineta)) == (1, 0)
+        figtb, itb = pg.diagram(ftb, t(f'5×5, 2 tegen 1, zwart aan zet: {vtb}', f'5×5, 2 against 1, black to move: {vtb}'), gid=k521)
+        hta, *_ = pg.moves(ftb, self.plan(lineta), 1, True, 'm1', itb)
+        figtw, itw = pg.diagram(ftw, t(f'5×5, 2 tegen 1, wit aan zet: {vtw}', f'5×5, 2 against 1, white to move: {vtw}'), gid=k521)
+        htw, *_ = pg.moves(ftw, self.plan(linetw), 1, False, 'm1', itw)
         f55 = e521.fen(['a2', 'a4'], ['e2'], 'B')
         v55 = e521.analyse(f55)[0]
         line55 = '1. … e2-d3 2. a4-b5 d3-e2 3. b5-c4 e2-d1 4. a2-b3 d1-e2 5. b3-a4 e2-d1 6. c4-d3 d1-e2 7. a4-b5! e2xc4 8. b5xd3'
-        g = f55
-        for (mv,), _ in self.plan(line55):
-            ms = e521.analyse(g)[1]
-            m = next(x for x in ms if x[0] == mv)
-            w = g[0] == 'W'
-            assert m[1][0] == ('W' if w else 'L') and int(m[1][1:]) == (min if w else max)(
-                int(x[1][1:]) for x in ms if x[1][0] == m[1][0]), (mv, m[1])
-            g = m[2]
-        assert count(g) == (1, 0) and f55 not in direct
+        assert count(checked(f55, line55)) == (1, 0) and f55 not in direct
         assert v55 == 'L' + str(max(int(e521.analyse(e521.fen(W, B, 'B'))[0][1:]) for W, B in quiet))
-        fig, i0 = pg.diagram(f55, t(f'5×5, 2 tegen 1, zwart aan zet: {v55}', f'5×5, 2 against 1, black to move: {v55}'), gid=k521)
-        h55, *_ = pg.moves(f55, self.plan(line55), 1, True, 'm1', i0)
-        body += [t(f'''
-<p>Op 5×5 met onspeelbare hoekvelden is elke hoek een dubbele hoek: b1/a2, d1/e2, a4/b5 en d5/e4. Zoals op
-<a href="twee-4x4.html">4×4</a> ligt de ontsnapping naar een andere dubbele hoek te dichtbij, en
-<a href="twee-verdrijven.html">de dam verdrijven</a> helpt bijna nooit: op spiegelen en draaien na zijn er {nq} rustige
-stellingen, en met wit aan zet wint wit er maar {dw} zonder offer, met zwart aan zet {db}. Toch is 2 tegen 1 hier, anders
-dan op 4×4, altijd gewonnen: wit wint met een offer. Hij biedt een dam aan, zwart moet slaan, en wit slaat terug.</p>
-<p>Hier pendelt zwart in de dubbele hoek d1/e2. Wit zet met 6. c4-d3 een dam klaar, en na 6. … d1-e2 7. a4-b5! moet zwart
-slaan: 7. … e2×c4 8. b5×d3, en zwart heeft niets meer. Dit is ook de langste winst met zwart aan zet ({v55[1:]} ply).</p>''',
-                   f'''
-<p>On 5×5 with unplayable corner squares every corner is a double corner: b1/a2, d1/e2, a4/b5 and d5/e4. As on
-<a href="twee-4x4.html">4×4</a> the escape to another double corner is too close, and
-<a href="twee-verdrijven.html">driving out the king</a> hardly ever works: up to mirrors and rotations there are {nq}
-quiet positions, and with white to move white wins only {dw} of them without a sacrifice, with black to move {db}. Still,
-unlike on 4×4, 2 against 1 always wins here: white wins with a sacrifice. He offers a king, black has to capture, and
-white captures back.</p>
-<p>Here black shuttles in the double corner d1/e2. With 6. c4-d3 white sets up a king, and after 6. … d1-e2 7. a4-b5!
-black has to capture: 7. … e2×c4 8. b5×d3, and black has nothing left. This is also the longest win with black to move
-({v55[1:]} plies).</p>'''), fig, f'<p class="var">{h55}</p>', '<div style="clear:both"></div>']
-        flush('twee-5x5.html')
+        fig55, i55 = pg.diagram(f55, t(f'5×5, 2 tegen 1, zwart aan zet: {v55}', f'5×5, 2 against 1, black to move: {v55}'), gid=k521)
+        h55, *_ = pg.moves(f55, self.plan(line55), 1, True, 'm1', i55)
+        body += [t('''
+<p>Op spiegelen en draaien na is er precies één val die werkt met wit en met zwart aan zet: wit op b3 en e4, zwart op b1.
+Met zwart aan zet verliest elke zwarte zet. Pendelt zwart naar a2, dan offert wit de dam op e4; gaat hij naar c2, dan slaat
+wit hem meteen (1. … b1-c2 2. b3×d1).''' + ' ' + 'Alle zetten van zwart: ' + self.moves_list(pg, itb, legaltb, '1. … ') + '.</p>', '''
+<p>Up to mirrors and rotations there is exactly one trap that works with white and with black to move: white on b3 and
+e4, black on b1. With black to move every black move loses. If black shuttles to a2, white sacrifices the king on e4; if
+it goes to c2, white captures it at once (1. … b1-c2 2. b3×d1).''' + ' ' + 'All moves of black: ' + self.moves_list(pg, itb, legaltb, '1. … ') + '.</p>'),
+                 figtb, f'<p class="var">{hta}</p>', '<div style="clear:both"></div>',
+                 t('<p>Met wit aan zet offert wit meteen de dam op b3:</p>',
+                   '<p>With white to move white sacrifices the king on b3 at once:</p>'),
+                 figtw, f'<p class="var">{htw}</p>', '<div style="clear:both"></div>',
+                 t(f'''
+<p>Ook de langste winst met zwart aan zet ({v55[1:]} ply) eindigt met een offer. Zwart pendelt in de dubbele hoek d1/e2;
+wit zet met 6. c4-d3 een dam klaar, en na 6. … d1-e2 7. a4-b5! moet zwart slaan: 7. … e2×c4 8. b5×d3.</p>''', f'''
+<p>The longest win with black to move ({v55[1:]} plies) also ends with a sacrifice. Black shuttles in the double corner
+d1/e2; with 6. c4-d3 white sets up a king, and after 6. … d1-e2 7. a4-b5! black has to capture: 7. … e2×c4 8. b5×d3.</p>'''),
+                 fig55, f'<p class="var">{h55}</p>', '<div style="clear:both"></div>']
+        flush('twee-5x5-val.html')
         # driving out the king: the 4x4 draw position ported to the double corner a7/b8 of 8x8. With white to move white
         # drives the black king out as on 4x4, but there is no second double corner nearby to escape to; with black to
         # move black steps to the other edge square, the position is the mirror image in the diagonal a8-h1, and white

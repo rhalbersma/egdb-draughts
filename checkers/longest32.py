@@ -226,6 +226,54 @@ class dict_engine:
         return self.e.analyse(fen)
 
 
+def fortress_parity(e):
+    """the fortress test as a yes/no question: the two black kings on the edge squares of two double corners (one in
+    each), black to move, nobody can capture, the white kings anywhere; per pair of double corners and per parity (of
+    the sum of the rank numbers of all kings, which never changes without a capture) the number of positions and of
+    positions won for white (and lost for white). White breaks the fortress at a parity when one of those set-ups wins"""
+    sq = {n: tuple(fr) for n, fr in e.g['sq'].items()}
+    at = {fr: n for n, fr in sq.items()}
+    nb = {n: [at[(f + df, r + dr)] for df in (-1, 1) for dr in (-1, 1) if (f + df, r + dr) in at] for n, (f, r) in sq.items()}
+    name = {n: f'{chr(97 + f)}{r + 1}' for n, (f, r) in sq.items()}
+
+    def captures(us, them):
+        occ = set(us) | set(them)
+        for x in us:
+            for v in nb[x]:
+                if v in them:
+                    to = at.get((2 * sq[v][0] - sq[x][0], 2 * sq[v][1] - sq[x][1]))
+                    if to is not None and to not in occ:
+                        return True
+        return False
+
+    def values(fens, chunk=500):
+        out = []
+        for i in range(0, len(fens), chunk):
+            part = fens[i:i + chunk]
+            e.p.stdin.write(''.join(f'val {f}\n' for f in part))
+            e.p.stdin.flush()
+            for _ in part:
+                out.append(e.p.stdout.readline().split()[1])
+                e.p.stdout.readline()
+        return out
+
+    dcs = double_corners(e)
+    out = {}
+    for i, j in combinations(range(len(dcs)), 2):
+        cands = [(wk, bk) for bk in sorted({tuple(sorted((a, b))) for a in dcs[i] for b in dcs[j] if a != b})
+                 for wk in combinations(sorted(set(sq) - set(bk)), 3)]
+        cands = [(wk, bk) for wk, bk in cands if not captures(wk, bk) and not captures(bk, wk)]
+        fens = [e.fen([name[x] for x in wk], [name[x] for x in bk], 'B') for wk, bk in cands]
+        res = {'even': [0, 0, 0], 'odd': [0, 0, 0]}          # positions, won for white, lost for white
+        for (wk, bk), v in zip(cands, values(fens)):
+            par = 'even' if sum(sq[x][1] + 1 for x in (*wk, *bk)) % 2 == 0 else 'odd'
+            res[par][0] += 1
+            res[par][1] += v[0] == 'L'                       # black to move loses: white wins
+            res[par][2] += v[0] == 'W'
+        out['/'.join(name[x] for x in dcs[i]) + ' ' + '/'.join(name[x] for x in dcs[j])] = res
+    return out
+
+
 def longest_any(e):
     """a position with white to move and the longest win (small boards only)"""
     name = {n: f'{chr(97 + f)}{r + 1}' for n, (f, r) in e.g['sq'].items()}
@@ -247,7 +295,7 @@ def main():
             w = h + d
             for corners in (['unplayable', 'playable'] if w % 2 and h % 2 else ['playable']):
                 key = f'{w}x{h} {corners}'
-                if key in data and 'pairs' in data[key]:
+                if key in data and 'parity' in data[key]:
                     continue
                 if w * h // 2 + (w * h % 2 and corners == 'playable') < 6:
                     continue                       # no room for 5 kings and a move
@@ -256,11 +304,13 @@ def main():
                 if key in data:                    # stored before: add what is missing
                     if 'fortress' not in data[key]:
                         data[key]['fortress'] = fortress_counts(e, rng)
-                    data[key]['pairs'], extra = pair_longest(e)
-                    data[key]['analyses'].update(extra)
+                    if 'pairs' not in data[key]:
+                        data[key]['pairs'], extra = pair_longest(e)
+                        data[key]['analyses'].update(extra)
+                    data[key]['parity'] = fortress_parity(e)
                     e.p.terminate()
                     OUT.write_bytes(gzip.compress(json.dumps(data, separators=(',', ':'), sort_keys=True).encode(), mtime=0))
-                    print(key, 'pairs', {k: (v['type'], v['n']) for k, v in data[key]['pairs'].items()}, flush=True)
+                    print(key, 'parity', data[key]['parity'], flush=True)
                     continue
                 if not e.longest:                  # egdb_fast reports none on a few small boards: search them all
                     e.longest = longest_any(e)
@@ -270,6 +320,7 @@ def main():
                 entry['fortress'] = fortress_counts(e, rng)
                 entry['pairs'], extra = pair_longest(e)
                 entry['analyses'].update(extra)
+                entry['parity'] = fortress_parity(e)
                 data[key] = entry
                 e.p.terminate()
                 OUT.write_bytes(gzip.compress(json.dumps(data, separators=(',', ':'), sort_keys=True).encode(), mtime=0))

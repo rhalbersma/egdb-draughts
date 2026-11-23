@@ -150,7 +150,6 @@ Material material_of(Pos const& p)
 
 constexpr bitboard DOM_WM = FULL - PROMO_WHITE;    // squares a white man may stand on (15 on 6x6)
 constexpr bitboard DOM_BM = FULL - PROMO_BLACK;    // squares a black man may stand on (15 on 6x6)
-constexpr std::size_t NDOM = N - ROW;              // their number
 
 // The index of a material's files. Joint (the default): the white men over the 15 squares a white man may stand on, the
 // black men over theirs that the white men leave (an offset per white-men rank), the white kings over the empty
@@ -172,7 +171,7 @@ struct MatIndex {
 
         explicit MatIndex(Material m)
         :
-                c(m), swm(CC[NDOM][std::size_t(m.wm)]), sbm(CC[NDOM][std::size_t(m.bm)]), swk(CC[N][std::size_t(m.wk)]),
+                c(m), swm(CC[DOM_WM.size()][std::size_t(m.wm)]), sbm(CC[DOM_BM.size()][std::size_t(m.bm)]), swk(CC[N][std::size_t(m.wk)]),
                 sbk(CC[N][std::size_t(m.bk)]), size(swm * sbm * swk * sbk)
         {
                 int const e = N - m.wm - m.bm;
@@ -395,7 +394,6 @@ struct Group {
 // the tempo of a colour's men: the rows they still have to go (White up to row 0, Black down to the last row)
 int white_tempo(bitboard const& wm) { int t = 0; for (auto const sq : wm) t += row_of(int(sq)); return t; }
 int black_tempo(bitboard const& bm) { int t = 0; for (auto const sq : bm) t += BOARD_H - 1 - row_of(int(sq)); return t; }
-bitboard row_squares(int r) { return bb_of(low_bits(ROW) << (r * ROW)); }
 
 // every k-subset of mask whose squares add up to tempo t, row by row (weight(r): the tempo of a square in row r)
 template<class W, class F>
@@ -440,7 +438,7 @@ void Group::load()
 
 // the number of configurations of a material's men per (White tempo, Black tempo), by counting row by row: a row's
 // squares are alike (the same tempo for each colour), so i white and j black men go into a row of ROW squares in
-// C(ROW, i) C(ROW - i, j) ways (no white man on the top row, no black man on the bottom row)
+// C(n, i) C(n - i, j) ways (n: the row's squares) (no white man on the top row, no black man on the bottom row)
 std::map<std::pair<int, int>, std::uint64_t> tempo_counts(Material c)
 {
         std::map<std::tuple<int, int, int, int>, std::uint64_t> cur{ { { 0, 0, 0, 0 }, 1 } };     // (white men, black men, tw, tb)
@@ -448,10 +446,11 @@ std::map<std::pair<int, int>, std::uint64_t> tempo_counts(Material c)
                 std::map<std::tuple<int, int, int, int>, std::uint64_t> next;
                 for (auto const& [st, n] : cur) {
                         auto const [iw, ib, tw, tb] = st;
-                        for (int i = 0; iw + i <= c.wm && i <= ROW && (r > 0 || i == 0); ++i)
-                                for (int j = 0; ib + j <= c.bm && i + j <= ROW && (r < BOARD_H - 1 || j == 0); ++j)
+                        int const row = int(row_squares(r).size());
+                        for (int i = 0; iw + i <= c.wm && i <= row && (r > 0 || i == 0); ++i)
+                                for (int j = 0; ib + j <= c.bm && i + j <= row && (r < BOARD_H - 1 || j == 0); ++j)
                                         next[{ iw + i, ib + j, tw + i * r, tb + j * (BOARD_H - 1 - r) }]
-                                                += n * CC[ROW][std::size_t(i)] * CC[std::size_t(ROW - i)][std::size_t(j)];
+                                                += n * CC[std::size_t(row)][std::size_t(i)] * CC[std::size_t(row - i)][std::size_t(j)];
                 }
                 cur = std::move(next);
         }

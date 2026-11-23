@@ -4,8 +4,9 @@
 #          http://www.boost.org/LICENSE_1_0.txt)
 
 # tbgen: Syzygy style builds for 6x6 international draughts (itbgen), or English checkers with the engine built for it
-# (ctbgen, -DEGDB_6X6_CHECKERS=1), or another board (ctbgen_8x8, itbgen_10x10: the tree starts with the engine's
-# board, from `<engine> board`, instead of 6x6/), two-sided: one of each pair of a material and its
+# (ctbgen, -DEGDB_6X6_CHECKERS=1), or another board (ctbgen_8x8, itbgen_10x10, any tabula board: the tree starts with the
+# engine's board, from `<engine> board`, instead of 6x6/; that line also says whether the board has a colour mirror,
+# and without one every material is built in both colours), two-sided: one of each pair of a material and its
 # colour mirror (the 82 materials up to 6 pieces of strongly_solving_6x6/materials), built in the order of the DAG of
 # captures and promotions. A material is named wp-bp-wm-bm (white pieces, black pieces, white men, black men, two
 # digits each); inside, a tuple (wm, wk, bm, bk) with kings. Per material four files of full results,
@@ -60,9 +61,16 @@ STORE = config.get('store', 'compressed')  # compressed: each file as <name>.z (
 SUF = '.z' if STORE == 'compressed' else ''
 
 
+# the board the engine was built for (default 6x6; see src/egdb_6x6.cpp): the top of every material's tree, and its
+# colour mirror (rotation, reflection or none: without one, every material is built in both colours)
+_board = subprocess.run([ENGINE, 'board'], capture_output=True, text=True, check=True).stdout.split()
+BOARD = _board[0]
+MIRROR = 'mirror=none' not in _board
+
+
 def stored(m):
     wm, wk, bm, bk = m
-    return not (bm, wm, bk, wk) < (wm, bm, wk, bk)
+    return not MIRROR or not (bm, wm, bk, wk) < (wm, bm, wk, bk)
 
 
 def canonical(m):
@@ -103,9 +111,6 @@ def deps(m):
                 if bm > 0: out.add((wm - i, wk - j, bm - 1, bk + 1))
     return sorted({canonical(d) for d in out} - {m})
 
-
-# the board the engine was built for (-DEGDB_WIDTH, -DEGDB_HEIGHT; default 6x6): the top of every material's tree
-BOARD = subprocess.run([ENGINE, 'board'], capture_output=True, text=True, check=True).stdout.split()[0]
 
 
 def sub(n):                                                            # wp-bp-wm-bm -> db/np/wp-bp/wm-bm

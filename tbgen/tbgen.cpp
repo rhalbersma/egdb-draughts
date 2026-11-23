@@ -130,7 +130,8 @@ void store(std::uint16_t& x, std::uint16_t v) { std::atomic_ref<std::uint16_t>(x
 // ---------------------------------------------------------------- materials and files
 
 // one of each pair of a material and its colour mirror, as in egdb_6x6 and strongly_solving_6x6/materials
-bool stored(Material m) { return !(std::tuple(m.bm, m.wm, m.bk, m.wk) < std::tuple(m.wm, m.bm, m.wk, m.bk)); }
+// one of each pair of a material and its colour mirror (every material on a board without the colour mirror)
+bool stored(Material m) { return !HAS_MIRROR || !(std::tuple(m.bm, m.wm, m.bk, m.wk) < std::tuple(m.wm, m.bm, m.wk, m.bk)); }
 
 // kind 0: <metric>-wtm, 1: <metric>-btm (one byte per slot); 2: wdl-wtm, 3: wdl-btm (two bits per slot); kind = side to
 // move + 2 * wdl. The wdl files carry no metric: they are the same for all three
@@ -1647,7 +1648,7 @@ int main(int argc, char* argv[])
                 return Material{ wm, wp - wm, bm, bp - bm };
         };
         if (a.size() == 1 && a[0] == "board") {                      // the board this binary was built for (its tree's name)
-                std::cout << board_name() << (CHECKERS ? " checkers" : " international") << std::endl;
+                std::cout << board_name() << (CHECKERS ? " checkers" : " international") << " mirror=" << mirror_name() << std::endl;
                 return 0;
         }
         if ((a.size() == 2 || a.size() == 3) && a[0] == "bench") {   // what the rules cost per position

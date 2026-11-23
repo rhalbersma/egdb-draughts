@@ -3,7 +3,10 @@
 `tbgen.cpp` builds endgame databases in the manner of R. de Man's `rtbgen` (the generator of the Syzygy tablebases
 for chess, whose `r` names its variant, regular chess, as `a` names atomic and `s` suicide). Here the first letter names
 the rules: **`itbgen`** for international draughts and **`ctbgen`** for English checkers (`-DEGDB_6X6_CHECKERS=1`),
-on 6×6 by default, on other boards with `-DEGDB_WIDTH` / `-DEGDB_HEIGHT` (CMake: `ctbgen_8x8`, `itbgen_10x10`).
+on 6×6 by default, on any tabula draughts board of at most 64 playable squares with `-DEGDB_WIDTH`, `-DEGDB_HEIGHT`,
+`-DEGDB_PARITY` (a1 dark or light) and `-DEGDB_LAKE` (removed squares), or a tabula preset with `-DEGDB_BOARD` (CMake:
+`ctbgen_8x8`, `itbgen_10x10`, `ctbgen_8x8_p0`, `itbgen_10x10_j10`, `itbgen_6x5`). Where the board has no colour mirror
+(an odd width with an even height, or a lake that is not symmetric), every material is built in both colours.
 Below, `tbgen` stands for either. It is adapted to draughts and to the design notes in
 [`literature/egdb_primitives.md`](../literature/egdb_primitives.md). It shares its metrics, materials, index, groups
 and unmoves with [`thompson86`](../thompson86/) (`src/materials_6x6.hpp`); what differs is the sidedness and the

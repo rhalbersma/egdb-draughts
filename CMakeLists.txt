@@ -52,15 +52,27 @@ target_compile_options(bench_index_6x6 PRIVATE
     $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -march=native>
 )
 
-# The programs with men and kings (egdb_6x6, thompson86, tbgen) are built for one board and one rule set each: the
-# board W x H by -DEGDB_WIDTH / -DEGDB_HEIGHT (even sides, 18 to 64 dark squares; default 6x6, its geometry from
-# tabula::chequer), the rules by -DEGDB_6X6_CHECKERS (0: international draughts, 1: English checkers).
+# The programs with men and kings (egdb_6x6, thompson86, tbgen) are built for one board and one rule set each. The board
+# is any tabula draughts board of at most 64 playable squares: width, height, the colour of a1 (PARITY 1: dark, the
+# default; 0: light) and a LAKE of removed squares, or a tabula preset (BOARD tabula::draughts::mertens_cut_j10); the
+# rules by -DEGDB_6X6_CHECKERS (0: international draughts, 1: English checkers). See src/egdb_6x6.cpp.
+#   egdb_board(<target> <source> <width> <height> <checkers> [PARITY <0|1>] [LAKE <"h8"_sq,...>] [BOARD <type>])
 find_library(ZSTD_LIBRARY zstd REQUIRED)
 # std::execution::par runs on Intel TBB with GCC's standard library (without it, it silently runs sequentially)
 find_package(TBB REQUIRED)
 function(egdb_board target source width height checkers)
+    cmake_parse_arguments(PARSE_ARGV 5 arg "" "PARITY;LAKE;BOARD" "")
     add_executable(${target} ${source})
     target_compile_definitions(${target} PRIVATE EGDB_WIDTH=${width} EGDB_HEIGHT=${height} EGDB_6X6_CHECKERS=${checkers})
+    if(DEFINED arg_PARITY)
+        target_compile_definitions(${target} PRIVATE EGDB_PARITY=${arg_PARITY})
+    endif()
+    if(DEFINED arg_LAKE)
+        target_compile_definitions(${target} PRIVATE "EGDB_LAKE=${arg_LAKE}")
+    endif()
+    if(DEFINED arg_BOARD)
+        target_compile_definitions(${target} PRIVATE EGDB_BOARD=${arg_BOARD})
+    endif()
     target_link_libraries(${target} PRIVATE tabula::tabula xstd::bits OpenMP::OpenMP_CXX ${ZSTD_LIBRARY} TBB::tbb)
     target_compile_features(${target} PRIVATE cxx_std_23)
     target_compile_options(${target} PRIVATE
@@ -90,3 +102,10 @@ egdb_board(egdb_8x8_checkers src/egdb_6x6.cpp 8 8 1)
 egdb_board(egdb_10x10 src/egdb_6x6.cpp 10 10 0)
 egdb_board(ctbgen_8x8 tbgen/tbgen.cpp 8 8 1)
 egdb_board(itbgen_10x10 tbgen/tbgen.cpp 10 10 0)
+
+# a few boards of the kings-only sites, now with men: 8x8 with a1 light (the colouring of Italian and Spanish draughts,
+# here with the checkers rules), 10x10 without j10 (Mertens; no colour mirror: both colours of every material), and a
+# board with an odd side (6 wide, 5 high: the colour mirror is the reflection in the middle row)
+egdb_board(ctbgen_8x8_p0 tbgen/tbgen.cpp 8 8 1 PARITY 0)
+egdb_board(itbgen_10x10_j10 tbgen/tbgen.cpp 10 10 0 BOARD tabula::draughts::mertens_cut_j10)
+egdb_board(itbgen_6x5 tbgen/tbgen.cpp 6 5 0)

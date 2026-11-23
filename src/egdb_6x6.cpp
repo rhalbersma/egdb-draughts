@@ -4,10 +4,10 @@
 //          http://www.boost.org/LICENSE_1_0.txt)
 
 // Exact endgame databases for international draughts on the 6x6 board, with men and kings, or (built with
-// -DEGDB_6X6_CHECKERS=1, as egdb_6x6_checkers) for English checkers on the same board. Other boards: -DEGDB_WIDTH=W
-// -DEGDB_HEIGHT=H (even sides, 18 to 64 dark squares; the geometry from tabula::chequer, the squares numbered as in
-// PDN, the promotion rows the top and bottom rows), e.g. 8x8 for English checkers and 10x10 for international draughts;
-// perft reproduces the published counts of both. The text below describes the 6x6 board.
+// -DEGDB_6X6_CHECKERS=1, as egdb_6x6_checkers) for English checkers on the same board. Other boards: any tabula
+// draughts board of at most 64 playable squares (width, height, the colour of a1, a lake; see "The board" below), e.g.
+// 8x8 for English checkers and 10x10 for international draughts, where perft reproduces the published counts. The text
+// below describes the 6x6 board.
 //
 // Rules: international draughts on 6x6: men move one square diagonally forward and capture forwards
 // and backwards, flying kings, mandatory capture, majority capture (kings and men count the same),
@@ -70,7 +70,9 @@
 // FEN: W:W17,K16:B2,K15 (side to move, white pieces, black pieces; K = king).
 // Values: "W<n>" win in n plies, "L<n>" loss in n plies, "D" draw (for the side to move).
 
+#include <tabula/games/draughts.hpp>               // basic_draughts, draughts:: boards
 #include <tabula/grids/chequer.hpp>               // chequer
+#include <tabula/lake.hpp>                        // basic_lake, square_literals
 #include <xstd/bits/bit/bit_compress.hpp>          // bit_compress
 #include <xstd/bits/bit/bit_convert.hpp>           // bit_convert
 #include <xstd/bits/bit/bit_expand.hpp>            // bit_expand
@@ -116,24 +118,77 @@
 
 namespace {
 
-// the board: BOARD_W x BOARD_H (default 6 x 6; -DEGDB_WIDTH=, -DEGDB_HEIGHT=), the dark square a1 at the bottom left
-// (tabula::chequer with parity 1), its N dark squares numbered 1..N in reading order from the top left as in PDN
-// (tabula: the index on the board flipped upside down). Even sides, so that the 180 degree rotation maps square n onto
-// N + 1 - n (mirror), and the top and bottom rows (the promotion rows) hold BOARD_W / 2 squares each.
+// The board: any tabula draughts board (tabula::basic_draughts: width, height, the colour of the corner a1, squares
+// removed as a lake), chosen at compile time: -DEGDB_BOARD=<a tabula board type> (e.g. tabula::draughts::mertens_cut_j10),
+// else -DEGDB_WIDTH=, -DEGDB_HEIGHT=, -DEGDB_PARITY= (1: a1 dark, playable, the default; 0: a1 light) and
+// -DEGDB_LAKE='"h8"_sq, ...' (default 6 x 6, parity 1, no lake). The playable squares (dark, not in the lake) are
+// numbered as in PDN: the squares of the chequer, lake squares included, 1.. in reading order from the top left
+// (tabula: the index on the board flipped upside down); inside, the playable squares are 0..N-1 in that order (dense),
+// so a row is a run of consecutive squares. White's men move up and promote on the top row, Black's down to the bottom
+// row.
 #ifndef EGDB_WIDTH
 #define EGDB_WIDTH 6
 #endif
 #ifndef EGDB_HEIGHT
 #define EGDB_HEIGHT 6
 #endif
-constexpr int BOARD_W = EGDB_WIDTH, BOARD_H = EGDB_HEIGHT;
-constexpr tabula::chequer GRID{ BOARD_W, BOARD_H, 1 };
+#ifndef EGDB_PARITY
+#define EGDB_PARITY 1
+#endif
+#ifndef EGDB_LAKE
+#define EGDB_LAKE
+#endif
+using namespace tabula::square_literals;
+#ifdef EGDB_BOARD
+using Board = EGDB_BOARD;
+#else
+using Board = tabula::basic_draughts<EGDB_WIDTH, EGDB_HEIGHT, EGDB_PARITY, tabula::basic_lake<EGDB_LAKE>>;
+#endif
+constexpr tabula::chequer GRID = Board::grid;
+constexpr int BOARD_W = GRID.width, BOARD_H = GRID.height;
 constexpr tabula::chequer PDN_GRID = GRID.flip();     // the same squares, rank 0 at the top: index = PDN number - 1
-constexpr int N = PDN_GRID.size();
-constexpr int ROW = BOARD_W / 2;                       // squares per row
-static_assert(BOARD_W % 2 == 0 && BOARD_H % 2 == 0 && BOARD_H >= 4, "even sides, at least four rows");
-static_assert(16 < N && N <= 64, "a bitboard is one 32- or 64-bit word");
-std::string board_name() { return std::to_string(BOARD_W) + "x" + std::to_string(BOARD_H); }
+constexpr int PDN_SIZE = PDN_GRID.size();              // the dark squares, lake squares included
+
+// a square (file, row from the top) is playable: on the board, dark and not in the lake
+constexpr bool playable(int file, int row)
+{
+        return PDN_GRID.is_valid(std::pair{ file, row }) && Board::is_valid(Board::square(file, BOARD_H - 1 - row));
+}
+
+struct Geometry {
+        int n = 0;                                      // playable squares
+        std::array<int, PDN_SIZE> dense{};              // PDN index -> playable square, -1 for a lake square
+        std::array<int, PDN_SIZE> pdn{}, row{}, col{};  // playable square -> PDN index, row from the top, file
+};
+constexpr Geometry GEO = [] {
+        Geometry g;
+        for (int i = 0; i < PDN_SIZE; ++i) {
+                auto const [c, r] = PDN_GRID.coordinates(i);
+                g.dense[std::size_t(i)] = -1;
+                if (!playable(c, r)) continue;
+                g.dense[std::size_t(i)] = g.n;
+                g.pdn[std::size_t(g.n)] = i; g.row[std::size_t(g.n)] = r; g.col[std::size_t(g.n)] = c;
+                ++g.n;
+        }
+        return g;
+}();
+constexpr int N = GEO.n;
+static_assert(BOARD_H >= 3 && N >= 2, "a board with a row between the promotion rows");
+static_assert(N <= 64, "a bitboard is one 32- or 64-bit word (more squares: two words, not yet)");
+static_assert([] { for (int i = 0; i < PDN_SIZE; ++i) { auto const [c, r] = PDN_GRID.coordinates(i); if (PDN_GRID.index(std::pair{ c, r }) != i) return false; } return true; }(),
+              "tabula's PDN numbering: index and coordinates are inverse");
+
+// the board's name, the top of the database tree: WxH, then -p0 for a light a1, then the lake squares (10x10-h8)
+std::string board_name()
+{
+        std::string s = std::to_string(BOARD_W) + "x" + std::to_string(BOARD_H) + (GRID.parity == 0 ? "-p0" : "");
+        for (int i = 0; i < PDN_SIZE; ++i)
+                if (GEO.dense[std::size_t(i)] < 0) {
+                        auto const [c, r] = PDN_GRID.coordinates(i);
+                        s += "-" + std::string(1, char('a' + c)) + std::to_string(BOARD_H - r);
+                }
+        return s;
+}
 
 // the rules (see the top of the file)
 #ifndef EGDB_6X6_CHECKERS
@@ -146,10 +201,11 @@ constexpr bool MAJORITY = !CHECKERS;              // the capture of the most pie
 bool keep_duplicates = false;                     // perft only: keep moves that give the same position
 
 // bitboards: the N squares in the smallest block that holds them (bit_least: std::uint32_t up to 32 squares, else
-// std::uint64_t), widened to that block (bit_align); a word is that block as an integer; the full board is FULL, so a
-// complement is FULL - x
-using bitboard = xstd::bit_align<xstd::bit_least<xstd::bit_fixed_set<N>>>;
-using word = std::conditional_t<(N <= 32), std::uint32_t, std::uint64_t>;
+// std::uint64_t; at least 17 squares wide, so the block is never narrower than 32 bits), widened to that block (bit_align);
+// a word is that block as an integer; the full board is FULL, so a complement is FULL - x
+constexpr int NB = std::max(N, 17);
+using bitboard = xstd::bit_align<xstd::bit_least<xstd::bit_fixed_set<NB>>>;
+using word = std::conditional_t<(NB <= 32), std::uint32_t, std::uint64_t>;
 constexpr int WORD_BITS = std::numeric_limits<word>::digits;
 static_assert(sizeof(bitboard) == sizeof(word));
 constexpr bitboard bb_of(word x) { return xstd::bit_convert<bitboard>(x); }
@@ -158,10 +214,17 @@ bitboard square_bb(int s) { return bitboard{ std::size_t(s) }; }
 constexpr word low_bits(int n) { return n == WORD_BITS ? ~word(0) : (word(1) << n) - 1; }
 constexpr bitboard FULL = bb_of(low_bits(N));
 
-constexpr int row_of(int s) { return PDN_GRID.coordinates(s).second; }        // 0 = the top row (squares 1..ROW)
-constexpr int col_of(int s) { return PDN_GRID.coordinates(s).first; }         // 0 = file a
-constexpr int square_at(int r, int c) { return PDN_GRID.is_valid(std::pair{ c, r }) ? PDN_GRID.index(std::pair{ c, r }) : -1; }
-static_assert(square_at(0, 1) == 0 && square_at(BOARD_H - 1, 0) == N - ROW && row_of(N - 1) == BOARD_H - 1);
+constexpr int row_of(int s) { return GEO.row[std::size_t(s)]; }        // 0 = the top row
+constexpr int col_of(int s) { return GEO.col[std::size_t(s)]; }        // 0 = file a
+constexpr int square_at(int r, int c) { return playable(c, r) ? GEO.dense[std::size_t(PDN_GRID.index(std::pair{ c, r }))] : -1; }
+
+// the squares of each row, from the top
+constexpr std::array<word, BOARD_H> ROW_BITS = [] {
+        std::array<word, BOARD_H> a{};
+        for (int s = 0; s < N; ++s) a[std::size_t(GEO.row[std::size_t(s)])] |= word(1) << s;
+        return a;
+}();
+constexpr bitboard row_squares(int r) { return bb_of(ROW_BITS[std::size_t(r)]); }
 
 // directions: 0 = up-left, 1 = up-right, 2 = down-left, 3 = down-right
 constexpr int DR[4] = { -1, -1, 1, 1 };
@@ -202,8 +265,8 @@ void init_tables()
         }
 }
 
-constexpr bitboard PROMO_WHITE = bb_of(low_bits(ROW));                       // the top row: squares 1..ROW
-constexpr bitboard PROMO_BLACK = bb_of(low_bits(ROW) << (N - ROW));          // the bottom row: squares N-ROW+1..N
+constexpr bitboard PROMO_WHITE = row_squares(0);                             // the top row: White promotes there
+constexpr bitboard PROMO_BLACK = row_squares(BOARD_H - 1);                   // the bottom row: Black promotes there
 
 struct Pos {
         bitboard m[2]{};        // men   [0] = white, [1] = black
@@ -214,10 +277,41 @@ struct Pos {
         bool operator==(Pos const&) const = default;
 };
 
-// 180 degree rotation with colours swapped: square n <-> N + 1 - n, white <-> black (the word reversed, shifted down)
+// The colour mirror: a symmetry of the playable squares that swaps the top and the bottom row, so that with the colours
+// swapped every position has a mirror image of the same value. The 180 degree rotation (square n <-> N + 1 - n: the word
+// reversed) where it maps the playable squares onto themselves (even W + H and a symmetric lake), else the reflection in
+// the middle row (odd H), else none: then every material is built in both colours (HAS_MIRROR).
+enum class MirrorKind { none, rotation, reflection };
+constexpr MirrorKind MIRROR = [] {
+#ifdef EGDB_NO_MIRROR
+        return MirrorKind::none;                        // for tests: every material in both colours, no lookup through the mirror
+#endif
+        auto const maps = [](auto f) {
+                for (int s = 0; s < N; ++s) { auto const [c, r] = f(GEO.col[std::size_t(s)], GEO.row[std::size_t(s)]); if (!playable(c, r)) return false; }
+                return true;
+        };
+        if (maps([](int c, int r) { return std::pair{ BOARD_W - 1 - c, BOARD_H - 1 - r }; })) return MirrorKind::rotation;
+        if (maps([](int c, int r) { return std::pair{ c, BOARD_H - 1 - r }; })) return MirrorKind::reflection;
+        return MirrorKind::none;
+}();
+constexpr bool HAS_MIRROR = MIRROR != MirrorKind::none;
+constexpr std::array<int, std::size_t(N)> MIRROR_SQ = [] {             // the reflection, square by square
+        std::array<int, std::size_t(N)> a{};
+        for (int s = 0; s < N; ++s) a[std::size_t(s)] = MIRROR == MirrorKind::reflection ? square_at(BOARD_H - 1 - GEO.row[std::size_t(s)], GEO.col[std::size_t(s)]) : N - 1 - s;
+        return a;
+}();
+static_assert(MIRROR != MirrorKind::rotation || [] { for (int s = 0; s < N; ++s) if (square_at(BOARD_H - 1 - GEO.row[std::size_t(s)], BOARD_W - 1 - GEO.col[std::size_t(s)]) != N - 1 - s) return false; return true; }(),
+              "the rotation reverses the numbering");
+char const* mirror_name() { return MIRROR == MirrorKind::rotation ? "rotation" : MIRROR == MirrorKind::reflection ? "reflection" : "none"; }
+
 bitboard flip(bitboard const& x)
 {
-        return bb_of(word(xstd::bit_reverse(bits_of(x)) >> (WORD_BITS - N)));
+        if constexpr (MIRROR == MirrorKind::rotation) return bb_of(word(xstd::bit_reverse(bits_of(x)) >> (WORD_BITS - N)));
+        else {
+                bitboard y;
+                for (auto const sq : x) y.insert(std::size_t(MIRROR_SQ[sq]));
+                return y;
+        }
 }
 
 Pos mirror(Pos const& p)
@@ -238,9 +332,9 @@ struct Move {
 };
 
 // the moves of a position, without heap allocation (at most 12 pieces on 18 squares: far fewer than 128 moves; a king
-// on a larger board has at most 2 (BOARD_W - 1) moves, so 12 pieces at most 24 (BOARD_W - 1))
+// on a larger board has fewer than W + H moves, so 12 pieces fewer than 12 (W + H))
 struct MoveList {
-        static constexpr std::size_t CAP = std::max<std::size_t>(128, 24 * (BOARD_W - 1) + 16);
+        static constexpr std::size_t CAP = std::max<std::size_t>(128, 12 * std::size_t(BOARD_W + BOARD_H) + 16);
         alignas(Move) unsigned char buf[CAP * sizeof(Move)];   // uninitialised: no zeroing of 128 moves per call
         std::size_t n = 0;
         Move* data() { return std::launder(reinterpret_cast<Move*>(buf)); }
@@ -426,9 +520,10 @@ Key key_of(Pos const& p)
 
 int pieces(Key const& k) { return int(k.wm.size() + k.bm.size()) + k.nwk + k.nbk; }
 
-// slices are stored for one of each pair (slice, mirror(slice)) only
+// slices are stored for one of each pair (slice, mirror(slice)) only (every slice on a board without the colour mirror)
 bool canonical_key(Key const& k)
 {
+        if constexpr (!HAS_MIRROR) return true;
         Key m{ flip(k.bm), flip(k.wm), k.nbk, k.nwk };
         return k.pack() <= m.pack();
 }
@@ -688,7 +783,7 @@ std::uint16_t lookup_slice(Pos const& p0)
 int alphabeta(Pos const& p, int alpha, int beta)
 {
         if (in_slices(p)) return to_score((lookup_slice(p)));
-        PosKey const key = std::min(pack(p), pack(mirror(p)));
+        PosKey const key = HAS_MIRROR ? std::min(pack(p), pack(mirror(p))) : pack(p);
         if (auto it = tt.find(key); it != tt.end()) {
                 Bounds const b = it->second;
                 if (b.lo == b.hi || b.lo >= beta) return b.lo;
@@ -1743,6 +1838,8 @@ std::uint64_t verify(int threads)
 
 // ---------------------------------------------------------------- I/O
 
+int pdn_number(int sq) { return GEO.pdn[std::size_t(sq)] + 1; }   // a playable square's PDN number
+
 bool parse_fen(std::string const& fen, Pos& p)
 {
         p = Pos{};
@@ -1761,8 +1858,9 @@ bool parse_fen(std::string const& fen, Pos& p)
                 while (std::getline(ss, item, ',')) {
                         if (item.empty()) continue;
                         bool king = item[0] == 'K';
-                        int sq = std::stoi(king ? item.substr(1) : item) - 1;
-                        if (sq < 0 || sq >= N) return false;
+                        int const i = std::stoi(king ? item.substr(1) : item) - 1;      // a PDN number
+                        if (i < 0 || i >= PDN_SIZE || GEO.dense[std::size_t(i)] < 0) return false;
+                        int const sq = GEO.dense[std::size_t(i)];
                         (king ? p.k[side] : p.m[side]).insert(std::size_t(sq));
                 }
                 i = j;
@@ -1784,24 +1882,23 @@ std::string fen_of(Pos const& p)
                         if (!first) s += ',';
                         first = false;
                         if (k) s += 'K';
-                        s += std::to_string(sq + 1);
+                        s += std::to_string(pdn_number(sq));
                 }
         }
         return s;
 }
 
-// the start position: BOARD_H / 2 - 1 rows of men per side (W:W13,...,18:B1,...,6 on 6x6)
+// the start position: (BOARD_H - 2) / 2 rows of men per side (W:W13,...,18:B1,...,6 on 6x6)
 std::string start_fen()
 {
-        int const men = (BOARD_H / 2 - 1) * ROW;
-        std::string w, b;
-        for (int i = 1; i <= men; ++i) { b += (i > 1 ? "," : "") + std::to_string(i); w += (i > 1 ? "," : "") + std::to_string(N - men + i); }
-        return "W:W" + w + ":B" + b;
+        Pos p;
+        for (int r = 0; r < (BOARD_H - 2) / 2; ++r) { p.m[1] |= row_squares(r); p.m[0] |= row_squares(BOARD_H - 1 - r); }
+        return fen_of(p);
 }
 
 std::string notation(Move const& mv)
 {
-        return std::to_string(mv.from + 1) + (!mv.captured.empty() ? "x" : "-") + std::to_string(mv.to + 1);
+        return std::to_string(pdn_number(mv.from)) + (!mv.captured.empty() ? "x" : "-") + std::to_string(pdn_number(mv.to));
 }
 
 // ---------------------------------------------------------------- store: units of compressed DTM
@@ -1826,24 +1923,24 @@ std::string notation(Move const& mv)
 
 constexpr bitboard MEN_W = FULL - PROMO_WHITE;            // squares where a white man can stand
 constexpr bitboard MEN_B = FULL - PROMO_BLACK;            // squares where a black man can stand
-constexpr bitboard MEN_MID = MEN_W & MEN_B;               // squares ROW+1..N-ROW (4-15 on 6x6)
+constexpr bitboard MEN_MID = MEN_W & MEN_B;               // between the promotion rows (4-15 on 6x6)
 constexpr std::uint64_t BLOCK = 4096;                     // positions (bytes) per compressed block
 constexpr std::uint64_t CDB_MAGIC = 0x3678364244424331ull;     // version 1: draw 253, no escapes (still read)
 constexpr std::uint64_t CDB_MAGIC2 = 0x3678364244424332ull;    // version 2: draw 255, escape codes E..254 (see ESC8)
 constexpr int ZLEVEL = 19;
 
 // placements of nwm white and nbm black men with j white men on the bottom row (squares 16-18 on 6x6)
-constexpr int MID = N - 2 * ROW, MEN_SQ = N - ROW;     // the squares between the promotion rows; a colour's men's squares
+constexpr int BOTTOM = int(PROMO_BLACK.size()), MID = int(MEN_MID.size()), MEN_SQ = int(MEN_B.size());   // the bottom row; between the promotion rows; Black's men's squares
 std::uint64_t men_part(int nwm, int nbm, int j)
 {
-        if (j > ROW || j > nwm || nwm - j > MID || nbm > MEN_SQ - (nwm - j)) return 0;
-        return binom[ROW][j] * binom[MID][nwm - j] * binom[MEN_SQ - (nwm - j)][nbm];
+        if (j > BOTTOM || j > nwm || nwm - j > MID || nbm > MEN_SQ - (nwm - j)) return 0;
+        return binom[BOTTOM][j] * binom[MID][nwm - j] * binom[MEN_SQ - (nwm - j)][nbm];
 }
 
 std::uint64_t men_count(int nwm, int nbm)
 {
         std::uint64_t c = 0;
-        for (int j = 0; j <= ROW; ++j) c += men_part(nwm, nbm, j);
+        for (int j = 0; j <= BOTTOM; ++j) c += men_part(nwm, nbm, j);
         return c;
 }
 
@@ -2050,6 +2147,7 @@ void store_close()
 // open a unit: raw (mode 0 read only, 1 create, 2 existing for writing) or compressed (mode 3)
 bool unit_open(std::string const& dir, int n, int m, int mode)
 {
+        if constexpr (!HAS_MIRROR) { std::cerr << "store: the units keep one of each mirror pair; this board has no colour mirror" << std::endl; return false; }
         auto const lay = unit_layout(n, m);
         if (lay.empty()) return true;
         Unit u;

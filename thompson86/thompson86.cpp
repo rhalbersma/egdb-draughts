@@ -593,7 +593,7 @@ int main(int argc, char* argv[])
         init_cc();
         std::vector<std::string> const a(argv + 1, argv + argc);
         if (a.size() == 1 && a[0] == "board") {                      // the board this binary was built for (its tree's name)
-                std::cout << board_name() << (CHECKERS ? " checkers" : " international") << std::endl;
+                std::cout << board_name() << (CHECKERS ? " checkers" : " international") << " mirror=" << mirror_name() << std::endl;
                 return 0;
         }
         auto mat_at = [&](std::size_t i) {                             // wp bp wm bm

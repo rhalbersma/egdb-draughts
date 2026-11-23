@@ -115,7 +115,7 @@ remise.</li>
 <li><em>L</em> = 9: met het paar langs de kant van 9 beslist op elke breedte de oppositie; op de even breedtes is dat het
 enige paar. Op de oneven breedtes is het remise met een ander paar: op 9×9 diagonaal, vanaf 11×9 ook langs de lange
 kant.</li>
-<li><em>L</em> = 10: overal remise.</li>
+<li><em>L</em> ≥ 10: overal remise (op 11 hoog, buiten de tabel, nagerekend op 11×11, 12×11 en 13×11).</li>
 </ul>''',
           'en': '''<p>Per pair of double corners the longest win with the black kings in those two double corners, with a row per height
 <em>H</em> and a column per <em>W</em> − <em>H</em>; click a number for the position and replay the whole win.</p>
@@ -150,7 +150,7 @@ draw.</li>
 <li><em>H</em> = 9: with the pair along the side of 9 the opposition decides at every width; on the even widths it is the
 only pair. On the odd widths it is a draw with another pair: on 9×9 diagonally, from 11×9 also along the long
 side.</li>
-<li><em>H</em> = 10: drawn everywhere.</li>
+<li><em>H</em> ≥ 10: drawn everywhere (at height 11, outside the table, checked on 11×11, 12×11 and 13×11).</li>
 </ul>'''}
 
 

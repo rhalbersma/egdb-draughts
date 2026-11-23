@@ -328,6 +328,8 @@ NOTES_EN = {
     'wit kan op twee mooie manieren winnen': 'white can win in two beautiful ways',
     'de hoofdvariant, diagram 7.23': 'the main line, diagram 7.23',
     'database: 10. 12-8! in plaats van 10. 4-1': 'database: 10. 12-8! instead of 10. 4-1',
+    'Herm Jan Brascamp (2026): na 10. 4-1? houdt ook 10. … 3-6 remise, sneller dan 10. … 13-16: zwart offert met 11. … 6-8 een schijf en haalt na 12. 1×12 een dam op 16, op de lange diagonaal 16-3. Drie witte dammen winnen niet tegen een dam op die diagonaal, en de drie witte schijven kunnen niet alle drie over de diagonaal naar de overkant': 'Herm Jan Brascamp (2026): after 10. 4-1? 10. … 3-6 holds the draw too, faster than 10. … 13-16: black sacrifices a man with 11. … 6-8 and after 12. 1×12 gets a king on 16, on the long diagonal 16-3. Three white kings do not win against a king on that diagonal, and the three white men cannot all cross the diagonal to the other side',
+    'Herm Jan Brascamp (2026): na 10. 12-9? is 10. … 13-16 de enige remisezet, en 11. 4-1 geeft de stelling van de hoofdvariant (10. 4-1 13-16 11. 12-9): zo dwingt wit met één fout de remisevariant van het boek af, terwijl zwart na 10. 4-1 ook 10. … 3-6 heeft': 'Herm Jan Brascamp (2026): after 10. 12-9? 10. … 13-16 is the only drawing move, and 11. 4-1 gives the position of the main line (10. 4-1 13-16 11. 12-9): so white forces the drawing line of the book with a single mistake, while after 10. 4-1 black also has 10. … 3-6',
     'kansrijkste spel voor wit, beste verdediging voor zwart': 'most promising play for white, best defence for black',
     'tekst sectie 7.7: "3. … 5-7 4. 14-11 1-5"': 'text section 7.7: "3. … 5-7 4. 14-11 1-5"',
     'diagram 8.1': 'diagram 8.1',

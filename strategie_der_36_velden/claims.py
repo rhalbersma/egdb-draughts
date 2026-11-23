@@ -420,6 +420,8 @@ LINES = [
     ('7.7', '7.22', '7. … 2-5', 'W+', 'wit kan op twee mooie manieren winnen'),
     ('7.7', '7.22', '7. … 7-10 8. 13-11 4-7 9. 11×4 10-13 10. 4-1 13-16 11. 12-9 16-13 12. 14-12 3-6 13. 1-4 13-16 14. 4-7 16-13 15. 18-15 2-5!! 16. 7×2 13-10', '=', 'de hoofdvariant, diagram 7.23'),
     ('7.7', '7.22', '7. … 7-10 8. 13-11 4-7 9. 11×4 10-13 10. 12-8! 13-16 11. 14-11 2-5 12. 8×1 16×6 13. 18-14', 'W+', 'database: 10. 12-8! in plaats van 10. 4-1'),
+    ('7.7', '7.22', '7. … 7-10 8. 13-11 4-7 9. 11×4 10-13 10. 4-1? 3-6 11. 12-9 6-8 12. 1×12 13-16', '=', 'Herm Jan Brascamp (2026): na 10. 4-1? houdt ook 10. … 3-6 remise, sneller dan 10. … 13-16: zwart offert met 11. … 6-8 een schijf en haalt na 12. 1×12 een dam op 16, op de lange diagonaal 16-3. Drie witte dammen winnen niet tegen een dam op die diagonaal, en de drie witte schijven kunnen niet alle drie over de diagonaal naar de overkant'),
+    ('7.7', '7.22', '7. … 7-10 8. 13-11 4-7 9. 11×4 10-13 10. 12-9? 13-16 [enige] 11. 4-1', '=', 'Herm Jan Brascamp (2026): na 10. 12-9? is 10. … 13-16 de enige remisezet, en 11. 4-1 geeft de stelling van de hoofdvariant (10. 4-1 13-16 11. 12-9): zo dwingt wit met één fout de remisevariant van het boek af, terwijl zwart na 10. 4-1 ook 10. … 3-6 heeft'),
     ('7.7', '7.1', '3. 16-13 5-8 4. 14-11 1-5 5. 11×6 9×2 6. 15-12 5-7 7. 17-14 7-10', '=', 'kansrijkste spel voor wit, beste verdediging voor zwart'),
     ('7.7', '7.1', '3. 16-13 5-7 4. 14-11 1-5', None, 'tekst sectie 7.7: "3. … 5-7 4. 14-11 1-5"'),
     # ---------------------------------------------------------------- 8

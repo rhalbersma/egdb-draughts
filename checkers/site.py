@@ -116,10 +116,6 @@ remise.</li>
 enige paar. Op de oneven breedtes is het remise met een ander paar: op 9×9 diagonaal, vanaf 11×9 ook langs de lange
 kant.</li>
 <li><em>L</em> = 10: overal remise.</li>
-<li>Samengevat beslist vanaf 6 hoog de afstand tussen de hoekvelden van het paar (<em>D</em> × <em>d</em> = grootste ×
-kleinste coördinaatverschil): tot en met <em>D</em> = 6 wint wit, en ook op 8×8 (7 × 7); bij <em>D</em> = 8
-beslist de oppositie, behalve diagonaal op 9×9 (8 × 8), waar het remise is; vanaf <em>D</em> = 9 is het remise. De enige
-uitzondering is 8×6 (7 × 5).</li>
 </ul>''',
           'en': '''<p>Per pair of double corners the longest win with the black kings in those two double corners, with a row per height
 <em>H</em> and a column per <em>W</em> − <em>H</em>; click a number for the position and replay the whole win.</p>
@@ -155,10 +151,6 @@ draw.</li>
 only pair. On the odd widths it is a draw with another pair: on 9×9 diagonally, from 11×9 also along the long
 side.</li>
 <li><em>H</em> = 10: drawn everywhere.</li>
-<li>In short, from height 6 the distance between the corner squares of the pair decides (<em>D</em> × <em>d</em> = largest
-× smallest coordinate difference): up to <em>D</em> = 6 white wins, and on 8×8 (7 × 7) too; at <em>D</em> = 8
-the opposition decides, except diagonally on 9×9 (8 × 8), where it is a draw; from <em>D</em> = 9 it is a draw. The only
-exception is 8×6 (7 × 5).</li>
 </ul>'''}
 
 
@@ -190,17 +182,15 @@ van de rijnummers van alle dammen nooit, dus de vraag is per pariteit: wint een 
 onspeelbare/speelbare hoekvelden; bij speelbare op een oneven × oneven bord is er geen dubbele hoek en dus geen vesting.
 Een bord <em>B</em> × <em>L</em> is breedte × lengte, met <em>B</em> ≥ <em>L</em>.</p>
 <ul>
-<li><em>L</em> = 3: op de even breedtes wint wit, en de langste winst is precies 6<em>B</em> − 13 ply, 12 ply meer per
-twee kolommen (op 166×3 al 983 ply); alleen op 6×3 houdt zwart drie opstellingen. Op de oneven breedtes met onspeelbare
+<li><em>L</em> = 3: op de even breedtes wint wit; alleen op 6×3 houdt zwart drie opstellingen. Op de oneven breedtes met onspeelbare
 hoeken (5×3 tot en met 11×3) beslist de oppositie. Elke damzet gaat van een even naar een oneven rij of omgekeerd, dus
 niemand kan een tempo verliezen, en op zo'n strook, waar een dam alleen op de middelste rij geslagen kan worden, draait de
 uitkomst van elke stelling met de zwarte dam in een dubbele hoek om met de zet. Wit op b3 en d3 en zwart op a2 is
 bijvoorbeeld remise met wit aan zet en verloren met zwart aan zet.</li>
 <li><em>L</em> = 4: <a href="twee-4x4.html">4×4</a> is het enige bord dat remise is: geen enkele opstelling wint.
 Wit wint alleen als een witte dam op het andere veld van de dubbele hoek staat en de zwarte dam zich moet laten slaan.
-Vanaf 5×4 wint wit (op 5×4 houdt zwart één opstelling); de langste winst groeit met 8 ply per twee kolommen.</li>
-<li><em>L</em> ≥ 5: overal wint wit, en vrijwel elke opstelling wint (op de borden van 6 hoog houdt zwart er één of twee); de
-langste winst groeit met ongeveer 4 ply per kolom.</li>
+Vanaf 5×4 wint wit (op 5×4 houdt zwart één opstelling).</li>
+<li><em>L</em> ≥ 5: overal wint wit, en vrijwel elke opstelling wint (op de borden van 6 hoog houdt zwart er één of twee).</li>
 </ul>''',
           'en': '''<p>The longest win on every board, with a row per height <em>H</em> and a column per <em>W</em> − <em>H</em>; click a
 number for the position and replay the whole win.</p>
@@ -214,17 +204,16 @@ plies · <span class="res-diag">33*</span> = yes at one parity: the opposition d
 unplayable/playable corner squares; with playable ones on an odd × odd board there is no double corner and so no fortress.
 A board <em>W</em> × <em>H</em> is width × height, with <em>W</em> ≥ <em>H</em>.</p>
 <ul>
-<li><em>H</em> = 3: on the even widths white wins, and the longest win is exactly 6<em>W</em> − 13 plies, 12 plies more
-per two columns (983 plies on 166×3); only on 6×3 does black hold three set-ups. On the odd widths with unplayable corners
+<li><em>H</em> = 3: on the even widths white wins; only on 6×3 does black hold three set-ups. On the odd widths with unplayable corners
 (5×3 to 11×3) the opposition decides. Every king move goes from an even to an odd rank or back, so nobody can lose a
 tempo, and on such a strip, where a king can only be captured on the middle rank, the outcome of every position with the
 black king in a double corner turns with the side to move. White on b3 and d3 and black on a2, for instance, is a draw
 with white to move and lost with black to move.</li>
 <li><em>H</em> = 4: <a href="twee-4x4.html">4×4</a> is the only board that is a draw: no set-up wins. White only
 wins when a white king stands on the other square of the double corner and the black king has to let itself be captured.
-From 5×4 white wins (on 5×4 black holds one set-up); the longest win grows by 8 plies per two columns.</li>
+From 5×4 white wins (on 5×4 black holds one set-up).</li>
 <li><em>H</em> ≥ 5: white wins everywhere, and nearly every set-up wins (on the boards of height 6 black holds
-one or two); the longest win grows by about 4 plies per column.</li>
+one or two).</li>
 </ul>'''}
 
 def rank_parity(e, fen):

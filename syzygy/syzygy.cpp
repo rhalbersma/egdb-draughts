@@ -1077,18 +1077,12 @@ MemoryNeed memory_need(Material c)
         MatIndex const& mi = mat_index(c);
         auto const groups = groups_of(c);
         m.slots = mi.size;
-        m.groups = groups.size();
-        for (auto const& g : groups) {
-                m.positions += 2 * g.P;
-                m.max_group = std::max(m.max_group, g.P);
-                m.slices += g.units.size();
-        }
+        for (auto const& g : groups) m.add(g);
         std::uint64_t const T = 2 * m.max_group;
         // 10 bit planes (has a move inside, every exit loses, exits lost by now, won, lost, four frontiers, candidates); the level
         // lists with pass 0's per-block entries while they are merged (8 + 4 bytes per entry, at most one per position
-        // and side to move counted); the scan mode's value array; a group about 480 bytes, a slice 160
+        // and side to move counted); the scan mode's value array; the groups' own memory (MemoryNeed::meta)
         std::uint64_t const transient = g_cell8 ? T + 12 * T : 10 * ((T + 63) / 64) * 8 + 12 * T + (g_frontier ? 0 : 2 * T);
-        std::uint64_t const meta = 160 * m.slices + 480 * m.groups;
         std::uint64_t const writing = std::uint64_t(5) << 18;                          // the final pass's chunk buffers
         // the memory-mapped files count in the resident set as their pages are touched: the inputs (the materials the
         // moves lead into: the bytes and wdl files for dtm, the wdl files for dtc and dtz) and, at rung 1, the
@@ -1099,8 +1093,8 @@ MemoryNeed memory_need(Material c)
                 inputs += 2 * ((n + 3) / 4) + (g_metric == Metric::dtm ? 2 * n : 0);
         }
         std::uint64_t const sink_bytes = g_byte_sink ? 2 * mi.size + 2 * ((mi.size + 3) / 4) : 4 * mi.size;   // both sides
-        m.rung0 = FIXED_BYTES + meta + inputs + sink_bytes + std::max(transient, writing);
-        m.rung1 = FIXED_BYTES + meta + inputs + 64 * m.slices + 2 * T + 2 * m.positions + std::max(transient, writing);
+        m.rung0 = FIXED_BYTES + m.meta(false) + inputs + sink_bytes + std::max(transient, writing);
+        m.rung1 = FIXED_BYTES + m.meta(true) + inputs + 2 * T + 2 * m.positions + std::max(transient, writing);
         return m;
 }
 
@@ -1171,7 +1165,7 @@ bool build_material(std::string const& dir, Material c, ExecutionPolicy const& p
         g_dir = dir;
         g_current = c;
         MatIndex const& mi = mat_index(c);
-        auto const groups = groups_of(c);
+        auto groups = groups_of(c);
         if (g_mem_mb != 0 || g_sink_auto) {             // the claim against the estimates, and the sink
                 MemoryNeed const need = memory_need(c);
                 std::uint64_t const r0 = to_mb(need.rung0), r1 = to_mb(need.rung1);
@@ -1185,7 +1179,7 @@ bool build_material(std::string const& dir, Material c, ExecutionPolicy const& p
         open_successors(c);
         g_frozen = true;
         std::unique_ptr<DepthSink<std::uint16_t>> sink;
-        if (g_group_files) sink = std::make_unique<GroupSink<std::uint16_t>>(dir, c, mi, groups);
+        if (g_group_files) sink = std::make_unique<GroupSink<std::uint16_t>>(dir + "/" + metric_name(), c, mi, groups);     // next to the depth files
         else if (g_byte_sink) sink = std::make_unique<ByteSink>(dir, c, mi);
         else sink = std::make_unique<ArraySink<std::uint16_t>>(mi);
         g_sink = sink.get();
@@ -1193,10 +1187,12 @@ bool build_material(std::string const& dir, Material c, ExecutionPolicy const& p
         auto const t0 = std::chrono::steady_clock::now();
         std::uint64_t positions = 0;
         for (std::size_t k = 0; k < groups.size(); ++k) {
+                groups[k].load();                               // its list of configurations, if it has one
                 sink->begin_group(k, groups[k]);
                 solve_group(groups[k], *sink, policy);
                 sink->end_group();
                 positions += 2 * groups[k].P;
+                if (!sink->keeps_groups()) groups[k].release();
         }
 
         // the four files, each written once, sequentially, in index order: the values gathered from the sink slot by
@@ -1304,7 +1300,7 @@ bool check_all(std::string const& dir, int n, int threads)
         std::uint64_t total = 0;
         for (Material const c : stored_materials_up_to(n)) {
                 std::uint64_t checked = 0, bad_o = 0, bad_s = 0, bad_w = 0;
-                for (auto const& g : groups_of(c))
+                for (auto const& g : loaded_groups_of(c))
                         for (std::uint64_t i = 0; i < g.P; ++i)
                                 for (int s : { 0, 1 }) {
                                         Pos const p = g.pos(i, s);
@@ -1338,7 +1334,7 @@ bool compare_thompson86(std::string const& dir, std::string const& dir86, int n)
                 std::string const base = c.path(dir86) + "-d" + metric_name()[2];
                 std::uint8_t const* w = map_file(base + "W-wtm", mi.size);
                 std::uint8_t const* l = map_file(base + "L-btm", mi.size);
-                for (auto const& g : groups_of(c))
+                for (auto const& g : loaded_groups_of(c))
                         for (std::uint64_t i = 0; i < g.P; ++i) {
                                 Pos const pw = g.pos(i, 0), pb = g.pos(i, 1);
                                 std::uint16_t const vw = probe(pw), vb = probe(pb);

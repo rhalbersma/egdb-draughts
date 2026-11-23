@@ -81,7 +81,7 @@ PAGES = [('index.html', 'Overzicht', 'Overview', None)] + [(f, nl, en, c) for c,
 # longest32.py), per pair of double corners: e x e has one diagonal pair, e x o one pair along a side, o x o with
 # unplayable corners a pair along the W side, one along the H side and a diagonal pair (on a square board one pair along
 # a side), and o x o with playable corners no double corner. Every number is the longest win with the black kings in the
-# double corners of that pair, its colour the fortress test of that pair (Site.results32)
+# double corners of that pair, its colour the fortress test of that pair per parity (Site.results32)
 TEXT32 = {'nl': '''<p>Per paar dubbele hoeken de langste winst met de zwarte dammen in die twee dubbele hoeken, met een rij per lengte
 <em>L</em> en een kolom per <em>B</em> − <em>L</em>; klik op een getal voor de stelling en speel de hele winst na.</p>
 {table}
@@ -89,17 +89,17 @@ TEXT32 = {'nl': '''<p>Per paar dubbele hoeken de langste winst met de zwarte dam
 oneven zijde één paar langs een kant. Een bord met twee oneven zijden en onspeelbare hoekvelden heeft vier dubbele hoeken:
 een vakje toont dan <code>B-kant/L-kant/diagonaal/speelbare hoeken</code> (op een vierkant bord
 <code>kant/diagonaal/speelbare hoeken</code>), en het laatste getal is het bord met speelbare hoekvelden, waar geen dubbele
-hoek is en dus geen vesting. De kleur volgt de vestingtoets van het paar: de twee zwarte dammen in de dubbele hoeken, de
-witte dammen ergens rustig (zoals bij 2 tegen 1), elke stelling met wit en met zwart aan zet (op de grotere borden een
-steekproef van 3000), en de meerderheid beslist. <span class="res-win">67</span> = de vesting valt: gewonnen, wie er ook
-aan zet is · <span class="res-diag">79*</span> = de oppositie beslist: de uitkomst draait om met de zet ·
-<span class="res-draw">(97)</span> = de vesting houdt: remise, wie er ook aan zet is (het getal is de langste winst van de
-enkele stellingen die toch gewonnen zijn) · – = geen winst, of 5 dammen passen niet.</p>
+hoek is en dus geen vesting. De kleur volgt de vestingtoets van het paar: de twee zwarte dammen op de randvelden van de
+twee dubbele hoeken (in elke hoek één), zwart aan zet, niemand kan slaan en zwart kan direct materiaalverlies ontlopen, de
+witte dammen ergens. Zonder slag verandert de pariteit van de som van de rijnummers van alle dammen nooit, dus de vraag is
+per pariteit: wint een van die opstellingen voor wit, ja of nee? <span class="res-win">67</span> = ja bij beide
+pariteiten: de vesting valt · <span class="res-diag">79*</span> = ja bij één pariteit: de oppositie beslist ·
+<span class="res-draw">(97)</span> = bij geen van beide: de vesting houdt (het getal is dan de langste winst van een
+stelling buiten de toets, bijvoorbeeld met wit aan zet) · – = geen winst, of 5 dammen passen niet.</p>
 <ul>
-<li>Bijna overal is het zwart-wit: op elk bord van 4 hoog of meer geeft 98% tot 100% van de vestingstellingen van een paar
-hetzelfde patroon, behalve 4×4 en de paren langs de kant van 5 op 9×5, 11×5 en 13×5 met onspeelbare hoeken (93%,
-79% en 67%).</li>
-<li>Wat beslist, is de afstand tussen de hoekvelden van het paar (<em>D</em> = grootste, <em>d</em> = kleinste
+<li>Vanaf 4 hoog is het bijna altijd alles of niets: bij een pariteit met winst wint vrijwel elke opstelling, behalve op
+4×4 (65%) en langs de kant van 5 op 9×5, 11×5 en 13×5 met onspeelbare hoeken (91%, 74% en 61%).</li>
+<li>Vanaf 4 hoog beslist de afstand tussen de hoekvelden van het paar (<em>D</em> = grootste, <em>d</em> = kleinste
 coördinaatverschil). Tot en met <em>D</em> = 6 valt de vesting, en ook op 8×8 (7 × 7). Bij <em>D</em> = 8 beslist de
 oppositie (langs een kant van 9, en diagonaal op 9×7, 8 × 6), behalve diagonaal op 9×9 (8 × 8): daar houdt ze. Vanaf
 <em>D</em> = 9 houdt de vesting.</li>
@@ -108,8 +108,9 @@ oppositie (langs een kant van 9, en diagonaal op 9×7, 8 × 6), behalve diagonaa
 val.</li>
 <li>Op een bord met vier dubbele hoeken kiest zwart het paar dat voor hem het beste is: op 11×7 valt het paar langs de
 kant van 7, maar houden het paar langs de kant van 11 en het diagonale paar.</li>
-<li>Op 3 hoog delen de twee dubbele hoeken aan dezelfde kant een randveld, en hangt de uitkomst vooral af van hoe ver de
-witte dammen weg staan: die rij heeft geen kleur.</li>
+<li>Op 3 hoog heeft elke kant maar één randveld, dat de twee dubbele hoeken aan die kant delen. Met de zwarte dammen in de
+twee dubbele hoeken aan dezelfde kant (langs de kant van 3) beslist altijd de oppositie; met een zwarte dam aan elke kant
+valt de vesting op 5×3, beslist de oppositie op 7×3 en houdt ze vanaf 9×3.</li>
 </ul>''',
           'en': '''<p>Per pair of double corners the longest win with the black kings in those two double corners, with a row per height
 <em>H</em> and a column per <em>W</em> − <em>H</em>; click a number for the position and replay the whole win.</p>
@@ -118,17 +119,17 @@ witte dammen weg staan: die rij heeft geen kleur.</li>
 one pair along a side. A board with two odd sides and unplayable corner squares has four double corners: a cell then
 shows <code>W side/H side/diagonal/playable corners</code> (on a square board <code>side/diagonal/playable corners</code>),
 and the last number is the board with playable corner squares, which has no double corner and so no fortress. The colour
-follows the fortress test of the pair: the two black kings in the double corners, the white kings anywhere quiet (as for
-2 against 1), each position with white and with black to move (on the larger boards a sample of 3000), and the majority
-decides. <span class="res-win">67</span> = the fortress falls: won, whichever side is to move ·
-<span class="res-diag">79*</span> = the opposition decides: the outcome turns with the side to move ·
-<span class="res-draw">(97)</span> = the fortress holds: drawn, whichever side is to move (the number is the longest win of
-the few positions that are won all the same) · – = no win, or 5 kings do not fit.</p>
+follows the fortress test of the pair: the two black kings on the edge squares of the two double corners (one in each),
+black to move, nobody can capture and black can avoid losing material at once, the white kings anywhere. Without a
+capture the parity of the sum of the rank numbers of all kings never changes, so the question is per parity: does one of
+those set-ups win for white, yes or no? <span class="res-win">67</span> = yes at both parities: the fortress falls ·
+<span class="res-diag">79*</span> = yes at one parity: the opposition decides · <span class="res-draw">(97)</span> = at
+neither: the fortress holds (the number is then the longest win of a position outside the test, for instance with white
+to move) · – = no win, or 5 kings do not fit.</p>
 <ul>
-<li>Nearly everywhere it is black and white: on every board of height 4 or more 98% to 100% of the fortress positions of
-a pair give the same pattern, except 4×4 and the pairs along the side of 5 on 9×5, 11×5 and 13×5 with unplayable
-corners (93%, 79% and 67%).</li>
-<li>What decides is the distance between the corner squares of the pair (<em>D</em> = largest, <em>d</em> = smallest
+<li>From height 4 it is nearly always all or nothing: at a parity with a win nearly every set-up wins, except on 4×4
+(65%) and along the side of 5 on 9×5, 11×5 and 13×5 with unplayable corners (91%, 74% and 61%).</li>
+<li>From height 4 the distance between the corner squares of the pair decides (<em>D</em> = largest, <em>d</em> = smallest
 coordinate difference). Up to <em>D</em> = 6 the fortress falls, and on 8×8 (7 × 7) too. At <em>D</em> = 8 the
 opposition decides (along a side of 9, and diagonally on 9×7, 8 × 6), except diagonally on 9×9 (8 × 8): there it holds.
 From <em>D</em> = 9 the fortress holds.</li>
@@ -137,8 +138,9 @@ From <em>D</em> = 9 the fortress holds.</li>
 the trap.</li>
 <li>On a board with four double corners black picks the pair that is best for him: on 11×7 the pair along the side of 7
 falls, but the pair along the side of 11 and the diagonal pair hold.</li>
-<li>At height 3 the two double corners on the same side share an edge square, and the outcome depends mainly on how far
-away the white kings stand: that row has no colour.</li>
+<li>At height 3 each side has a single edge square, shared by the two double corners on that side. With the black kings
+in the two double corners on the same side (along the side of 3) the opposition always decides; with a black king on
+each side the fortress falls on 5×3, the opposition decides on 7×3 and it holds from 9×3.</li>
 </ul>'''}
 
 

@@ -34,8 +34,7 @@ PARTS = [
         ('2 tegen 1', '2 against 1', [
             ('tabel-twee.html', '2 dammen tegen 1 per bord', '2 kings against 1 per board')]),
         ('3 tegen 2', '3 against 2', [
-            ('tabel-drie.html', '3 dammen tegen 2 per bord', '3 kings against 2 per board'),
-            ('afstandsregel.html', 'De afstandsregel', 'The distance rule')])]),
+            ('tabel-drie.html', '3 dammen tegen 2 per bord', '3 kings against 2 per board')])]),
     ('Vallen', 'Traps', [
         ('8×8', '8×8', [
             ('twee-verdrijven.html', '2 tegen 1: de dam verdrijven', '2 against 1: expelling the king'),
@@ -79,70 +78,68 @@ PAGES = [('index.html', 'Overzicht', 'Overview', None)] + [(f, nl, en, c) for c,
 
 
 # 3 kings against 2 per board, heights 3 to 10 and widths up to height + 9, from longest32.json.gz (built by
-# longest32.py): the number is the longest win in plies (white to move), unplayable/playable corner squares on boards with
-# two odd sides, '–' where 5 kings do not fit. The colour is the fortress test: the black kings in two double corners,
-# the white kings anywhere (quiet), each position with white and with black to move, the pair of double corners best for
-# black; the majority decides: 21 = the fortress falls (won with either side to move), 21* = the opposition decides
-# (the outcome turns with the side to move), (21) = the fortress holds (drawn with either side to move)
-RESULTS_32 = {
-    3: ['–/–', '9', '19/11', '25*', '(23)/23', '35*', '(39)/33', '(53)', '(51)/37', '(65)'],
-    4: ['19', '25', '31', '35', '49', '49', '67', '73', '93', '105'],
-    5: ['35/15', '33', '51/27', '47', '81/43', '61', '95/55', '75', '109/67', '91'],
-    6: ['51', '63', '(59)', '65*', '(77)', '(75)', '(85)', '(93)', '(101)', '(111)'],
-    7: ['85/39', '75', '93*/49', '87', '(117)/65', '101', '(137)/79', '117', '(161)/91', '133'],
-    8: ['67', '79*', '(97)', '(97)', '(107)', '(111)', '(123)', '(123)', '(137)', '(139)'],
-    9: ['(99)/63', '93*', '(117)/79', '101*', '(129)/91', '115*', '(145)/103', '131*', '(159)/115', '145*'],
-    10: ['(115)', '(109)', '(127)', '(131)', '(137)', '(143)', '(151)', '(155)', '(167)', '(169)'],
-}
-
-TEXT32 = {'nl': '''<p>De langste winst op elk bord, met een rij per lengte <em>L</em> en een kolom per <em>B</em> − <em>L</em>; klik op een
-getal voor de stelling en speel de hele winst na.</p>
+# longest32.py), per pair of double corners: e x e has one diagonal pair, e x o one pair along a side, o x o with
+# unplayable corners a pair along the W side, one along the H side and a diagonal pair (on a square board one pair along
+# a side), and o x o with playable corners no double corner. Every number is the longest win with the black kings in the
+# double corners of that pair, its colour the fortress test of that pair (Site.results32)
+TEXT32 = {'nl': '''<p>Per paar dubbele hoeken de langste winst met de zwarte dammen in die twee dubbele hoeken, met een rij per lengte
+<em>L</em> en een kolom per <em>B</em> − <em>L</em>; klik op een getal voor de stelling en speel de hele winst na.</p>
 {table}
-<p class="src">De kleur volgt de vestingtoets: de twee zwarte dammen in twee dubbele hoeken, de witte dammen ergens
-rustig (zoals bij 2 tegen 1), elke stelling met wit en met zwart aan zet; bij meer dan twee dubbele hoeken telt het paar
-dat voor zwart het beste is (op de grotere borden een steekproef van 3000). De meerderheid beslist.
-<span class="res-win">67</span> = de vesting valt: gewonnen, wie er ook aan zet is; de langste winst duurt 67 ply ·
-<span class="res-diag">79*</span> = de oppositie beslist: de uitkomst draait om met de zet ·
-<span class="res-draw">(97)</span> = de vesting houdt: remise, wie er ook aan zet is (het getal is de langste winst) ·
-<code>99/63</code> = onspeelbare/speelbare hoekvelden; bij onspeelbare hoekvelden is elke hoek een dubbele hoek, bij
-speelbare op een oneven × oneven bord geen enkele, en dan is er geen vesting · – = 5 dammen passen niet.</p>
+<p class="src">Een bord met twee even zijden heeft één paar dubbele hoeken, diagonaal tegenover elkaar; een bord met één
+oneven zijde één paar langs een kant. Een bord met twee oneven zijden en onspeelbare hoekvelden heeft vier dubbele hoeken:
+een vakje toont dan <code>B-kant/L-kant/diagonaal/speelbare hoeken</code> (op een vierkant bord
+<code>kant/diagonaal/speelbare hoeken</code>), en het laatste getal is het bord met speelbare hoekvelden, waar geen dubbele
+hoek is en dus geen vesting. De kleur volgt de vestingtoets van het paar: de twee zwarte dammen in de dubbele hoeken, de
+witte dammen ergens rustig (zoals bij 2 tegen 1), elke stelling met wit en met zwart aan zet (op de grotere borden een
+steekproef van 3000), en de meerderheid beslist. <span class="res-win">67</span> = de vesting valt: gewonnen, wie er ook
+aan zet is · <span class="res-diag">79*</span> = de oppositie beslist: de uitkomst draait om met de zet ·
+<span class="res-draw">(97)</span> = de vesting houdt: remise, wie er ook aan zet is (het getal is de langste winst van de
+enkele stellingen die toch gewonnen zijn) · – = geen winst, of 5 dammen passen niet.</p>
 <ul>
-<li>Bijna overal is het zwart-wit: op elk bord van 4 hoog of meer, behalve 4×4 en de borden van 5 hoog met onspeelbare
-hoeken, geeft 98% tot 100% van de vestingstellingen hetzelfde patroon.</li>
-<li>De vesting valt op 8×8, 7×7, 6×6 en 5×5, op alle borden waar het paar langs een zijde van hoogstens 7 ligt (8×7,
-7×6, 10×7 enzovoort), en op alle borden van 4 en 5 hoog, ook als de dubbele hoeken daar ver uit elkaar liggen.</li>
-<li>De oppositie beslist als het paar 8 uit elkaar ligt: 9×8, 9×6, de borden van 9 hoog met even breedte, en 9×7 met
-onspeelbare hoeken.</li>
-<li>De vesting houdt als het paar verder uit elkaar ligt: 9×9 en de grotere oneven × oneven borden met onspeelbare
-hoeken, de borden van even lengte vanaf 10 breed, en <a href="vesting-8x6.html">8×6</a>, waar de dubbele hoeken diagonaal
-maar 7 uit elkaar liggen, maar de diagonaal ertussen te kort is voor de val.</li>
-<li>Op 3 hoog delen de twee dubbele hoeken aan dezelfde kant een randveld, en is de uitkomst onregelmatig.</li>
-</ul>
-<p>Waar de vesting valt en waar de oppositie beslist, vat <a href="afstandsregel.html">de afstandsregel</a> samen.</p>''',
-          'en': '''<p>The longest win on every board, with a row per height <em>H</em> and a column per <em>W</em> − <em>H</em>; click a
-number for the position and replay the whole win.</p>
+<li>Bijna overal is het zwart-wit: op elk bord van 4 hoog of meer geeft 98% tot 100% van de vestingstellingen van een paar
+hetzelfde patroon, behalve 4×4 en de paren langs de kant van 5 op 9×5, 11×5 en 13×5 met onspeelbare hoeken (93%,
+79% en 67%).</li>
+<li>Wat beslist, is de afstand tussen de hoekvelden van het paar (<em>D</em> = grootste, <em>d</em> = kleinste
+coördinaatverschil). Tot en met <em>D</em> = 6 valt de vesting, en ook op 8×8 (7 × 7). Bij <em>D</em> = 8 beslist de
+oppositie (langs een kant van 9, en diagonaal op 9×7, 8 × 6), behalve diagonaal op 9×9 (8 × 8): daar houdt ze. Vanaf
+<em>D</em> = 9 houdt de vesting.</li>
+<li>Twee uitzonderingen: op borden van 4 en 5 hoog valt elk paar, ook als de dubbele hoeken ver uit elkaar liggen, en op
+<a href="vesting-8x6.html">8×6</a> houdt het diagonale paar al bij 7 × 5: de diagonaal ertussen is te kort voor de
+val.</li>
+<li>Op een bord met vier dubbele hoeken kiest zwart het paar dat voor hem het beste is: op 11×7 valt het paar langs de
+kant van 7, maar houden het paar langs de kant van 11 en het diagonale paar.</li>
+<li>Op 3 hoog delen de twee dubbele hoeken aan dezelfde kant een randveld, en hangt de uitkomst vooral af van hoe ver de
+witte dammen weg staan: die rij heeft geen kleur.</li>
+</ul>''',
+          'en': '''<p>Per pair of double corners the longest win with the black kings in those two double corners, with a row per height
+<em>H</em> and a column per <em>W</em> − <em>H</em>; click a number for the position and replay the whole win.</p>
 {table}
-<p class="src">The colour follows the fortress test: the two black kings in two double corners, the white kings anywhere
-quiet (as for 2 against 1), each position with white and with black to move; with more than two double corners the pair
-best for black counts (on the larger boards a sample of 3000). The majority decides. <span class="res-win">67</span> = the
-fortress falls: won, whichever side is to move; the longest win takes 67 plies · <span class="res-diag">79*</span> = the
-opposition decides: the outcome turns with the side to move · <span class="res-draw">(97)</span> = the fortress holds:
-drawn, whichever side is to move (the number is the longest win) · <code>99/63</code> = unplayable/playable corner
-squares; with unplayable corner squares every corner is a double corner, with playable ones on an odd × odd board none
-is, and then there is no fortress · – = 5 kings do not fit.</p>
+<p class="src">A board with two even sides has one pair of double corners, diagonally opposite; a board with one odd side
+one pair along a side. A board with two odd sides and unplayable corner squares has four double corners: a cell then
+shows <code>W side/H side/diagonal/playable corners</code> (on a square board <code>side/diagonal/playable corners</code>),
+and the last number is the board with playable corner squares, which has no double corner and so no fortress. The colour
+follows the fortress test of the pair: the two black kings in the double corners, the white kings anywhere quiet (as for
+2 against 1), each position with white and with black to move (on the larger boards a sample of 3000), and the majority
+decides. <span class="res-win">67</span> = the fortress falls: won, whichever side is to move ·
+<span class="res-diag">79*</span> = the opposition decides: the outcome turns with the side to move ·
+<span class="res-draw">(97)</span> = the fortress holds: drawn, whichever side is to move (the number is the longest win of
+the few positions that are won all the same) · – = no win, or 5 kings do not fit.</p>
 <ul>
-<li>Nearly everywhere it is black and white: on every board of height 4 or more, except 4×4 and the boards of height 5
-with unplayable corners, 98% to 100% of the fortress positions give the same pattern.</li>
-<li>The fortress falls on 8×8, 7×7, 6×6 and 5×5, on every board where the pair lies along a side of at most 7 (8×7, 7×6,
-10×7 and so on), and on every board of height 4 and 5, also when the double corners lie far apart there.</li>
-<li>The opposition decides when the pair lies 8 apart: 9×8, 9×6, the boards of height 9 with even width, and 9×7 with
-unplayable corners.</li>
-<li>The fortress holds when the pair lies further apart: 9×9 and the larger odd × odd boards with unplayable corners, the
-boards of even height from width 10, and <a href="vesting-8x6.html">8×6</a>, where the double corners lie only 7 apart
-diagonally, but the diagonal between them is too short for the trap.</li>
-<li>At height 3 the two double corners on the same side share an edge square, and the outcome is irregular.</li>
-</ul>
-<p>Where the fortress falls and where the opposition decides is summed up by <a href="afstandsregel.html">the distance rule</a>.</p>'''}
+<li>Nearly everywhere it is black and white: on every board of height 4 or more 98% to 100% of the fortress positions of
+a pair give the same pattern, except 4×4 and the pairs along the side of 5 on 9×5, 11×5 and 13×5 with unplayable
+corners (93%, 79% and 67%).</li>
+<li>What decides is the distance between the corner squares of the pair (<em>D</em> = largest, <em>d</em> = smallest
+coordinate difference). Up to <em>D</em> = 6 the fortress falls, and on 8×8 (7 × 7) too. At <em>D</em> = 8 the
+opposition decides (along a side of 9, and diagonally on 9×7, 8 × 6), except diagonally on 9×9 (8 × 8): there it holds.
+From <em>D</em> = 9 the fortress holds.</li>
+<li>Two exceptions: on boards of height 4 and 5 every pair falls, also when the double corners lie far apart, and on
+<a href="vesting-8x6.html">8×6</a> the diagonal pair already holds at 7 × 5: the diagonal between them is too short for
+the trap.</li>
+<li>On a board with four double corners black picks the pair that is best for him: on 11×7 the pair along the side of 7
+falls, but the pair along the side of 11 and the diagonal pair hold.</li>
+<li>At height 3 the two double corners on the same side share an edge square, and the outcome depends mainly on how far
+away the white kings stand: that row has no colour.</li>
+</ul>'''}
 
 
 # 2 kings against 1 per board: a row per height H, a column per W - H; the number is the longest win in plies (white to
@@ -342,6 +339,72 @@ class Site:
         return text[self.lang].replace('{table}', '<table class="tbl results">' + head + ''.join(rows) + '</table>')
 
     @staticmethod
+    def fortress_kind(counts):
+        """the majority of the fortress positions of a pair: won either way, the opposition, or drawn either way"""
+        g = {'win': counts.get('WL', 0), 'diag': counts.get('WD', 0) + counts.get('DL', 0), 'draw': counts.get('DD', 0)}
+        return max(g, key=g.get)
+
+    def results32(self, pg):
+        """the 3-2 table per pair of double corners: e x e one diagonal pair, e x o one pair along a side, o x o (with
+        unplayable corners) the pairs along the W side and the H side and the diagonal pair (on a square board one pair
+        along a side), then the board with playable corners; every number is the longest win with the black kings in
+        the double corners of that pair, coloured by its fortress test (no colour at height 3)"""
+        t = self.t
+        stored = json.loads(gzip.decompress((HERE / 'longest32.json.gz').read_bytes()))
+        side = {'W': t('langs de B-kant', 'along the W side'), 'H': t('langs de L-kant', 'along the H side'),
+                'diag': t('diagonaal', 'diagonal')}
+        ncol = 10
+        head = '<tr><th>' + t('L \\ B − L', 'H \\ W − H') + '</th>' + ''.join(f'<th>{d}</th>' for d in range(ncol)) + '</tr>'
+        rows = []
+        for h in range(3, 11):
+            tds = []
+            for d in range(ncol):
+                w = h + d
+                parts = []                         # (label, plies, kind, fen, board key)
+                for corners in (['unplayable', 'playable'] if w % 2 and h % 2 else ['playable']):
+                    key = f'{w}x{h} {corners}'
+                    entry = stored.get(key)
+                    if entry is None:
+                        parts.append(None)
+                        continue
+                    pairs = entry.get('pairs', {})
+                    if not pairs:                  # no double corner: no fortress
+                        parts.append((t('speelbare hoeken', 'playable corners'), int(entry['analyses'][entry['longest']][0][1:]),
+                                      'win', entry['longest'], key))
+                        continue
+                    kinds = ['W', 'H', 'diag'] if w != h else ['W', 'diag']
+                    for kind in kinds:
+                        ps = [(name, p) for name, p in pairs.items() if p['type'] == kind or (w == h and kind == 'W' and p['type'] == 'H')]
+                        if not ps:
+                            continue
+                        name, p = max(ps, key=lambda np: (np[1]['n'] > 0, np[1]['n']))
+                        label = (t('onspeelbare hoeken, ', 'unplayable corners, ') if corners == 'unplayable' else '') + \
+                            (t('langs een kant', 'along a side') if w == h and kind == 'W' else side[kind])
+                        parts.append((label, p['n'], self.fortress_kind(entry['fortress'][name]), p['longest'], key))
+                links = []
+                for part in parts:
+                    if part is None:
+                        links.append('–')
+                        continue
+                    label, n, kind, fen, key = part
+                    text = f'({n})' if kind == 'draw' else f'{n}*' if kind == 'diag' else f'{n}'
+                    if n and fen:
+                        gid = f'{key} 3-2 stored'
+                        e = self.engines.setdefault(gid, CachedEngine(stored[key]))
+                        if gid not in pg.geoms:
+                            pg.use(gid, e, e.g)
+                        assert e.analyse(fen)[0] == f'W{n}', (key, label, fen)
+                        i = pg.add(fen, gid=gid)
+                        pg.best_line(fen, n, start=i)
+                        text = text.replace(str(n), f'<a class="m1" href="#" data-i="{i}" title="{w}×{h} {label}: W{n}">{n}</a>', 1)
+                    else:
+                        text = text.replace('0', '–')
+                    links.append(text if h == 3 else f'<span class="res-{kind}">{text}</span>')
+                tds.append('<td>' + '/'.join(links) + '</td>')
+            rows.append(f'<tr><th>{h}</th>' + ''.join(tds) + '</tr>')
+        return TEXT32[self.lang].replace('{table}', '<table class="tbl results">' + head + ''.join(rows) + '</table>')
+
+    @staticmethod
     def longest_any(e, n):
         """a 2-1 position with white to move and a win in n plies (egdb_fast reports none on a few boards of height 3)"""
         from itertools import combinations
@@ -400,7 +463,7 @@ then the traps that explain those outcomes, with a chapter per board.</p>''')]
         flush('index.html')
         body = [self.results(pg, RESULTS_21, TEXT21, 2, 1)]
         flush('tabel-twee.html')
-        body = [self.results(pg, RESULTS_32, TEXT32, 3, 2)]
+        body = [self.results32(pg)]
         flush('tabel-drie.html')
         fen = self.longest_21(e21)
         v, _ = e21.analyse(fen)
@@ -704,7 +767,7 @@ d1/e2; with 6. c4-d3 white sets up a king, and after 6. … d1-e2 7. a4-b5! blac
             f'vangstelling en dwingt op zet 21 met een offer een ruil af: zwart moet slaan, wit slaat terug, en 2 tegen 1 '
             f'wint. Hoe die val werkt, staat bij <a href="val.html">de val</a>.</p>'
             f'<p>De twee dubbele hoeken liggen op 8×8 diagonaal tegenover elkaar en dicht bij elkaar (in de '
-            f'<a href="afstandsregel.html">afstandsregel</a>: D × d = 7 × 7, de vesting valt). De oppositie, die op 9×8 en '
+            f'<a href="tabel-drie.html">tabel van 3 tegen 2</a> liggen hun hoeken 7 × 7 uit elkaar, en de vesting valt). De oppositie, die op 9×8 en '
             f'10×9 de helft van zulke stellingen remise maakt, speelt op 8×8 dus geen rol.</p>',
             f'<p>The longest win on 8×8 without a capture for either side in the start position takes {v[1:]} plies. Black '
             f'flees with both kings to the double corners: after 15. … 27-32 they stand on 5 and 32. A king on the two edge '
@@ -715,7 +778,7 @@ d1/e2; with 6. c4-d3 white sets up a king, and after 6. … d1-e2 7. a4-b5! blac
             f'capture, white captures back, and 2 against 1 wins. How that trap works is shown at '
             f'<a href="val.html">the trap</a>.</p>'
             f'<p>On 8×8 the two double corners lie diagonally opposite and close together (in the '
-            f'<a href="afstandsregel.html">distance rule</a>: D × d = 7 × 7, the fortress falls). The opposition, which '
+            f'<a href="tabel-drie.html">table of 3 against 2</a> their corners lie 7 × 7 apart, and the fortress falls). The opposition, which '
             f'makes half of such positions a draw on 9×8 and 10×9, plays no role on 8×8.</p>'),
             f'<p class="var">{h}</p>',
             t('<p>Zwart probeert zijn toevlucht te zoeken in een vesting door beide dubbele hoeken te bezetten, maar wit '
@@ -742,7 +805,7 @@ zwarte dam uit zijn dubbele hoek, en de vesting valt bij beide pariteiten.</p>
 op de diagonaal werkt, zoals op 8×8, maar er is geen tweede diagonaal om van tempo te wisselen: ook hier beslist de
 oppositie. Op <a href="vesting-8x6.html">8×6</a> liggen de dubbele hoeken dichter bij elkaar, maar is de diagonaal
 ertussen te kort voor de val: remise. Op <a href="vesting-9x9.html">9×9</a> is de diagonaal te lang: ook remise. Op nog grotere borden houdt de vesting
-stand (zie <a href="afstandsregel.html">de afstandsregel</a> bij de tabel van 3 tegen 2).</p>
+stand (zie de <a href="tabel-drie.html">tabel van 3 tegen 2</a>).</p>
 <p>Ten slotte de kleine borden <a href="langste-7x7.html">7×7</a> en <a href="langste-5x5.html">5×5</a>, waar elke hoek een
 dubbele hoek is: kan een verdreven dam daar naar een andere dubbele hoek ontsnappen?</p>''', '''
 <p>In 2 against 1 expelling the king works on every board, except on boards of height 5 and on 4×4 (see
@@ -761,7 +824,7 @@ double corner, and the fortress falls at both parities.</p>
 diagonal works, as on 8×8, but there is no second diagonal to change the tempo: here too the opposition decides. On
 <a href="vesting-8x6.html">8×6</a> the double corners lie closer together, but the diagonal between them is too short
 for the trap: a draw. On <a href="vesting-9x9.html">9×9</a> the diagonal is too long: a draw as well. On even bigger boards the fortress holds (see
-<a href="afstandsregel.html">the distance rule</a> with the table of 3 against 2).</p>
+the <a href="tabel-drie.html">table of 3 against 2</a>).</p>
 <p>Finally the small boards <a href="langste-7x7.html">7×7</a> and <a href="langste-5x5.html">5×5</a>, where every corner
 is a double corner: can an expelled king escape to another double corner there?</p>''')]
         flush('drie-algemeen.html')
@@ -1075,43 +1138,6 @@ move, and kings cannot lose a tempo, so with black to move the parity is fixed f
 <p>With black to move and the black kings on the edge squares of the two double corners (quiet positions, nobody can
 capture), on 9×8 every position is drawn at even parity (8,228 positions) and none at odd parity (8,244).</p>'''),
                 *act89,
-                t('''
-<p>Wat beslist, is de afstand tussen de hoeken van de dubbele hoeken die zwart bezet (<em>D</em> = grootste,
-<em>d</em> = kleinste coördinaatverschil; <em>d</em> = 0 als ze aan dezelfde kant liggen), niet of ze aan dezelfde
-kant liggen. Bij een paar langs een zijde staat in de tabel eerst de lengte van die zijde en dan de andere zijde: het bord
-8×7 heet hier 7×8, want zijn paar ligt langs de zijde van 7.</p>
-<table class="tbl"><tr><th>Paar</th><th>Borden</th><th>D × d</th><th>Vesting</th></tr>
-<tr><td>≤ 7 × H, verticaal</td><td>5×5; 7×5, 7×6, 7×7, 7×8, 7×9 en 7×10 tot en met 7×12</td><td>≤ 6 × 0</td><td>valt</td></tr>
-<tr><td>≤ 8 × 8, diagonaal</td><td>5×5, 6×6, 7×7, 8×8</td><td>≤ 7 × 7</td><td>valt</td></tr>
-<tr><td>8 × 6, diagonaal</td><td><a href="vesting-8x6.html">8×6</a></td><td>7 × 5</td><td>houdt</td></tr>
-<tr><td>9 × H, verticaal</td><td>9×6, 9×7, 9×8, 9×9 en 9×10 tot en met 9×12</td><td>8 × 0</td><td>oppositie beslist</td></tr>
-<tr><td>9 × 7, diagonaal</td><td>9×7</td><td>8 × 6</td><td>oppositie beslist</td></tr>
-<tr><td>9 × 9, diagonaal</td><td>9×9</td><td>8 × 8</td><td>houdt</td></tr>
-<tr><td>11 × H, verticaal</td><td>11×6 tot en met 11×12</td><td>10 × 0</td><td>houdt</td></tr>
-<tr><td>≥ 10, overige paren</td><td>10×8, 10×10, 11×10, 12×10 (zoals getekend)</td><td>≥ 9</td><td>houdt</td></tr>
-<tr><td>9 × 5, 11 × 5, 13 × 5, verticaal</td><td>9×5, 11×5, 13×5</td><td>8, 10, 12 × 0</td><td>valt</td></tr>
-<tr><td>op 4 hoog</td><td>5×4 tot en met 13×4</td><td>≤ 12</td><td>valt</td></tr></table>
-<p><em>D</em> ≤ 7: de vesting valt · <em>D</em> = 8: de oppositie beslist, tenzij ook <em>d</em> = 8 ·
-<em>D</em> ≥ 9: de vesting houdt. Behalve op borden van 4 of 5 hoog: daar valt de vesting altijd. En op 8×6 houdt de
-vesting al bij <em>D</em> = 7. De <a href="tabel-drie.html">tabel van 3 tegen 2</a> geeft de vestingtoets op elk bord.</p>''', '''
-<p>What decides is the distance between the corners of the double corners black occupies (<em>D</em> = largest,
-<em>d</em> = smallest coordinate difference; <em>d</em> = 0 when they are on the same side), not whether they lie on the
-same side. For a pair along a side the table first gives the length of that side and then the other side: the board 8×7
-is called 7×8 here, since its pair lies along the side of 7.</p>
-<table class="tbl"><tr><th>Pair</th><th>Boards</th><th>D × d</th><th>Fortress</th></tr>
-<tr><td>≤ 7 × H, vertical</td><td>5×5; 7×5, 7×6, 7×7, 7×8, 7×9 and 7×10 to 7×12</td><td>≤ 6 × 0</td><td>falls</td></tr>
-<tr><td>≤ 8 × 8, diagonal</td><td>5×5, 6×6, 7×7, 8×8</td><td>≤ 7 × 7</td><td>falls</td></tr>
-<tr><td>8 × 6, diagonal</td><td><a href="vesting-8x6.html">8×6</a></td><td>7 × 5</td><td>holds</td></tr>
-<tr><td>9 × H, vertical</td><td>9×6, 9×7, 9×8, 9×9 and 9×10 to 9×12</td><td>8 × 0</td><td>opposition decides</td></tr>
-<tr><td>9 × 7, diagonal</td><td>9×7</td><td>8 × 6</td><td>opposition decides</td></tr>
-<tr><td>9 × 9, diagonal</td><td>9×9</td><td>8 × 8</td><td>holds</td></tr>
-<tr><td>11 × H, vertical</td><td>11×6 to 11×12</td><td>10 × 0</td><td>holds</td></tr>
-<tr><td>≥ 10, other pairs</td><td>10×8, 10×10, 11×10, 12×10 (as drawn)</td><td>≥ 9</td><td>holds</td></tr>
-<tr><td>9 × 5, 11 × 5, 13 × 5, vertical</td><td>9×5, 11×5, 13×5</td><td>8, 10, 12 × 0</td><td>falls</td></tr>
-<tr><td>at height 4</td><td>5×4 to 13×4</td><td>≤ 12</td><td>falls</td></tr></table>
-<p><em>D</em> ≤ 7: the fortress falls · <em>D</em> = 8: opposition decides, unless also <em>d</em> = 8 ·
-<em>D</em> ≥ 9: the fortress holds. Except on boards of height 4 or 5: there the fortress always falls. And on 8×6 the
-fortress already holds at <em>D</em> = 7. The <a href="tabel-drie.html">table of 3 against 2</a> gives the fortress test on every board.</p>'''),
                 ]
         # the other of the two traps on 9x8 (the trap of the previous page is the first), on a page of its own
         pgp = self.page((k89, e89))
@@ -1139,8 +1165,7 @@ fortress already holds at <em>D</em> = 7. The <a href="tabel-drie.html">table of
             + self.no_tempo(pgp, k89, e89, '9×8', ['c7', 'e7', 'g7'], ['a7', 'i7'], '1. c7-d8 a7-b8 2. g7-f8 b8-a7',
                             t('de witte opstelling van val 1', 'the white set-up of trap 1'), all_moves=True)
         self.write('vesting-pariteit.html', None, '\n'.join(extra), pgp, k89)
-        rule = next(k for k, x in enumerate(body) if isinstance(x, str) and 'D × d' in x)
-        self.write('vesting.html', None, '\n'.join(body[:rule] + trap2), pg, k89)
+        self.write('vesting.html', None, '\n'.join(body + trap2), pg, k89)
         self.write('vesting-9x9.html', None, '\n'.join(self.fortress99(pg9, k99, e99)), pg9, k99)
         k86, e86 = self.engine(8, 6, 'playable')
         pg86 = self.page((k86, e86))
@@ -1341,7 +1366,7 @@ are 8 traps, at even parity not a single one.</p>''')]
                    '<p>But can such an expelled king not flee to another double corner? On 8×7 there is none; on '
                    '<a href="langste-7x7.html">7×7</a> there is.</p>')]
         self.write('vesting-8x7-wit.html', None, '\n'.join(bodyv), pgv, k87)
-        # the distance rule, with the two pairs of 9x7 that are 8 apart
+        # 9x7: the pairs that are 8 apart
         k97, e97 = self.engine(9, 7, 'unplayable')
         name = t('9×7 onspeelbare hoeken', '9×7 unplayable corners')
         pga = self.page((k97, e97))
@@ -1426,14 +1451,6 @@ are 8 traps, at even parity not a single one.</p>''')]
         for W, B in ((['c2', 'e2', 'g2'], ['a2', 'i2']), (['d3', 'e4', 'f5'], ['b1', 'h7']), (['c2', 'e4', 'g6'], ['a2', 'i6'])):
             assert rank_parity(e97, e97.fen(W, B, 'B')) == 0 and e97.analyse(e97.fen(W, B, 'B'))[0][0] == 'L'
         self.write('vesting-9x7.html', None, '\n'.join(rulebody), pga, k97)
-        self.write('afstandsregel.html', None, body[rule] + t(
-            '<p>Zie de borden zelf: <a href="vesting-8x7.html">8×7</a>, <a href="val.html">8×8</a>, '
-            '<a href="vesting.html">9×8</a>, <a href="vesting-9x7.html">9×7</a>, <a href="vesting-8x6.html">8×6</a>, '
-            '<a href="vesting-9x9.html">9×9</a>, <a href="langste-7x7.html">7×7</a> en <a href="langste-5x5.html">5×5</a>.</p>',
-            '<p>See the boards themselves: <a href="vesting-8x7.html">8×7</a>, <a href="val.html">8×8</a>, '
-            '<a href="vesting.html">9×8</a>, <a href="vesting-9x7.html">9×7</a>, <a href="vesting-8x6.html">8×6</a>, '
-            '<a href="vesting-9x9.html">9×9</a>, <a href="langste-7x7.html">7×7</a> and <a href="langste-5x5.html">5×5</a>.</p>'),
-            self.page((k97, e97)))
 
 
     def board55(self):
@@ -1739,7 +1756,7 @@ saves himself only with 1. … {draw[0]}; both corner moves lose. All moves of b
         t = self.t
         body = [t('''
 <p>Op 8×6 liggen de dubbele hoeken g1/h2 en b6/a5 diagonaal tegenover elkaar, 7 × 5 uit elkaar: dichterbij dan op 8×8.
-Volgens de <a href="afstandsregel.html">afstandsregel</a> zou de vesting dus moeten vallen, maar ze houdt: met de
+Op elk ander bord valt een paar dat zo dicht bij elkaar ligt (zie de <a href="tabel-drie.html">tabel van 3 tegen 2</a>), maar hier houdt de vesting: met de
 zwarte dammen in de twee dubbele hoeken is 98% van de rustige stellingen remise, wie er ook aan zet is, en de database
 vindt bij geen van beide pariteiten één val
 (<a href="https://github.com/rhalbersma/egdb-draughts/blob/main/checkers/traps.py"><code>traps.py</code></a>).</p>
@@ -1748,8 +1765,8 @@ zwarte dammen, met aan beide kanten een vrij veld, b6 en f2. Pendelt zwart in de
 veld naast de andere zwarte dam, en de middelste witte dam slaat terug. Op 8×6 verbindt de diagonaal g1–b6 de dubbele
 hoeken, maar b6 is zelf het randveld van de dubbele hoek: tussen de zwarte dammen liggen maar 4 velden, en met drie witte
 dammen erop blijft er maar één vrij.</p>''', '''
-<p>On 8×6 the double corners g1/h2 and b6/a5 lie diagonally opposite, 7 × 5 apart: closer than on 8×8. By the
-<a href="afstandsregel.html">distance rule</a> the fortress should therefore fall, but it holds: with the black kings in
+<p>On 8×6 the double corners g1/h2 and b6/a5 lie diagonally opposite, 7 × 5 apart: closer than on 8×8. On every other board a pair this close falls (see the
+<a href="tabel-drie.html">table of 3 against 2</a>), but here the fortress holds: with the black kings in
 the two double corners 98% of the quiet positions are drawn, whichever side is to move, and the database finds not a
 single trap at either parity
 (<a href="https://github.com/rhalbersma/egdb-draughts/blob/main/checkers/traps.py"><code>traps.py</code></a>).</p>
@@ -1841,10 +1858,10 @@ only one of the two shuttle moves.</p>'''), fig1,
                    f'<p>One square further, on e4, f5 and g6 ({v2}), it is the other way round: {hit2} is punished, '
                    f'{free2} is not. All moves of black: ') + self.moves_list(pg, i2, legal2, '1. … ')
                  + t('. Bij geen van beide pariteiten straft één opstelling beide pendelzetten, dus de vesting houdt: '
-                     'remise. De <a href="afstandsregel.html">afstandsregel</a> bij de tabel van 3 tegen 2 vat samen wanneer de vesting '
+                     'remise. De <a href="tabel-drie.html">tabel van 3 tegen 2</a> laat per paar dubbele hoeken zien wanneer de vesting '
                      'valt.</p>',
                      '. At neither parity does one set-up punish both shuttle moves, so the fortress holds: a draw. The '
-                     '<a href="afstandsregel.html">distance rule</a> with the table of 3 against 2 sums up when the fortress falls.</p>'),
+                     '<a href="tabel-drie.html">table of 3 against 2</a> shows per pair of double corners when the fortress falls.</p>'),
                  '<div style="clear:both"></div>']
         return body
 
@@ -1863,9 +1880,10 @@ def main():
         s.vesting()
         s.board55()
         # pages that were renamed or merged
-        (out / 'conclusie.html').write_text('<!DOCTYPE html><meta charset="utf-8"><meta http-equiv="refresh" '
-                                            'content="0; url=afstandsregel.html"><link rel="canonical" href="afstandsregel.html">'
-                                            '<title>Checkers</title><a href="afstandsregel.html">afstandsregel.html</a>\n')
+        for old in ('conclusie.html', 'afstandsregel.html'):
+            (out / old).write_text('<!DOCTYPE html><meta charset="utf-8"><meta http-equiv="refresh" '
+                                   'content="0; url=tabel-drie.html"><link rel="canonical" href="tabel-drie.html">'
+                                   '<title>Checkers</title><a href="tabel-drie.html">tabel-drie.html</a>\n')
         (out / 'val-race.html').write_text('<!DOCTYPE html><meta charset="utf-8"><meta http-equiv="refresh" '
                                            'content="0; url=val.html"><link rel="canonical" href="val.html">'
                                            '<title>Checkers</title><a href="val.html">val.html</a>\n')

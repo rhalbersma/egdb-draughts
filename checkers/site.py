@@ -95,7 +95,7 @@ witte dammen ergens. Zonder slag verandert de pariteit van de som van de rijnumm
 per pariteit: wint een van die opstellingen voor wit, ja of nee? <span class="res-win">67</span> = ja bij beide
 pariteiten: de vesting valt · <span class="res-diag">79*</span> = ja bij één pariteit: de oppositie beslist ·
 <span class="res-draw">(97)</span> = bij geen van beide: de vesting houdt (het getal is dan de langste winst van een
-stelling buiten de toets, bijvoorbeeld met wit aan zet) · – = geen winst, of 5 dammen passen niet.</p>
+stelling buiten de toets, bijvoorbeeld met wit aan zet) · – = geen winst · op 3×3 (<code>–/–</code>) passen 5 dammen niet (onspeelbare hoeken) of vullen ze het bord, zodat niemand kan zetten (speelbare hoeken): geen partij en dus geen kleur.</p>
 <ul>
 <li>Vanaf 4 hoog is het bijna altijd alles of niets: bij een pariteit met winst wint vrijwel elke opstelling, behalve op
 4×4 (65%) en langs de kant van 5 op 9×5, 11×5 en 13×5 met onspeelbare hoeken (91%, 74% en 61%).</li>
@@ -125,7 +125,7 @@ capture the parity of the sum of the rank numbers of all kings never changes, so
 those set-ups win for white, yes or no? <span class="res-win">67</span> = yes at both parities: the fortress falls ·
 <span class="res-diag">79*</span> = yes at one parity: the opposition decides · <span class="res-draw">(97)</span> = at
 neither: the fortress holds (the number is then the longest win of a position outside the test, for instance with white
-to move) · – = no win, or 5 kings do not fit.</p>
+to move) · – = no win · on 3×3 (<code>–/–</code>) 5 kings do not fit (unplayable corners) or fill the board, so that nobody can move (playable corners): no game and so no colour.</p>
 <ul>
 <li>From height 4 it is nearly always all or nothing: at a parity with a win nearly every set-up wins, except on 4×4
 (65%) and along the side of 5 on 9×5, 11×5 and 13×5 with unplayable corners (91%, 74% and 61%).</li>

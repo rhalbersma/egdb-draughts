@@ -93,32 +93,32 @@ hoek is en dus geen vesting. De kleur volgt de vestingtoets van het paar: de twe
 twee dubbele hoeken (in elke hoek één), zwart aan zet, niemand kan slaan en zwart kan direct materiaalverlies ontlopen, de
 witte dammen ergens. Zonder slag verandert de pariteit van de som van de rijnummers van alle dammen nooit, dus de vraag is
 per pariteit: wint een van die opstellingen voor wit, ja of nee? <span class="res-win">67</span> = ja bij beide
-pariteiten: de vesting valt · <span class="res-diag">79*</span> = ja bij één pariteit: de oppositie beslist ·
-<span class="res-draw">(97)</span> = bij geen van beide: de vesting houdt (het getal is dan de langste winst van een
+pariteiten: wint · <span class="res-diag">79*</span> = ja bij één pariteit: de oppositie beslist ·
+<span class="res-draw">(97)</span> = bij geen van beide: remise (het getal is dan de langste winst van een
 stelling buiten de toets, bijvoorbeeld met wit aan zet) · – = geen winst · op 3×3 (<code>–/–</code>) passen 5 dammen niet (onspeelbare hoeken) of vullen ze het bord, zodat niemand kan zetten (speelbare hoeken): geen partij en dus geen kleur.</p>
 <ul>
 <li><em>L</em> = 3: elke kant heeft maar één randveld, dat de twee dubbele hoeken aan die kant delen. Met de zwarte dammen
 langs de kant van 3 beslist altijd de oppositie; op de even breedtes is dat het enige paar. Met een zwarte dam aan elke
-kant valt de vesting op 5×3, beslist de oppositie op 7×3 en houdt ze vanaf 9×3: daar wint wit met de zwarte dammen in
+kant wint wit op 5×3, beslist de oppositie op 7×3 en is het remise vanaf 9×3: daar wint wit met de zwarte dammen in
 die hoeken nooit, (–).</li>
-<li><em>L</em> = 4 en 5: elk paar valt, ook als de dubbele hoeken ver uit elkaar liggen. Bij een pariteit met winst wint
+<li><em>L</em> = 4 en 5: wint wit bij elk paar, ook als de dubbele hoeken ver uit elkaar liggen. Bij een pariteit met winst wint
 vrijwel elke opstelling, behalve op 4×4 (65%) en langs de kant van 5 op 9×5, 11×5 en 13×5 met onspeelbare hoeken (91%, 74%
 en 61%).</li>
-<li><em>L</em> = 6: 6×6 en 7×6 vallen, op 9×6 (langs de kant van 9) beslist de oppositie, en op 8×6 en vanaf 10×6 houdt de
-vesting. <a href="vesting-8x6.html">8×6</a> is de verrassing: de dubbele hoeken liggen diagonaal maar 7 × 5 uit elkaar,
+<li><em>L</em> = 6: 6×6 en 7×6 winnen, op 9×6 (langs de kant van 9) beslist de oppositie, en 8×6 en vanaf 10×6 zijn
+remise. <a href="vesting-8x6.html">8×6</a> is de verrassing: de dubbele hoeken liggen diagonaal maar 7 × 5 uit elkaar,
 en toch is de diagonaal ertussen te kort voor de val.</li>
-<li><em>L</em> = 7: het paar langs de kant van 7 valt op elke breedte; op de even breedtes is dat het enige paar, dus wint
+<li><em>L</em> = 7: met het paar langs de kant van 7 wint wit op elke breedte; op de even breedtes is dat het enige paar, dus wint
 wit daar altijd. Op de oneven breedtes kiest zwart een ander paar: op 9×7 beslist dan de oppositie (langs de kant van 9 en
-diagonaal), vanaf 11×7 houdt de vesting. Op 7×7 vallen beide paren.</li>
-<li><em>L</em> = 8: 8×8 valt (diagonaal 7 × 7), op 9×8 beslist de oppositie (langs de kant van 9), vanaf 10×8 houdt de
-vesting.</li>
+diagonaal), vanaf 11×7 is het remise. Op 7×7 wint wit bij beide paren.</li>
+<li><em>L</em> = 8: 8×8 wint (diagonaal 7 × 7), op 9×8 beslist de oppositie (langs de kant van 9), vanaf 10×8 is het
+remise.</li>
 <li><em>L</em> = 9: met het paar langs de kant van 9 beslist op elke breedte de oppositie; op de even breedtes is dat het
-enige paar. Op de oneven breedtes houdt de vesting met een ander paar: op 9×9 diagonaal, vanaf 11×9 ook langs de lange
+enige paar. Op de oneven breedtes is het remise met een ander paar: op 9×9 diagonaal, vanaf 11×9 ook langs de lange
 kant.</li>
-<li><em>L</em> = 10: overal houdt de vesting.</li>
+<li><em>L</em> = 10: overal remise.</li>
 <li>Samengevat beslist vanaf 6 hoog de afstand tussen de hoekvelden van het paar (<em>D</em> × <em>d</em> = grootste ×
-kleinste coördinaatverschil): tot en met <em>D</em> = 6 valt de vesting, en ook op 8×8 (7 × 7); bij <em>D</em> = 8
-beslist de oppositie, behalve diagonaal op 9×9 (8 × 8), waar ze houdt; vanaf <em>D</em> = 9 houdt ze. De enige
+kleinste coördinaatverschil): tot en met <em>D</em> = 6 wint wit, en ook op 8×8 (7 × 7); bij <em>D</em> = 8
+beslist de oppositie, behalve diagonaal op 9×9 (8 × 8), waar het remise is; vanaf <em>D</em> = 9 is het remise. De enige
 uitzondering is 8×6 (7 × 5).</li>
 </ul>''',
           'en': '''<p>Per pair of double corners the longest win with the black kings in those two double corners, with a row per height
@@ -131,33 +131,33 @@ and the last number is the board with playable corner squares, which has no doub
 follows the fortress test of the pair: the two black kings on the edge squares of the two double corners (one in each),
 black to move, nobody can capture and black can avoid losing material at once, the white kings anywhere. Without a
 capture the parity of the sum of the rank numbers of all kings never changes, so the question is per parity: does one of
-those set-ups win for white, yes or no? <span class="res-win">67</span> = yes at both parities: the fortress falls ·
+those set-ups win for white, yes or no? <span class="res-win">67</span> = yes at both parities: won ·
 <span class="res-diag">79*</span> = yes at one parity: the opposition decides · <span class="res-draw">(97)</span> = at
-neither: the fortress holds (the number is then the longest win of a position outside the test, for instance with white
+neither: drawn (the number is then the longest win of a position outside the test, for instance with white
 to move) · – = no win · on 3×3 (<code>–/–</code>) 5 kings do not fit (unplayable corners) or fill the board, so that nobody can move (playable corners): no game and so no colour.</p>
 <ul>
 <li><em>H</em> = 3: each side has a single edge square, shared by the two double corners on that side. With the black
 kings along the side of 3 the opposition always decides; on the even widths that is the only pair. With a black king on
-each side the fortress falls on 5×3, the opposition decides on 7×3 and it holds from 9×3: there white never wins with the
+each side white wins on 5×3, the opposition decides on 7×3 and it is a draw from 9×3: there white never wins with the
 black kings in those corners, (–).</li>
-<li><em>H</em> = 4 and 5: every pair falls, also when the double corners lie far apart. At a parity with a win nearly every
+<li><em>H</em> = 4 and 5: white wins with every pair, also when the double corners lie far apart. At a parity with a win nearly every
 set-up wins, except on 4×4 (65%) and along the side of 5 on 9×5, 11×5 and 13×5 with unplayable corners (91%, 74% and
 61%).</li>
-<li><em>H</em> = 6: 6×6 and 7×6 fall, on 9×6 (along the side of 9) the opposition decides, and on 8×6 and from 10×6 the
-fortress holds. <a href="vesting-8x6.html">8×6</a> is the surprise: the double corners lie only 7 × 5 apart diagonally,
+<li><em>H</em> = 6: 6×6 and 7×6 are won, on 9×6 (along the side of 9) the opposition decides, and 8×6 and from 10×6 are
+drawn. <a href="vesting-8x6.html">8×6</a> is the surprise: the double corners lie only 7 × 5 apart diagonally,
 yet the diagonal between them is too short for the trap.</li>
-<li><em>H</em> = 7: the pair along the side of 7 falls at every width; on the even widths it is the only pair, so white
+<li><em>H</em> = 7: with the pair along the side of 7 white wins at every width; on the even widths it is the only pair, so white
 always wins there. On the odd widths black picks another pair: on 9×7 the opposition then decides (along the side of 9 and
-diagonally), from 11×7 the fortress holds. On 7×7 both pairs fall.</li>
-<li><em>H</em> = 8: 8×8 falls (diagonally 7 × 7), on 9×8 the opposition decides (along the side of 9), from 10×8 the
-fortress holds.</li>
+diagonally), from 11×7 it is a draw. On 7×7 white wins with both pairs.</li>
+<li><em>H</em> = 8: 8×8 is won (diagonally 7 × 7), on 9×8 the opposition decides (along the side of 9), from 10×8 it is a
+draw.</li>
 <li><em>H</em> = 9: with the pair along the side of 9 the opposition decides at every width; on the even widths it is the
-only pair. On the odd widths the fortress holds with another pair: on 9×9 diagonally, from 11×9 also along the long
+only pair. On the odd widths it is a draw with another pair: on 9×9 diagonally, from 11×9 also along the long
 side.</li>
-<li><em>H</em> = 10: the fortress holds everywhere.</li>
+<li><em>H</em> = 10: drawn everywhere.</li>
 <li>In short, from height 6 the distance between the corner squares of the pair decides (<em>D</em> × <em>d</em> = largest
-× smallest coordinate difference): up to <em>D</em> = 6 the fortress falls, and on 8×8 (7 × 7) too; at <em>D</em> = 8
-the opposition decides, except diagonally on 9×9 (8 × 8), where it holds; from <em>D</em> = 9 it holds. The only
+× smallest coordinate difference): up to <em>D</em> = 6 white wins, and on 8×8 (7 × 7) too; at <em>D</em> = 8
+the opposition decides, except diagonally on 9×9 (8 × 8), where it is a draw; from <em>D</em> = 9 it is a draw. The only
 exception is 8×6 (7 × 5).</li>
 </ul>'''}
 
@@ -184,22 +184,22 @@ getal voor de stelling en speel de hele winst na.</p>
 <p class="src">De kleur volgt de vestingtoets: de zwarte dam op een veld van een dubbele hoek, zwart aan zet, niemand kan
 slaan en zwart kan direct materiaalverlies ontlopen, de witte dammen ergens. Zonder slag verandert de pariteit van de som
 van de rijnummers van alle dammen nooit, dus de vraag is per pariteit: wint een van die opstellingen voor wit, ja of nee?
-<span class="res-win">33</span> = ja bij beide pariteiten: de vesting valt; de langste winst duurt 33 ply ·
+<span class="res-win">33</span> = ja bij beide pariteiten: wint; de langste winst duurt 33 ply ·
 <span class="res-diag">33*</span> = ja bij één pariteit: de oppositie beslist ·
-<span class="res-draw">(33)</span> = bij geen van beide: de vesting houdt · <code>31/13</code> =
+<span class="res-draw">(33)</span> = bij geen van beide: remise · <code>31/13</code> =
 onspeelbare/speelbare hoekvelden; bij speelbare op een oneven × oneven bord is er geen dubbele hoek en dus geen vesting.
 Een bord <em>B</em> × <em>L</em> is breedte × lengte, met <em>B</em> ≥ <em>L</em>.</p>
 <ul>
-<li><em>L</em> = 3: op de even breedtes valt de vesting, en de langste winst is precies 6<em>B</em> − 13 ply, 12 ply meer per
+<li><em>L</em> = 3: op de even breedtes wint wit, en de langste winst is precies 6<em>B</em> − 13 ply, 12 ply meer per
 twee kolommen (op 166×3 al 983 ply); alleen op 6×3 houdt zwart drie opstellingen. Op de oneven breedtes met onspeelbare
 hoeken (5×3 tot en met 11×3) beslist de oppositie. Elke damzet gaat van een even naar een oneven rij of omgekeerd, dus
 niemand kan een tempo verliezen, en op zo'n strook, waar een dam alleen op de middelste rij geslagen kan worden, draait de
 uitkomst van elke stelling met de zwarte dam in een dubbele hoek om met de zet. Wit op b3 en d3 en zwart op a2 is
 bijvoorbeeld remise met wit aan zet en verloren met zwart aan zet.</li>
-<li><em>L</em> = 4: <a href="twee-4x4.html">4×4</a> is het enige bord waar de vesting houdt: geen enkele opstelling wint.
+<li><em>L</em> = 4: <a href="twee-4x4.html">4×4</a> is het enige bord dat remise is: geen enkele opstelling wint.
 Wit wint alleen als een witte dam op het andere veld van de dubbele hoek staat en de zwarte dam zich moet laten slaan.
-Vanaf 5×4 valt de vesting (op 5×4 houdt zwart één opstelling); de langste winst groeit met 8 ply per twee kolommen.</li>
-<li><em>L</em> ≥ 5: overal valt de vesting en wint vrijwel elke opstelling (op de borden van 6 hoog houdt zwart er één of twee); de
+Vanaf 5×4 wint wit (op 5×4 houdt zwart één opstelling); de langste winst groeit met 8 ply per twee kolommen.</li>
+<li><em>L</em> ≥ 5: overal wint wit, en vrijwel elke opstelling wint (op de borden van 6 hoog houdt zwart er één of twee); de
 langste winst groeit met ongeveer 4 ply per kolom.</li>
 </ul>''',
           'en': '''<p>The longest win on every board, with a row per height <em>H</em> and a column per <em>W</em> − <em>H</em>; click a
@@ -208,22 +208,22 @@ number for the position and replay the whole win.</p>
 <p class="src">The colour follows the fortress test: the black king on a square of a double corner, black to move,
 nobody can capture and black can avoid losing material at once, the white kings anywhere. Without a capture the parity of
 the sum of the rank numbers of all kings never changes, so the question is per parity: does one of those set-ups win for
-white, yes or no? <span class="res-win">33</span> = yes at both parities: the fortress falls; the longest win takes 33
+white, yes or no? <span class="res-win">33</span> = yes at both parities: won; the longest win takes 33
 plies · <span class="res-diag">33*</span> = yes at one parity: the opposition decides ·
-<span class="res-draw">(33)</span> = at neither: the fortress holds · <code>31/13</code> =
+<span class="res-draw">(33)</span> = at neither: drawn · <code>31/13</code> =
 unplayable/playable corner squares; with playable ones on an odd × odd board there is no double corner and so no fortress.
 A board <em>W</em> × <em>H</em> is width × height, with <em>W</em> ≥ <em>H</em>.</p>
 <ul>
-<li><em>H</em> = 3: on the even widths the fortress falls, and the longest win is exactly 6<em>W</em> − 13 plies, 12 plies more
+<li><em>H</em> = 3: on the even widths white wins, and the longest win is exactly 6<em>W</em> − 13 plies, 12 plies more
 per two columns (983 plies on 166×3); only on 6×3 does black hold three set-ups. On the odd widths with unplayable corners
 (5×3 to 11×3) the opposition decides. Every king move goes from an even to an odd rank or back, so nobody can lose a
 tempo, and on such a strip, where a king can only be captured on the middle rank, the outcome of every position with the
 black king in a double corner turns with the side to move. White on b3 and d3 and black on a2, for instance, is a draw
 with white to move and lost with black to move.</li>
-<li><em>H</em> = 4: <a href="twee-4x4.html">4×4</a> is the only board where the fortress holds: no set-up wins. White only
+<li><em>H</em> = 4: <a href="twee-4x4.html">4×4</a> is the only board that is a draw: no set-up wins. White only
 wins when a white king stands on the other square of the double corner and the black king has to let itself be captured.
-From 5×4 the fortress falls (on 5×4 black holds one set-up); the longest win grows by 8 plies per two columns.</li>
-<li><em>H</em> ≥ 5: the fortress falls everywhere and nearly every set-up wins (on the boards of height 6 black holds
+From 5×4 white wins (on 5×4 black holds one set-up); the longest win grows by 8 plies per two columns.</li>
+<li><em>H</em> ≥ 5: white wins everywhere, and nearly every set-up wins (on the boards of height 6 black holds
 one or two); the longest win grows by about 4 plies per column.</li>
 </ul>'''}
 

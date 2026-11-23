@@ -5,7 +5,7 @@
 
 // Exact endgame databases for international draughts on the 6x6 board, with men and kings, or (built with
 // -DEGDB_6X6_CHECKERS=1, as egdb_6x6_checkers) for English checkers on the same board. Other boards: any tabula
-// draughts board of at most 64 playable squares (width, height, the colour of a1, a lake; see "The board" below), e.g.
+// draughts board of any size (width, height, the colour of a1, a lake; see "The board" below; bitboards in blocks of 64), e.g.
 // 8x8 for English checkers and 10x10 for international draughts, where perft reproduces the published counts. The text
 // below describes the 6x6 board.
 //
@@ -174,7 +174,6 @@ constexpr Geometry GEO = [] {
 }();
 constexpr int N = GEO.n;
 static_assert(BOARD_H >= 3 && N >= 2, "a board with a row between the promotion rows");
-static_assert(N <= 64, "a bitboard is one 32- or 64-bit word (more squares: two words, not yet)");
 static_assert([] { for (int i = 0; i < PDN_SIZE; ++i) { auto const [c, r] = PDN_GRID.coordinates(i); if (PDN_GRID.index(std::pair{ c, r }) != i) return false; } return true; }(),
               "tabula's PDN numbering: index and coordinates are inverse");
 
@@ -200,31 +199,54 @@ constexpr bool MEN_CAPTURE_BACK = !CHECKERS;      // men capture backwards too
 constexpr bool MAJORITY = !CHECKERS;              // the capture of the most pieces is compulsory
 bool keep_duplicates = false;                     // perft only: keep moves that give the same position
 
-// bitboards: the N squares in the smallest block that holds them (bit_least: std::uint32_t up to 32 squares, else
-// std::uint64_t; at least 17 squares wide, so the block is never narrower than 32 bits), widened to that block (bit_align);
-// a word is that block as an integer; the full board is FULL, so a complement is FULL - x
-constexpr int NB = std::max(N, 17);
-using bitboard = xstd::bit_align<xstd::bit_least<xstd::bit_fixed_set<NB>>>;
-using word = std::conditional_t<(NB <= 32), std::uint32_t, std::uint64_t>;
-constexpr int WORD_BITS = std::numeric_limits<word>::digits;
-static_assert(sizeof(bitboard) == sizeof(word));
-constexpr bitboard bb_of(word x) { return xstd::bit_convert<bitboard>(x); }
-constexpr word bits_of(bitboard const& x) { return xstd::bit_convert<word>(x); }
+// bitboards: xstd::bit_fixed_set<N> aligned to whole blocks of 64 bits (xstd::bit_align, as egdb_fast): BLOCKS blocks.
+// Everything that treats a bitboard as integers goes through xstd's own conversions, a block at a time (block_bits:
+// squares 64 b ... 64 b + 63 of a bitboard as one std::uint64_t), so it does not depend on how the set stores its bits;
+// with one block (at most 64 squares) a bitboard converts to one std::uint64_t directly. The full board is
+// FULL, so a complement is FULL - x.
+constexpr int BLOCKS = (N + 63) / 64;
+using bitboard = xstd::bit_align<xstd::bit_fixed_set<N>>;
+static_assert(sizeof(bitboard) == 8 * BLOCKS, "whole blocks of 64 bits");
+using word = std::uint64_t;
+constexpr int WORD_BITS = 64;
+constexpr word low_bits(int n) { return n >= WORD_BITS ? ~word(0) : (word(1) << n) - 1; }
 bitboard square_bb(int s) { return bitboard{ std::size_t(s) }; }
-constexpr word low_bits(int n) { return n == WORD_BITS ? ~word(0) : (word(1) << n) - 1; }
-constexpr bitboard FULL = bb_of(low_bits(N));
+constexpr bitboard squares_from_to(int lo, int hi)      // the squares lo .. hi - 1
+{
+        bitboard b;
+        for (int s = lo; s < hi; ++s) b.insert(std::size_t(s));
+        return b;
+}
+constexpr bitboard FULL = squares_from_to(0, N);
+constexpr std::array<bitboard, BLOCKS> BLOCK_SQUARES = [] {          // the squares of each block
+        std::array<bitboard, BLOCKS> a{};
+        for (int b = 0; b < BLOCKS; ++b) a[std::size_t(b)] = squares_from_to(64 * b, std::min(N, 64 * b + 64));
+        return a;
+}();
+template<class B = bitboard>                            // (a template: the one-block conversion is compiled only for one block)
+word block_bits(B const& x, int b)                      // squares 64 b .. 64 b + 63 of x, as the bits of one integer
+{
+        if constexpr (BLOCKS == 1) return xstd::bit_convert<word>(x);
+        else return xstd::bit_compress<word>(x & BLOCK_SQUARES[std::size_t(b)], BLOCK_SQUARES[std::size_t(b)]);
+}
+template<class B = bitboard>
+B bitboard_of_block(word w, int b)                      // the inverse: one block's integer as squares
+{
+        if constexpr (BLOCKS == 1) return xstd::bit_convert<B>(w);
+        else return xstd::bit_expand(w, BLOCK_SQUARES[std::size_t(b)]);
+}
 
 constexpr int row_of(int s) { return GEO.row[std::size_t(s)]; }        // 0 = the top row
 constexpr int col_of(int s) { return GEO.col[std::size_t(s)]; }        // 0 = file a
 constexpr int square_at(int r, int c) { return playable(c, r) ? GEO.dense[std::size_t(PDN_GRID.index(std::pair{ c, r }))] : -1; }
 
 // the squares of each row, from the top
-constexpr std::array<word, BOARD_H> ROW_BITS = [] {
-        std::array<word, BOARD_H> a{};
-        for (int s = 0; s < N; ++s) a[std::size_t(GEO.row[std::size_t(s)])] |= word(1) << s;
+constexpr std::array<bitboard, BOARD_H> ROW_SQUARES = [] {
+        std::array<bitboard, BOARD_H> a{};
+        for (int s = 0; s < N; ++s) a[std::size_t(GEO.row[std::size_t(s)])].insert(std::size_t(s));
         return a;
 }();
-constexpr bitboard row_squares(int r) { return bb_of(ROW_BITS[std::size_t(r)]); }
+constexpr bitboard row_squares(int r) { return ROW_SQUARES[std::size_t(r)]; }
 
 // directions: 0 = up-left, 1 = up-right, 2 = down-left, 3 = down-right
 constexpr int DR[4] = { -1, -1, 1, 1 };
@@ -237,7 +259,7 @@ std::array<std::array<std::uint64_t, N + 1>, N + 1> binom{};
 // does not depend on the mask it was packed from, so one table of 2^N ranks serves every mask, and per number of
 // kings k one table of the packed subsets in rank order (2^N entries over all k). Only for small boards (2^20 entries
 // at most); on larger ones the ranks are sums of binomials over the set bits, and the unranks the greedy inverse.
-constexpr bool RANK_TABLES = N <= 20;
+constexpr bool RANK_TABLES = N <= 20;                  // (one block)
 std::vector<std::uint32_t> rank_table, unrank_table;
 std::array<std::uint32_t, N + 2> unrank_offset{};
 
@@ -254,14 +276,15 @@ void init_tables()
         if constexpr (RANK_TABLES) {
                 rank_table.assign(std::size_t(1) << N, 0);
                 unrank_table.assign(std::size_t(1) << N, 0);
-                for (word c = 0; c < (word(1) << N); ++c) {
+                constexpr word all = word(1) << std::min(N, 63);
+                for (word c = 0; c < all; ++c) {
                         std::uint64_t r = 0;
                         int i = 0;
-                        for (auto const sq : bb_of(c)) r += binom[std::size_t(sq)][std::size_t(++i)];
+                        for (auto const sq : bitboard_of_block(c, 0)) r += binom[std::size_t(sq)][std::size_t(++i)];
                         rank_table[c] = std::uint32_t(r);
                 }
                 for (int k = 0; k <= N; ++k) unrank_offset[std::size_t(k) + 1] = unrank_offset[std::size_t(k)] + std::uint32_t(binom[N][std::size_t(k)]);
-                for (word c = 0; c < (word(1) << N); ++c) unrank_table[unrank_offset[bb_of(c).size()] + rank_table[c]] = std::uint32_t(c);
+                for (word c = 0; c < all; ++c) unrank_table[unrank_offset[std::size_t(std::popcount(c))] + rank_table[c]] = std::uint32_t(c);
         }
 }
 
@@ -306,7 +329,7 @@ char const* mirror_name() { return MIRROR == MirrorKind::rotation ? "rotation" :
 
 bitboard flip(bitboard const& x)
 {
-        if constexpr (MIRROR == MirrorKind::rotation) return bb_of(word(xstd::bit_reverse(bits_of(x)) >> (WORD_BITS - N)));
+        if constexpr (MIRROR == MirrorKind::rotation && BLOCKS == 1) return bitboard_of_block(word(xstd::bit_reverse(block_bits(x, 0)) >> (WORD_BITS - N)), 0);
         else {
                 bitboard y;
                 for (auto const sq : x) y.insert(std::size_t(MIRROR_SQ[sq]));
@@ -492,8 +515,10 @@ std::string show(std::uint16_t v)
 // ---------------------------------------------------------------- slices
 
 // a slice's key packed into one integer: the white men, the black men (N bits each), the numbers of white and black kings
-// (4 bits each); 64 bits up to 28 squares, else 128
+// (4 bits each); 64 bits up to 28 squares, 128 up to 60; beyond, the numbers of men and kings (4 bits each) and the two
+// colex ranks of the men (white over the board, black over what is left) in mixed radix, in 128 bits
 using KeyPack = std::conditional_t<(2 * N + 8 <= 64), std::uint64_t, unsigned __int128>;
+constexpr bool RANKED_KEY = 2 * N + 8 > 128;
 struct KeyPackHash {
         std::size_t operator()(KeyPack x) const
         {
@@ -503,13 +528,32 @@ struct KeyPackHash {
         }
 };
 
+std::uint64_t rank_in(bitboard const& x, bitboard const& mask);
+bitboard unrank_in(std::uint64_t r, int k, bitboard const& mask);
+
 struct Key {
         bitboard wm, bm;
         int nwk, nbk;
-        KeyPack pack() const { return KeyPack(bits_of(wm)) | KeyPack(bits_of(bm)) << N | KeyPack(nwk) << (2 * N) | KeyPack(nbk) << (2 * N + 4); }
+        KeyPack pack() const
+        {
+                if constexpr (!RANKED_KEY)
+                        return KeyPack(block_bits(wm, 0)) | KeyPack(block_bits(bm, 0)) << N | KeyPack(nwk) << (2 * N) | KeyPack(nbk) << (2 * N + 4);
+                else {
+                        std::size_t const a = wm.size(), b = bm.size();
+                        KeyPack const r = KeyPack(rank_in(wm, FULL)) + KeyPack(binom[N][a]) * KeyPack(rank_in(bm, FULL - wm));
+                        return r << 16 | KeyPack(a) << 12 | KeyPack(b) << 8 | KeyPack(nwk) << 4 | KeyPack(nbk);
+                }
+        }
         static Key unpack(KeyPack x)
         {
-                return { bb_of(word(x) & low_bits(N)), bb_of(word(x >> N) & low_bits(N)), int(x >> (2 * N) & 15), int(x >> (2 * N + 4) & 15) };
+                if constexpr (!RANKED_KEY)
+                        return { bitboard_of_block(word(x) & low_bits(N), 0), bitboard_of_block(word(x >> N) & low_bits(N), 0), int(x >> (2 * N) & 15), int(x >> (2 * N + 4) & 15) };
+                else {
+                        int const a = int(x >> 12 & 15), b = int(x >> 8 & 15);
+                        KeyPack const r = x >> 16, c = KeyPack(binom[N][std::size_t(a)]);
+                        bitboard const wm = unrank_in(std::uint64_t(r % c), a, FULL);
+                        return { wm, unrank_in(std::uint64_t(r / c), b, FULL - wm), int(x >> 4 & 15), int(x & 15) };
+                }
         }
 };
 
@@ -547,46 +591,95 @@ Meta meta_of(Key const& key)
 }
 
 // colex rank of x within mask (x subset of mask): x packed onto the low bits (PEXT), then one table entry (small
-// boards) or the sum of C(position, i) over its i-th set bit
+// boards) or the sum of C(position, i) over its i-th set bit; with several blocks, each block packed on its own and its
+// positions offset by the mask's squares in the blocks before it
 std::uint64_t rank_in(bitboard const& x, bitboard const& mask)
 {
-        word const c = xstd::bit_compress<word>(x, mask);
-        if constexpr (RANK_TABLES) return rank_table[c];
-        else {
+        if constexpr (BLOCKS == 1) {
+                word const c = xstd::bit_compress<word>(x, mask);
+                if constexpr (RANK_TABLES) return rank_table[c];
+                else {
+                        std::uint64_t r = 0;
+                        std::size_t i = 0;
+                        for (word b = c; b != 0; b &= b - 1) r += binom[std::size_t(std::countr_zero(b))][++i];
+                        return r;
+                }
+        } else {
                 std::uint64_t r = 0;
-                std::size_t i = 0;
-                for (word b = c; b != 0; b &= b - 1) r += binom[std::size_t(std::countr_zero(b))][++i];
+                std::size_t i = 0, off = 0;
+                for (int k = 0; k < BLOCKS; ++k) {
+                        bitboard const m = mask & BLOCK_SQUARES[std::size_t(k)];
+                        for (word b = xstd::bit_compress<word>(x & m, m); b != 0; b &= b - 1) r += binom[off + std::size_t(std::countr_zero(b))][++i];
+                        off += m.size();
+                }
                 return r;
         }
 }
 
-// the k-subset of mask with colex rank r: one table entry (small boards) or greedily, from the highest set bit down (the
-// largest p with C(p, i) <= r is the i-th bit), spread over the mask (PDEP)
-bitboard unrank_in(std::uint64_t r, int k, bitboard const& mask)
+// the packed positions in c (bits 0 .. |mask| - 1, at most 64) spread over the mask (PDEP), block by block
+bitboard expand_packed(word c, bitboard const& mask)
 {
-        if constexpr (RANK_TABLES) return xstd::bit_expand(unrank_table[unrank_offset[std::size_t(k)] + r], mask);
+        if constexpr (BLOCKS == 1) return xstd::bit_expand(c, mask);
         else {
-                word c = 0;
-                std::size_t p = N;
-                for (std::size_t i = std::size_t(k); i > 0; --i) {
-                        do --p; while (binom[p][i] > r);
-                        r -= binom[p][i];
-                        c |= word(1) << p;
+                bitboard out;
+                for (int k = 0; k < BLOCKS && c != 0; ++k) {
+                        bitboard const m = mask & BLOCK_SQUARES[std::size_t(k)];
+                        int const n = int(m.size());
+                        out |= xstd::bit_expand(word(c & low_bits(n)), m);
+                        c = n >= WORD_BITS ? 0 : c >> n;
                 }
-                return xstd::bit_expand(c, mask);
+                return out;
         }
 }
 
-// every k-subset of mask (Gosper's next combination on the packed bits, spread over the mask), in colex order
+// the k-subset of mask with colex rank r: one table entry (small boards) or greedily, from the highest set bit down (the
+// largest p with C(p, i) <= r is the i-th bit), spread over the mask (PDEP; with several blocks, each packed position into
+// its block)
+bitboard unrank_in(std::uint64_t r, int k, bitboard const& mask)
+{
+        if constexpr (RANK_TABLES) return xstd::bit_expand(word(unrank_table[unrank_offset[std::size_t(k)] + r]), mask);
+        else {
+                std::size_t const n = mask.size();
+                std::size_t p = n;
+                if (n <= std::size_t(WORD_BITS)) {
+                        word c = 0;
+                        for (std::size_t i = std::size_t(k); i > 0; --i) {
+                                do --p; while (binom[p][i] > r);
+                                r -= binom[p][i];
+                                c |= word(1) << p;
+                        }
+                        return expand_packed(c, mask);
+                }
+                std::array<word, BLOCKS> w{}, off{}, cnt{};             // the mask's squares in each block, and before it
+                for (std::size_t b = 0, o = 0; b < std::size_t(BLOCKS); ++b) { off[b] = o; cnt[b] = (mask & BLOCK_SQUARES[b]).size(); o += cnt[b]; }
+                for (std::size_t i = std::size_t(k); i > 0; --i) {
+                        do --p; while (binom[p][i] > r);
+                        r -= binom[p][i];
+                        std::size_t b = 0;
+                        while (p >= off[b] + cnt[b]) ++b;
+                        w[b] |= word(1) << (p - off[b]);
+                }
+                bitboard out;
+                for (std::size_t b = 0; b < std::size_t(BLOCKS); ++b) if (w[b]) out |= xstd::bit_expand(w[b], mask & BLOCK_SQUARES[b]);
+                return out;
+        }
+}
+
+// every k-subset of mask, in colex order: Gosper's next combination on the packed bits, spread over the mask (a mask of
+// at most 64 squares), else every rank unranked
 template<class F>
 void for_each_subset(bitboard const& mask, int k, F&& f)
 {
         int const n = int(mask.size());
         if (k < 0 || k > n) return;
         if (k == 0) { f(bitboard{}); return; }
+        if (n > WORD_BITS) {
+                for (std::uint64_t r = 0; r < binom[std::size_t(n)][std::size_t(k)]; ++r) f(unrank_in(r, k, mask));
+                return;
+        }
         word const end = n == WORD_BITS ? 0 : word(1) << n;
         for (word c = low_bits(k);;) {
-                f(xstd::bit_expand(c, mask));
+                f(expand_packed(c, mask));
                 word const u = c & (~c + 1), v = c + u;
                 if (v == 0 || (end != 0 && v >= end)) break;
                 c = v | (((v ^ c) >> 2) / u);
@@ -703,9 +796,9 @@ SliceRef slice_values(Key const& key)
 // alpha-beta search down to the slices (see below).
 
 // a position packed into one key: four bitboards and the side to move, 4 N + 1 bits; one 128-bit integer up to 31
-// squares, else the four words and the side to move
+// squares, else the blocks of the four bitboards and the side to move
 struct WidePosKey {
-        std::array<word, 4> b{};
+        std::array<word, 4 * BLOCKS> b{};
         int stm = 0;
         auto operator<=>(WidePosKey const&) const = default;
 };
@@ -715,17 +808,32 @@ template<class K = PosKey>                              // a template, so that o
 K pack(Pos const& p)
 {
         if constexpr (std::is_same_v<K, unsigned __int128>)
-                return K(bits_of(p.m[0])) | K(bits_of(p.m[1])) << N | K(bits_of(p.k[0])) << (2 * N)
-                     | K(bits_of(p.k[1])) << (3 * N) | K(p.stm) << (4 * N);
-        else return { { bits_of(p.m[0]), bits_of(p.m[1]), bits_of(p.k[0]), bits_of(p.k[1]) }, p.stm };
+                return K(block_bits(p.m[0], 0)) | K(block_bits(p.m[1], 0)) << N | K(block_bits(p.k[0], 0)) << (2 * N)
+                     | K(block_bits(p.k[1], 0)) << (3 * N) | K(p.stm) << (4 * N);
+        else {
+                K k;
+                for (int b = 0; b < BLOCKS; ++b) {
+                        std::size_t const i = std::size_t(4 * b);
+                        k.b[i] = block_bits(p.m[0], b); k.b[i + 1] = block_bits(p.m[1], b);
+                        k.b[i + 2] = block_bits(p.k[0], b); k.b[i + 3] = block_bits(p.k[1], b);
+                }
+                k.stm = p.stm;
+                return k;
+        }
 }
 // two 64-bit halves of a key (for hashing and checksums)
 template<class K>
 std::pair<std::uint64_t, std::uint64_t> halves(K const& x)
 {
         if constexpr (std::is_same_v<K, unsigned __int128>) return { std::uint64_t(x), std::uint64_t(x >> 64) };
-        else return { std::uint64_t(x.b[0]) ^ std::uint64_t(x.b[2]) * 0xD6E8FEB86659FD93ull,
-                      (std::uint64_t(x.b[1]) ^ std::uint64_t(x.b[3]) * 0xD6E8FEB86659FD93ull) * 2 + std::uint64_t(x.stm) };
+        else {
+                std::uint64_t lo = 0, hi = std::uint64_t(x.stm);
+                for (std::size_t i = 0; i < x.b.size(); i += 2) {
+                        lo = (lo ^ x.b[i]) * 0xD6E8FEB86659FD93ull;
+                        hi = (hi ^ x.b[i + 1]) * 0x9E3779B97F4A7C15ull;
+                }
+                return { lo, hi };
+        }
 }
 struct PosKeyHash {
         std::size_t operator()(PosKey const& x) const

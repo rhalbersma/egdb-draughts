@@ -35,13 +35,15 @@
 
 namespace {
 
-// ---------------------------------------------------------------- binomials up to C(64, 64)
+// ---------------------------------------------------------------- binomials up to C(N, N) (at least C(64, 64); the large
+// ones wrap around, but only those with few pieces are used)
 
-std::array<std::array<std::uint64_t, 65>, 65> CC{};
+constexpr std::size_t CC_MAX = std::max(N, 64);
+std::array<std::array<std::uint64_t, CC_MAX + 1>, CC_MAX + 1> CC{};
 
 void init_cc()
 {
-        for (std::size_t n = 0; n <= 64; ++n) {
+        for (std::size_t n = 0; n <= CC_MAX; ++n) {
                 CC[n][0] = 1;
                 for (std::size_t k = 1; k <= n; ++k) CC[n][k] = CC[n - 1][k - 1] + (k <= n - 1 ? CC[n - 1][k] : 0);
         }

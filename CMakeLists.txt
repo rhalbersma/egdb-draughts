@@ -53,7 +53,7 @@ target_compile_options(bench_index_6x6 PRIVATE
 )
 
 # The programs with men and kings (egdb_6x6, thompson86, tbgen) are built for one board and one rule set each. The board
-# is any tabula draughts board of at most 64 playable squares: width, height, the colour of a1 (PARITY 1: dark, the
+# is any tabula draughts board (bitboards in blocks of 64 squares): width, height, the colour of a1 (PARITY 1: dark, the
 # default; 0: light) and a LAKE of removed squares, or a tabula preset (BOARD tabula::draughts::mertens_cut_j10); the
 # rules by -DEGDB_6X6_CHECKERS (0: international draughts, 1: English checkers). See src/egdb_6x6.cpp.
 #   egdb_board(<target> <source> <width> <height> <checkers> [PARITY <0|1>] [LAKE <"h8"_sq,...>] [BOARD <type>])
@@ -109,3 +109,5 @@ egdb_board(itbgen_10x10 tbgen/tbgen.cpp 10 10 0)
 egdb_board(ctbgen_8x8_p0 tbgen/tbgen.cpp 8 8 1 PARITY 0)
 egdb_board(itbgen_10x10_j10 tbgen/tbgen.cpp 10 10 0 BOARD tabula::draughts::mertens_cut_j10)
 egdb_board(itbgen_6x5 tbgen/tbgen.cpp 6 5 0)
+# more than 64 squares (bitboards of two blocks): Canadian draughts' 12x12 board with the international rules
+egdb_board(itbgen_12x12 tbgen/tbgen.cpp 12 12 0 BOARD tabula::draughts::canadian)

@@ -228,9 +228,10 @@ class dict_engine:
 
 def fortress_parity(e):
     """the fortress test as a yes/no question: the two black kings on the edge squares of two double corners (one in
-    each), black to move, nobody can capture, the white kings anywhere; per pair of double corners and per parity (of
-    the sum of the rank numbers of all kings, which never changes without a capture) the number of positions and of
-    positions won for white (and lost for white). White breaks the fortress at a parity when one of those set-ups wins"""
+    each), black to move, nobody can capture, black can avoid losing material at once, the white kings anywhere; per
+    pair of double corners and per parity (of the sum of the rank numbers of all kings, which never changes without a
+    capture) the number of positions and of positions won for white (and lost for white). White breaks the fortress at
+    a parity when one of those set-ups wins"""
     sq = {n: tuple(fr) for n, fr in e.g['sq'].items()}
     at = {fr: n for n, fr in sq.items()}
     nb = {n: [at[(f + df, r + dr)] for df in (-1, 1) for dr in (-1, 1) if (f + df, r + dr) in at] for n, (f, r) in sq.items()}
@@ -245,6 +246,10 @@ def fortress_parity(e):
                     if to is not None and to not in occ:
                         return True
         return False
+
+    def safe(wk, bk):                                        # black to move can avoid losing material at once
+        occ = set(wk) | set(bk)
+        return any(not captures(wk, (set(bk) - {x}) | {y}) for x in bk for y in nb[x] if y not in occ)
 
     def values(fens, chunk=500):
         out = []
@@ -262,7 +267,7 @@ def fortress_parity(e):
     for i, j in combinations(range(len(dcs)), 2):
         cands = [(wk, bk) for bk in sorted({tuple(sorted((a, b))) for a in dcs[i] for b in dcs[j] if a != b})
                  for wk in combinations(sorted(set(sq) - set(bk)), 3)]
-        cands = [(wk, bk) for wk, bk in cands if not captures(wk, bk) and not captures(bk, wk)]
+        cands = [(wk, bk) for wk, bk in cands if not captures(wk, bk) and not captures(bk, wk) and safe(wk, bk)]
         fens = [e.fen([name[x] for x in wk], [name[x] for x in bk], 'B') for wk, bk in cands]
         res = {'even': [0, 0, 0], 'odd': [0, 0, 0]}          # positions, won for white, lost for white
         for (wk, bk), v in zip(cands, values(fens)):

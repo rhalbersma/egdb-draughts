@@ -143,11 +143,10 @@ away the white kings stand: that row has no colour.</li>
 
 
 # 2 kings against 1 per board: a row per height H, a column per W - H; the number is the longest win in plies (white to
-# move), unplayable/playable corner squares on boards with two odd sides. The colour is the fortress test: the black king
-# in a double corner, the white kings anywhere (quiet: nobody can capture, white to move has a move that loses no
-# material, black to move cannot create a fork), each position with white and with black to move, the double corner best
-# for black; the majority decides: 21 = the king is expelled (won with either side to move), 21* = the opposition decides
-# (the outcome turns with the side to move), (21) = the fortress holds (drawn with either side to move; only 4x4)
+# move), unplayable/playable corner squares on boards with two odd sides. The colour is the fortress test of
+# fortress21.py: the black king on a square of a double corner, black to move, nobody can capture, black can avoid losing
+# material at once, the white kings anywhere; per parity of the sum of the rank numbers, does a set-up win for white?
+# 21 = at both parities (the fortress falls), 21* = at one (the opposition decides), (21) = at neither (it holds; only 4x4)
 RESULTS_21 = {
     3: ['3/3', '11', '9*/9', '23', '17*/11', '35', '25*/15', '47', '33*/19', '59'],
     4: ['(3)', '13', '19', '19', '27', '27', '35', '35', '43', '43'],
@@ -162,45 +161,43 @@ RESULTS_21 = {
 TEXT21 = {'nl': '''<p>De langste winst op elk bord, met een rij per lengte <em>L</em> en een kolom per <em>B</em> − <em>L</em>; klik op een
 getal voor de stelling en speel de hele winst na.</p>
 {table}
-<p class="src">De kleur volgt de vestingtoets: de zwarte dam in een dubbele hoek, de witte dammen ergens rustig (niemand
-kan slaan, wit aan zet kan direct materiaalverlies ontlopen, zwart aan zet kan geen vork maken), elke stelling met wit en
-met zwart aan zet; bij meer dubbele hoeken telt de beste voor zwart. De meerderheid beslist.
-<span class="res-win">33</span> = de dam wordt verdreven: gewonnen, wie er ook aan zet is; de langste winst duurt 33 ply
-· <span class="res-diag">33*</span> = de oppositie beslist: de uitkomst draait om met de zet ·
-<span class="res-draw">(33)</span> = de vesting houdt: remise, wie er ook aan zet is · <code>31/13</code> =
+<p class="src">De kleur volgt de vestingtoets: de zwarte dam op een veld van een dubbele hoek, zwart aan zet, niemand kan
+slaan en zwart kan direct materiaalverlies ontlopen, de witte dammen ergens. Zonder slag verandert de pariteit van de som
+van de rijnummers van alle dammen nooit, dus de vraag is per pariteit: wint een van die opstellingen voor wit, ja of nee?
+<span class="res-win">33</span> = ja bij beide pariteiten: de vesting valt; de langste winst duurt 33 ply ·
+<span class="res-diag">33*</span> = ja bij één pariteit: de oppositie beslist ·
+<span class="res-draw">(33)</span> = bij geen van beide: de vesting houdt · <code>31/13</code> =
 onspeelbare/speelbare hoekvelden; bij speelbare op een oneven × oneven bord is er geen dubbele hoek en dus geen vesting.
 Een bord <em>B</em> × <em>L</em> is breedte × lengte, met <em>B</em> ≥ <em>L</em>.</p>
 <ul>
-<li><a href="twee-4x4.html">4×4</a> is het enige bord waar de vesting houdt: met de zwarte dam in een dubbele hoek is 56%
-remise, wie er ook aan zet is, want de dam ontsnapt naar de andere dubbele hoek.</li>
+<li><a href="twee-4x4.html">4×4</a> is het enige bord waar de vesting houdt: geen enkele opstelling wint. Wit wint
+alleen als een witte dam op het andere veld van de dubbele hoek staat en de zwarte dam zich moet laten slaan.</li>
 <li>Op de oneven borden van 3 hoog met onspeelbare hoeken (5×3 tot en met 11×3) beslist de oppositie. Elke damzet gaat
 van een even naar een oneven rij of omgekeerd, dus niemand kan een tempo verliezen, en op zo'n strook, waar een dam alleen
 op de middelste rij geslagen kan worden, draait de uitkomst van elke stelling met de zwarte dam in een dubbele hoek om met de zet. Wit op b3 en d3 en zwart op a2 is bijvoorbeeld remise met wit aan zet en verloren met zwart aan zet.</li>
-<li>Alle andere borden zijn gewonnen. Alleen in de blokkade in de enkele hoeken, een handvol stellingen, hangt de uitkomst
-af van wie aan zet is. Zonder blokkade is elke rustige stelling gewonnen: op de oneven × oneven borden vanaf 5×5, de
-borden van 4 hoog vanaf 5×4, 3×3 en 4×3.</li>
+<li>Op alle andere borden valt de vesting bij beide pariteiten, en wint vrijwel elke opstelling: alleen op 6×3, 5×4 en
+de borden van 6 hoog houdt zwart er een tot drie.</li>
 </ul>''',
           'en': '''<p>The longest win on every board, with a row per height <em>H</em> and a column per <em>W</em> − <em>H</em>; click a
 number for the position and replay the whole win.</p>
 {table}
-<p class="src">The colour follows the fortress test: the black king in a double corner, the white kings anywhere quiet
-(nobody can capture, white to move can avoid losing material at once, black to move cannot create a fork), each position
-with white and with black to move; with more double corners the best one for black counts. The majority decides.
-<span class="res-win">33</span> = the king is expelled: won, whichever side is to move; the longest win takes 33 plies ·
-<span class="res-diag">33*</span> = the opposition decides: the outcome turns with the side to move ·
-<span class="res-draw">(33)</span> = the fortress holds: drawn, whichever side is to move · <code>31/13</code> =
+<p class="src">The colour follows the fortress test: the black king on a square of a double corner, black to move,
+nobody can capture and black can avoid losing material at once, the white kings anywhere. Without a capture the parity of
+the sum of the rank numbers of all kings never changes, so the question is per parity: does one of those set-ups win for
+white, yes or no? <span class="res-win">33</span> = yes at both parities: the fortress falls; the longest win takes 33
+plies · <span class="res-diag">33*</span> = yes at one parity: the opposition decides ·
+<span class="res-draw">(33)</span> = at neither: the fortress holds · <code>31/13</code> =
 unplayable/playable corner squares; with playable ones on an odd × odd board there is no double corner and so no fortress.
 A board <em>W</em> × <em>H</em> is width × height, with <em>W</em> ≥ <em>H</em>.</p>
 <ul>
-<li><a href="twee-4x4.html">4×4</a> is the only board where the fortress holds: with the black king in a double corner
-56% are drawn, whichever side is to move, since the king escapes to the other double corner.</li>
+<li><a href="twee-4x4.html">4×4</a> is the only board where the fortress holds: no set-up wins. White only wins when a
+white king stands on the other square of the double corner and the black king has to let itself be captured.</li>
 <li>On the odd boards of height 3 with unplayable corners (5×3 to 11×3) the opposition decides. Every king move goes from an
 even to an odd rank or back, so nobody can lose a tempo, and on such a strip, where a king can only be captured on the
 middle rank, the outcome of every position with the black king in a double corner turns with the side to move. White on
 b3 and d3 and black on a2, for instance, is a draw with white to move and lost with black to move.</li>
-<li>All other boards are won. Only in the blockade in the single corners, a handful of positions, does the outcome depend
-on the side to move. Without a blockade every quiet position is won: on the odd × odd boards from 5×5, the boards of
-height 4 from 5×4, 3×3 and 4×3.</li>
+<li>On all other boards the fortress falls at both parities, and nearly every set-up wins: only on 6×3, 5×4 and the
+boards of height 6 does black hold one to three.</li>
 </ul>'''}
 
 def rank_parity(e, fen):
@@ -339,16 +336,16 @@ class Site:
         return text[self.lang].replace('{table}', '<table class="tbl results">' + head + ''.join(rows) + '</table>')
 
     @staticmethod
-    def fortress_kind(counts):
-        """the majority of the fortress positions of a pair: won either way, the opposition, or drawn either way"""
-        g = {'win': counts.get('WL', 0), 'diag': counts.get('WD', 0) + counts.get('DL', 0), 'draw': counts.get('DD', 0)}
-        return max(g, key=g.get)
+    def parity_kind(res):
+        """the fortress test of a pair: a set-up wins for white at both parities (the fortress falls), at one (the
+        opposition decides), or at neither (it holds)"""
+        return ('draw', 'diag', 'win')[sum(res[p][1] > 0 for p in ('even', 'odd'))]
 
     def results32(self, pg):
         """the 3-2 table per pair of double corners: e x e one diagonal pair, e x o one pair along a side, o x o (with
         unplayable corners) the pairs along the W side and the H side and the diagonal pair (on a square board one pair
         along a side), then the board with playable corners; every number is the longest win with the black kings in
-        the double corners of that pair, coloured by its fortress test (no colour at height 3)"""
+        the double corners of that pair, coloured by its fortress test"""
         t = self.t
         stored = json.loads(gzip.decompress((HERE / 'longest32.json.gz').read_bytes()))
         side = {'W': t('langs de B-kant', 'along the W side'), 'H': t('langs de L-kant', 'along the H side'),
@@ -380,7 +377,7 @@ class Site:
                         name, p = max(ps, key=lambda np: (np[1]['n'] > 0, np[1]['n']))
                         label = (t('onspeelbare hoeken, ', 'unplayable corners, ') if corners == 'unplayable' else '') + \
                             (t('langs een kant', 'along a side') if w == h and kind == 'W' else side[kind])
-                        parts.append((label, p['n'], self.fortress_kind(entry['fortress'][name]), p['longest'], key))
+                        parts.append((label, p['n'], self.parity_kind(entry['parity'][name]), p['longest'], key))
                 links = []
                 for part in parts:
                     if part is None:
@@ -399,7 +396,7 @@ class Site:
                         text = text.replace(str(n), f'<a class="m1" href="#" data-i="{i}" title="{w}×{h} {label}: W{n}">{n}</a>', 1)
                     else:
                         text = text.replace('0', '–')
-                    links.append(text if h == 3 else f'<span class="res-{kind}">{text}</span>')
+                    links.append(f'<span class="res-{kind}">{text}</span>')
                 tds.append('<td>' + '/'.join(links) + '</td>')
             rows.append(f'<tr><th>{h}</th>' + ''.join(tds) + '</tr>')
         return TEXT32[self.lang].replace('{table}', '<table class="tbl results">' + head + ''.join(rows) + '</table>')

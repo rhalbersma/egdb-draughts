@@ -1,19 +1,19 @@
 # A CMake shell on top of Snakemake
 
 `CMakeLists.txt` here configures and builds the 6×6 endgame databases of [`thompson86`](../thompson86/) or
-[`syzygy`](../syzygy/) with CMake's two steps. Snakemake still schedules the builds; CMake checks the machine, compiles
+[`tbgen`](../tbgen/) with CMake's two steps. Snakemake still schedules the builds; CMake checks the machine, compiles
 the engine and writes the Snakemake profile (synthesis §7.3, "choosing by machine").
 
 ```bash
-cmake -S databases -B build/syzygy-6 -DBUILDER=syzygy -DPIECES=6
+cmake -S databases -B build/itbgen-6 -DBUILDER=tbgen -DPIECES=6
 ```
 
 ```bash
-cmake --build build/syzygy-6
+cmake --build build/itbgen-6
 ```
 
 ```bash
-cmake --build build/syzygy-6 --target dtm
+cmake --build build/itbgen-6 --target dtm
 ```
 
 | step | what it does |
@@ -31,14 +31,15 @@ cmake --build build/syzygy-6 --target dtm
 
 | option | default | |
 |---|---|---|
-| `BUILDER` | `syzygy` | `thompson86` (one-sided, half results) or `syzygy` (two-sided, full results) |
+| `BUILDER` | `tbgen` | `thompson86` (one-sided, half results) or `tbgen` (two-sided, full results) |
+| `RULES` | `international` | `international` (the engine `itbgen`, or `thompson86`) or `checkers` (`ctbgen`, or `thompson86_checkers`) |
 | `PIECES` | 6 | at most this many pieces |
 | `METRICS` | `dtm;dtc;dtz` | each into `<DATA_DIR>/<metric>` |
 | `GRANULARITY` | `material` | `material`, `tempi` or `configuration` |
 | `POLICY` | `seq` | every pass of a build sequential or parallel (`par`) |
 | `SINK` | `auto` | `auto`, `groups` or `array` |
 | `STYLE` | `86` | thompson86 only: `86` or `96` |
-| `ROUNDS` | `frontier` | syzygy only: `frontier` or `scan` |
+| `ROUNDS` | `frontier` | tbgen only: `frontier` or `scan` |
 | `DATA_DIR` | `<build>/data` | where the databases go |
 | `DISK_MBPS` | 150 for an HDD, 500 otherwise | the disk's sequential speed, for the I/O time |
 | `DISK_TBW` | none | an SSD's rated endurance in TB written, to put the build's writes against |
@@ -53,7 +54,7 @@ ones, MB, GB or TB (a "1 TB" disk is 10¹² bytes; `df -H`), e.g. "memory: 15.7 
 **Besides space, configure reports the I/O** (synthesis §7.4): the writes (every file once, sequentially; up to the
 depth sink's group-order files on top), the reads (each build's inputs through memory maps, at best each input once,
 at worst once per build that reads it, plus the checks), the disk time at `DISK_MBPS`, and with `DISK_TBW` the writes
-against the SSD's endurance. For `syzygy` to 6 pieces, all metrics: "writes 404 MB (all sequential; up to 1.1 GB with
+against the SSD's endurance. For `tbgen` to 6 pieces, all metrics: "writes 404 MB (all sequential; up to 1.1 GB with
 group files), reads 590 MB to 1.5 GB; at 150 MB/s: 6 to 17 s of disk time". The volumes are those of rungs 0–2, where
 the builders run; at the lower rungs the per-level streams and random accesses of §7.4 come on top.
 
@@ -120,7 +121,7 @@ The total work, 964 days on one core, matches his 2.65 CPU-years of building.
 
 ## Space, I/O and time for a machine
 
-With `--builder` (`thompson86`, `syzygy` or `wdl`) the same command estimates the build on a machine: RAM per group
+With `--builder` (`thompson86`, `tbgen` or `wdl`) the same command estimates the build on a machine: RAM per group
 (`--ram`), cores (`--cores`) and their clock (`--ghz`), and the disk (`--disk`, `--disk-mbps`, `--tbw`):
 
 * **space**: the files (depth bytes per metric, the outcomes) and the scratch of the jobs side by side (the depth
@@ -130,10 +131,10 @@ With `--builder` (`thompson86`, `syzygy` or `wdl`) the same command estimates th
   that do not fit the RAM at the builder's cost the per-level streams of rung 3 (`--levels` per group); the disk time
   at `--disk-mbps`, and the writes against `--tbw`;
 * **time**: the list schedule on `--cores`, at the builders' 6×6 cost per position and side (thompson86 0.35 µs,
-  syzygy 0.68 µs, WDL 0.52 µs at 2.1 GHz) scaled by `--ghz`, or `--us` measured on the target board; with the disk
+  tbgen 0.68 µs, WDL 0.52 µs at 2.1 GHz) scaled by `--ghz`, or `--us` measured on the target board; with the disk
   time overlapped or added.
 
-On 6×6 the estimate matches the builds: syzygy, three metrics, 404 MB of files with `--index overlapping` (the
+On 6×6 the estimate matches the builds: tbgen, three metrics, 404 MB of files with `--index overlapping` (the
 configure step's figure), about 10 s per metric on 4 cores (measured: 11.8 s for dtm). For larger boards the 6×6 cost
 is a floor (longer rays, flying kings, inputs out of the page cache): Gilbert's 2009 build ran at 5.06 µs per position
 on 2.4 GHz cores, and with that `--us` the estimate gives about 114 days on 10 cores, for his 2.65 CPU-years.
@@ -144,7 +145,7 @@ python3 src/egdb_layout.py --board 8x8 --pieces 10 --ram 16GiB --builder wdl --c
 
 **The cost per position depends on the game**, so the estimate measures it: `<engine> bench n` samples every material
 and times the move generator, with the branching factor and the shares of captures and promotions (each a lookup into
-another material's files). The measured builds fix the ratio of build cost to move generation (thompson86 1.23, syzygy
+another material's files). The measured builds fix the ratio of build cost to move generation (thompson86 1.23, tbgen
 2.39 move generations per position and side), so a bench of other rules gives their cost. Same engine, same board, same
 machine:
 

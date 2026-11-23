@@ -3,7 +3,7 @@
 `thompson86.cpp` builds endgame databases in the manner of K. Thompson, "Retrograde analysis of certain endgames",
 ICCA Journal 9(3), 1986, and "6-piece endgames", ICCA Journal 19(4), 1996, adapted to draughts and to the design
 notes in [`literature/egdb_primitives.md`](../literature/egdb_primitives.md). Its metrics, materials, index, groups
-and unmoves are in `src/materials_6x6.hpp`, shared with the two-sided [`syzygy`](../syzygy/) builder.
+and unmoves are in `src/materials_6x6.hpp`, shared with the two-sided [`tbgen`](../tbgen/) builder.
 
 **Four files per material** (shown for dtm; dtc and dtz alike), all one-sided (White's wins and Black's losses):
 
@@ -18,7 +18,7 @@ and unmoves are in `src/materials_6x6.hpp`, shared with the two-sided [`syzygy`]
 moves, Thompson's "win in k": up to 509 plies in a byte. In dtc and dtz a goal move by the losing side (Black's forced
 capture) can end a White win on an even ply, so they store plies. The build works in plies; only the files differ.
 
-The notation, shared with [`syzygy`](../syzygy/): a file is `6x6/np/wp-bp/wm-bm-<kind>-<side to move>`. A **full result**
+The notation, shared with [`tbgen`](../tbgen/): a file is `6x6/np/wp-bp/wm-bm-<kind>-<side to move>`. A **full result**
 holds win, draw and loss: `dtm` (with depth) or `wdl` (outcome only). A **half result** holds one of them: `dmW`,
 `dmL` (with depth), `isW`, `isL` (outcome only, one bit). The same for dtc and dtz (`dcW`, `dcL`, `dzW`, `dzL`); the bit files carry no
 metric, since they are the same for all three, so the files of each metric go into a directory of their own,
@@ -53,7 +53,7 @@ side, is a lookup into the files of the material it leads into: virtual addressi
 copies parked inside a bigger run. The files form a DAG through captures and promotions, which Snakemake builds in
 order; a capture of a side's last piece ends the game and needs no file.
 
-**Granularity** (`granularity=material|tempi|configuration`, shared with `syzygy`, synthesis §1.1): how finely a
+**Granularity** (`granularity=material|tempi|configuration`, shared with `tbgen`, synthesis §1.1): how finely a
 material class is cut into groups: the whole material class, one (White tempo, Black tempo) cell (a colour's tempo is
 its men's distance to promotion, summed), or one configuration of the men. The default is `material` for both styles, the nearest to Thompson's runs (below);
 any granularity works with either style's passes, and below `material` every man move is an exit into an earlier
@@ -115,7 +115,7 @@ even at rung 1; at `granularity=configuration`, 3 all-men materials over the bud
 one-position configurations dominates, not the depth bytes, so rung 1 cannot help. Files byte-identical to the unbudgeted
 builds; no build's peak above its estimate.
 
-**Every pass is one `std::for_each`** over blocks of 4096 positions (`for_blocks`, shared with `syzygy`), sequential
+**Every pass is one `std::for_each`** over blocks of 4096 positions (`for_blocks`, shared with `tbgen`), sequential
 or parallel (`policy=seq|par`, the last argument of `build`). Pass 0 gives each block the words of its positions in
 every bit plane and its own seed lists, merged afterwards; the pushes (P2, P3) and the seeds set bits with an atomic
 OR; verification (P4) and the commit iterate whole words of the planes they write; the sink is written at distinct

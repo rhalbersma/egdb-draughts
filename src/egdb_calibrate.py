@@ -29,7 +29,7 @@ def main():
                 with open(os.path.join(d, f)) as fh:
                     rows += [line.rstrip('\n').split('\t')[1:] for line in fh if line.startswith('stats\t')]
     if not rows:
-        sys.exit(f'{root}: no stats lines (build logs of thompson86 or syzygy)')
+        sys.exit(f'{root}: no stats lines (build logs of thompson86 or tbgen)')
     print('#' + '\t'.join(FIELDS))
     for r in sorted(rows, key=lambda r: (r[0], int(r[2]), r[1])):
         print('\t'.join(r))

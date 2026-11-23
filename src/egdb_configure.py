@@ -30,7 +30,7 @@ import sys
 
 
 def materials(n, builder):
-    """(wm, wk, bm, bk) with at most n pieces, both sides on the board; syzygy: one of each mirror pair"""
+    """(wm, wk, bm, bk) with at most n pieces, both sides on the board; tbgen: one of each mirror pair"""
     out = []
     for wm in range(n + 1):
         for wk in range(n + 1 - wm):
@@ -38,7 +38,7 @@ def materials(n, builder):
                 for bk in range(n + 1 - wm - wk - bm):
                     if wm + wk == 0 or bm + bk == 0:
                         continue
-                    if builder == 'syzygy' and (bm, wm, bk, wk) < (wm, bm, wk, bk):
+                    if builder == 'tbgen' and (bm, wm, bk, wk) < (wm, bm, wk, bk):
                         continue
                     out.append((wm, wk, bm, bk))
     return out
@@ -54,7 +54,7 @@ def slots(m):
 
 
 def material_bytes(m, builder):
-    """the four files of one material and metric: two of bytes, two of outcome bits (thompson86: 1, syzygy: 2 per slot)"""
+    """the four files of one material and metric: two of bytes, two of outcome bits (thompson86: 1, tbgen: 2 per slot)"""
     s = slots(m)
     return 2 * s + 2 * (-(-s // 8) if builder == 'thompson86' else -(-s // 4))
 
@@ -94,7 +94,7 @@ def input_bytes(m, builder, metric):
     s = slots(m)
     outcome = 2 * (-(-s // 8) if builder == 'thompson86' else -(-s // 4))
     if metric == 'dtm':
-        return 2 * s + (outcome if builder == 'syzygy' else 0)
+        return 2 * s + (outcome if builder == 'tbgen' else 0)
     return outcome
 
 

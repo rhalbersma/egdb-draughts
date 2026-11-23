@@ -3,15 +3,15 @@
 #    (See accompanying file LICENSE_1_0.txt or copy at
 #          http://www.boost.org/LICENSE_1_0.txt)
 
-# A CMake shell on top of Snakemake for the 6x6 endgame databases (thompson86/, syzygy/), synthesis section 7.3:
+# A CMake shell on top of Snakemake for the 6x6 endgame databases (thompson86/, tbgen/), synthesis section 7.3:
 #
-#   cmake -S databases -B build/syzygy-6 -DBUILDER=syzygy -DPIECES=6      configure: compile settings, the machine
+#   cmake -S databases -B build/itbgen-6 -DBUILDER=tbgen -DPIECES=6        configure: compile settings, the machine
 #                                                                         (cores, RAM, disk), the tree of directories,
 #                                                                         the disk a build needs, a Snakemake profile
-#   cmake --build build/syzygy-6                                          compile the engine, build every metric
-#   cmake --build build/syzygy-6 --target dtm                             one metric (dtm, dtc or dtz)
-#   cmake --build build/syzygy-6 --target plan                            what would run: Snakemake's dry run
-#   cmake --build build/syzygy-6 --target machine                         the machine description of the configure step
+#   cmake --build build/itbgen-6                                          compile the engine, build every metric
+#   cmake --build build/itbgen-6 --target dtm                             one metric (dtm, dtc or dtz)
+#   cmake --build build/itbgen-6 --target plan                            what would run: Snakemake's dry run
+#   cmake --build build/itbgen-6 --target machine                         the machine description of the configure step
 #
 # The databases go to DATA_DIR (default: <build>/data), in <DATA_DIR>/<metric>/6x6/<np>/<wp>-<bp>/ (the wdl files in
 # <DATA_DIR>/wdl/, shared by the metrics). Snakemake runs from
@@ -23,8 +23,10 @@ project(egdb-6x6-databases LANGUAGES CXX)
 
 # ---------------------------------------------------------------- what to build
 
-set(BUILDER "syzygy" CACHE STRING "thompson86 (one-sided, half results) or syzygy (two-sided, full results)")
-set_property(CACHE BUILDER PROPERTY STRINGS thompson86 syzygy)
+set(BUILDER "tbgen" CACHE STRING "thompson86 (one-sided, half results) or tbgen (two-sided, full results)")
+set_property(CACHE BUILDER PROPERTY STRINGS thompson86 tbgen)
+set(RULES "international" CACHE STRING "international (draughts: itbgen) or checkers (English checkers: ctbgen)")
+set_property(CACHE RULES PROPERTY STRINGS international checkers)
 set(PIECES 6 CACHE STRING "the number of pieces, at most")
 set(METRICS "dtm;dtc;dtz" CACHE STRING "the metrics to build (dtm, dtc, dtz), each into <DATA_DIR>/<metric>")
 set(GRANULARITY "material" CACHE STRING "material, tempi or configuration: how finely a material class is cut into groups")
@@ -34,12 +36,15 @@ set_property(CACHE POLICY PROPERTY STRINGS seq par)
 set(SINK "auto" CACHE STRING "auto, groups or array: where the depths of the material being built go")
 set_property(CACHE SINK PROPERTY STRINGS auto groups array)
 set(STYLE "86" CACHE STRING "thompson86 only: 86 (test at once) or 96 (masked late)")
-set(ROUNDS "frontier" CACHE STRING "syzygy only: frontier (bit planes) or scan (rtbgen's full scans)")
+set(ROUNDS "frontier" CACHE STRING "tbgen only: frontier (bit planes) or scan (rtbgen's full scans)")
 set(DATA_DIR "${CMAKE_BINARY_DIR}/data" CACHE PATH "where the databases go")
 set(DISK_MBPS "" CACHE STRING "the disk's sequential speed in MB/s, for the I/O time (default: 150 for an HDD, 500 otherwise)")
 set(DISK_TBW "" CACHE STRING "an SSD's rated endurance in TB written, to put the build's writes against (optional)")
-if(NOT BUILDER MATCHES "^(thompson86|syzygy)$")
-    message(FATAL_ERROR "BUILDER must be thompson86 or syzygy, not ${BUILDER}")
+if(NOT BUILDER MATCHES "^(thompson86|tbgen)$")
+    message(FATAL_ERROR "BUILDER must be thompson86 or tbgen, not ${BUILDER}")
+endif()
+if(NOT RULES MATCHES "^(international|checkers)$")
+    message(FATAL_ERROR "RULES must be international or checkers, not ${RULES}")
 endif()
 foreach(metric IN LISTS METRICS)
     if(NOT metric MATCHES "^(dtm|dtc|dtz)$")
@@ -130,7 +135,7 @@ foreach(v IN ITEMS DISK_free_mb DISK_need_mb DISK_files_mb DISK_scratch_mb DISK_
                    DISK_read_best_mb DISK_read_max_mb)
     disk_size(${v}_h ${${v}})
 endforeach()
-message(STATUS "egdb 6x6: ${BUILDER}, ${PIECES} pieces, ${DISK_materials} materials, metrics ${METRICS}, granularity ${GRANULARITY}")
+message(STATUS "egdb 6x6: ${BUILDER} (${RULES}), ${PIECES} pieces, ${DISK_materials} materials, metrics ${METRICS}, granularity ${GRANULARITY}")
 message(STATUS "  cores: ${PHYSICAL_CORES} physical, ${LOGICAL_CORES} logical; jobs side by side: ${CORES}, policy ${POLICY}")
 message(STATUS "  memory: ${TOTAL_MB_h}, ${AVAILABLE_MB_h} available; budget ${MEM_MB_h} (sink ${SINK})")
 message(STATUS "  disk: ${DATA_DIR}")
@@ -198,7 +203,8 @@ foreach(dep IN ITEMS bits ints misc)                            # header-only; t
     FetchContent_Declare(xstd-${dep} GIT_REPOSITORY https://github.com/rhalbersma/xstd-${dep}.git GIT_TAG main
                          SOURCE_SUBDIR no-cmake)
 endforeach()
-FetchContent_MakeAvailable(xstd-bits xstd-ints xstd-misc)
+FetchContent_Declare(tabula GIT_REPOSITORY https://github.com/rhalbersma/tabula.git GIT_TAG main SOURCE_SUBDIR no-cmake)
+FetchContent_MakeAvailable(xstd-bits xstd-ints xstd-misc tabula)
 
 find_package(OpenMP REQUIRED)
 find_package(TBB REQUIRED)            # std::execution::par runs on TBB with GCC's standard library
@@ -206,16 +212,29 @@ find_library(ZSTD_LIBRARY zstd REQUIRED)
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif()
-add_executable(${BUILDER} "${REPO}/${BUILDER}/${BUILDER}.cpp")
-target_include_directories(${BUILDER} SYSTEM PRIVATE
+# the engine's name: tbgen's first letter names the rules (itbgen, ctbgen), thompson86 gets _checkers for checkers
+if(BUILDER STREQUAL "tbgen")
+    if(RULES STREQUAL "checkers")
+        set(ENGINE_NAME ctbgen)
+    else()
+        set(ENGINE_NAME itbgen)
+    endif()
+elseif(RULES STREQUAL "checkers")
+    set(ENGINE_NAME thompson86_checkers)
+else()
+    set(ENGINE_NAME thompson86)
+endif()
+add_executable(${ENGINE_NAME} "${REPO}/${BUILDER}/${BUILDER}.cpp")
+target_compile_definitions(${ENGINE_NAME} PRIVATE EGDB_6X6_CHECKERS=$<IF:$<STREQUAL:${RULES},checkers>,1,0>)
+target_include_directories(${ENGINE_NAME} SYSTEM PRIVATE "${tabula_SOURCE_DIR}/include"
     "${xstd-bits_SOURCE_DIR}/include" "${xstd-ints_SOURCE_DIR}/include" "${xstd-misc_SOURCE_DIR}/include")
-target_link_libraries(${BUILDER} PRIVATE OpenMP::OpenMP_CXX ${ZSTD_LIBRARY} TBB::tbb)
-target_compile_features(${BUILDER} PRIVATE cxx_std_23)
-target_compile_options(${BUILDER} PRIVATE $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -march=native>)
+target_link_libraries(${ENGINE_NAME} PRIVATE OpenMP::OpenMP_CXX ${ZSTD_LIBRARY} TBB::tbb)
+target_compile_features(${ENGINE_NAME} PRIVATE cxx_std_23)
+target_compile_options(${ENGINE_NAME} PRIVATE $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -march=native>)
 
 # ---------------------------------------------------------------- the Snakemake profile and the build targets
 
-set(ENGINE "${CMAKE_BINARY_DIR}/${BUILDER}")
+set(ENGINE "${CMAKE_BINARY_DIR}/${ENGINE_NAME}")
 file(WRITE "${CMAKE_BINARY_DIR}/egdb.yaml"
 "# the values the Snakefile reads (written by the configure step; the metric comes with each target)
 engine: ${ENGINE}
@@ -245,16 +264,16 @@ set(all_metrics)
 foreach(metric IN LISTS METRICS)
     add_custom_target(${metric}
         COMMAND ${SNAKEMAKE} --config metric=${metric}
-        DEPENDS ${BUILDER} USES_TERMINAL COMMENT "${BUILDER}: ${metric} up to ${PIECES} pieces")
+        DEPENDS ${ENGINE_NAME} USES_TERMINAL COMMENT "${BUILDER}: ${metric} up to ${PIECES} pieces")
     list(APPEND all_metrics COMMAND ${SNAKEMAKE} --config metric=${metric})
 endforeach()
 add_custom_target(databases ALL ${all_metrics}                  # one metric after another, each on the whole machine
-    DEPENDS ${BUILDER} USES_TERMINAL COMMENT "${BUILDER}: ${METRICS} up to ${PIECES} pieces")
+    DEPENDS ${ENGINE_NAME} USES_TERMINAL COMMENT "${BUILDER}: ${METRICS} up to ${PIECES} pieces")
 set(dry)
 foreach(metric IN LISTS METRICS)
     list(APPEND dry COMMAND ${SNAKEMAKE} --config metric=${metric} --dry-run --quiet rules)
 endforeach()
-add_custom_target(plan ${dry} DEPENDS ${BUILDER} USES_TERMINAL COMMENT "what would run")
+add_custom_target(plan ${dry} DEPENDS ${ENGINE_NAME} USES_TERMINAL COMMENT "what would run")
 add_custom_target(machine COMMAND ${CMAKE_COMMAND} -E cat "${CMAKE_BINARY_DIR}/machine.yaml" USES_TERMINAL)
 
 # calibration, as a profile-guided build: the same build to fewer pieces (CALIBRATE_PIECES), instrumented (every build
@@ -275,9 +294,9 @@ endforeach()
 add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/calibration.tsv"
     ${cal_builds}
     COMMAND "${Python3_EXECUTABLE}" -I "${REPO}/src/egdb_calibrate.py" "${cal_dir}" > "${CMAKE_BINARY_DIR}/calibration.tsv"
-    DEPENDS ${BUILDER} USES_TERMINAL COMMENT "instrumented build to ${CALIBRATE_PIECES} pieces" VERBATIM)
+    DEPENDS ${ENGINE_NAME} USES_TERMINAL COMMENT "instrumented build to ${CALIBRATE_PIECES} pieces" VERBATIM)
 add_custom_target(calibrate DEPENDS "${CMAKE_BINARY_DIR}/calibration.tsv")
-add_custom_target(bench COMMAND ${BUILDER} bench ${PIECES} DEPENDS ${BUILDER} USES_TERMINAL
+add_custom_target(bench COMMAND ${ENGINE_NAME} bench ${PIECES} DEPENDS ${ENGINE_NAME} USES_TERMINAL
     COMMENT "bench: move generation, branching, captures, promotions" VERBATIM)
 list(LENGTH METRICS n_metrics)
 add_custom_target(estimate

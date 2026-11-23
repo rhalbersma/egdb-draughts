@@ -3,8 +3,8 @@
 #    (See accompanying file LICENSE_1_0.txt or copy at
 #          http://www.boost.org/LICENSE_1_0.txt)
 
-# Syzygy style builds for 6x6 international draughts, or English checkers with the engine built for it (syzygy_checkers,
-# -DEGDB_6X6_CHECKERS=1), or another board (syzygy_8x8_checkers, syzygy_10x10: the tree starts with the engine's
+# tbgen: Syzygy style builds for 6x6 international draughts (itbgen), or English checkers with the engine built for it
+# (ctbgen, -DEGDB_6X6_CHECKERS=1), or another board (ctbgen_8x8, itbgen_10x10: the tree starts with the engine's
 # board, from `<engine> board`, instead of 6x6/), two-sided: one of each pair of a material and its
 # colour mirror (the 82 materials up to 6 pieces of strongly_solving_6x6/materials), built in the order of the DAG of
 # captures and promotions. A material is named wp-bp-wm-bm (white pieces, black pieces, white men, black men, two
@@ -22,8 +22,8 @@
 # path. granularity=material|tempi|configuration sets the groups (tempi: the smallest largest group).
 #
 # usage (from the root of the repo):
-#   snakemake -s syzygy/Snakefile --cores 10 --config engine=build/syzygy dir=data/syzygy pieces=12 metric=dtm rounds=cell8
-#   snakemake -s syzygy/Snakefile --cores 10 --config engine=build/syzygy_checkers dir=data/syzygy_checkers pieces=12 metric=dtm rounds=cell8
+#   snakemake -s tbgen/Snakefile --cores 10 --config engine=build/itbgen dir=data/itbgen pieces=12 metric=dtm rounds=cell8
+#   snakemake -s tbgen/Snakefile --cores 10 --config engine=build/ctbgen dir=data/ctbgen pieces=12 metric=dtm rounds=cell8
 # metric: dtm, dtc or dtz. policy=auto (default): the largest materials (at least par_min positions; default 1 / (4 x
 # cores) of all the positions of the run, so only those at the end of the critical path) with std::execution::par on all
 # cores, alone; the rest seq on one core, as many side by side as --cores and the memory claims (--resources mem_mb=N)
@@ -36,8 +36,8 @@
 # will be built from them); check=1: checkall against egdb_6x6 at the end (keeps every
 # build file; heavy beyond 8 pieces).
 
-ENGINE = config.get('engine', 'build/syzygy')
-BASE = config.get('dir', 'data/syzygy')
+ENGINE = config.get('engine', 'build/itbgen')
+BASE = config.get('dir', 'data/itbgen')
 N = int(config.get('pieces', 6))
 METRIC = config.get('metric', 'dtm')
 D = BASE                                   # depth files in <dir>/<metric>/..., wdl files in <dir>/wdl/... (shared)

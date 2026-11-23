@@ -29,22 +29,22 @@ for every primitive is what the pass ranges over and whether it writes only the 
 
 ## Settled decisions (the defaults of the 6×6 builders)
 
-Decided in the design discussions and implemented in `syzygy/` (the two-sided builder; `syzygy_checkers` for English
+Decided in the design discussions and implemented in `tbgen/` (the two-sided builder: `itbgen` for international draughts, `ctbgen` for English
 checkers). Change one only on purpose, and update this list with it.
 
 | topic | decision | where |
 |---|---|---|
 | values | exact plies for every metric, never rounded or halved; no draw-rule band | §7.5, §10 |
-| board | a compile-time parameter: `EGDB_WIDTH` × `EGDB_HEIGHT` (even sides, 18 to 64 dark squares, default 6×6), the geometry from `tabula::chequer`, squares numbered as in PDN; the rules by `EGDB_6X6_CHECKERS`; the tree starts with the board's name (`syzygy board`). Checked by perft (8×8 checkers, 10×10 international) and against `egdb_fast` (kings only) | `src/egdb_6x6.cpp`, CMake `egdb_board()` |
+| board | a compile-time parameter: `EGDB_WIDTH` × `EGDB_HEIGHT` (even sides, 18 to 64 dark squares, default 6×6), the geometry from `tabula::chequer`, squares numbered as in PDN; the rules by `EGDB_6X6_CHECKERS`; the tree starts with the board's name (`tbgen board`). Checked by perft (8×8 checkers, 10×10 international) and against `egdb_fast` (kings only) | `src/egdb_6x6.cpp`, CMake `egdb_board()` |
 | index | the joint index: legal placements only (white men, black men over what the white men leave, kings over the free squares), ranked with PEXT (`bit_compress`, physical to logical squares) and colex tables (up to 20 squares; beyond, sums of binomials), unranked with PDEP; men outermost | `src/materials_6x6.hpp` (`EGDB_JOINT_INDEX=1`) |
 | build cell | 8 bits per position and side (cell8), reductions every 240 codes into value-preserving zstd snapshots, merged as a transform-reduce over the windows | §7.5, `rounds=cell8` |
 | loss checks | delayed (rtbgen's `CHANGED`): mark the candidates, check each once | cell8 and frontier modes |
-| inputs | read only in pass 0; DTM builds read only the DTM build files (self-contained: 1 + plies, 0 a draw), DTC and DTZ builds only the WDL build files | `syzygy/syzygy.cpp` |
+| inputs | read only in pass 0; DTM builds read only the DTM build files (self-contained: 1 + plies, 0 a draw), DTC and DTZ builds only the WDL build files | `tbgen/tbgen.cpp` |
 | build format | both sides, every position stored (captures, pending captures, draws); zstd blocks of 4 KiB read through a per-thread block cache (64 MiB); escape tokens beyond the direct range (E = 241, one extra byte, up to 3,840) | `store=compressed` |
 | sink | the 8-bit sink in anonymous memory, each file written once, sequentially: no random writes | `sink=bytes` |
 | WDL | one shared directory `<dir>/wdl/`, written by the first metric built, compared (not rewritten) by the others | Snakefile |
 | metrics | WDL + DTM to solve; DTZ before DTC; DTC reuses DTZ for kings-only materials | Snakefile |
-| probe format | one side to move; captures and draws as don't-cares (pending captures planned); depth without class (from WDL): DTM in moves, DTC and DTZ in plies, 16 escape tokens, no draw code; zstd blocks of 4 KiB; converted once the materials a material leads into are converted, then its depth build files are deleted | §10, `probe=1`, `syzygy convert` |
+| probe format | one side to move; captures and draws as don't-cares (pending captures planned); depth without class (from WDL): DTM in moves, DTC and DTZ in plies, 16 escape tokens, no draw code; zstd blocks of 4 KiB; converted once the materials a material leads into are converted, then its depth build files are deleted | §10, `probe=1`, `tbgen convert` |
 | fills | don't-cares take the dominant or the run-extending value, never an escape token | §10 |
 | parallelism | `for_blocks<B>(policy, n, f)`, B a multiple of 8 cache lines; Snakemake `policy=auto`: the largest materials (at least 1 / (4 × cores) of all positions, those at the end of the critical path) with `std::execution::par` on all cores, alone; the rest on one core each, side by side as far as `--cores` and the memory claims allow | `src/materials_6x6.hpp`, Snakefile |
 | layout | `<dir>/<metric>/<board>/<np>/<wp>-<bp>/<wm>-<bm>-<kind>-<side>.z` (board 6x6, 8x8, 10x10, …), `<dir>/wdl/…`, `<dir>/probe/<kind>/…` | Snakefile |
@@ -103,8 +103,8 @@ too. Ours come in two granularities, the coarser a union of the finer:
 
 | slice, labelled by | |
 |---|---|
-| the **tempi**: each colour's tempo, its men's distance to promotion summed over its men (rows still to go) | `thompson86`, `syzygy` (`granularity=tempi`) |
-| the **configuration**: every man's square | `egdb_6x6`, `thompson86`, `syzygy` (`granularity=configuration`) |
+| the **tempi**: each colour's tempo, its men's distance to promotion summed over its men (rows still to go) | `thompson86`, `tbgen` (`granularity=tempi`) |
+| the **configuration**: every man's square | `egdb_6x6`, `thompson86`, `tbgen` (`granularity=configuration`) |
 
 The tempi factorize by colour: every man move lowers its own colour's tempo by exactly one, a white man move from
 (tw, tb) to (tw − 1, tb), a black one to (tw, tb − 1). So the tempi are a grid, every man move leads to a neighbour
@@ -143,7 +143,7 @@ builders):
 | granularity | a group is | moves inside | default for |
 |---|---|---|---|
 | (run) | a material class and all its subsets (Thompson 1986, 1996; not offered) | king and man moves, captures as uncaptures | |
-| `material` | the whole material class (dtz: one total tempo at a time, since a man move ends the count) | king and man moves | `syzygy`, `thompson86` (both styles) |
+| `material` | the whole material class (dtz: one total tempo at a time, since a man move ends the count) | king and man moves | `tbgen`, `thompson86` (both styles) |
 | `tempi` | one (White tempo, Black tempo) cell | king moves | |
 | `configuration` | one configuration of the men | king moves | `egdb_6x6` |
 
@@ -157,7 +157,7 @@ by the pawn's rank, which for a single pawn is its tempo.
 
 Below `material` every man move is an exit into a group solved earlier (it lowers its colour's tempo), looked up in
 pass 0 like a capture. At 6 pieces `tempi` gives the smallest largest group in both builders: rung 0 at most 58 MB in
-`syzygy` (2,652 groups) and 49 MB in `thompson86` (4,897), against 94–103 MB at `material` (82 and 155 groups) or at
+`tbgen` (2,652 groups) and 49 MB in `thompson86` (4,897), against 94–103 MB at `material` (82 and 155 groups) or at
 `configuration` (483,750 and 830,793 groups, where the metadata of the all-men materials' one-position configurations
 dominates).
 
@@ -179,7 +179,7 @@ ones through the depth sink.
 | one solve | **group** | a slice with its mirror | a slice: "A portion of the endgame database (a slice) is computed by resolving all positions" | a "subdivision" (tiers 2 and 3 only above 900 MB; 64,369) | a "subdivision" (about 200K) |
 | a job (what is scheduled) | one material class | a job queue line: one pass over a slice or mini-slice | slices (TrellisDAG) | one subdivision per program instance | one subdivision per instance |
 | a parallel index range | a block of 4096 positions | a **"mini-slice"**: page-aligned, about 10 million positions | POSIX threads dividing "the range of positions" equally | — | — |
-| the other colour | syzygy: one of each mirror pair; thompson86: both | the **"mirror"** node (4112 ↔ 1421) | "its mirror database 2332.77 with white to move" | — | — |
+| the other colour | tbgen: one of each mirror pair; thompson86: both | the **"mirror"** node (4112 ↔ 1421) | "its mirror database 2332.77 with white to move" | — | — |
 
 In this vocabulary: Chinook's node (1994) or sub-database (2003) and Gilbert's 2005 "slice" are material classes;
 Chinook 2003's "material" is the pieces-per-side subdivision; Chinook's "slice" is a leading-rank slice; Gilbert's
@@ -585,10 +585,10 @@ position in RAM** for that group. Taking the rungs in order as a group outgrows 
 
 | rung | in RAM per position of the group | on disk | depth | from |
 |---|---|---|---|---|
-| 0 | everything (depth bytes, bit planes, seeds) | finished files only | exact | `thompson86`, `syzygy`, `egdb_6x6` today |
+| 0 | everything (depth bytes, bit planes, seeds) | finished files only | exact | `thompson86`, `tbgen`, `egdb_6x6` today |
 | 0′ | 1 byte: the 8-bit cell, statuses inside, rounds by scanning (§7.5) | snapshots, one per 240-ply window | exact | rtbgen, made value-preserving |
 | 1 | bit planes (cumulative W/B, frontier, candidates): a few bits | depth as appended frontier lists, one merge at the end | exact | §7.1 |
-| 2 | the same, for a smaller group: wave → slice (cheap once the half results are stored, since a move out is one read) | | exact | `thompson86`, `syzygy` (`granularity=tempi\|configuration`), `egdb_6x6` |
+| 2 | the same, for a smaller group: wave → slice (cheap once the half results are stored, since a move out is one read) | | exact | `thompson86`, `tbgen` (`granularity=tempi\|configuration`), `egdb_6x6` |
 | 3 | 1 bit: the cumulative win bit; candidates and losses streamed | the byte database, merged per level (Wu–Beal), or the W/L/D/U state streamed (Lincke) | exact (Wu–Beal) or WDL (Lincke) | Wu–Beal, Lincke |
 | 4 | a cached fraction of 1 bit, dual-indexed for locality | as rung 3 | as rung 3 | Lincke |
 | 5 | sort runs only | everything; scatters as sorted batches | exact | Wu–Liu–Hsu |
@@ -596,7 +596,7 @@ position in RAM** for that group. Taking the rungs in order as a group outgrows 
 Before rung 3, the 4× symmetry of kings-only slices (§6) shrinks the largest groups for free. Each rung keeps the
 pass code and changes only where its inputs and outputs live, so a memory budget can pick the rung per group from
 the sizes known before the build (`Meta.P` of the slices). Both builders now reach rung 1 (a depth sink with
-group-order files, `sink=auto` by the job's claim). `syzygy` first had to split its 16-bit value array, which was both
+group-order files, `sink=auto` by the job's claim). `tbgen` first had to split its 16-bit value array, which was both
 depth store and cumulative state (about 7.5 bytes per position and side to move against rtbgen's 1 byte), into
 cumulative bit planes for the state and write-only values in the sink; its frontier rounds now hold about 10 bit planes (one for the delayed check's candidates)
 and the level lists, its scan mode (rtbgen's) still the value array, which its frontier scans. Both also offer groups
@@ -648,9 +648,9 @@ byte; the previous metric's build gives a better estimate).
 
 | pass or choice | work | access | measured |
 |---|---|---|---|
-| whole build, `seq` | about 2P positions per group, moves generated, exits looked up | CPU, random reads into finished files | `thompson86` 0.35 µs per position; frontier `syzygy` 0.34 µs (dtm) and 0.26 µs (dtz) per settled cell |
+| whole build, `seq` | about 2P positions per group, moves generated, exits looked up | CPU, random reads into finished files | `thompson86` 0.35 µs per position; frontier `tbgen` 0.34 µs (dtm) and 0.26 µs (dtz) per settled cell |
 | pass 0 lookups into finished files | a few per position | random reads | page cache: part of the above; cold memory map: 3–8 µs per lookup (§7, rule 6), so pass 0 explodes once the inputs fall out of the cache |
-| rounds by full scans instead of frontiers | 2 × 2P per round, L rounds | sequential reads of the group | `syzygy` dtm +46 % (53.1 s against 36.4 s), dtz +14 % |
+| rounds by full scans instead of frontiers | 2 × 2P per round, L rounds | sequential reads of the group | `tbgen` dtm +46 % (53.1 s against 36.4 s), dtz +14 % |
 | depth sink, group-order files instead of the array | the gathering pass, slice lookups | sequential writes, random reads in RAM | +10–15 % CPU; the largest material's peak memory 19.3 MB instead of 24.9 MB |
 | `par` within a group | the same work, split in blocks of 4096 positions | | whole-material groups: 2.0× on 4 cores (43.0 s → 21.1 s); configuration groups: none, only thread-pool overhead |
 | scattered updates on disk | one per update | random against sorted | Wu–Liu–Hsu 2004: 10^6 updates 3787 s random against 6.5 s sorted |
@@ -823,7 +823,7 @@ cache.
 **The cost per position depends on the game**, so the plan measures it rather than carry a constant over: the
 engine's `bench` samples every material and times the move generator (the core of every pass), with the branching
 factor and the shares of captures and promotions (pass 0's lookups into other materials). One ratio, fixed by the
-measured builds (thompson86 1.23, syzygy 2.39 move generations per position and side), turns a bench of any rules into
+measured builds (thompson86 1.23, tbgen 2.39 move generations per position and side), turns a bench of any rules into
 a cost per position. On the same 6×6 board, engine and machine, international draughts costs 0.284 µs per move
 generation with 4.07 moves (24.5 % captures, 5.3 % promotions), English checkers 0.153 µs with 3.44 (15.2 %, 8.4 %):
 flying kings, long captures and men capturing backwards make the first nearly twice as dear. Larger boards cost more
@@ -833,7 +833,7 @@ per position again (longer rays, more pieces to scan), so a build on another boa
 count their levels and frontiers (a few popcounts per round), one `stats` line per material, and the plan extrapolates
 from a small build of the same rules, engine and machine (fewer pieces) to the large one: the cost per position,
 geometrically from the last two piece counts. Calibrated on thompson86's build to 5 pieces, the 6-piece materials come
-out at 0.40 µs per position and side (measured 0.419) and about 36 s of CPU (40.5 s); syzygy's three metrics on 4 cores at 32 s, as measured (36.4 + 33.3 + 28.0 s of CPU). Gilbert's "average
+out at 0.40 µs per position and side (measured 0.419) and about 36 s of CPU (40.5 s); tbgen's three metrics on 4 cores at 32 s, as measured (36.4 + 33.3 + 28.0 s of CPU). Gilbert's "average
 build speed per CPU, 197,529 positions/sec" (5.06 µs per position on 2.4–2.5 GHz cores) is this kind of number:
 whole-build throughput, his 16.5 T positions over 2.65 CPU-years, his passes, caching and I/O included.
 
@@ -855,14 +855,14 @@ I/O: the configure step of `databases/` reports, for rungs 0–2,
 * the disk time at the disk's sequential speed (`DISK_MBPS`, by default 150 MB/s for an HDD, 500 MB/s otherwise), and
   for an SSD the writes against its endurance (`DISK_TBW`).
 
-`syzygy` to 6 pieces, all three metrics: 404 MB written (1.1 GB with group files), 590 MB to 1.5 GB read, 6 to 17 s of
+`tbgen` to 6 pieces, all three metrics: 404 MB written (1.1 GB with group files), 590 MB to 1.5 GB read, 6 to 17 s of
 disk time at 150 MB/s, 1 ppm of a 600 TBW drive. At the lower rungs the plan adds the per-level streams of rung 3 and
 the random accesses of rung 4 (frontier × moves × (1 − r) × t_access): a build whose plan shows those terms dominant is
 one to move to an SSD, to a finer granularity, or to sorted batches.
 
 ### 7.5 The 8-bit cell: one byte per position, reductions, value-preserving snapshots
 
-Without outcounting (the syzygy builder: a loss candidate is verified forward, as rtbgen's `check_loss`), the build
+Without outcounting (the tbgen builder: a loss candidate is verified forward, as rtbgen's `check_loss`), the build
 needs **one byte per position and side to move**, and no bit planes: rtbgen's design, with its reduction step made
 value-preserving and aligned with the storage escapes of §10.
 
@@ -915,7 +915,7 @@ DTC take their sign from WDL; DTM goes to moves); window i ≥ 2 becomes **stora
 byte is the extra byte, verbatim**. Every value stays exact from the first round to the stored byte: no rounding, no
 halving, no margin for an engine to keep, and the token is the window number: a multiple of the reduction interval.
 
-**Implemented** as `syzygy build … cell8` (`solve_group_cell8`); `EGDB_CELL8_WINDOW=k` forces windows of k plies, to
+**Implemented** as `tbgen build … cell8` (`solve_group_cell8`); `EGDB_CELL8_WINDOW=k` forces windows of k plies, to
 exercise the reductions on small builds. Up to 6 pieces it agrees with egdb_6x6 and with every position's successors
 for all three metrics, with the full window (no reductions) and with windows of 7 and 2 plies (up to 35 reductions
 in one group). At 8 pieces (DTM, every material up to 7 pieces plus the 21 eight-piece ones with at most 2 men: 81
@@ -1288,7 +1288,7 @@ syzygy's rtbgen without `-p` stores DTZ up to 100 plies in moves, unless a side 
 always halves the cursed band beyond 100; chesstb keeps DTZ exact up to 100 but halves the cursed band when a table fits
 one byte. The engine then needs a margin (Stockfish counts a win as certain only if DTZ + counter ≤ 99), and a second
 limit (FIDE's automatic draw at 75 moves) falls inside the halved band. The one reduction allowed is lossless: a DTM
-win is odd and a loss even, so a DTM can be stored in moves and its plies recovered from WDL (the thompson86 and syzygy
+win is odd and a loss even, so a DTM can be stored in moves and its plies recovered from WDL (the thompson86 and tbgen
 byte, up to 509 plies). DTZ and DTC have no such parity (either side's move can end the count) and stay in plies.
 
 **Escapes: S = 16 tokens, one extra byte each, for every game.** Each position has one code byte. Codes 0 … 239

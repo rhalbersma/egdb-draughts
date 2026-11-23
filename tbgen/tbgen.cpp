@@ -3,10 +3,12 @@
 //    (See accompanying file LICENSE_1_0.txt or copy at
 //          http://www.boost.org/LICENSE_1_0.txt)
 
-// Syzygy style builds (after R. de Man's rtbgen) for 6x6 international draughts, two-sided, for three metrics, with
-// the per-material index of thompson86 (src/materials_6x6.hpp). Built for one board and rule set (see src/egdb_6x6.cpp:
-// EGDB_WIDTH, EGDB_HEIGHT, EGDB_6X6_CHECKERS; the CMake targets syzygy, syzygy_checkers, syzygy_8x8_checkers,
-// syzygy_10x10), which names the top of the tree (6x6/, 8x8/, 10x10/) and which `syzygy board` prints. The value of
+// tbgen: Syzygy style builds (after R. de Man's rtbgen, the "regular" chess tablebase generator) for draughts, two-sided,
+// for three metrics, with the per-material index of thompson86 (src/materials_6x6.hpp). As rtbgen's letter names its
+// chess variant, the first letter names the rules: itbgen for international draughts, ctbgen for English checkers
+// (-DEGDB_6X6_CHECKERS=1). Built for one board (see src/egdb_6x6.cpp: EGDB_WIDTH, EGDB_HEIGHT; the CMake targets itbgen
+// and ctbgen on 6x6, itbgen_10x10, ctbgen_8x8), which names the top of the tree (6x6/, 8x8/, 10x10/) and which
+// `tbgen board` prints. Below, `tbgen` stands for either program. The value of
 // a position, for the side to move:
 //   0          draw (also an illegal slot)
 //   2n         win in n plies (n >= 1)
@@ -58,30 +60,30 @@
 // written once, sequentially.
 //
 // build: g++-14 -std=c++23 -O2 -march=native -fopenmp -I<xstd-bits>/include -I<xstd-ints>/include
-//        -I<xstd-misc>/include syzygy/syzygy.cpp -lzstd -ltbb -o syzygy
-// usage: syzygy build <dir> wp bp wm bm <metric> [seq|par] [frontier|scan|cell8] [auto|groups|bytes|array] [compressed|raw] [stats] [material|tempi|configuration] [mem=MB]
+//        -I<xstd-misc>/include -I<tabula>/include tbgen/tbgen.cpp -lzstd -ltbb -o itbgen
+// usage: tbgen build <dir> wp bp wm bm <metric> [seq|par] [frontier|scan|cell8] [auto|groups|bytes|array] [compressed|raw] [stats] [material|tempi|configuration] [mem=MB]
 //                                                            build one material (its captures and promotions must exist);
 //                                                            the depth sink by the claim mem=MB (auto: the array if rung 0
 //                                                            fits, else group files), or as given; the granularity of
 //                                                            the groups (default material; below it man moves are
 //                                                            exits)
-//        syzygy board                                        the board and rules of this binary (e.g. "8x8 checkers")
-//        syzygy plan n <metric> [granularity]                per stored material with at most n pieces: slots,
+//        tbgen board                                        the board and rules of this binary (e.g. "8x8 checkers")
+//        tbgen plan n <metric> [granularity]                per stored material with at most n pieces: slots,
 //                                                            positions, groups, the largest group, MB needed (rung 0)
-//        syzygy checkall <dir> n <metric> [threads]          every material of at most n pieces against egdb_6x6
+//        tbgen checkall <dir> n <metric> [threads]          every material of at most n pieces against egdb_6x6
 //                                                            (built in memory): dtm exactly, dtc / dtz their wins and
 //                                                            losses; every value against its successors; the wdl files
 //                                                            against the values
-//        syzygy cmp86 <dir> <dir_thompson86> n <metric>      the same half results (dmW, dmL) as thompson86, for every
+//        tbgen cmp86 <dir> <dir_thompson86> n <metric>      the same half results (dmW, dmL) as thompson86, for every
 //                                                            material of at most n pieces, both colours
-//        syzygy probe <dir> <metric> [FEN...]                the value of each position (default: the start position)
+//        tbgen probe <dir> <metric> [FEN...]                the value of each position (default: the start position)
 //                                                            and of each of its moves, from the probe files if the store
 //                                                            has them, else from the build files
-//        syzygy convert <dir> wp bp wm bm <metric> [seq|par] [verify=N]
+//        tbgen convert <dir> wp bp wm bm <metric> [seq|par] [verify=N]
 //                                                            one material's build files into the probe format (one side,
 //                                                            capture positions and draws as don't-cares), checked through
 //                                                            the prober on every N-th slot (default 16)
-//        syzygy order <dir> n                                dtz <= dtc <= dtm for every win and loss, all with the class
+//        tbgen order <dir> n                                dtz <= dtc <= dtm for every win and loss, all with the class
 //                                                            in the shared wdl files
 // metric: dtm, dtc, dtz. <dir>: the base directory; depth files in <dir>/<metric>/6x6/..., wdl files in <dir>/wdl/6x6/...,
 // written by whichever metric is built first (a later build of another metric compares its wdl with them)
@@ -1342,8 +1344,8 @@ bool compare_thompson86(std::string const& dir, std::string const& dir86, int n)
                                 int const ew = !is_win(vw) ? 0 : dtm ? (plies(vw) + 1) / 2 : plies(vw);
                                 int const el = !is_loss(vb) ? 0 : dtm ? plies(vb) / 2 + 1 : plies(vb) + 1;
                                 std::uint64_t const k = mi.index(pw);
-                                if (w[k] != ew && bad++ < 3) std::cerr << "w " << fen_of(pw) << " thompson86 " << int(w[k]) << " syzygy " << vw << std::endl;
-                                if (l[k] != el && bad++ < 3) std::cerr << "l " << fen_of(pb) << " thompson86 " << int(l[k]) << " syzygy " << vb << std::endl;
+                                if (w[k] != ew && bad++ < 3) std::cerr << "w " << fen_of(pw) << " thompson86 " << int(w[k]) << " tbgen " << vw << std::endl;
+                                if (l[k] != el && bad++ < 3) std::cerr << "l " << fen_of(pb) << " thompson86 " << int(l[k]) << " tbgen " << vb << std::endl;
                                 checked += 2;
                         }
         }
@@ -1637,7 +1639,7 @@ int main(int argc, char* argv[])
 {
         init_tables();
         init_cc();
-        g_granularity = Granularity::material;             // syzygy's default: the whole material class (dtz: by total tempo)
+        g_granularity = Granularity::material;             // tbgen's default: the whole material class (dtz: by total tempo)
         std::vector<std::string> const a(argv + 1, argv + argc);
         auto mat_at = [&](std::size_t i) {                             // wp bp wm bm
                 int const wp = std::stoi(a[i]), bp = std::stoi(a[i + 1]), wm = std::stoi(a[i + 2]), bm = std::stoi(a[i + 3]);
@@ -1691,7 +1693,7 @@ int main(int argc, char* argv[])
                 bool const ok = par ? convert_material(a[1], mat_at(2), stride, std::execution::par) : convert_material(a[1], mat_at(2), stride, std::execution::seq);
                 return ok ? 0 : 1;
         }
-        std::cerr << "usage: syzygy build <dir> wp bp wm bm dtm|dtc|dtz [seq|par] [frontier|scan|cell8] [auto|groups|bytes|array] [compressed|raw] [stats] [material|tempi|configuration] [mem=MB] | bench n [samples] | plan n dtm|dtc|dtz [granularity] | checkall <dir> n dtm|dtc|dtz [threads]"
+        std::cerr << "usage: " << (CHECKERS ? "ctbgen" : "itbgen") << " build <dir> wp bp wm bm dtm|dtc|dtz [seq|par] [frontier|scan|cell8] [auto|groups|bytes|array] [compressed|raw] [stats] [material|tempi|configuration] [mem=MB] | bench n [samples] | plan n dtm|dtc|dtz [granularity] | checkall <dir> n dtm|dtc|dtz [threads]"
                      " | cmp86 <dir> <dir_thompson86> n dtm|dtc|dtz | order <dir> n | probe <dir> dtm|dtc|dtz [FEN...] | convert <dir> wp bp wm bm dtm|dtc|dtz [seq|par] [verify=N]" << std::endl;
         return 2;
 }

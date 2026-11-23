@@ -52,7 +52,7 @@ target_compile_options(bench_index_6x6 PRIVATE
     $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -march=native>
 )
 
-# The programs with men and kings (egdb_6x6, thompson86, syzygy) are built for one board and one rule set each: the
+# The programs with men and kings (egdb_6x6, thompson86, tbgen) are built for one board and one rule set each: the
 # board W x H by -DEGDB_WIDTH / -DEGDB_HEIGHT (even sides, 18 to 64 dark squares; default 6x6, its geometry from
 # tabula::chequer), the rules by -DEGDB_6X6_CHECKERS (0: international draughts, 1: English checkers).
 find_library(ZSTD_LIBRARY zstd REQUIRED)
@@ -79,14 +79,14 @@ egdb_board(egdb_6x6_checkers src/egdb_6x6.cpp 6 6 1)
 egdb_board(thompson86 thompson86/thompson86.cpp 6 6 0)
 
 # a Syzygy (rtbgen) style build on top of egdb_6x6's rules: two-sided files per material for dtm, dtc and dtz, with
-# WDL as a by-product, the per-material index of thompson86 (see syzygy/); the same builder with the rules of English
-# checkers on the same 6x6 board
-egdb_board(syzygy syzygy/syzygy.cpp 6 6 0)
-egdb_board(syzygy_checkers syzygy/syzygy.cpp 6 6 1)
+# WDL as a by-product, the per-material index of thompson86 (see tbgen/): itbgen for international draughts, ctbgen with the rules of English
+# checkers (the first letter names the rules, as the r of rtbgen names regular chess)
+egdb_board(itbgen tbgen/tbgen.cpp 6 6 0)
+egdb_board(ctbgen tbgen/tbgen.cpp 6 6 1)
 
 # the same programs on the full boards: English checkers on 8x8 and international draughts on 10x10 (egdb_* for its
-# perft and the slice solver that syzygy's checkall compares with)
+# perft and the slice solver that tbgen's checkall compares with)
 egdb_board(egdb_8x8_checkers src/egdb_6x6.cpp 8 8 1)
 egdb_board(egdb_10x10 src/egdb_6x6.cpp 10 10 0)
-egdb_board(syzygy_8x8_checkers syzygy/syzygy.cpp 8 8 1)
-egdb_board(syzygy_10x10 syzygy/syzygy.cpp 10 10 0)
+egdb_board(ctbgen_8x8 tbgen/tbgen.cpp 8 8 1)
+egdb_board(itbgen_10x10 tbgen/tbgen.cpp 10 10 0)

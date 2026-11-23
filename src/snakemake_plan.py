@@ -3,7 +3,7 @@
 #    (See accompanying file LICENSE_1_0.txt or copy at
 #          http://www.boost.org/LICENSE_1_0.txt)
 
-"""The plan of a per-material build, shared by the Snakefiles of thompson86 and syzygy (synthesis section 7.3).
+"""The plan of a per-material build, shared by the Snakefiles of thompson86 and tbgen (synthesis section 7.3).
 
 Each engine reports, per material, its sizes and the memory a build needs at each rung of the memory ladder (its
 `plan` command, estimated from its own data structures and calibrated against measured peaks). From that:

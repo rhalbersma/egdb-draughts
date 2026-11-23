@@ -5,7 +5,7 @@
 
 // Per-material building blocks for 6x6 international draughts (or the board and rules egdb_6x6.cpp was built for:
 // EGDB_WIDTH, EGDB_HEIGHT, EGDB_6X6_CHECKERS; the numbers in the comments are those of 6x6), shared by thompson86/thompson86.cpp and
-// syzygy/syzygy.cpp: the metrics (dtm, dtc, dtz) and the moves that end their count, the materials (named
+// tbgen/tbgen.cpp: the metrics (dtm, dtc, dtz) and the moves that end their count, the materials (named
 // wp-bp-wm-bm) and their index (a product of four colex ranks), bit planes, groups of egdb_6x6 slices solved together
 // and their unmoves, and the list of materials. Included after src/egdb_6x6.cpp (with its main renamed), whose
 // positions, moves, slices and ranks it uses.
@@ -581,7 +581,7 @@ std::vector<Material> successor_materials(Material c)
 
 // ---------------------------------------------------------------- depth sinks: where the depths of the material being built go
 //
-// The rounds only put depths (V: a byte in thompson86, a 16-bit value in syzygy) and never read them back for their own
+// The rounds only put depths (V: a byte in thompson86, a 16-bit value in tbgen) and never read them back for their own
 // group; moves out of a group read the depths of earlier, finished groups of the same material. Two backends:
 //   array    the whole material's bytes in RAM, indexed like its files (rung 0)
 //   groups   only the current group's bytes in RAM; each finished group is appended to one file per side in group

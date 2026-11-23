@@ -263,12 +263,15 @@ constexpr bool RANK_TABLES = N <= 20;                  // (one block)
 std::vector<std::uint32_t> rank_table, unrank_table;
 std::array<std::uint32_t, N + 2> unrank_offset{};
 
+void init_rays_padded();                // the move generator's rays (below)
+
 void init_tables()
 {
         for (int s = 0; s < N; ++s)
                 for (int d = 0; d < 4; ++d)
                         for (int r = row_of(s) + DR[d], c = col_of(s) + DC[d]; square_at(r, c) >= 0; r += DR[d], c += DC[d])
                                 rays[s][d].push_back(square_at(r, c));
+        init_rays_padded();
         for (int n = 0; n <= N; ++n) {
                 binom[n][0] = 1;
                 for (int k = 1; k <= n; ++k) binom[n][k] = binom[n - 1][k - 1] + (k <= n - 1 ? binom[n - 1][k] : 0);
@@ -379,83 +382,188 @@ struct MoveList {
         }
 };
 
+// ---------------------------------------------------------------- the move generator: padded bitboards (after dctl)
+//
+// Moves are generated on padded bitboards: the board flipped (row 0 at the top, as the PDN numbering) and padded with
+// ghost squares on the right (tabula: pad_right(1); the padded width PW is odd), numbered row by row from the top left.
+// Every diagonal step is then one fixed stride (up-left -SR, up-right -SL, down-left +SL, down-right +SR, with
+// SL = (PW - 1) / 2 and SR = (PW + 1) / 2), so a step of a whole set of pieces is one shift; a step off the board lands
+// on a ghost square or off the bitboard, never on a playable square. The padded numbering keeps the PDN order of the
+// playable squares, so a dense bitboard (the squares 0..N-1 of positions, indices and files) converts to the padded one
+// by one PDEP onto the playable squares, and back by one PEXT.
+//   captures first: per direction, the men that can capture are men & shift(targets, -d) & shift(empty, -2 d) (dctl's
+//   jump_from), the kings' by the classical ray attack (a table of the squares along each ray, the first piece on it
+//   by a bit scan); from each, a depth-first search of the continuations (Turkish strike: captured pieces stay on the
+//   board until the capture is complete and cannot be jumped twice), keeping the longest where the majority rule holds;
+//   moves without capture only when there is no capture: men by one shift per forward direction, kings by the ray attack.
+constexpr tabula::chequer PAD_GRID = PDN_GRID.pad(tabula::pad_right(1));
+constexpr int PW = PAD_GRID.width;
+static_assert(PW % 2 == 1, "an odd padded width: every diagonal a constant stride");
+constexpr int SL = (PW - 1) / 2, SR = (PW + 1) / 2;
+constexpr int STEP[4] = { -SR, -SL, SL, SR };          // the directions of DR / DC: up-left, up-right, down-left, down-right
+constexpr std::array<int, std::size_t(N)> PAD_OF = [] {       // dense square -> padded square
+        std::array<int, std::size_t(N)> a{};
+        for (int s = 0; s < N; ++s) a[std::size_t(s)] = PAD_GRID.index(std::pair{ GEO.col[std::size_t(s)], GEO.row[std::size_t(s)] });
+        return a;
+}();
+constexpr int PAD_SIZE = PAD_OF[std::size_t(N - 1)] + 1;
+static_assert([] { for (int s = 1; s < N; ++s) if (PAD_OF[std::size_t(s)] <= PAD_OF[std::size_t(s - 1)]) return false; return true; }(),
+              "the padded numbering keeps the PDN order");
+static_assert([] { for (int s = 0; s < N; ++s) for (int d = 0; d < 4; ++d) {
+                        int const t = square_at(GEO.row[std::size_t(s)] + DR[d], GEO.col[std::size_t(s)] + DC[d]);
+                        if (t >= 0 && PAD_OF[std::size_t(t)] != PAD_OF[std::size_t(s)] + STEP[d]) return false;
+                } return true; }(), "every diagonal step is its stride");
+
+using pboard = xstd::bit_align<xstd::bit_fixed_set<PAD_SIZE>>;
+constexpr std::array<int, std::size_t(PAD_SIZE)> DENSE_OF = [] {       // padded square -> dense square, -1 for a ghost
+        std::array<int, std::size_t(PAD_SIZE)> a{};
+        for (auto& x : a) x = -1;
+        for (int s = 0; s < N; ++s) a[std::size_t(PAD_OF[std::size_t(s)])] = s;
+        return a;
+}();
+constexpr pboard PLAYABLE = [] { pboard b; for (int s = 0; s < N; ++s) b.insert(std::size_t(PAD_OF[std::size_t(s)])); return b; }();
+
+// dense <-> padded: the dense bitboard's bits deposited onto the playable squares (PDEP), and gathered back (PEXT)
+pboard to_pad(bitboard const& x)
+{
+        pboard y;
+        if constexpr (BLOCKS == 1 && PAD_SIZE <= 64) return xstd::bit_expand(block_bits(x, 0), PLAYABLE);
+        else for (auto const sq : x) y.insert(std::size_t(PAD_OF[sq]));
+        return y;
+}
+bitboard to_dense(pboard const& y)
+{
+        if constexpr (BLOCKS == 1 && PAD_SIZE <= 64) return bitboard_of_block(xstd::bit_compress<word>(y, PLAYABLE), 0);
+        else {
+                bitboard x;
+                for (auto const sq : y) x.insert(std::size_t(DENSE_OF[sq]));
+                return x;
+        }
+}
+
+pboard shifted(pboard x, int k)                         // every square moved by k (positive: down the board)
+{
+        if (k > 0) x <<= std::size_t(k);
+        else x >>= std::size_t(-k);
+        return x;
+}
+
+// the squares along each ray, from (not including) a square, and the ray from a square including it
+std::array<std::array<pboard, 4>, std::size_t(PAD_SIZE)> RAY{};
+
+void init_rays_padded()
+{
+        for (int s = 0; s < N; ++s)
+                for (int d = 0; d < 4; ++d)
+                        for (int t : rays[std::size_t(s)][std::size_t(d)]) RAY[std::size_t(PAD_OF[std::size_t(s)])][std::size_t(d)].insert(std::size_t(PAD_OF[std::size_t(t)]));
+}
+
+// the first square of a nonempty set along direction d (the nearest one: the lowest going down, the highest going up)
+int first_along(pboard const& x, int d) { return int(STEP[d] > 0 ? x.front() : x.back()); }
+
+// the empty squares a king on sq reaches in direction d (its ray up to the first piece), and that first piece (-1: none)
+pboard king_reach(int sq, int d, pboard const& empty, int& blocker)
+{
+        pboard ray = RAY[std::size_t(sq)][std::size_t(d)];
+        pboard const occupied = ray - empty;
+        blocker = -1;
+        if (occupied.empty()) return ray;
+        blocker = first_along(occupied, d);
+        ray -= RAY[std::size_t(blocker)][std::size_t(d)];
+        ray.erase(std::size_t(blocker));
+        return ray;
+}
+
+constexpr bool man_dir(int us, int d) { return us == 0 ? d < 2 : d >= 2; }    // a man's forward directions
+
 struct Gen {
         Pos const& p;
         int us, them;
-        bitboard enemy, empty0;
+        pboard enemy;                   // the opponent's pieces (padded)
         int best = 0;
         MoveList* out;
-        int from = 0;
+        int from = 0;                   // padded
         bool is_king = false;
 
-        Gen(Pos const& pp, MoveList* o) : p(pp), us(pp.stm), them(1 - pp.stm), out(o)
-        {
-                enemy = p.m[them] | p.k[them];
-        }
+        Gen(Pos const& pp, MoveList* o) : p(pp), us(pp.stm), them(1 - pp.stm), out(o) {}
 
-        void emit(int to, bitboard const& cap, int n)
+        void emit(int to, pboard const& cap, int n)
         {
                 if constexpr (!MAJORITY) n = n > 0 ? 1 : 0;     // every capture counts the same, but a capture is compulsory
                 if (n < best) return;
                 if (n > best) { best = n; out->clear(); }
+                int const f = DENSE_OF[std::size_t(from)], t = DENSE_OF[std::size_t(to)];
+                bitboard const captured = to_dense(cap);
+                if (!keep_duplicates && n > 0)          // the same position by another path (only captures can repeat one)
+                        for (auto const& mv : *out) if (mv.from == f && mv.to == t && mv.captured == captured) return;
                 Pos q = p;
-                std::size_t const fb = std::size_t(from), tb = std::size_t(to);
-                bool promote = !is_king && (us == 0 ? PROMO_WHITE : PROMO_BLACK).contains(tb);
+                std::size_t const fb = std::size_t(f), tb = std::size_t(t);
+                bool const promote = !is_king && (us == 0 ? PROMO_WHITE : PROMO_BLACK).contains(tb);
                 if (is_king) { q.k[us].erase(fb); q.k[us].insert(tb); }
                 else if (promote) { q.m[us].erase(fb); q.k[us].insert(tb); }
                 else { q.m[us].erase(fb); q.m[us].insert(tb); }
-                q.m[them] -= cap; q.k[them] -= cap;
+                q.m[them] -= captured; q.k[them] -= captured;
                 q.stm = them;
-                if (!keep_duplicates)
-                        for (auto const& mv : *out) if (mv.next == q) return;  // same resulting position
-                out->push_back({ from, to, cap, q });
+                out->push_back({ f, t, captured, q });
         }
 
-        // empty: squares that are empty during this capture (origin is vacated; captured pieces stay)
-        void capture(int s, bitboard const& empty, bitboard const& cap, int n)
+        // the continuations of a capture from sq: empty are the squares empty during the capture (the origin vacated, the
+        // captured pieces still there), cap the pieces captured so far
+        void capture(int sq, pboard const& empty, pboard const& cap, int n)
         {
                 bool any = false;
+                pboard const targets = enemy - cap;
                 for (int d = 0; d < 4; ++d) {
-                        if (!MEN_CAPTURE_BACK && !is_king && (us == 0 ? d >= 2 : d < 2)) continue;
-                        auto const& ray = rays[s][d];
-                        std::size_t i = 0;
-                        if (LONG_KINGS && is_king) while (i < ray.size() && empty.contains(std::size_t(ray[i]))) ++i;
-                        if (i >= ray.size()) continue;
-                        int v = ray[i];
-                        if (!enemy.contains(std::size_t(v)) || cap.contains(std::size_t(v))) continue;
-                        std::size_t j = i + 1;
-                        if (j >= ray.size() || !empty.contains(std::size_t(ray[j]))) continue;
-                        for (; j < ray.size() && empty.contains(std::size_t(ray[j])); ++j) {
+                        if (!MEN_CAPTURE_BACK && !is_king && !man_dir(us, d)) continue;
+                        if (LONG_KINGS && is_king) {
+                                int v;
+                                king_reach(sq, d, empty, v);
+                                if (v < 0 || !targets.contains(std::size_t(v))) continue;
+                                int w;
+                                pboard const land = king_reach(v, d, empty, w);
+                                for (auto const t : land) { any = true; capture(int(t), empty, cap | pboard{ std::size_t(v) }, n + 1); }
+                        } else {
+                                int const v = sq + STEP[d], t = v + STEP[d];
+                                if (v < 0 || t < 0 || t >= PAD_SIZE || !targets.contains(std::size_t(v)) || !empty.contains(std::size_t(t))) continue;
                                 any = true;
-                                capture(ray[j], empty, cap | square_bb(v), n + 1);
-                                if (!LONG_KINGS || !is_king) break;
+                                capture(t, empty, cap | pboard{ std::size_t(v) }, n + 1);
                         }
                 }
-                if (!any && n > 0) emit(s, cap, n);
+                if (!any && n > 0) emit(sq, cap, n);
         }
 
         void run()
         {
-                bitboard const occ = p.occ();
-                bitboard const pieces = p.m[us] | p.k[us];
-                // captures
-                for (auto const sq : pieces) {
-                        from = int(sq);
-                        is_king = p.k[us].contains(sq);
-                        capture(from, (FULL - occ) | square_bb(from), bitboard{}, 0);
-                }
+                pboard const men = to_pad(p.m[us]), kings = to_pad(p.k[us]);
+                enemy = to_pad(p.m[them] | p.k[them]);
+                pboard const empty = PLAYABLE - men - kings - enemy;
+                // captures: the men that can capture, by shifts per direction, then each one's continuations; then the kings'
+                pboard jumpers;
+                for (int d = 0; d < 4; ++d)
+                        if (MEN_CAPTURE_BACK || man_dir(us, d))
+                                jumpers |= men & shifted(enemy, -STEP[d]) & shifted(empty, -2 * STEP[d]);
+                is_king = false;
+                for (auto const sq : jumpers) { from = int(sq); capture(from, empty | pboard{ std::size_t(sq) }, pboard{}, 0); }
+                is_king = true;
+                for (auto const sq : kings) { from = int(sq); capture(from, empty | pboard{ std::size_t(sq) }, pboard{}, 0); }
                 if (best > 0) return;
-                // quiet moves
-                for (auto const sq : pieces) {
+                // moves without capture
+                is_king = false;
+                for (int d = 0; d < 4; ++d) {
+                        if (!man_dir(us, d)) continue;
+                        for (auto const t : shifted(men, STEP[d]) & empty) { from = int(t) - STEP[d]; emit(int(t), pboard{}, 0); }
+                }
+                is_king = true;
+                for (auto const sq : kings) {
                         from = int(sq);
-                        is_king = p.k[us].contains(sq);
                         for (int d = 0; d < 4; ++d) {
-                                if (!is_king && (us == 0 ? d >= 2 : d < 2)) continue;
-                                for (int t : rays[from][d]) {
-                                        if (occ.contains(std::size_t(t))) break;
-                                        emit(t, bitboard{}, 0);
-                                        if (!LONG_KINGS || !is_king) break;
+                                pboard reach;
+                                if constexpr (LONG_KINGS) { int b; reach = king_reach(from, d, empty, b); }
+                                else {
+                                        int const t = from + STEP[d];
+                                        if (t >= 0 && t < PAD_SIZE && empty.contains(std::size_t(t))) reach.insert(std::size_t(t));
                                 }
+                                for (auto const t : reach) emit(int(t), pboard{}, 0);
                         }
                 }
         }
@@ -469,27 +577,35 @@ MoveList moves(Pos const& p)
         return out;
 }
 
+// whether the side to move can capture: the men by shifts, the kings by their rays
 bool has_capture(Pos const& p)
 {
-        int us = p.stm, them = 1 - us;
-        bitboard const enemy = p.m[them] | p.k[them];
-        bitboard const empty = FULL - p.occ();
-        for (auto const sq : p.m[us]) {
-                for (int d = 0; d < 4; ++d) {
-                        if (!MEN_CAPTURE_BACK && (us == 0 ? d >= 2 : d < 2)) continue;
-                        auto const& r = rays[std::size_t(sq)][std::size_t(d)];
-                        if (r.size() >= 2 && enemy.contains(std::size_t(r[0])) && empty.contains(std::size_t(r[1]))) return true;
-                }
+        int const us = p.stm, them = 1 - us;
+        pboard const men = to_pad(p.m[us]), kings = to_pad(p.k[us]), enemy = to_pad(p.m[them] | p.k[them]);
+        pboard const empty = PLAYABLE - men - kings - enemy;
+        for (int d = 0; d < 4; ++d) {
+                if (!MEN_CAPTURE_BACK && !man_dir(us, d)) continue;
+                if (!(men & shifted(enemy, -STEP[d]) & shifted(empty, -2 * STEP[d])).empty()) return true;
         }
-        for (auto const sq : p.k[us]) {
-                for (int d = 0; d < 4; ++d) {
-                        auto const& r = rays[std::size_t(sq)][std::size_t(d)];
-                        std::size_t i = 0;
-                        if constexpr (LONG_KINGS) while (i < r.size() && empty.contains(std::size_t(r[i]))) ++i;
-                        if (i + 1 < r.size() && enemy.contains(std::size_t(r[i])) && empty.contains(std::size_t(r[i + 1]))) return true;
-                }
+        if (kings.empty()) return false;
+        if constexpr (!LONG_KINGS) {
+                for (int d = 0; d < 4; ++d)
+                        if (!(kings & shifted(enemy, -STEP[d]) & shifted(empty, -2 * STEP[d])).empty()) return true;
+                return false;
+        } else {
+                pboard const victims = enemy & [&] { pboard x; for (int d = 0; d < 4; ++d) x |= shifted(empty, -STEP[d]); return x; }();
+                if (victims.empty()) return false;
+                for (auto const sq : kings)
+                        for (int d = 0; d < 4; ++d) {
+                                int b;
+                                king_reach(int(sq), d, empty, b);
+                                if (b >= 0 && enemy.contains(std::size_t(b))) {
+                                        int const t = b + STEP[d];
+                                        if (t >= 0 && t < PAD_SIZE && empty.contains(std::size_t(t)) && RAY[std::size_t(b)][std::size_t(d)].contains(std::size_t(t))) return true;
+                                }
+                        }
+                return false;
         }
-        return false;
 }
 
 // ---------------------------------------------------------------- values

@@ -7,8 +7,9 @@
 """The longest win on every board of the 3-2 table (heights 3 to 10, widths up to height + 9), with the analyses along its
 main line, stored in longest32.json.gz for the site (building the 3-2 databases of all boards takes about an hour).
 Also stored per board: the quiet positions counted by their value with white and with black to move, and the fortress
-test, the same count for the positions with the two black kings in two double corners (per pair of double corners); the
-colours of the table use the fortress test. A position is quiet when nobody can capture, white to move has a move that loses no material, and
+test, the same count for the positions with the two black kings in two double corners (per pair of double corners), and
+per pair the longest win with the black kings in its double corners (with its main line); the table shows per pair that
+longest win, coloured by the fortress test. A position is quiet when nobody can capture, white to move has a move that loses no material, and
 black to move cannot create a fork (a move after which white has no such move). Exact on small boards, a random sample
 of 3000 quiet positions on the others. Resumable: boards already in the file are skipped.
 
@@ -162,6 +163,122 @@ def fortress_counts(e, rng):
     return pairs
 
 
+def pair_longest(e):
+    """per pair of double corners: its type (along the W side, along the H side, or diagonal) and the quiet position
+    with white to move, the black kings in the two double corners, with the longest win; with the analyses along its
+    main line, to be merged into the stored analyses of the board"""
+    sq = {n: tuple(fr) for n, fr in e.g['sq'].items()}
+    at = {fr: n for n, fr in sq.items()}
+    nb = {n: [at[(f + df, r + dr)] for df in (-1, 1) for dr in (-1, 1) if (f + df, r + dr) in at] for n, (f, r) in sq.items()}
+    name = {n: f'{chr(97 + f)}{r + 1}' for n, (f, r) in sq.items()}
+
+    def captures(us, them):
+        occ = set(us) | set(them)
+        for x in us:
+            for v in nb[x]:
+                if v in them:
+                    to = at.get((2 * sq[v][0] - sq[x][0], 2 * sq[v][1] - sq[x][1]))
+                    if to is not None and to not in occ:
+                        return True
+        return False
+
+    def values(fens, chunk=500):                   # 'val' requests in chunks: the answers of a chunk fit the pipe
+        out = []
+        for i in range(0, len(fens), chunk):
+            part = fens[i:i + chunk]
+            e.p.stdin.write(''.join(f'val {f}\n' for f in part))
+            e.p.stdin.flush()
+            for _ in part:
+                out.append(e.p.stdout.readline().split()[1])
+                e.p.stdout.readline()              # end
+        return out
+
+    dcs = double_corners(e)
+    corner = lambda dc: tuple(min(sq[x][k] for x in dc) if min(sq[x][k] for x in dc) == 0 else max(sq[x][k] for x in dc)
+                              for k in (0, 1))
+    pairs, analyses = {}, {}
+    for i, j in combinations(range(len(dcs)), 2):
+        (fi, ri), (fj, rj) = corner(dcs[i]), corner(dcs[j])
+        kind = 'W' if ri == rj else 'H' if fi == fj else 'diag'
+        cands = [(wk, bk) for bk in sorted({tuple(sorted((a, b))) for a in dcs[i] for b in dcs[j] if a != b})
+                 for wk in combinations(sorted(set(sq) - set(bk)), 3)]
+        fens = [e.fen([name[x] for x in wk], [name[x] for x in bk]) for wk, bk in cands]
+        best = None
+        for (wk, bk), fen, v in sorted(zip(cands, fens, values(fens)), key=lambda t: -int(t[2][1:]) if t[2][0] == 'W' else 0):
+            if v[0] != 'W':
+                break
+            if not captures(wk, bk) and not captures(bk, wk):
+                best = (fen, int(v[1:]))
+                break
+        key = '/'.join(name[x] for x in dcs[i]) + ' ' + '/'.join(name[x] for x in dcs[j])
+        pairs[key] = {'type': kind, 'longest': best[0] if best else None, 'n': best[1] if best else 0}
+        if best:
+            analyses.update(CachedEngine.entry(dict_engine(e, best[0]), best[1])['analyses'])
+    return pairs, analyses
+
+
+class dict_engine:
+    """FastEngine e seen from another start position, for CachedEngine.entry"""
+    def __init__(self, e, longest):
+        self.e, self.g, self.longest = e, e.g, longest
+
+    def analyse(self, fen):
+        return self.e.analyse(fen)
+
+
+def fortress_parity(e):
+    """the fortress test as a yes/no question: the two black kings on the edge squares of two double corners (one in
+    each), black to move, nobody can capture, black can avoid losing material at once, the white kings anywhere; per
+    pair of double corners and per parity (of the sum of the rank numbers of all kings, which never changes without a
+    capture) the number of positions and of positions won for white (and lost for white). White breaks the fortress at
+    a parity when one of those set-ups wins"""
+    sq = {n: tuple(fr) for n, fr in e.g['sq'].items()}
+    at = {fr: n for n, fr in sq.items()}
+    nb = {n: [at[(f + df, r + dr)] for df in (-1, 1) for dr in (-1, 1) if (f + df, r + dr) in at] for n, (f, r) in sq.items()}
+    name = {n: f'{chr(97 + f)}{r + 1}' for n, (f, r) in sq.items()}
+
+    def captures(us, them):
+        occ = set(us) | set(them)
+        for x in us:
+            for v in nb[x]:
+                if v in them:
+                    to = at.get((2 * sq[v][0] - sq[x][0], 2 * sq[v][1] - sq[x][1]))
+                    if to is not None and to not in occ:
+                        return True
+        return False
+
+    def safe(wk, bk):                                        # black to move can avoid losing material at once
+        occ = set(wk) | set(bk)
+        return any(not captures(wk, (set(bk) - {x}) | {y}) for x in bk for y in nb[x] if y not in occ)
+
+    def values(fens, chunk=500):
+        out = []
+        for i in range(0, len(fens), chunk):
+            part = fens[i:i + chunk]
+            e.p.stdin.write(''.join(f'val {f}\n' for f in part))
+            e.p.stdin.flush()
+            for _ in part:
+                out.append(e.p.stdout.readline().split()[1])
+                e.p.stdout.readline()
+        return out
+
+    dcs = double_corners(e)
+    out = {}
+    for i, j in combinations(range(len(dcs)), 2):
+        cands = [(wk, bk) for bk in sorted({tuple(sorted((a, b))) for a in dcs[i] for b in dcs[j] if a != b})
+                 for wk in combinations(sorted(set(sq) - set(bk)), 3)]
+        cands = [(wk, bk) for wk, bk in cands if not captures(wk, bk) and not captures(bk, wk) and safe(wk, bk)]
+        fens = [e.fen([name[x] for x in wk], [name[x] for x in bk], 'B') for wk, bk in cands]
+        res = {'even': [0, 0, 0], 'odd': [0, 0, 0]}          # positions, won for white, lost for white
+        for (wk, bk), v in zip(cands, values(fens)):
+            par = 'even' if sum(sq[x][1] + 1 for x in (*wk, *bk)) % 2 == 0 else 'odd'
+            res[par][0] += 1
+            res[par][1] += v[0] == 'L'                       # black to move loses: white wins
+            res[par][2] += v[0] == 'W'
+        out['/'.join(name[x] for x in dcs[i]) + ' ' + '/'.join(name[x] for x in dcs[j])] = res
+    return out
+
+
 def longest_any(e):
     """a position with white to move and the longest win (small boards only)"""
     name = {n: f'{chr(97 + f)}{r + 1}' for n, (f, r) in e.g['sq'].items()}
@@ -183,17 +300,22 @@ def main():
             w = h + d
             for corners in (['unplayable', 'playable'] if w % 2 and h % 2 else ['playable']):
                 key = f'{w}x{h} {corners}'
-                if key in data and 'fortress' in data[key]:
+                if key in data and 'parity' in data[key]:
                     continue
                 if w * h // 2 + (w * h % 2 and corners == 'playable') < 6:
                     continue                       # no room for 5 kings and a move
                 e = FastEngine(EXE, '--width', w, '--height', h, '--corners', corners, '--rules', 'checkers',
                                '--white', 3, '--black', 2)
-                if key in data:                    # stored before the fortress test: add it
-                    data[key]['fortress'] = fortress_counts(e, rng)
+                if key in data:                    # stored before: add what is missing
+                    if 'fortress' not in data[key]:
+                        data[key]['fortress'] = fortress_counts(e, rng)
+                    if 'pairs' not in data[key]:
+                        data[key]['pairs'], extra = pair_longest(e)
+                        data[key]['analyses'].update(extra)
+                    data[key]['parity'] = fortress_parity(e)
                     e.p.terminate()
                     OUT.write_bytes(gzip.compress(json.dumps(data, separators=(',', ':'), sort_keys=True).encode(), mtime=0))
-                    print(key, 'fortress', data[key]['fortress'], flush=True)
+                    print(key, 'parity', data[key]['parity'], flush=True)
                     continue
                 if not e.longest:                  # egdb_fast reports none on a few small boards: search them all
                     e.longest = longest_any(e)
@@ -201,6 +323,9 @@ def main():
                 entry = CachedEngine.entry(e, int(v[1:])) if v[0] == 'W' else {'g': e.g, 'longest': None, 'analyses': {}}
                 entry['quiet'] = quiet_counts(e, rng)
                 entry['fortress'] = fortress_counts(e, rng)
+                entry['pairs'], extra = pair_longest(e)
+                entry['analyses'].update(extra)
+                entry['parity'] = fortress_parity(e)
                 data[key] = entry
                 e.p.terminate()
                 OUT.write_bytes(gzip.compress(json.dumps(data, separators=(',', ':'), sort_keys=True).encode(), mtime=0))

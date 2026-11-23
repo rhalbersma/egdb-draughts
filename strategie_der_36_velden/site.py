@@ -41,17 +41,17 @@ REPO = 'https://github.com/rhalbersma/egdb-draughts'
 TITLE = 'Strategie der 36 velden'
 H = 'https://www.hijkendtc.nl/'
 
-# the menu and the landing page: the pages in the order of the book's website, consecutive pages of a chapter
-# grouped
+# the menu and the landing page: the pages per chapter, with the section numbers of the book's website (which
+# publishes the solutions of chapter 6 after the first page of chapter 7; here every chapter stays together)
 LANDING = [
     ('Hoofdstuk 1', ['h1']), ('Hoofdstuk 2', ['h2']), ('Hoofdstuk 3', ['h3', 'h3-3']), ('Hoofdstuk 4', ['h4']),
-    ('Hoofdstuk 5 · Scouppe', ['h5a', 'h5b', 'h5c', 'h5d']), ('Hoofdstuk 6 · Opgaven', ['h6a', 'h6b']),
-    ('Hoofdstuk 7', ['h7']), ('Hoofdstuk 6 · Oplossingen', ['h6a-opl', 'h6-opl1', 'h6-opl2', 'h6-opl3']),
-    ('Hoofdstuk 7 · Vervolg', ['h7-2', 'h7-3', 'h7-4', 'h7-5', 'h7-6', 'h7-7']), ('Hoofdstuk 8', ['h8']),
+    ('Hoofdstuk 5 · Scouppe', ['h5a', 'h5b', 'h5c', 'h5d']),
+    ('Hoofdstuk 6 · Intermezzo', ['h6a', 'h6b', 'h6a-opl', 'h6-opl1', 'h6-opl2', 'h6-opl3']),
+    ('Hoofdstuk 7 · De randslag-opening', ['h7', 'h7-2', 'h7-3', 'h7-4', 'h7-5', 'h7-6', 'h7-7']), ('Hoofdstuk 8', ['h8']),
     ('Hoofdstuk 9', ['h9']),
 ]
 
-# the pages of the book's website in its own order: (file, label, title, original, sections, diagrams)
+# the pages of the book's website per chapter: (file, label, title, original, sections, diagrams)
 PAGES = [
     ('h1', 'Hoofdstuk 1', 'Inleiding', H + 'strategie-der-36-velden/', ['1'], ['1.1', '1.2']),
     ('h2', 'Hoofdstuk 2', 'De lange lijn', H + 'strategie-der-36-velden-ii/', ['2'], ['2.1', '2.2', '2.3']),
@@ -65,19 +65,19 @@ PAGES = [
     ('h5b', 'Hoofdstuk 5b', 'Scouppe Trucs', H + 'scouppe-trucs/', ['5.2'], ['5.3', '5.4']),
     ('h5c', 'Hoofdstuk 5c', 'Scouppe: Dam op 17', H + 'dam-op-17/', ['5.3'], ['5.5', '5.6']),
     ('h5d', 'Hoofdstuk 5d', 'Compositie op finesse 5', H + 'compositie-op-finesse-5/', ['5.4', '5.5'], ['5.7']),
-    ('h6a', 'Hoofdstuk 6a', 'Intermezzo: acht opgaven (sectie 6.1)', H + 'acht-opgaven/', ['6.1'],
+    ('h6a', 'Hoofdstuk 6', 'Intermezzo: acht opgaven', H + 'acht-opgaven/', ['6.1'],
      ['6.1', '6.2', '6.3', '6.4', '6.5']),
-    ('h6b', 'Hoofdstuk 6b', 'Zwaar manoeuvreren (sectie 6.2)', H + 'zwaar-manouevreren/', ['6.2'],
+    ('h6b', 'Hoofdstuk 6.2', 'Zwaar manoeuvreren', H + 'zwaar-manouevreren/', ['6.2'],
      ['6.6', '6.7', '6.8', '6.9', '6.10']),
-    ('h7', 'Hoofdstuk 7', 'De randslag-opening', H + 'randslag/', ['7.1'], ['7.1', '7.2']),
-    ('h6a-opl', 'Hoofdstuk 6a', 'Oplossingen (sectie 6.1)', H + 'oplossingen/', ['6.3'], ['6.1', '6.3', '6.5']),
-    ('h6-opl1', '', 'Oplossingen zwaar manoeuvreren I', H + '6-4-oplossingen-2-zwaar-manoeuvreren/', ['6.4'],
+    ('h6a-opl', 'Hoofdstuk 6.3', 'Oplossingen', H + 'oplossingen/', ['6.3'], ['6.1', '6.3', '6.5']),
+    ('h6-opl1', 'Hoofdstuk 6.4', 'Oplossingen 2: zwaar manoeuvreren', H + '6-4-oplossingen-2-zwaar-manoeuvreren/', ['6.4'],
      ['6.6', '6.6a', '6.7', '6.7a']),
-    ('h6-opl2', '', 'Oplossingen zwaar manoeuvreren II', H + '6-5-oplossingen-3-de-stand-waar-alles-om-draait/',
+    ('h6-opl2', 'Hoofdstuk 6.5', 'Oplossingen 3: de stand waar alles om draait', H + '6-5-oplossingen-3-de-stand-waar-alles-om-draait/',
      ['6.5'], ['6.9', '6.9a']),
-    ('h6-opl3', '', 'Oplossingen zwaar manoeuvreren III',
+    ('h6-opl3', 'Hoofdstuk 6.6', 'Oplossingen 4: toegift. Nog steeds zwaar manoeuvreren',
      H + '6-6-oplossingen-4-toegift-nog-steeds-zwaar-manoeuvreren/', ['6.6'],
      ['6.10', '6.11', '6.12', '6.13', '6.14', '6.15']),
+    ('h7', 'Hoofdstuk 7', 'De randslag-opening', H + 'randslag/', ['7.1'], ['7.1', '7.2']),
     ('h7-2', 'Hoofdstuk 7.2', 'De derde zet', H + '7-2-de-derde-zet/', ['7.2'], ['7.1', '7.3', '7.4j']),
     ('h7-3', 'Hoofdstuk 7.3', 'De vierde zet', H + '7-3-de-vierde-zet/', ['7.3'],
      ['7.4', '7.5', '7.6', '7.7', '7.8', '6.11', '7.9', '7.10', '7.11']),
@@ -520,10 +520,10 @@ class Site:
         t = self.t
         body = ['<h1>Strategie der 36 velden</h1>', fig, md(lead, 'strategie_der_36_velden/', lambda h: pg.prose_html(h, '6x6')),
                 t('<h2>Hoofdstukken</h2>', '<h2>Chapters</h2>'),
-                t('<p>In de volgorde van de website van het boek. Elk hoofdstuk toont de diagrammen met de claims van '
+                t('<p>Per hoofdstuk, met de sectienummers van de website van het boek. Elk hoofdstuk toont de diagrammen met de claims van '
                   'het boek, de varianten en de weerleggingen; het menu <em>Hoofdstukken</em> bovenaan brengt je overal '
                   'heen.</p>',
-                  '<p>In the order of the book\'s website (the chapter titles are Brascamp\'s, in Dutch). Each chapter '
+                  '<p>Per chapter, with the section numbers of the book\'s website (the chapter titles are Brascamp\'s, in Dutch). Each chapter '
                   'shows the diagrams with the claims of the book, the variations and the refutations; the '
                   '<em>Chapters</em> menu at the top takes you anywhere.</p>'), '\n'.join(toc),
                 t(f'<h2>De opening</h2><p>Met de databases tot en met 12 stukken is 6×6 sterk opgelost: van elke '

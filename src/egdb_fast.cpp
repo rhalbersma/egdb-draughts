@@ -960,6 +960,7 @@ public:
         // ---- line protocol for other programs (e.g. the companion site) ------------
         //   geom      -> "geom W H PARITY", "sq PDN FILE RANK" per square, "lake FILE RANK" per removed square
         //   pos FEN   -> "val V", then "move ALG NUM V NEXTFEN" per move, best first
+        //   val FEN   -> "val V" only
         // values: Wn / Ln (n plies, for the side to move resp. the mover), D; each answer ends with "end"
 
         [[nodiscard]] static std::string show(std::uint8_t v)
@@ -982,6 +983,8 @@ public:
                                                 std::cout << std::format("sq {} {} {}\n", g.pdn[static_cast<std::size_t>(i)], nm[0] - 'a', std::stoi(nm.substr(1)) - 1);
                                         }
                                         for (auto const& [f, r] : g.lake) { std::cout << std::format("lake {} {}\n", f, r); }
+                                } else if (cmd == "val") {
+                                        std::cout << "val " << show(probe(normalize(parse_fen(arg)).first)) << '\n';
                                 } else if (cmd == "pos") {
                                         auto const [p, swapped] = normalize(parse_fen(arg));
                                         std::cout << "val " << show(probe(p)) << '\n';
@@ -1069,7 +1072,7 @@ void usage()
                 "  --no-text           with --out: only the compact binary files\n"
                 "  --query FEN         analyse a position (e.g. W:WK2,K10,K45:BK50); repeatable\n"
                 "  --no-verify         skip the verification pass\n"
-                "  --serve             after building, answer 'geom' and 'pos FEN' requests on stdin\n";
+                "  --serve             after building, answer 'geom', 'pos FEN' and 'val FEN' requests on stdin\n";
 }
 
 auto parse_square(std::string const& s)

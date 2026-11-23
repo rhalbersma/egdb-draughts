@@ -218,25 +218,30 @@ and the last number is the board with playable corner squares, which has no doub
 follows the fortress test of the pair: the two black kings on the edge squares of the two double corners (one in each),
 black to move, nobody can capture and black can avoid losing material at once, the white kings anywhere. Without a
 capture the parity of the sum of the rank numbers of all kings never changes, so the question is per parity: does one of
-those set-ups win for white, yes or no? <span class="res-win">67</span> = yes at both parities: the fortress falls ·
+those set-ups win for white, yes or no? <span class="res-win">67</span> = yes at both parities: won ·
 <span class="res-diag">79*</span> = yes at one parity: the opposition decides · <span class="res-draw">(97)</span> = at
-neither: the fortress holds (the number is then the longest win of a position outside the test, for instance with white
+neither: drawn (the number is then the longest win of a position outside the test, for instance with white
 to move) · – = no win · on 3×3 (<code>–/–</code>) 5 kings do not fit (unplayable corners) or fill the board, so that nobody can move (playable corners): no game and so no colour.</p>
 <ul>
-<li>From height 4 it is nearly always all or nothing: at a parity with a win nearly every set-up wins, except on 4×4
-(65%) and along the side of 5 on 9×5, 11×5 and 13×5 with unplayable corners (91%, 74% and 61%).</li>
-<li>From height 4 the distance between the corner squares of the pair decides (<em>D</em> = largest, <em>d</em> = smallest
-coordinate difference). Up to <em>D</em> = 6 the fortress falls, and on 8×8 (7 × 7) too. At <em>D</em> = 8 the
-opposition decides (along a side of 9, and diagonally on 9×7, 8 × 6), except diagonally on 9×9 (8 × 8): there it holds.
-From <em>D</em> = 9 the fortress holds.</li>
-<li>Two exceptions: on boards of height 4 and 5 every pair falls, also when the double corners lie far apart, and on
-<a href="vesting-8x6.html">8×6</a> the diagonal pair already holds at 7 × 5: the diagonal between them is too short for
-the trap.</li>
-<li>On a board with four double corners black picks the pair that is best for him: on 11×7 the pair along the side of 7
-falls, but the pair along the side of 11 and the diagonal pair hold.</li>
-<li>At height 3 each side has a single edge square, shared by the two double corners on that side. With the black kings
-in the two double corners on the same side (along the side of 3) the opposition always decides; with a black king on
-each side the fortress falls on 5×3, the opposition decides on 7×3 and it holds from 9×3.</li>
+<li><em>H</em> = 3: each side has a single edge square, shared by the two double corners on that side. With the black
+kings along the side of 3 the opposition always decides; on the even widths that is the only pair. With a black king on
+each side white wins on 5×3, the opposition decides on 7×3 and it is a draw from 9×3: there white never wins with the
+black kings in those corners, (–).</li>
+<li><em>H</em> = 4 and 5: white wins with every pair, also when the double corners lie far apart. At a parity with a win nearly every
+set-up wins, except on 4×4 (65%) and along the side of 5 on 9×5, 11×5 and 13×5 with unplayable corners (91%, 74% and
+61%).</li>
+<li><em>H</em> = 6: 6×6 and 7×6 are won, on 9×6 (along the side of 9) the opposition decides, and 8×6 and from 10×6 are
+drawn. <a href="vesting-8x6.html">8×6</a> is the surprise: the double corners lie only 7 × 5 apart diagonally,
+yet the diagonal between them is too short for the trap.</li>
+<li><em>H</em> = 7: with the pair along the side of 7 white wins at every width; on the even widths it is the only pair, so white
+always wins there. On the odd widths black picks another pair: on 9×7 the opposition then decides (along the side of 9 and
+diagonally), from 11×7 it is a draw. On 7×7 white wins with both pairs.</li>
+<li><em>H</em> = 8: 8×8 is won (diagonally 7 × 7), on 9×8 the opposition decides (along the side of 9), from 10×8 it is a
+draw.</li>
+<li><em>H</em> = 9: with the pair along the side of 9 the opposition decides at every width; on the even widths it is the
+only pair. On the odd widths it is a draw with another pair: on 9×9 diagonally, from 11×9 also along the long
+side.</li>
+<li><em>H</em> ≥ 10: drawn everywhere (at height 11, outside the table, checked on 11×11, 12×11 and 13×11).</li>
 </ul>
 <nav class="pager"><a href="tabel-twee.html">← 2 kings against 1 per board</a><a href="twee-verdrijven.html">2 against 1: expelling the king →</a></nav>
 <p class="src credit">The form of the analyses is taken from those by Wieger Wesselink on <a href="https://10x10.org">10x10.org</a>.</p>

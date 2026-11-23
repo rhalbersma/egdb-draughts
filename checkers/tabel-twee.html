@@ -214,20 +214,22 @@ number for the position and replay the whole win.</p>
 <p class="src">The colour follows the fortress test: the black king on a square of a double corner, black to move,
 nobody can capture and black can avoid losing material at once, the white kings anywhere. Without a capture the parity of
 the sum of the rank numbers of all kings never changes, so the question is per parity: does one of those set-ups win for
-white, yes or no? <span class="res-win">33</span> = yes at both parities: the fortress falls; the longest win takes 33
+white, yes or no? <span class="res-win">33</span> = yes at both parities: won; the longest win takes 33
 plies · <span class="res-diag">33*</span> = yes at one parity: the opposition decides ·
-<span class="res-draw">(33)</span> = at neither: the fortress holds · <code>31/13</code> =
+<span class="res-draw">(33)</span> = at neither: drawn · <code>31/13</code> =
 unplayable/playable corner squares; with playable ones on an odd × odd board there is no double corner and so no fortress.
 A board <em>W</em> × <em>H</em> is width × height, with <em>W</em> ≥ <em>H</em>.</p>
 <ul>
-<li><a href="twee-4x4.html">4×4</a> is the only board where the fortress holds: no set-up wins. White only wins when a
-white king stands on the other square of the double corner and the black king has to let itself be captured.</li>
-<li>On the odd boards of height 3 with unplayable corners (5×3 to 11×3) the opposition decides. Every king move goes from an
-even to an odd rank or back, so nobody can lose a tempo, and on such a strip, where a king can only be captured on the
-middle rank, the outcome of every position with the black king in a double corner turns with the side to move. White on
-b3 and d3 and black on a2, for instance, is a draw with white to move and lost with black to move.</li>
-<li>On all other boards the fortress falls at both parities, and nearly every set-up wins: only on 6×3, 5×4 and the
-boards of height 6 does black hold one to three.</li>
+<li><em>H</em> = 3: on the even widths white wins; only on 6×3 does black hold three set-ups. On the odd widths with unplayable corners
+(5×3 to 11×3) the opposition decides. Every king move goes from an even to an odd rank or back, so nobody can lose a
+tempo, and on such a strip, where a king can only be captured on the middle rank, the outcome of every position with the
+black king in a double corner turns with the side to move. White on b3 and d3 and black on a2, for instance, is a draw
+with white to move and lost with black to move.</li>
+<li><em>H</em> = 4: <a href="twee-4x4.html">4×4</a> is the only board that is a draw: no set-up wins. White only
+wins when a white king stands on the other square of the double corner and the black king has to let itself be captured.
+From 5×4 white wins (on 5×4 black holds one set-up).</li>
+<li><em>H</em> ≥ 5: white wins everywhere, and nearly every set-up wins (on the boards of height 6 black holds
+one or two).</li>
 </ul>
 <nav class="pager"><a href="index.html">← Overview</a><a href="tabel-drie.html">3 kings against 2 per board →</a></nav>
 <p class="src credit">The form of the analyses is taken from those by Wieger Wesselink on <a href="https://10x10.org">10x10.org</a>.</p>

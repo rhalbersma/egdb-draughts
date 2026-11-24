@@ -162,7 +162,7 @@ corner.</li>
 # material at once, the white kings anywhere; per parity of the sum of the rank numbers, does a set-up win for white?
 # 21 = at both parities (the fortress falls), 21* = at one (the opposition decides), (21) = at neither (it holds; only 4x4)
 RESULTS_21 = {
-    3: ['3/3', '11', '9*/9', '23', '17*/11', '35', '25*/15', '47', '33*/19', '59', '41*/25'],
+    3: ['3/3', '11', '9*/9', '23', '17*/11', '35', '25*/15', '47', '33*/19', '59', '41*/23'],
     4: ['(3)', '13', '19', '19', '27', '27', '35', '35', '43', '43', '51'],
     5: ['13/9', '23', '31/13', '33', '37/17', '41', '45/21', '49', '53/25', '57', '61/29'],
     6: ['27', '31', '33', '37', '41', '45', '49', '53', '57', '61', '65'],

@@ -806,8 +806,11 @@ void solve_group_cell8(Group const& g, DepthSink<std::uint16_t>& sink, Execution
                 st(id, encode(win_value(n), w));
                 return true;
         };
+        // the time of each step of the rounds (summed over the plies), reported with the group
+        double t_reduce = 0, t_unmove = 0, t_check = 0, t_win = 0;
+        auto const timed = [](double& acc, auto&& f) { auto const s0 = std::chrono::steady_clock::now(); f(); acc += seconds_since(s0); };
         for (int n = 1;; ++n) {
-                if (n % WP == 0) { ++w; reduce(); }
+                if (n % WP == 0) { ++w; timed(t_reduce, reduce); }
                 std::atomic<bool> found{ false };
                 auto const note = [&](bool b) { if (b) found.store(true, std::memory_order_relaxed); };
                 // the codes of the previous ply n - 1 (dtm: a win only at an odd ply, a loss only at an even one)
@@ -817,33 +820,34 @@ void solve_group_cell8(Group const& g, DepthSink<std::uint16_t>& sink, Execution
                 std::uint8_t const cl = has_loss ? (front ? C_FRONT_LOSS : encode(loss(n - 1), w)) : 0;
                 for_list(at(eloss_at, n), [&](std::uint64_t id) { if (cell[id] == C_PENDING) cell[id] = 0; });
                 if (has_win && mark_changed) {                                  // losses in n: mark, then check once
-                        for_blocks(policy, T, [&](std::uint64_t lo, std::uint64_t hi) {
+                        timed(t_unmove, [&] { for_blocks(policy, T, [&](std::uint64_t lo, std::uint64_t hi) {
                                 scan_eq(lo, hi, cw, [&](std::uint64_t q) {
                                         predecessors(q, [&](std::uint64_t id) {
                                                 std::uint8_t z = 0;
                                                 std::atomic_ref<std::uint8_t>(cell[id]).compare_exchange_strong(z, C_CHANGED, std::memory_order_relaxed);
                                         });
                                 });
-                        });
-                        for_blocks(policy, T, [&](std::uint64_t lo, std::uint64_t hi) {
+                        }); });
+                        timed(t_check, [&] { for_blocks(policy, T, [&](std::uint64_t lo, std::uint64_t hi) {
                                 scan_eq(lo, hi, C_CHANGED, [&](std::uint64_t q) { st(q, 0); note(check_loss(q, n)); });
-                        });
+                        }); });
                 } else if (has_win)
-                        for_blocks(policy, T, [&](std::uint64_t lo, std::uint64_t hi) {         // losses in n
+                        timed(t_check, [&] { for_blocks(policy, T, [&](std::uint64_t lo, std::uint64_t hi) {         // losses in n
                                 scan_eq(lo, hi, cw, [&](std::uint64_t q) { predecessors(q, [&](std::uint64_t id) { note(check_loss(id, n)); }); });
-                        });
-                for_list(at(eloss_at, n), [&](std::uint64_t id) { note(check_loss(id, n)); });
+                        }); });
+                timed(t_check, [&] { for_list(at(eloss_at, n), [&](std::uint64_t id) { note(check_loss(id, n)); }); });
                 if (has_loss)
-                        for_blocks(policy, T, [&](std::uint64_t lo, std::uint64_t hi) {         // wins in n
+                        timed(t_win, [&] { for_blocks(policy, T, [&](std::uint64_t lo, std::uint64_t hi) {         // wins in n
                                 scan_eq(lo, hi, cl, [&](std::uint64_t q) { predecessors(q, [&](std::uint64_t id) { note(mark_win(id, n)); }); });
-                        });
-                for_list(at(ewin_at, n), [&](std::uint64_t id) { note(mark_win(id, n)); });
+                        }); });
+                timed(t_win, [&] { for_list(at(ewin_at, n), [&](std::uint64_t id) { note(mark_win(id, n)); }); });
                 if (!found && n > max_seed.load()) {
                         g_stats.levels = std::max(g_stats.levels, std::uint64_t(n));
                         break;
                 }
         }
 
+        auto const t_merge0 = std::chrono::steady_clock::now();
         // merge: all windows side by side, chunk by chunk (every snapshot stream-decompressed, the last window read from
         // the cells). A position's value is a transform-reduce over the windows: transform its byte in each window into
         // that window's value (0 where it is NOT_MINE, or not a depth code), reduce by keeping the non-zero one (exactly
@@ -893,6 +897,8 @@ void solve_group_cell8(Group const& g, DepthSink<std::uint16_t>& sink, Execution
         g_stats.frontier += zbytes;                             // cell8: the bytes of the snapshots
         if (count_checks) std::cout << "cell8: " << checks.load() << " loss checks for " << T << " positions" << std::endl;
         g_stats.rounds += seconds_since(t1);
+        std::cout << "cell8 steps: unmoves " << t_unmove << " s, loss checks " << t_check << " s, win marking " << t_win
+                  << " s, reductions " << t_reduce << " s, merge " << seconds_since(t_merge0) << " s (dual index " << g_dual_index << ")" << std::endl;
         if (!snaps.empty())
                 std::cout << "cell8: group of " << T << " positions, " << snaps.size() << " reductions, snapshots " << zbytes << " bytes" << std::endl;
 }

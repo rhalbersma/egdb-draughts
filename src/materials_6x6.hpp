@@ -161,6 +161,17 @@ constexpr bitboard DOM_BM = FULL - PROMO_BLACK;    // squares a black man may st
 #ifndef EGDB_JOINT_INDEX
 #define EGDB_JOINT_INDEX 1
 #endif
+
+// Dual indexing (Lincke), EGDB_DUAL_INDEX: one side to move's positions numbered in the colour-swapped order (black men,
+// then white men over what they leave; black kings, then white kings; the men stay outermost). A move changes only the
+// mover's pieces, so with the Black-to-move positions swapped (1) the successors of a move lie close together (the loss
+// checks), with the White-to-move positions swapped (2) the predecessors of an unmove do (the unmoves); 0: both sides in
+// the material's order. The order holds everywhere a position meets its slot: the cells, the sinks, the build and probe
+// files, so the files stay congruent with the cells and are written as one stream. A format choice: one setting per store
+// (joint index only)
+int const g_dual_index = std::getenv("EGDB_DUAL_INDEX") ? std::atoi(std::getenv("EGDB_DUAL_INDEX")) : 0;
+constexpr bool dual_side_allowed = EGDB_JOINT_INDEX != 0;
+inline bool dual_side(int stm) { return dual_side_allowed && g_dual_index != 0 && stm == 2 - g_dual_index; }
 // The joint index's two parts also number the positions of the groups (whichever index the files use): the men index of
 // a configuration of the men (white men, then black men over what the white men leave) and the king index within it
 // (white kings over the free squares, black kings over what is left). Every configuration of a material leaves the same
@@ -252,6 +263,7 @@ struct MatIndex {
         std::uint64_t index(Pos const& p) const
         {
 #if EGDB_JOINT_INDEX
+                if (dual_side(p.stm)) return men_index_dual(p.m[0], p.m[1]) * kings() + king_index_dual(FULL - p.m[0] - p.m[1], p.k[0], p.k[1]);
                 return men_index(p.m[0], p.m[1]) * kings() + king_index(p);
 #else
                 return ((rank_in(p.m[0], DOM_WM) * sbm + rank_in(p.m[1], DOM_BM)) * swk + rank_in(p.k[0], FULL)) * sbk
@@ -264,7 +276,8 @@ struct MatIndex {
         {
                 p.stm = stm;
 #if EGDB_JOINT_INDEX
-                place(slot / kings(), slot % kings(), stm, p);
+                if (dual_side(stm)) place_dual(slot / kings(), slot % kings(), stm, p);
+                else place(slot / kings(), slot % kings(), stm, p);
                 return true;
 #else
                 std::uint64_t const rbk = slot % sbk, t1 = slot / sbk, rwk = t1 % swk, t2 = t1 / swk;
@@ -387,10 +400,6 @@ struct Plane {
         }
 };
 
-// dual indexing (see Group::dual), EGDB_DUAL_INDEX: 0 off (both sides in the material's order), 1 the Black-to-move
-// positions colour-swapped (the successors of a move lie close together: the loss checks), 2 the White-to-move
-// positions colour-swapped (the predecessors of an unmove lie close together: the unmoves)
-int const g_dual_index = std::getenv("EGDB_DUAL_INDEX") ? std::atoi(std::getenv("EGDB_DUAL_INDEX")) : 0;
 
 // ---------------------------------------------------------------- a group of configurations, solved together
 //
@@ -421,7 +430,7 @@ struct Group {
         // White-to-move positions: the loss checks; with the White-to-move positions swapped (2) the same holds for the
         // predecessors of an unmove: the unmoves. Only the group's own numbering changes: the sinks and the files keep
         // the material's index
-        bool dual(int stm) const { return all && g_dual_index != 0 && stm == 2 - g_dual_index; }
+        bool dual(int stm) const { return all && dual_side(stm); }
 
         std::uint64_t index(Pos const& p) const
         {

@@ -632,6 +632,24 @@ void solve_group_cell8(Group const& g, DepthSink<std::uint16_t>& sink, Execution
         std::vector<std::uint8_t> cell(T, 0);
         auto const ld = [&](std::uint64_t id) { return std::atomic_ref<std::uint8_t>(cell[id]).load(std::memory_order_relaxed); };
         auto const st = [&](std::uint64_t id, std::uint8_t c) { std::atomic_ref<std::uint8_t>(cell[id]).store(c, std::memory_order_relaxed); };
+        // f(q) for every cell q in [lo, hi) holding code c, 8 cells at a time: one relaxed atomic load of a 64-bit word
+        // (GCC's __atomic builtin on a may_alias word: the cells are bytes), its bytes equal to c found at once (the
+        // exact zero-byte test on word ^ c c c c c c c c), the rest of the block byte by byte. A word is read before
+        // f runs on its cells; f writes only cells that do not hold c before or after (a candidate it checks, other
+        // codes elsewhere), so the word is never stale for the test. The blocks of for_blocks start on whole words.
+        using alias_word = std::uint64_t __attribute__((may_alias));
+        auto const scan_eq = [&](std::uint64_t lo, std::uint64_t hi, std::uint8_t c, auto&& f) {
+                constexpr std::uint64_t ones = 0x0101010101010101ull, low7 = 0x7f7f7f7f7f7f7f7full;
+                std::uint64_t const pattern = ones * c;
+                std::uint64_t q = lo;
+                for (; q < hi && q % 8 != 0; ++q) if (ld(q) == c) f(q);
+                for (; q + 8 <= hi; q += 8) {
+                        std::uint64_t const x = __atomic_load_n(reinterpret_cast<alias_word const*>(cell.data() + q), __ATOMIC_RELAXED) ^ pattern;
+                        std::uint64_t m = ~(((x & low7) + low7) | x | low7);    // the high bit of every zero byte of x
+                        for (; m != 0; m &= m - 1) f(q + std::uint64_t(std::countr_zero(m)) / 8);
+                }
+                for (; q < hi; ++q) if (ld(q) == c) f(q);
+        };
 
         // the value of a position whose moves all leave the group (pass 0, and again for a deferred one), or 0
         auto const exit_value = [&](Pos const& p, auto const& ml) -> std::uint16_t {
@@ -793,26 +811,24 @@ void solve_group_cell8(Group const& g, DepthSink<std::uint16_t>& sink, Execution
                 for_list(at(eloss_at, n), [&](std::uint64_t id) { if (cell[id] == C_PENDING) cell[id] = 0; });
                 if (has_win && mark_changed) {                                  // losses in n: mark, then check once
                         for_blocks(policy, T, [&](std::uint64_t lo, std::uint64_t hi) {
-                                for (std::uint64_t q = lo; q < hi; ++q)
-                                        if (ld(q) == cw) predecessors(q, [&](std::uint64_t id) {
+                                scan_eq(lo, hi, cw, [&](std::uint64_t q) {
+                                        predecessors(q, [&](std::uint64_t id) {
                                                 std::uint8_t z = 0;
                                                 std::atomic_ref<std::uint8_t>(cell[id]).compare_exchange_strong(z, C_CHANGED, std::memory_order_relaxed);
                                         });
+                                });
                         });
                         for_blocks(policy, T, [&](std::uint64_t lo, std::uint64_t hi) {
-                                for (std::uint64_t q = lo; q < hi; ++q)
-                                        if (ld(q) == C_CHANGED) { st(q, 0); note(check_loss(q, n)); }
+                                scan_eq(lo, hi, C_CHANGED, [&](std::uint64_t q) { st(q, 0); note(check_loss(q, n)); });
                         });
                 } else if (has_win)
                         for_blocks(policy, T, [&](std::uint64_t lo, std::uint64_t hi) {         // losses in n
-                                for (std::uint64_t q = lo; q < hi; ++q)
-                                        if (ld(q) == cw) predecessors(q, [&](std::uint64_t id) { note(check_loss(id, n)); });
+                                scan_eq(lo, hi, cw, [&](std::uint64_t q) { predecessors(q, [&](std::uint64_t id) { note(check_loss(id, n)); }); });
                         });
                 for_list(at(eloss_at, n), [&](std::uint64_t id) { note(check_loss(id, n)); });
                 if (has_loss)
                         for_blocks(policy, T, [&](std::uint64_t lo, std::uint64_t hi) {         // wins in n
-                                for (std::uint64_t q = lo; q < hi; ++q)
-                                        if (ld(q) == cl) predecessors(q, [&](std::uint64_t id) { note(mark_win(id, n)); });
+                                scan_eq(lo, hi, cl, [&](std::uint64_t q) { predecessors(q, [&](std::uint64_t id) { note(mark_win(id, n)); }); });
                         });
                 for_list(at(ewin_at, n), [&](std::uint64_t id) { note(mark_win(id, n)); });
                 if (!found && n > max_seed.load()) {

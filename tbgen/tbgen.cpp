@@ -615,7 +615,6 @@ void solve_group_cell8(Group const& g, DepthSink<std::uint16_t>& sink, Execution
 {
         std::uint64_t const P = g.P, T = 2 * P;
         auto const pos = [&](std::uint64_t id) { return g.pos(id % P, int(id / P)); };
-        auto const id_of = [&](Pos const& p) { return std::uint64_t(p.stm) * P + g.index(p); };
         bool const dtm = g_metric == Metric::dtm;
         int const cpp = dtm ? 1 : 2;                                    // codes per ply
         int WP = 240 / cpp;                                             // plies per window
@@ -658,18 +657,19 @@ void solve_group_cell8(Group const& g, DepthSink<std::uint16_t>& sink, Execution
                 int ms = 0;
                 for (std::uint64_t id = lo; id < hi; ++id) {
                         Pos const p = pos(id);
-                        auto const ml = moves(p);
                         auto const i = std::uint32_t(id);
-                        if (ml.empty()) { cell[id] = encode(loss(0), 0); continue; }
-                        bool in = false, drawn = false;
+                        bool any = false, in = false, drawn = false;
                         int wn = INF, l = 0;
-                        for (auto const& mv : ml) {
-                                if (inside(p, mv)) { in = true; continue; }
-                                std::uint16_t const x = move_value(p, mv);
+                        for_each_move(pad_pos(p), [&](MoveRef const& m) {      // a move inside needs no successor
+                                any = true;
+                                if (inside_ref(m)) { in = true; return true; }
+                                std::uint16_t const x = move_value(p, to_move(p, m));
                                 if (is_win(x)) wn = std::min(wn, plies(x));
                                 else if (is_loss(x)) l = std::max(l, plies(x));
                                 else drawn = true;
-                        }
+                                return true;
+                        });
+                        if (!any) { cell[id] = encode(loss(0), 0); continue; }
                         if (!in) {                                      // decided
                                 std::uint16_t const v = wn < INF ? win_value(wn) : drawn ? std::uint16_t(0) : loss(l);
                                 if (v == 0) { cell[id] = C_DRAWN; continue; }
@@ -705,7 +705,7 @@ void solve_group_cell8(Group const& g, DepthSink<std::uint16_t>& sink, Execution
         };
         auto const predecessors = [&](std::uint64_t q, auto&& f) {
                 std::uint64_t const off = (1 - q / P) * P;
-                for_each_inside_predecessor(g, pos(q), [&](std::uint64_t i) { f(off + i); });
+                for_each_inside_predecessor(g, pos(q), q % P, [&](std::uint64_t i) { f(off + i); });
         };
 
         // reduce: snapshot window w - 1 (its depth codes unchanged, 0 elsewhere), collapse it, enter window w
@@ -767,8 +767,11 @@ void solve_group_cell8(Group const& g, DepthSink<std::uint16_t>& sink, Execution
                 if (ld(id) != 0) return false;
                 if (count_checks) checks.fetch_add(1, std::memory_order_relaxed);
                 Pos const p = pos(id);
-                for (auto const& mv : moves(p))
-                        if (inside(p, mv) && !win_below(ld(id_of(mv.next)), n)) return false;
+                std::uint64_t const gp = id % P, other = (1 - id / P) * P;
+                bool const lost = for_each_move(pad_pos(p), [&](MoveRef const& m) {    // stops at the first move inside that does not lose
+                        return !inside_ref(m) || win_below(ld(other + successor_index(g, p, gp, m)), n);
+                });
+                if (!lost) return false;
                 st(id, encode(loss(n), w));
                 return true;
         };
@@ -881,7 +884,6 @@ void solve_group(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPolicy
         if (g_cell8) { solve_group_cell8(g, sink, policy); return; }
         std::uint64_t const P = g.P, T = 2 * P;                 // position id = stm * P + index in the group
         auto const pos = [&](std::uint64_t id) { return g.pos(id % P, int(id / P)); };
-        auto const id_of = [&](Pos const& p) { return std::uint64_t(p.stm) * P + g.index(p); };
         std::vector<std::uint16_t> v(g_frontier ? 0 : T, 0);    // scan mode only
         auto const set_value = [&](std::uint64_t id, Pos const& p, std::uint16_t value) {
                 if (g_frontier) sink.put(int(id / P), id % P, p, value);
@@ -900,18 +902,19 @@ void solve_group(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPolicy
                 std::uint64_t const blk = lo / block_size;
                 for (std::uint64_t id = lo; id < hi; ++id) {
                         Pos const p = pos(id);
-                        auto const ml = moves(p);
                         auto const i = std::uint32_t(id);
-                        if (ml.empty()) { set_value(id, p, loss(0)); lost_b[blk].push_back({ 0, i }); continue; }
-                        bool in = false, drawn = false;
+                        bool any = false, in = false, drawn = false;
                         int w = INF, l = 0;
-                        for (auto const& mv : ml) {
-                                if (inside(p, mv)) { in = true; continue; }
-                                std::uint16_t const x = move_value(p, mv);
+                        for_each_move(pad_pos(p), [&](MoveRef const& m) {      // a move inside needs no successor
+                                any = true;
+                                if (inside_ref(m)) { in = true; return true; }
+                                std::uint16_t const x = move_value(p, to_move(p, m));
                                 if (is_win(x)) w = std::min(w, plies(x));
                                 else if (is_loss(x)) l = std::max(l, plies(x));
                                 else drawn = true;
-                        }
+                                return true;
+                        });
+                        if (!any) { set_value(id, p, loss(0)); lost_b[blk].push_back({ 0, i }); continue; }
                         if (!in) {                                      // decided
                                 if (w < INF) { set_value(id, p, win(w)); won_b[blk].push_back({ std::uint32_t(w), i }); }
                                 else if (!drawn) { set_value(id, p, loss(l)); lost_b[blk].push_back({ std::uint32_t(l), i }); }
@@ -951,7 +954,7 @@ void solve_group(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPolicy
         };
         auto const predecessors = [&](std::uint64_t q, auto&& f) {             // the other side to move
                 std::uint64_t const off = (1 - q / P) * P;
-                for_each_inside_predecessor(g, pos(q), [&](std::uint64_t i) { f(off + i); });
+                for_each_inside_predecessor(g, pos(q), q % P, [&](std::uint64_t i) { f(off + i); });
         };
 
         if (!g_frontier) {
@@ -959,11 +962,13 @@ void solve_group(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPolicy
                 auto const check_loss = [&](std::uint64_t id, int n) {         // rtbgen's check_loss: lost in n?
                         if (!openp.test(id) || load(v[id]) != 0 || !lossable.test(id) || !exits_done.test(id)) return false;
                         Pos const p = pos(id);
-                        for (auto const& mv : moves(p)) {                       // every move inside to a win in fewer than n plies
-                                if (!inside(p, mv)) continue;
-                                std::uint16_t const x = load(v[id_of(mv.next)]);
-                                if (!is_win(x) || plies(x) >= n) return false;  // pass 0 decides wins of any depth
-                        }
+                        std::uint64_t const gp = id % P, other = (1 - id / P) * P;
+                        bool const lost = for_each_move(pad_pos(p), [&](MoveRef const& m) {    // every move inside to a win in fewer than n plies
+                                if (!inside_ref(m)) return true;
+                                std::uint16_t const x = load(v[other + successor_index(g, p, gp, m)]);
+                                return is_win(x) && plies(x) < n;               // pass 0 decides wins of any depth
+                        });
+                        if (!lost) return false;
                         store(v[id], loss(n));
                         return true;
                 };
@@ -1013,8 +1018,8 @@ void solve_group(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPolicy
                         auto const lose = [&](std::uint64_t id) {
                                 if (!openp.test(id) || !lossable.test(id) || !exits_done.test(id) || won.test(id) || lost.test(id)) return;
                                 Pos const p = pos(id);
-                                for (auto const& mv : moves(p))
-                                        if (inside(p, mv) && !won.test(id_of(mv.next))) return;
+                                std::uint64_t const gp = id % P, other = (1 - id / P) * P;
+                                if (!for_each_move(pad_pos(p), [&](MoveRef const& m) { return !inside_ref(m) || won.test(other + successor_index(g, p, gp, m)); })) return;
                                 sink.put(int(id / P), id % P, p, loss(n));
                                 lost_new.set_atomic(id);
                         };

@@ -475,44 +475,67 @@ pboard king_reach(int sq, int d, pboard const& empty, int& blocker)
 }
 
 constexpr bool man_dir(int us, int d) { return us == 0 ? d < 2 : d >= 2; }    // a man's forward directions
-
-struct Gen {
-        Pos const& p;
-        int us, them;
-        pboard enemy;                   // the opponent's pieces (padded)
-        int best = 0;
-        MoveList* out;
-        int from = 0;                   // padded
-        bool is_king = false;
-
-        Gen(Pos const& pp, MoveList* o) : p(pp), us(pp.stm), them(1 - pp.stm), out(o) {}
-
-        void emit(int to, pboard const& cap, int n)
-        {
-                if constexpr (!MAJORITY) n = n > 0 ? 1 : 0;     // every capture counts the same, but a capture is compulsory
-                if (n < best) return;
-                if (n > best) { best = n; out->clear(); }
-                int const f = DENSE_OF[std::size_t(from)], t = DENSE_OF[std::size_t(to)];
-                bitboard const captured = to_dense(cap);
-                if (!keep_duplicates && n > 0)          // the same position by another path (only captures can repeat one)
-                        for (auto const& mv : *out) if (mv.from == f && mv.to == t && mv.captured == captured) return;
-                Pos q = p;
-                std::size_t const fb = std::size_t(f), tb = std::size_t(t);
-                bool const promote = !is_king && (us == 0 ? PROMO_WHITE : PROMO_BLACK).contains(tb);
-                if (is_king) { q.k[us].erase(fb); q.k[us].insert(tb); }
-                else if (promote) { q.m[us].erase(fb); q.k[us].insert(tb); }
-                else { q.m[us].erase(fb); q.m[us].insert(tb); }
-                q.m[them] -= captured; q.k[them] -= captured;
-                q.stm = them;
-                out->push_back({ f, t, captured, q });
+constexpr std::array<pboard, 2> PROMO_PAD = [] {        // the promotion rows, padded: White's the top row, Black's the bottom
+        std::array<pboard, 2> a{};
+        for (int s = 0; s < N; ++s) {
+                if (GEO.row[std::size_t(s)] == 0) a[0].insert(std::size_t(PAD_OF[std::size_t(s)]));
+                if (GEO.row[std::size_t(s)] == BOARD_H - 1) a[1].insert(std::size_t(PAD_OF[std::size_t(s)]));
         }
+        return a;
+}();
 
-        // the continuations of a capture from sq: empty are the squares empty during the capture (the origin vacated, the
-        // captured pieces still there), cap the pieces captured so far
-        void capture(int sq, pboard const& empty, pboard const& cap, int n)
-        {
+// a position on padded bitboards, from the side to move: its men and kings, the opponent's pieces, the empty squares
+struct PadPos {
+        pboard men, kings, enemy, empty;
+        int us = 0;
+};
+PadPos pad_pos(Pos const& p)
+{
+        PadPos q;
+        q.us = p.stm;
+        q.men = to_pad(p.m[p.stm]); q.kings = to_pad(p.k[p.stm]); q.enemy = to_pad(p.m[1 - p.stm] | p.k[1 - p.stm]);
+        q.empty = PLAYABLE - q.men - q.kings - q.enemy;
+        return q;
+}
+
+// a move without its successor: padded squares, the captured pieces (padded), a king or a man, a promotion
+struct MoveRef {
+        int from, to;
+        pboard captured;
+        bool king;
+        bool promotes;
+        bool capture() const { return !captured.empty(); }
+        int from_sq() const { return DENSE_OF[std::size_t(from)]; }     // the dense squares
+        int to_sq() const { return DENSE_OF[std::size_t(to)]; }
+};
+
+// every legal move of a position, without building its successor: f(MoveRef const&) returns false to stop, and then
+// for_each_move returns false. Captures first: all of them are found before the first is passed on (a later piece can
+// still have a longer capture under the majority rule), into a buffer, where the same capture by another path is dropped;
+// moves without capture only when there is no capture, streamed straight from the shifts and the rays.
+template<class F>
+bool for_each_move(PadPos const& pp, F&& f)
+{
+        struct Cap { int from, to; pboard captured; bool king; };
+        alignas(Cap) unsigned char raw[MoveList::CAP * sizeof(Cap)];   // uninitialised: no zeroing per call
+        Cap* const buf = std::launder(reinterpret_cast<Cap*>(raw));
+        std::size_t nbuf = 0;
+        int best = 0, from = 0;
+        bool is_king = false;
+        int const us = pp.us;
+        auto const add = [&](int to, pboard const& cap, int n) {
+                if constexpr (!MAJORITY) n = 1;         // every capture counts the same, but a capture is compulsory
+                if (n < best) return;
+                if (n > best) { best = n; nbuf = 0; }
+                if (!keep_duplicates)
+                        for (std::size_t i = 0; i < nbuf; ++i) if (buf[i].from == from && buf[i].to == to && buf[i].captured == cap) return;
+                if (nbuf == MoveList::CAP) { std::cerr << "too many captures" << std::endl; std::abort(); }
+                ::new (static_cast<void*>(buf + nbuf++)) Cap{ from, to, cap, is_king };
+        };
+        // the continuations from sq: empty during the capture (the origin vacated, the captured pieces still there)
+        auto const capture = [&](auto&& self, int sq, pboard const& empty, pboard const& cap, int n) -> void {
                 bool any = false;
-                pboard const targets = enemy - cap;
+                pboard const targets = pp.enemy - cap;
                 for (int d = 0; d < 4; ++d) {
                         if (!MEN_CAPTURE_BACK && !is_king && !man_dir(us, d)) continue;
                         if (LONG_KINGS && is_king) {
@@ -521,59 +544,69 @@ struct Gen {
                                 if (v < 0 || !targets.contains(std::size_t(v))) continue;
                                 int w;
                                 pboard const land = king_reach(v, d, empty, w);
-                                for (auto const t : land) { any = true; capture(int(t), empty, cap | pboard{ std::size_t(v) }, n + 1); }
+                                for (auto const t : land) { any = true; self(self, int(t), empty, cap | pboard{ std::size_t(v) }, n + 1); }
                         } else {
                                 int const v = sq + STEP[d], t = v + STEP[d];
                                 if (v < 0 || t < 0 || t >= PAD_SIZE || !targets.contains(std::size_t(v)) || !empty.contains(std::size_t(t))) continue;
                                 any = true;
-                                capture(t, empty, cap | pboard{ std::size_t(v) }, n + 1);
+                                self(self, t, empty, cap | pboard{ std::size_t(v) }, n + 1);
                         }
                 }
-                if (!any && n > 0) emit(sq, cap, n);
+                if (!any && n > 0) add(sq, cap, n);
+        };
+        pboard jumpers;
+        for (int d = 0; d < 4; ++d)
+                if (MEN_CAPTURE_BACK || man_dir(us, d))
+                        jumpers |= pp.men & shifted(pp.enemy, -STEP[d]) & shifted(pp.empty, -2 * STEP[d]);
+        is_king = false;
+        for (auto const sq : jumpers) { from = int(sq); capture(capture, from, pp.empty | pboard{ std::size_t(sq) }, pboard{}, 0); }
+        is_king = true;
+        for (auto const sq : pp.kings) { from = int(sq); capture(capture, from, pp.empty | pboard{ std::size_t(sq) }, pboard{}, 0); }
+        if (best > 0) {
+                for (std::size_t i = 0; i < nbuf; ++i) {
+                        Cap const& c = buf[i];
+                        if (!f(MoveRef{ c.from, c.to, c.captured, c.king, !c.king && PROMO_PAD[std::size_t(us)].contains(std::size_t(c.to)) })) return false;
+                }
+                return true;
         }
-
-        void run()
-        {
-                pboard const men = to_pad(p.m[us]), kings = to_pad(p.k[us]);
-                enemy = to_pad(p.m[them] | p.k[them]);
-                pboard const empty = PLAYABLE - men - kings - enemy;
-                // captures: the men that can capture, by shifts per direction, then each one's continuations; then the kings'
-                pboard jumpers;
-                for (int d = 0; d < 4; ++d)
-                        if (MEN_CAPTURE_BACK || man_dir(us, d))
-                                jumpers |= men & shifted(enemy, -STEP[d]) & shifted(empty, -2 * STEP[d]);
-                is_king = false;
-                for (auto const sq : jumpers) { from = int(sq); capture(from, empty | pboard{ std::size_t(sq) }, pboard{}, 0); }
-                is_king = true;
-                for (auto const sq : kings) { from = int(sq); capture(from, empty | pboard{ std::size_t(sq) }, pboard{}, 0); }
-                if (best > 0) return;
-                // moves without capture
-                is_king = false;
+        for (int d = 0; d < 4; ++d) {                   // men, one shift per forward direction
+                if (!man_dir(us, d)) continue;
+                for (auto const t : shifted(pp.men, STEP[d]) & pp.empty)
+                        if (!f(MoveRef{ int(t) - STEP[d], int(t), pboard{}, false, PROMO_PAD[std::size_t(us)].contains(std::size_t(t)) })) return false;
+        }
+        for (auto const sq : pp.kings)                  // kings, by their rays (one step for short kings)
                 for (int d = 0; d < 4; ++d) {
-                        if (!man_dir(us, d)) continue;
-                        for (auto const t : shifted(men, STEP[d]) & empty) { from = int(t) - STEP[d]; emit(int(t), pboard{}, 0); }
-                }
-                is_king = true;
-                for (auto const sq : kings) {
-                        from = int(sq);
-                        for (int d = 0; d < 4; ++d) {
-                                pboard reach;
-                                if constexpr (LONG_KINGS) { int b; reach = king_reach(from, d, empty, b); }
-                                else {
-                                        int const t = from + STEP[d];
-                                        if (t >= 0 && t < PAD_SIZE && empty.contains(std::size_t(t))) reach.insert(std::size_t(t));
-                                }
-                                for (auto const t : reach) emit(int(t), pboard{}, 0);
+                        pboard reach;
+                        if constexpr (LONG_KINGS) { int b; reach = king_reach(int(sq), d, pp.empty, b); }
+                        else {
+                                int const t = int(sq) + STEP[d];
+                                if (t >= 0 && t < PAD_SIZE && pp.empty.contains(std::size_t(t))) reach.insert(std::size_t(t));
                         }
+                        for (auto const t : reach) if (!f(MoveRef{ int(sq), int(t), pboard{}, true, false })) return false;
                 }
-        }
-};
+        return true;
+}
+
+// the successor of a move
+Pos apply(Pos const& p, MoveRef const& m)
+{
+        Pos q = p;
+        int const us = p.stm, them = 1 - us;
+        std::size_t const f = std::size_t(m.from_sq()), t = std::size_t(m.to_sq());
+        if (m.king) { q.k[us].erase(f); q.k[us].insert(t); }
+        else if (m.promotes) { q.m[us].erase(f); q.k[us].insert(t); }
+        else { q.m[us].erase(f); q.m[us].insert(t); }
+        if (m.capture()) { bitboard const c = to_dense(m.captured); q.m[them] -= c; q.k[them] -= c; }
+        q.stm = them;
+        return q;
+}
+
+Move to_move(Pos const& p, MoveRef const& m) { return { m.from_sq(), m.to_sq(), m.capture() ? to_dense(m.captured) : bitboard{}, apply(p, m) }; }
 
 MoveList moves(Pos const& p)
 {
         MoveList out;
-        Gen g(p, &out);
-        g.run();
+        for_each_move(pad_pos(p), [&](MoveRef const& m) { out.push_back(to_move(p, m)); return true; });
         return out;
 }
 

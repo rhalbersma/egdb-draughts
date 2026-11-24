@@ -199,10 +199,10 @@ struct MatIndex {
                 return off[rank_in(wm, DOM_WM)] + rank_in(bm, DOM_BM - wm);
         }
 
-        std::uint64_t king_index(Pos const& p) const
+        std::uint64_t king_index(Pos const& p) const { return king_index(FULL - p.m[0] - p.m[1], p.k[0], p.k[1]); }
+        std::uint64_t king_index(bitboard const& free, bitboard const& wk, bitboard const& bk) const
         {
-                bitboard const free = FULL - p.m[0] - p.m[1];
-                return rank_in(p.k[0], free) * nk2 + rank_in(p.k[1], free - p.k[0]);
+                return rank_in(wk, free) * nk2 + rank_in(bk, free - wk);
         }
 
         // the position of configuration mi (a men index) and king placement ki
@@ -391,6 +391,16 @@ struct Group {
                 mi->place(all ? g / K : men[g / K], g % K, stm, p);
                 return p;
         }
+
+        // the index update: the local index of p (at local index g) with one of side's kings moved from a to b (dense
+        // squares). The men stay, so the configuration and the free squares stay: only the king index is recomputed
+        std::uint64_t king_moved(Pos const& p, std::uint64_t g, int side, int a, int b) const
+        {
+                bitboard k[2] = { p.k[0], p.k[1] };
+                k[side].erase(std::size_t(a));
+                k[side].insert(std::size_t(b));
+                return g - g % K + mi->king_index(FULL - p.m[0] - p.m[1], k[0], k[1]);
+        }
 };
 
 // the tempo of a colour's men: the rows they still have to go (White up to row 0, Black down to the last row)
@@ -462,36 +472,56 @@ std::map<std::pair<int, int>, std::uint64_t> tempo_counts(Material c)
         return out;
 }
 
-// the positions of the group from which a move inside the group leads to q: king unmoves (along a free diagonal with
-// long kings, one square with short kings: English checkers, egdb_6x6's LONG_KINGS), and in a wave man unmoves (men
-// move one square forward in both games). Captures and promotions leave the group, so their rules never enter here
+// the positions of the group from which a move inside the group leads to q (at local index gq), by their local index:
+// king unmoves from the ray attacks on padded bitboards (a king on t came from a square it reaches over empty squares;
+// one square with short kings: English checkers, egdb_6x6's LONG_KINGS), their indices by the index update; and in a
+// wave man unmoves (men move one square forward in both games), by the full index. Captures and promotions leave the
+// group, so their rules never enter here
 template<class F>
-void for_each_inside_predecessor(Group const& g, Pos const& q, F&& f)
+void for_each_inside_predecessor(Group const& g, Pos const& q, std::uint64_t gq, F&& f)
 {
         int const mover = 1 - q.stm;
-        bitboard const occ = q.occ();
-        for (auto const t : q.k[mover])
-                for (int d = 0; d < 4; ++d)
-                        for (int fr : rays[std::size_t(t)][std::size_t(d)]) {
-                                if (occ.contains(std::size_t(fr))) break;
-                                Pos pr = q;
-                                pr.k[mover].erase(t);
-                                pr.k[mover].insert(std::size_t(fr));
-                                pr.stm = mover;
-                                f(g.index(pr));
-                                if (!LONG_KINGS) break;                 // short kings: one square back
+        pboard const empty = PLAYABLE - to_pad(q.occ());
+        for (auto const t : q.k[mover]) {
+                int const tp = PAD_OF[t];
+                for (int d = 0; d < 4; ++d) {
+                        pboard reach;
+                        if constexpr (LONG_KINGS) { int b; reach = king_reach(tp, d, empty, b); }
+                        else {
+                                int const fr = tp + STEP[d];
+                                if (fr >= 0 && fr < PAD_SIZE && empty.contains(std::size_t(fr))) reach.insert(std::size_t(fr));
                         }
+                        for (auto const fr : reach) f(g.king_moved(q, gq, mover, int(t), DENSE_OF[fr]));
+                }
+        }
         if (!men_inside()) return;
         for (auto const t : q.m[mover])
                 for (int d = mover == 0 ? 2 : 0; d < (mover == 0 ? 4 : 2); ++d) {     // a man came from behind
                         auto const& ray = rays[std::size_t(t)][std::size_t(d)];
-                        if (ray.empty() || occ.contains(std::size_t(ray[0]))) continue;
+                        if (ray.empty() || q.occ().contains(std::size_t(ray[0]))) continue;
                         Pos pr = q;
                         pr.m[mover].erase(t);
                         pr.m[mover].insert(std::size_t(ray[0]));
                         pr.stm = mover;
                         f(g.index(pr));
                 }
+}
+
+template<class F>
+void for_each_inside_predecessor(Group const& g, Pos const& q, F&& f) { for_each_inside_predecessor(g, q, g.index(q), f); }
+
+// the moves inside the group, their successors by local index: a king move by the index update, a man move (inside only
+// in a wave) by the full index
+bool inside_ref(MoveRef const& m)
+{
+        if (m.capture() || m.promotes) return false;
+        return m.king || men_inside();
+}
+
+std::uint64_t successor_index(Group const& g, Pos const& p, std::uint64_t gp, MoveRef const& m)
+{
+        if (m.king) return g.king_moved(p, gp, p.stm, m.from_sq(), m.to_sq());
+        return g.index(apply(p, m));
 }
 
 // ---------------------------------------------------------------- the groups of a material, in dependency order

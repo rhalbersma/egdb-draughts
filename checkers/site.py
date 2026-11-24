@@ -77,7 +77,7 @@ PAGES = [('index.html', 'Overzicht', 'Overview', None)] + [(f, nl, en, c) for c,
                                                         for f, nl, en in secs]
 
 
-# 3 kings against 2 per board, heights 3 to 10 and widths up to height + 9, from longest32.json.gz (built by
+# 3 kings against 2 per board, heights 3 to 11 and widths up to height + 10, from longest32.json.gz (built by
 # longest32.py), per pair of double corners: e x e has one diagonal pair, e x o one pair along a side, o x o with
 # unplayable corners a pair along the W side, one along the H side and a diagonal pair (on a square board one pair along
 # a side), and o x o with playable corners no double corner. Every number is the longest win with the black kings in the
@@ -115,9 +115,8 @@ remise.</li>
 <li><em>L</em> = 9: met het paar langs de kant van 9 beslist op elke breedte de oppositie; op de even breedtes is dat het
 enige paar. Op de oneven breedtes is het remise met een ander paar: op 9×9 diagonaal, vanaf 11×9 ook langs de lange
 kant.</li>
-<li><em>L</em> ≥ 10: overal remise, behalve op de oneven × oneven borden met speelbare hoeken, die geen dubbele hoek
-hebben (op 11 hoog, buiten de tabel, nagerekend: 11×11 en 13×11 met onspeelbare hoeken en 12×11 zijn remise, 11×11 en
-13×11 met speelbare hoeken winnen in 83 en 99 ply).</li>
+<li><em>L</em> = 10 en 11: overal remise, behalve op de oneven × oneven borden met speelbare hoeken, die geen dubbele
+hoek hebben.</li>
 </ul>''',
           'en': '''<p>Per pair of double corners the longest win with the black kings in those two double corners, with a row per height
 <em>H</em> and a column per <em>W</em> − <em>H</em>; click a number for the position and replay the whole win.</p>
@@ -152,9 +151,8 @@ draw.</li>
 <li><em>H</em> = 9: with the pair along the side of 9 the opposition decides at every width; on the even widths it is the
 only pair. On the odd widths it is a draw with another pair: on 9×9 diagonally, from 11×9 also along the long
 side.</li>
-<li><em>H</em> ≥ 10: drawn everywhere, except on the odd × odd boards with playable corners, which have no double corner
-(at height 11, outside the table, checked: 11×11 and 13×11 with unplayable corners and 12×11 are drawn, 11×11 and 13×11
-with playable corners are won in 83 and 99 plies).</li>
+<li><em>H</em> = 10 and 11: drawn everywhere, except on the odd × odd boards with playable corners, which have no double
+corner.</li>
 </ul>'''}
 
 
@@ -318,7 +316,7 @@ class Site:
     def results(self, pg, table, text, nw, nb):
         """the results per board as a table, a row per H and a column per W - H; every number links to a position with
         the longest win on that board, shown on the large board, with the whole win to replay. 2-1 from the databases,
-        3-2 from longest32.json.gz (the 3-2 databases of all boards take an hour)"""
+        3-2 from longest32.json.gz (the 3-2 databases of all boards take several hours)"""
         t = self.t
         stored = json.loads(gzip.decompress((HERE / 'longest32.json.gz').read_bytes())) if (nw, nb) == (3, 2) else None
         ncol = len(next(iter(table.values())))

@@ -4,8 +4,8 @@
 #    (See accompanying file LICENSE_1_0.txt or copy at
 #          http://www.boost.org/LICENSE_1_0.txt)
 
-"""The longest win on every board of the 3-2 table (heights 3 to 10, widths up to height + 9), with the analyses along its
-main line, stored in longest32.json.gz for the site (building the 3-2 databases of all boards takes about an hour).
+"""The longest win on every board of the 3-2 table (heights 3 to 11, widths up to height + 10), with the analyses along its
+main line, stored in longest32.json.gz for the site (building the 3-2 databases of all boards takes several hours).
 Also stored per board: the quiet positions counted by their value with white and with black to move, and the fortress
 test, the same count for the positions with the two black kings in two double corners (per pair of double corners), and
 per pair the longest win with the black kings in its double corners (with its main line); the table shows per pair that
@@ -30,7 +30,7 @@ from sitekit import CachedEngine, FastEngine   # noqa: E402
 
 EXE = sys.argv[1] if len(sys.argv) > 1 else str(HERE.parent / 'build' / 'egdb_fast')
 OUT = HERE / 'longest32.json.gz'
-HEIGHTS, EXTRA = range(3, 11), range(10)       # a row per height H, a column per W - H
+HEIGHTS, EXTRA = range(3, 12), range(11)       # a row per height H, a column per W - H
 SAMPLE, EXACT = 3000, 150000
 
 

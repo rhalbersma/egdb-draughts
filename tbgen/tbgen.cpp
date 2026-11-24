@@ -943,6 +943,188 @@ void solve_group_cell8(Group const& g, DepthSink<std::uint16_t>& sink, Execution
                 std::cout << "cell8: group of " << T << " positions, " << snaps.size() << " reductions, snapshots " << zbytes << " bytes" << std::endl;
 }
 
+// ---------------------------------------------------------------- one group in rtbgen's sweeps (DTM, one window)
+//
+// rtbgen's iteration (Ronald de Man's DTZ50 generator) carried over to DTM, with rtbgen's names: one byte per position
+// in each colour (table_w, table_b), one sweep per ply over one colour (white at even plies, black at odd), the loss
+// depth computed from the successors' codes, and rtbgen's tbl dispatch on the code. No lists: an exit win is written
+// in pass 0 as a provisional win, and the loss check looks the exits up again for the slowest losing one. Codes:
+//   DRAWN            decided in pass 0 as a draw (all its moves leave the group)
+//   MATE - k         a loss in 2k plies (MATE: no moves)
+//   WIN_IN_ONE + k   a win in 2k + 1 plies
+//   EXIT_DRAW        undecided, cannot lose: an exit draws (rtbgen's CAPT_DRAW)
+//   CHANGED          a loss candidate (rtbgen's CHANGED)
+//   UNKNOWN          undecided; a draw at the end (0, so the table starts zeroed)
+//
+// Ply p sweeps colour p mod 2, and each of its cells is read once:
+//   CHANGED          rtbgen's check_loss: every move inside to an opened win (one of at most p - 1 plies); the depth e
+//                    is 1 + the slowest of them, or the slowest losing exit. A loss in time (e <= p) marks its
+//                    predecessors won in e + 1 at once (rtbgen's RETRO(mark_wins)); a deeper one (a slow losing exit)
+//                    waits for its own ply, as the losses of pass 0 do
+//   a loss of the sweep's even depth (p or p - 1), written by pass 0 or by an early check: its predecessors won
+//                    (rtbgen's tbl[MATE] = 3 and mark_win_in_1, at any depth)
+//   a win of the sweep's odd depth (p or p - 1): its predecessors UNKNOWN -> CHANGED (rtbgen's mark_changed)
+// So every loss marks its predecessors exactly once, at its ply, and a win written then is final: a faster one comes
+// from a shallower loss, marked at an earlier ply. Only a provisional exit win (a move out of the group wins, and moves
+// inside remain) can be replaced by a faster win. The unmoves do not test compulsory capture, so a position decided in
+// pass 0 (its moves all leave the group: it has a capture) can turn up as a predecessor; it holds a decided code, which
+// no marking touches: a win replaces only UNKNOWN, CHANGED, EXIT_DRAW, or a slower win of a position without a capture.
+// The sweeps end past the deepest value written.
+namespace rtb {
+constexpr std::uint8_t UNKNOWN = 0, DRAWN = 1, MATE = 121, WIN_IN_ONE = 122, EXIT_DRAW = 254, CHANGED = 255;
+constexpr int KMAX = 120;                                       // codes per class: wins to 239 plies, losses to 238
+constexpr int MAX_DEPTH = 2 * KMAX - 1;
+constexpr bool is_win_code(std::uint8_t c) { return c >= WIN_IN_ONE && c < WIN_IN_ONE + KMAX; }
+constexpr bool is_loss_code(std::uint8_t c) { return c > MATE - KMAX && c <= MATE; }
+constexpr int win_depth(std::uint8_t c) { return 2 * (c - WIN_IN_ONE) + 1; }
+constexpr int loss_depth(std::uint8_t c) { return 2 * (MATE - c); }
+constexpr std::uint8_t win_code(int d) { return std::uint8_t(WIN_IN_ONE + (d - 1) / 2); }
+constexpr std::uint8_t loss_code(int d) { return std::uint8_t(MATE - d / 2); }
+static_assert(loss_code(MAX_DEPTH - 1) > DRAWN && win_code(MAX_DEPTH) < EXIT_DRAW);
+}
+
+bool g_rtb = false;
+
+template<class ExecutionPolicy>
+void solve_group_rtb(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPolicy const& policy)
+{
+        using namespace rtb;
+        if (g_metric != Metric::dtm) { std::cerr << "rtb: dtm only" << std::endl; std::abort(); }
+        std::uint64_t const P = g.P, T = 2 * P;                 // table_w = [0, P), table_b = [P, 2P)
+        auto const pos = [&](std::uint64_t id) { return g.pos(id % P, int(id / P)); };
+        std::vector<std::uint8_t> table(T, UNKNOWN);
+        auto const ld = [&](std::uint64_t id) { return std::atomic_ref<std::uint8_t>(table[id]).load(std::memory_order_relaxed); };
+        std::atomic<int> max_depth{ 0 };                        // the deepest value written, provisional ones included
+        std::atomic<bool> provisional{ false };                 // pass 0 wrote a provisional exit win
+        auto const note_depth = [&](int d) {
+                int cur = max_depth.load(std::memory_order_relaxed);
+                while (d > cur && !max_depth.compare_exchange_weak(cur, d, std::memory_order_relaxed)) {}
+        };
+        auto const fits = [](int d) {
+                if (d > MAX_DEPTH) { std::cerr << "rtb: depth " << d << " beyond one window" << std::endl; std::abort(); }
+        };
+        std::atomic<std::uint64_t> replaced{ 0 }, refused{ 0 };
+        auto const set_win_value = [&](std::uint64_t id, std::uint8_t v) {     // rtbgen's SET_WIN_VALUE, see above
+                std::atomic_ref<std::uint8_t> a(table[id]);
+                std::uint8_t c = a.load(std::memory_order_relaxed);
+                for (;;) {
+                        if (c == UNKNOWN || c == CHANGED || c == EXIT_DRAW) {
+                                if (a.compare_exchange_weak(c, v, std::memory_order_relaxed)) return;
+                                continue;
+                        }
+                        if (!is_win_code(c) || c <= v || !provisional.load(std::memory_order_relaxed)) return;
+                        if (has_capture(pos(id))) { refused.fetch_add(1, std::memory_order_relaxed); return; }  // decided in pass 0
+                        if (a.compare_exchange_weak(c, v, std::memory_order_relaxed)) { replaced.fetch_add(1, std::memory_order_relaxed); return; }
+                }
+        };
+        auto const set_changed = [&](std::uint64_t id) {                        // rtbgen's SET_CHANGED
+                std::uint8_t c = UNKNOWN;
+                std::atomic_ref<std::uint8_t>(table[id]).compare_exchange_strong(c, CHANGED, std::memory_order_relaxed);
+        };
+        auto const retro = [&](std::uint64_t id, Pos const& p, auto&& f) {     // rtbgen's RETRO: the predecessors
+                std::uint64_t const other = (1 - id / P) * P;
+                for_each_inside_predecessor(g, p, id % P, [&](std::uint64_t i) { f(other + i); });
+        };
+        auto const mark_wins = [&](std::uint64_t id, Pos const& p, int e) {    // a loss in e: its predecessors won
+                fits(e + 1);
+                note_depth(e + 1);
+                retro(id, p, [&](std::uint64_t u) { set_win_value(u, win_code(e + 1)); });
+        };
+
+        // pass 0
+        auto const t0 = std::chrono::steady_clock::now();
+        for_blocks(policy, T, [&](std::uint64_t lo, std::uint64_t hi) {
+                int md = 0;
+                bool prov = false;
+                for (std::uint64_t id = lo; id < hi; ++id) {
+                        Pos const p = pos(id);
+                        bool any = false, in = false, drawn = false;
+                        int wn = INF, l = 0;
+                        for_each_move(pad_pos(p), [&](MoveRef const& m) {
+                                any = true;
+                                if (inside_ref(m)) { in = true; return true; }
+                                std::uint16_t const x = move_value(p, to_move(p, m));
+                                if (is_win(x)) wn = std::min(wn, plies(x));
+                                else if (is_loss(x)) l = std::max(l, plies(x));
+                                else drawn = true;
+                                return true;
+                        });
+                        if (!any) { table[id] = MATE; continue; }
+                        if (wn < INF) {                                 // final if all moves leave, else provisional
+                                fits(wn);
+                                table[id] = win_code(wn);
+                                md = std::max(md, wn);
+                                prov |= in;
+                                continue;
+                        }
+                        if (!in) {
+                                if (drawn) table[id] = DRAWN;
+                                else { fits(l); table[id] = loss_code(l); md = std::max(md, l + 1); }
+                                continue;
+                        }
+                        if (drawn) table[id] = EXIT_DRAW;               // else UNKNOWN: its exits (if any) all lose
+                }
+                note_depth(md);
+                if (prov) provisional = true;
+        });
+        g_stats.pass0 += seconds_since(t0);
+        auto const t1 = std::chrono::steady_clock::now();
+
+        // rtbgen's check_loss: every move inside to an opened win; the depth from the slowest of them and of the exits
+        auto const check_loss = [&](std::uint64_t q, int ply) {
+                Pos const p = pos(q);
+                std::uint64_t const gp = q % P, other = (1 - q / P) * P;
+                int worst = 0;
+                bool const all = for_each_move(pad_pos(p), [&](MoveRef const& m) {
+                        if (!inside_ref(m)) return true;
+                        std::uint8_t const c = ld(other + successor_index(g, p, gp, m));
+                        if (!is_win_code(c) || win_depth(c) > ply - 1) return false;
+                        worst = std::max(worst, win_depth(c));
+                        return true;
+                });
+                if (!all) { table[q] = UNKNOWN; return; }
+                int e = worst + 1;
+                for_each_move(pad_pos(p), [&](MoveRef const& m) {      // the exits all lose (else pass 0 wrote a win or EXIT_DRAW)
+                        if (!inside_ref(m)) e = std::max(e, plies(move_value(p, to_move(p, m))));
+                        return true;
+                });
+                fits(e);
+                table[q] = loss_code(e);
+                if (e <= ply) mark_wins(q, p, e);                       // in time; a deeper loss waits for its ply
+                else note_depth(e + 1);
+        };
+
+        // the sweeps
+        int ply = 0;
+        for (; ply <= max_depth.load() + 2; ++ply) {
+                std::uint64_t const base = std::uint64_t(ply % 2) * P;
+                int const de = ply % 2 ? ply - 1 : ply, dw = ply % 2 ? ply : ply - 1;  // this sweep's own losses and wins
+                std::uint8_t const cl = de <= MAX_DEPTH - 1 ? loss_code(de) : CHANGED;
+                std::uint8_t const cw = dw >= 1 && dw <= MAX_DEPTH ? win_code(dw) : CHANGED;
+                for_blocks(policy, P, [&](std::uint64_t lo, std::uint64_t hi) {
+                        for (std::uint64_t q = base + lo; q < base + hi; ++q) {
+                                std::uint8_t const c = table[q];        // only this cell's own loop writes this colour
+                                if (c == CHANGED) check_loss(q, ply);
+                                else if (c == cl) mark_wins(q, pos(q), de);
+                                else if (c == cw) retro(q, pos(q), set_changed);
+                        }
+                });
+        }
+        double const t_sweeps = seconds_since(t1);
+
+        auto const t3 = std::chrono::steady_clock::now();
+        for_blocks(policy, T, [&](std::uint64_t lo, std::uint64_t hi) {
+                for (std::uint64_t id = lo; id < hi; ++id) {
+                        std::uint8_t const c = table[id];
+                        std::uint16_t const v = is_win_code(c) ? win(win_depth(c)) : is_loss_code(c) ? loss(loss_depth(c)) : 0;
+                        if (v != 0) sink.put(int(id / P), id % P, pos(id), v);
+                }
+        });
+        g_stats.rounds += seconds_since(t1);
+        std::cout << "rtb steps: sweeps " << t_sweeps << " s (" << ply << " plies), output " << seconds_since(t3)
+                  << " s; provisional wins replaced " << replaced.load() << ", refused (capture) " << refused.load() << std::endl;
+}
+
 // ---------------------------------------------------------------- one group: pass 0 and the rounds
 
 // The values go to the depth sink: frontier rounds never read them back, so they write straight into it; scan mode
@@ -950,6 +1132,7 @@ void solve_group_cell8(Group const& g, DepthSink<std::uint16_t>& sink, Execution
 template<class ExecutionPolicy>
 void solve_group(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPolicy const& policy)
 {
+        if (g_cell8 && g_rtb) { solve_group_rtb(g, sink, policy); return; }
         if (g_cell8) { solve_group_cell8(g, sink, policy); return; }
         std::uint64_t const P = g.P, T = 2 * P;                 // position id = stm * P + index in the group
         auto const pos = [&](std::uint64_t id) { return g.pos(id % P, int(id / P)); };
@@ -1797,6 +1980,7 @@ int main(int argc, char* argv[])
                         if (a[i] == "seq" || a[i] == "par") par = a[i] == "par";
                         else if (a[i] == "scan" || a[i] == "frontier") g_frontier = a[i] == "frontier";
                         else if (a[i] == "cell8") { g_cell8 = true; g_frontier = false; }
+                        else if (a[i] == "rtb") { g_cell8 = g_rtb = true; g_frontier = false; }
                         else if (a[i] == "raw" || a[i] == "compressed") g_compressed = a[i] == "compressed";
                         else if (a[i] == "stats") g_write_stats = true;
                         else if (a[i].starts_with("mem=")) g_mem_mb = std::stoull(a[i].substr(4));

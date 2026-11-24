@@ -1232,42 +1232,100 @@ void solve_group_rtb(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPo
                   << " s, snapshot " << snap_bytes.load() << " bytes" << std::endl;
 }
 
-// ---------------------------------------------------------------- one group, WDL only: the 3-bit and the 2-bit loop
+// ---------------------------------------------------------------- one group, WDL only: rule tables and one loop
 //
-// Win, draw or loss without depths, so without a ply order: a value may be used as soon as it is written. The exits
-// are looked up as wdl only (probe_wdl). For now the depth files written beside the wdl files hold a placeholder
-// (win 1, loss 2): only the wdl files are results. Both loops keep a byte per position; the 2-bit and 3-bit names
-// are about the states they need, not (yet) their packing.
-//
-// wdl3, 8 states, retrograde with fresh and candidate states in the cell (no list, no recomputing of draws):
-//   UNKNOWN, CHANGED (a loss candidate), WIN_FRESH and LOSS_FRESH (decided, predecessors not marked yet), WIN, LOSS,
-//   PAWN_DRAW (a man move out of the group draws, moves inside remain: can still win), CAPT_DRAW (decided draw)
-//   Sweeps alternate between the colours, each cell read once, 8 at a time:
-//     LOSS_FRESH  its predecessors -> WIN_FRESH (over UNKNOWN, CHANGED, PAWN_DRAW); itself -> LOSS
-//     WIN_FRESH   its predecessors UNKNOWN -> CHANGED; itself -> WIN
-//     CHANGED     the delayed check: every move inside to a win -> LOSS, and its predecessors WIN_FRESH at once;
-//                 otherwise -> UNKNOWN
-//   until two sweeps in a row find nothing to do.
-// wdl2, 4 states (UNKNOWN, WIN, LOSS, DRAW: an exit draws or a decided draw, as Chinook's at-least-a-draw), the
-//   minimal Chinook-style loop: forward passes in place (UNKNOWN: a move inside to a loss -> WIN, every move inside
-//   to a win -> LOSS; DRAW: a capture test first, a capture position is final, else a move inside to a loss -> WIN),
-//   until a pass changes fewer than 1 in 32 positions; the changes of the next pass are the queue (a list), processed
-//   in levels: a queued LOSS makes an UNKNOWN predecessor WIN, a DRAW one only after a capture test; a queued WIN
-//   makes an UNKNOWN predecessor be evaluated at once (no candidate state), a DRAW one is skipped (it cannot lose).
+// Win, draw or loss without depths, so without a ply order: a value may be used as soon as it is written. A WDL loop
+// is a state machine on the cell codes, given by a rule set of 256-entry tables (rtbgen's tbl, win_loss and loss_win,
+// which rtbgen updates every ply, are such tables; without a ply order they stay fixed):
+//   pass 0      the code of a position from its exits (as wdl: probe_wdl) and whether it has moves inside
+//   act         a retrograde sweep's action on a cell of this code (rtbgen's tbl): mark the predecessors won (a fresh
+//               loss), mark them as candidates (a fresh win), or check (a candidate); after: its code afterwards
+//   counts_win  a successor that counts as won for the loss check (rtbgen's win_loss); counts_loss: as lost
+//   on_loss     (retro) a predecessor's code when a successor is lost (rtbgen's loss_win and SET_WIN_VALUE); with
+//               test_loss, only if it has no capture (a decided draw from pass 0 must not take it)
+//   on_win      (retro) a predecessor's code when a successor is won: a candidate (CHANGED, the delayed check), or
+//               EVALUATE: evaluated at once (no candidate state)
+//   forward     the cells a forward pass evaluates (fwd), whether they can lose (lossable), a capture test first
+//               (test_fwd), and their codes when a move inside reaches a loss (fwd_win) or all reach wins (fwd_loss)
+// The rule sets:
+//   wdl3        8 states: UNKNOWN, CHANGED, WIN_FRESH, WIN, LOSS_FRESH, LOSS, PAWN_DRAW (an exit draws: can still
+//               win), CAPT_DRAW (decided draw). Retrograde sweeps alternating between the colours: a fresh loss marks
+//               its predecessors WIN_FRESH, a fresh win marks them CHANGED, a candidate is checked once (a loss marks
+//               its wins at once), until two sweeps in a row find nothing to do
+//   wdl2        4 states: UNKNOWN, WIN, LOSS, ANY_DRAW (an exit draws or a decided draw, Chinook's at-least-a-draw).
+//               Forward passes in place until one changes fewer than 1 in 32 positions; the changes of the next pass
+//               are the queue (a list), processed in levels (a queued loss: UNKNOWN predecessors WIN, ANY_DRAW ones
+//               after a capture test; a queued win: UNKNOWN predecessors evaluated at once)
+// The exits are looked up as wdl only. For now the depth files written beside the wdl files hold a placeholder
+// (win 1, loss 2): only the wdl files are results. Both rule sets keep a byte per position; 3 and 2 bits are the
+// states they need, not (yet) their packing.
 namespace wdlx {
-constexpr std::uint8_t WIN = 3, WIN_FRESH = 4, LOSS_FRESH = 0xf8, LOSS = 0xf9, CAPT_DRAW = 0xfa, PAWN_DRAW = 0xfb,
-                       CHANGED = 0xfd, UNKNOWN = 0xfe;
+constexpr std::uint8_t EVALUATE = 0, WIN = 3, WIN_FRESH = 4, LOSS_FRESH = 0xf8, LOSS = 0xf9, CAPT_DRAW = 0xfa,
+                       PAWN_DRAW = 0xfb, CHANGED = 0xfd, UNKNOWN = 0xfe;
 constexpr std::uint8_t ANY_DRAW = PAWN_DRAW;                    // wdl2: both draws in one state
+enum Act : std::uint8_t { NONE, MARK_WINS, MARK_CANDIDATES, CHECK };
+enum class Mode { sweeps, forward_then_queue };
+struct Rules {
+        Mode mode;
+        std::uint8_t no_moves, exit_win, exits_draw, exits_loss, inside_exit_draw, inside;      // pass 0
+        std::uint8_t check_loss, check_fail;                    // the delayed check's outcomes
+        std::array<Act, 256> act{};
+        std::array<std::uint8_t, 256> after{}, on_loss{}, on_win{}, fwd_win{}, fwd_loss{};
+        std::array<bool, 256> counts_win{}, counts_loss{}, test_loss{}, fwd{}, lossable{}, test_fwd{};
+        Rules(Mode m) : mode(m) { for (int c = 0; c < 256; ++c) after[c] = on_loss[c] = on_win[c] = fwd_win[c] = fwd_loss[c] = std::uint8_t(c); }
+};
+inline Rules const& wdl3_rules()
+{
+        static Rules const r = [] {
+                Rules r(Mode::sweeps);
+                r.no_moves = LOSS_FRESH; r.exit_win = WIN_FRESH; r.exits_draw = CAPT_DRAW; r.exits_loss = LOSS_FRESH;
+                r.inside_exit_draw = PAWN_DRAW; r.inside = UNKNOWN;
+                r.check_loss = LOSS; r.check_fail = UNKNOWN;
+                r.act[LOSS_FRESH] = MARK_WINS;       r.after[LOSS_FRESH] = LOSS;
+                r.act[WIN_FRESH] = MARK_CANDIDATES;  r.after[WIN_FRESH] = WIN;
+                r.act[CHANGED] = CHECK;
+                for (std::uint8_t c : { UNKNOWN, CHANGED, PAWN_DRAW }) r.on_loss[c] = WIN_FRESH;
+                r.on_win[UNKNOWN] = CHANGED;
+                r.counts_win[WIN] = r.counts_win[WIN_FRESH] = true;
+                r.counts_loss[LOSS] = r.counts_loss[LOSS_FRESH] = true;
+                for (std::uint8_t c : { UNKNOWN, CHANGED, PAWN_DRAW }) { r.fwd[c] = true; r.fwd_win[c] = WIN_FRESH; }
+                r.lossable[UNKNOWN] = r.lossable[CHANGED] = true;
+                r.fwd_loss[UNKNOWN] = r.fwd_loss[CHANGED] = LOSS_FRESH;
+                return r;
+        }();
+        return r;
+}
+inline Rules const& wdl2_rules()
+{
+        static Rules const r = [] {
+                Rules r(Mode::forward_then_queue);
+                r.no_moves = LOSS; r.exit_win = WIN; r.exits_draw = ANY_DRAW; r.exits_loss = LOSS;
+                r.inside_exit_draw = ANY_DRAW; r.inside = UNKNOWN;
+                r.check_loss = LOSS; r.check_fail = UNKNOWN;
+                r.on_loss[UNKNOWN] = WIN;
+                r.on_loss[ANY_DRAW] = WIN; r.test_loss[ANY_DRAW] = true;
+                r.on_win[UNKNOWN] = EVALUATE;
+                r.counts_win[WIN] = true;
+                r.counts_loss[LOSS] = true;
+                r.fwd[UNKNOWN] = r.fwd[ANY_DRAW] = true;
+                r.lossable[UNKNOWN] = true;
+                r.test_fwd[ANY_DRAW] = true;
+                r.fwd_win[UNKNOWN] = r.fwd_win[ANY_DRAW] = WIN;
+                r.fwd_loss[UNKNOWN] = LOSS;
+                return r;
+        }();
+        return r;
+}
 }
 
 template<class ExecutionPolicy>
 void solve_group_wdl(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPolicy const& policy)
 {
         using namespace wdlx;
-        bool const three = g_wdl == 3;
+        Rules const& R = g_wdl == 3 ? wdl3_rules() : wdl2_rules();
         std::uint64_t const P = g.P, T = 2 * P;
         auto const pos = [&](std::uint64_t id) { return g.pos(id % P, int(id / P)); };
-        std::vector<std::uint8_t> table(T, UNKNOWN);
+        std::vector<std::uint8_t> table(T, R.inside);
         std::uint8_t* const cells = table.data();
         auto const ld = [&](std::uint64_t id) { return std::atomic_ref<std::uint8_t>(cells[id]).load(std::memory_order_relaxed); };
         auto const cas = [&](std::uint64_t id, std::uint8_t from, std::uint8_t to) {
@@ -1277,8 +1335,6 @@ void solve_group_wdl(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPo
                 std::uint64_t const other = (1 - id / P) * P;
                 for_each_inside_predecessor(g, p, id % P, [&](std::uint64_t i) { f(other + i); });
         };
-        auto const won = [&](std::uint8_t c) { return c == WIN || c == WIN_FRESH; };
-        auto const lost = [&](std::uint8_t c) { return c == LOSS || c == LOSS_FRESH; };
         std::atomic<std::uint64_t> evals{ 0 }, captests{ 0 };
 
         // pass 0: the exits as wdl
@@ -1296,101 +1352,116 @@ void solve_group_wdl(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPo
                                         else if (r == WDL_DRAW) drawn = true;
                                         return true;
                                 });
-                                std::uint8_t c = UNKNOWN;
-                                if (!any) c = three ? LOSS_FRESH : LOSS;
-                                else if (wins) c = three ? WIN_FRESH : WIN;            // final: wdl has no faster win
-                                else if (!in) c = drawn ? (three ? CAPT_DRAW : ANY_DRAW) : (three ? LOSS_FRESH : LOSS);
-                                else if (drawn) c = three ? PAWN_DRAW : ANY_DRAW;
-                                cells[id] = c;
+                                cells[id] = !any ? R.no_moves : wins ? R.exit_win : !in ? (drawn ? R.exits_draw : R.exits_loss)
+                                          : drawn ? R.inside_exit_draw : R.inside;
                         }
                 });
         g_stats.pass0 += seconds_since(t0);
         auto const t1 = std::chrono::steady_clock::now();
+
+        // a cell evaluates its moves inside: a move to a loss, or every move to a win (its exits are in its code)
+        enum class Summary { some_lost, all_won, other };
+        auto const summarize = [&](std::uint64_t q, Pos const& p, bool stop_at_loss) {
+                evals.fetch_add(1, std::memory_order_relaxed);
+                std::uint64_t const gp = q % P, other = (1 - q / P) * P;
+                bool all_won = true, some_lost = false;
+                for_each_move(pad_pos(p), [&](MoveRef const& m) {
+                        if (!inside_ref(m)) return true;
+                        std::uint8_t const c = ld(other + successor_index(g, p, gp, m));
+                        if (stop_at_loss && R.counts_loss[c]) { some_lost = true; return false; }
+                        if (!R.counts_win[c]) { all_won = false; if (!stop_at_loss) return false; }
+                        return true;
+                });
+                return some_lost ? Summary::some_lost : all_won ? Summary::all_won : Summary::other;
+        };
+        // a predecessor y of a decided q: its transition (on_loss or on_win); true if y changed
+        auto const transition = [&](std::uint64_t y, bool q_lost) -> std::uint8_t {
+                std::atomic_ref<std::uint8_t> a(cells[y]);
+                std::uint8_t c = a.load(std::memory_order_relaxed);
+                for (;;) {
+                        std::uint8_t to = q_lost ? R.on_loss[c] : R.on_win[c];
+                        if (to == c) return c;
+                        if (to == EVALUATE) {
+                                Summary const s = summarize(y, pos(y), true);
+                                to = s == Summary::some_lost ? R.fwd_win[c] : s == Summary::all_won && R.lossable[c] ? R.fwd_loss[c] : c;
+                                if (to == c) return c;
+                        } else if (q_lost && R.test_loss[c]) {
+                                captests.fetch_add(1, std::memory_order_relaxed);
+                                if (has_capture(pos(y))) return c;      // a decided draw: not a real predecessor
+                        }
+                        if (a.compare_exchange_weak(c, to, std::memory_order_relaxed)) return to;
+                }
+        };
         int sweeps = 0, forward_passes = 0, levels = 0;
         std::uint64_t queued = 0;
         constexpr std::uint64_t ones = 0x0101010101010101ull, low7 = 0x7f7f7f7f7f7f7f7full;
         auto const zero_bytes = [](std::uint64_t x) { return ~(((x & low7) + low7) | x | low7); };
 
-        if (three) {
-                auto const set_win_fresh = [&](std::uint64_t y) {
-                        std::atomic_ref<std::uint8_t> a(cells[y]);
-                        std::uint8_t c = a.load(std::memory_order_relaxed);
-                        while (c == UNKNOWN || c == CHANGED || c == PAWN_DRAW)
-                                if (a.compare_exchange_weak(c, WIN_FRESH, std::memory_order_relaxed)) return;
-                };
-                auto const set_changed = [&](std::uint64_t y) { cas(y, UNKNOWN, CHANGED); };
-                auto const check_loss = [&](std::uint64_t q) {          // every move inside to a win (its exits all lose)
-                        evals.fetch_add(1, std::memory_order_relaxed);
-                        Pos const p = pos(q);
-                        std::uint64_t const gp = q % P, other = (1 - q / P) * P;
-                        bool const all = for_each_move(pad_pos(p), [&](MoveRef const& m) {
-                                return !inside_ref(m) || won(ld(other + successor_index(g, p, gp, m)));
-                        });
-                        if (!all) { cells[q] = UNKNOWN; return; }
-                        cells[q] = LOSS;
-                        retro(q, p, set_win_fresh);
+        if (R.mode == Mode::sweeps) {
+                std::vector<std::uint64_t> patterns;            // the codes with an action, for the word-wise scan
+                for (int c = 0; c < 256; ++c) if (R.act[std::size_t(c)] != NONE) patterns.push_back(ones * std::uint64_t(c));
+                auto const handle = [&](std::uint64_t q) {
+                        std::uint8_t const c = cells[q];                // only this cell's own loop writes this colour
+                        switch (R.act[c]) {
+                        case MARK_WINS:
+                                cells[q] = R.after[c];
+                                retro(q, pos(q), [&](std::uint64_t y) { transition(y, true); });
+                                return true;
+                        case MARK_CANDIDATES:
+                                cells[q] = R.after[c];
+                                retro(q, pos(q), [&](std::uint64_t y) { transition(y, false); });
+                                return true;
+                        case CHECK: {                                   // the delayed check; a loss marks its wins at once
+                                Pos const p = pos(q);
+                                if (summarize(q, p, false) != Summary::all_won) { cells[q] = R.check_fail; return true; }
+                                cells[q] = R.check_loss;
+                                retro(q, p, [&](std::uint64_t y) { transition(y, true); });
+                                return true;
+                        }
+                        default: return false;
+                        }
                 };
                 for (int idle = 0; idle < 2; ++sweeps) {
-                        int const col = sweeps % 2;
-                        std::uint64_t const base = std::uint64_t(col) * P;
+                        std::uint64_t const base = std::uint64_t(sweeps % 2) * P;
                         std::atomic<bool> work{ false };
                         for_blocks(policy, P, [&](std::uint64_t lo, std::uint64_t hi) {
                                 bool any = false;
-                                auto const handle = [&](std::uint64_t q) {
-                                        std::uint8_t const c = cells[q];        // only this cell's own loop writes this colour
-                                        if (c == LOSS_FRESH) { cells[q] = LOSS; retro(q, pos(q), set_win_fresh); any = true; }
-                                        else if (c == WIN_FRESH) { cells[q] = WIN; retro(q, pos(q), set_changed); any = true; }
-                                        else if (c == CHANGED) { check_loss(q); any = true; }
-                                };
-                                std::uint64_t const p_lf = ones * LOSS_FRESH, p_wf = ones * WIN_FRESH, p_ch = ones * CHANGED;
                                 std::uint64_t q = base + lo, end = base + hi;
-                                for (; q < end && q % 8 != 0; ++q) handle(q);
+                                for (; q < end && q % 8 != 0; ++q) any |= handle(q);
                                 for (; q + 8 <= end; q += 8) {
                                         std::uint64_t w;
                                         std::memcpy(&w, cells + q, 8);
-                                        std::uint64_t m = zero_bytes(w ^ p_lf) | zero_bytes(w ^ p_wf) | zero_bytes(w ^ p_ch);
-                                        for (; m != 0; m &= m - 1) handle(q + std::uint64_t(std::countr_zero(m)) / 8);
+                                        std::uint64_t m = 0;
+                                        for (std::uint64_t pt : patterns) m |= zero_bytes(w ^ pt);
+                                        for (; m != 0; m &= m - 1) any |= handle(q + std::uint64_t(std::countr_zero(m)) / 8);
                                 }
-                                for (; q < end; ++q) handle(q);
+                                for (; q < end; ++q) any |= handle(q);
                                 if (any) work.store(true, std::memory_order_relaxed);
                         });
                         idle = work.load() ? 0 : idle + 1;
                 }
         } else {
-                // forward: an UNKNOWN or non-capture ANY_DRAW cell evaluates its moves inside, in place (it writes only itself)
-                auto const evaluate = [&](std::uint64_t q, Pos const& p, bool can_lose) -> std::uint8_t {
-                        evals.fetch_add(1, std::memory_order_relaxed);
-                        std::uint64_t const gp = q % P, other = (1 - q / P) * P;
-                        bool all_won = true, some_lost = false;
-                        for_each_move(pad_pos(p), [&](MoveRef const& m) {
-                                if (!inside_ref(m)) return true;
-                                std::uint8_t const c = ld(other + successor_index(g, p, gp, m));
-                                if (c == LOSS) { some_lost = true; return false; }
-                                if (c != WIN) all_won = false;
-                                return true;
-                        });
-                        return some_lost ? WIN : can_lose && all_won ? LOSS : UNKNOWN;
-                };
+                // forward passes in place: a cell evaluates its moves inside and writes only itself
                 std::vector<std::uint64_t> queue;
                 bool record = false;
                 for (int quiet = 0; quiet < 2; ++sweeps) {              // until two passes change nothing, or the queue takes over
-                        int const col = sweeps % 2;
-                        std::uint64_t const base = std::uint64_t(col) * P;
+                        std::uint64_t const base = std::uint64_t(sweeps % 2) * P;
                         std::atomic<std::uint64_t> changes{ 0 };
                         std::vector<std::vector<std::uint64_t>> rec(record ? num_blocks(P) : 0);
                         for_blocks(policy, P, [&](std::uint64_t lo, std::uint64_t hi) {
                                 std::uint64_t n = 0;
                                 for (std::uint64_t q = base + lo; q < base + hi; ++q) {
                                         std::uint8_t const c = cells[q];
-                                        if (c != UNKNOWN && c != ANY_DRAW) continue;
+                                        if (!R.fwd[c]) continue;
                                         Pos const p = pos(q);
-                                        if (c == ANY_DRAW) {
+                                        if (R.test_fwd[c]) {
                                                 captests.fetch_add(1, std::memory_order_relaxed);
                                                 if (has_capture(p)) continue;           // a decided draw
                                         }
-                                        std::uint8_t const r = evaluate(q, p, c == UNKNOWN);
-                                        if (r == UNKNOWN) continue;
-                                        cells[q] = r;
+                                        Summary const sm = summarize(q, p, true);
+                                        std::uint8_t const to = sm == Summary::some_lost ? R.fwd_win[c] : sm == Summary::all_won && R.lossable[c] ? R.fwd_loss[c] : c;
+                                        if (to == c) continue;
+                                        cells[q] = to;
                                         ++n;
                                         if (record) rec[lo / block_size].push_back(q);
                                 }
@@ -1410,19 +1481,11 @@ void solve_group_wdl(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPo
                                 auto& out = next[lo / block_size];
                                 for (std::uint64_t j = lo; j < hi; ++j) {
                                         std::uint64_t const q = queue[j];
-                                        bool const qlost = ld(q) == LOSS;
+                                        bool const q_lost = R.counts_loss[ld(q)];
                                         retro(q, pos(q), [&](std::uint64_t y) {
-                                                std::uint8_t const c = ld(y);
-                                                if (qlost) {
-                                                        if (c == UNKNOWN) { if (cas(y, UNKNOWN, WIN)) out.push_back(y); }
-                                                        else if (c == ANY_DRAW) {
-                                                                captests.fetch_add(1, std::memory_order_relaxed);
-                                                                if (!has_capture(pos(y)) && cas(y, ANY_DRAW, WIN)) out.push_back(y);
-                                                        }
-                                                } else if (c == UNKNOWN) {
-                                                        std::uint8_t const r = evaluate(y, pos(y), true);
-                                                        if (r != UNKNOWN && cas(y, UNKNOWN, r)) out.push_back(y);
-                                                }
+                                                std::uint8_t const before = ld(y);
+                                                std::uint8_t const after = transition(y, q_lost);
+                                                if (after != before && (R.counts_win[after] || R.counts_loss[after])) out.push_back(y);
                                         });
                                 }
                         });
@@ -1434,13 +1497,13 @@ void solve_group_wdl(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPo
         for_blocks(policy, T, [&](std::uint64_t lo, std::uint64_t hi) {
                 for (std::uint64_t id = lo; id < hi; ++id) {
                         std::uint8_t const c = cells[id];
-                        std::uint16_t const v = won(c) ? win(1) : lost(c) ? loss(2) : 0;      // placeholder depths
+                        std::uint16_t const v = R.counts_win[c] ? win(1) : R.counts_loss[c] ? loss(2) : 0;     // placeholder depths
                         if (v != 0) sink.put(int(id / P), id % P, pos(id), v);
                 }
         });
         g_stats.rounds += seconds_since(t1);
         std::cout << "wdl" << g_wdl << " steps: rounds " << t_rounds << " s, " << sweeps << " sweeps";
-        if (!three) std::cout << " (" << forward_passes << " forward), queue " << queued << " entries in " << levels << " levels";
+        if (R.mode == Mode::forward_then_queue) std::cout << " (" << forward_passes << " forward), queue " << queued << " entries in " << levels << " levels";
         std::cout << ", evaluations " << evals.load() << ", capture tests " << captests.load() << std::endl;
 }
 

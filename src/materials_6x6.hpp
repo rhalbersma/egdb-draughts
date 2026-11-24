@@ -170,6 +170,10 @@ struct MatIndex {
         std::uint64_t swm, sbm, swk, sbk, size;
         std::uint64_t nk1 = 0, nk2 = 0, men = 0;                // king placements (white, black); configurations
         std::vector<std::uint64_t> off;                         // per white-men rank: its first men index
+        // the dual order (colours swapped: black men, then white men over what they leave; black kings, then white kings):
+        // per black-men rank its first men index, and the white king placements over what the black kings leave
+        std::vector<std::uint64_t> offd;
+        std::uint64_t nkd2 = 0;
 
         explicit MatIndex(Material m)
         :
@@ -187,6 +191,14 @@ struct MatIndex {
                         men += CC[(DOM_BM - unrank_in(r, m.wm, DOM_WM)).size()][std::size_t(m.bm)];
                 }
                 off[swm] = men;
+                if (e >= m.wk + m.bk) nkd2 = CC[std::size_t(e - m.bk)][std::size_t(m.wk)];
+                offd.resize(sbm + 1);
+                std::uint64_t md = 0;
+                for (std::uint64_t r = 0; r < sbm; ++r) {
+                        offd[r] = md;
+                        md += CC[(DOM_WM - unrank_in(r, m.bm, DOM_BM)).size()][std::size_t(m.wm)];
+                }
+                offd[sbm] = md;
 #if EGDB_JOINT_INDEX
                 size = men * nk1 * nk2;
 #endif
@@ -203,6 +215,26 @@ struct MatIndex {
         std::uint64_t king_index(bitboard const& free, bitboard const& wk, bitboard const& bk) const
         {
                 return rank_in(wk, free) * nk2 + rank_in(bk, free - wk);
+        }
+
+        // the dual order's men and king indices (the same counts: men configurations, K king placements)
+        std::uint64_t men_index_dual(bitboard const& wm, bitboard const& bm) const
+        {
+                return offd[rank_in(bm, DOM_BM)] + rank_in(wm, DOM_WM - bm);
+        }
+        std::uint64_t king_index_dual(bitboard const& free, bitboard const& wk, bitboard const& bk) const
+        {
+                return rank_in(bk, free) * nkd2 + rank_in(wk, free - bk);
+        }
+        void place_dual(std::uint64_t mi, std::uint64_t ki, int stm, Pos& p) const
+        {
+                std::uint64_t const rb = std::uint64_t(std::ranges::upper_bound(offd, mi) - offd.begin()) - 1;
+                p.stm = stm;
+                p.m[1] = unrank_in(rb, c.bm, DOM_BM);
+                p.m[0] = unrank_in(mi - offd[rb], c.wm, DOM_WM - p.m[1]);
+                bitboard const free = FULL - p.m[0] - p.m[1];
+                p.k[1] = unrank_in(ki / nkd2, c.bk, free);
+                p.k[0] = unrank_in(ki % nkd2, c.wk, free - p.k[1]);
         }
 
         // the position of configuration mi (a men index) and king placement ki
@@ -355,6 +387,11 @@ struct Plane {
         }
 };
 
+// dual indexing (see Group::dual), EGDB_DUAL_INDEX: 0 off (both sides in the material's order), 1 the Black-to-move
+// positions colour-swapped (the successors of a move lie close together: the loss checks), 2 the White-to-move
+// positions colour-swapped (the predecessors of an unmove lie close together: the unmoves)
+int const g_dual_index = std::getenv("EGDB_DUAL_INDEX") ? std::atoi(std::getenv("EGDB_DUAL_INDEX")) : 0;
+
 // ---------------------------------------------------------------- a group of configurations, solved together
 //
 // A group is a set of configurations of the men (each with all its K king placements), numbered by MatIndex's men and
@@ -378,8 +415,17 @@ struct Group {
         void release() { if (!all) std::vector<std::uint64_t>().swap(men); }
         std::uint64_t configurations() const { return count; }
 
+        // dual indexing (EGDB_DUAL_INDEX, whole-material groups; Lincke's dual indexing): one side to move's positions in
+        // the colour-swapped order. A move changes only the mover's pieces, so with the Black-to-move positions swapped
+        // (1) the successors of a White move lie close together among them, and those of a Black move among the
+        // White-to-move positions: the loss checks; with the White-to-move positions swapped (2) the same holds for the
+        // predecessors of an unmove: the unmoves. Only the group's own numbering changes: the sinks and the files keep
+        // the material's index
+        bool dual(int stm) const { return all && g_dual_index != 0 && stm == 2 - g_dual_index; }
+
         std::uint64_t index(Pos const& p) const
         {
+                if (dual(p.stm)) return mi->men_index_dual(p.m[0], p.m[1]) * K + mi->king_index_dual(FULL - p.m[0] - p.m[1], p.k[0], p.k[1]);
                 std::uint64_t const m = mi->men_index(p.m[0], p.m[1]);
                 std::uint64_t const u = all ? m : std::uint64_t(std::ranges::lower_bound(men, m) - men.begin());
                 return u * K + mi->king_index(p);
@@ -388,8 +434,23 @@ struct Group {
         Pos pos(std::uint64_t g, int stm) const
         {
                 Pos p;
-                mi->place(all ? g / K : men[g / K], g % K, stm, p);
+                if (dual(stm)) mi->place_dual(g / K, g % K, stm, p);
+                else mi->place(all ? g / K : men[g / K], g % K, stm, p);
                 return p;
+        }
+
+        // the local index of p with one of mover's kings moved from a to b (dense squares), numbered for side `to`
+        // (the side to move after the move, or before it for an unmove); g: p's own local index, for side p.stm. The men
+        // stay, so in one order only the king index is recomputed; across the orders the men index too
+        std::uint64_t king_moved_to(Pos const& p, std::uint64_t g, int mover, int a, int b, int to) const
+        {
+                if (dual(p.stm) == dual(to)) return king_moved(p, g, mover, a, b);    // one order: the configuration part stays
+                bitboard k[2] = { p.k[0], p.k[1] };
+                k[mover].erase(std::size_t(a));
+                k[mover].insert(std::size_t(b));
+                bitboard const free = FULL - p.m[0] - p.m[1];
+                if (dual(to)) return mi->men_index_dual(p.m[0], p.m[1]) * K + mi->king_index_dual(free, k[0], k[1]);
+                return mi->men_index(p.m[0], p.m[1]) * K + mi->king_index(free, k[0], k[1]);
         }
 
         // the index update: the local index of p (at local index g) with one of side's kings moved from a to b (dense
@@ -399,6 +460,7 @@ struct Group {
                 bitboard k[2] = { p.k[0], p.k[1] };
                 k[side].erase(std::size_t(a));
                 k[side].insert(std::size_t(b));
+                if (dual(p.stm)) return g - g % K + mi->king_index_dual(FULL - p.m[0] - p.m[1], k[0], k[1]);
                 return g - g % K + mi->king_index(FULL - p.m[0] - p.m[1], k[0], k[1]);
         }
 };
@@ -491,7 +553,7 @@ void for_each_inside_predecessor(Group const& g, Pos const& q, std::uint64_t gq,
                                 int const fr = tp + STEP[d];
                                 if (fr >= 0 && fr < PAD_SIZE && empty.contains(std::size_t(fr))) reach.insert(std::size_t(fr));
                         }
-                        for (auto const fr : reach) f(g.king_moved(q, gq, mover, int(t), DENSE_OF[fr]));
+                        for (auto const fr : reach) f(g.king_moved_to(q, gq, mover, int(t), DENSE_OF[fr], mover));
                 }
         }
         if (!men_inside()) return;
@@ -520,7 +582,7 @@ bool inside_ref(MoveRef const& m)
 
 std::uint64_t successor_index(Group const& g, Pos const& p, std::uint64_t gp, MoveRef const& m)
 {
-        if (m.king) return g.king_moved(p, gp, p.stm, m.from_sq(), m.to_sq());
+        if (m.king) return g.king_moved_to(p, gp, p.stm, m.from_sq(), m.to_sq(), 1 - p.stm);
         return g.index(apply(p, m));
 }
 

@@ -995,6 +995,8 @@ constexpr int loss_depth(std::uint8_t c) { return 2 * (MATE - c); }
 constexpr std::uint8_t win_code(int d) { return std::uint8_t(WIN_IN_ONE + (d - 1) / 2); }
 constexpr std::uint8_t loss_code(int d) { return std::uint8_t(MATE - d / 2); }
 static_assert(win_code(MAX_WIN) + 1 == loss_code(MAX_LOSS) && loss_code(2) == LOSS_IN_ONE);
+inline thread_local std::uint64_t wins_written = 0;             // per thread: wins written by the current block
+enum class Dir { retro, forward };
 }
 
 bool g_rtb = false;
@@ -1012,6 +1014,7 @@ void solve_group_rtb(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPo
         std::vector<std::array<std::uint64_t, 4>> snap_mask[2]; // per colour and block: the depths in it
         std::vector<std::uint8_t> snap_has[2];                  // per colour: the depths that occur
         std::atomic<std::uint64_t> snap_bytes{ 0 };
+        std::uint64_t hist[2][256] = {};                        // pass 0: per colour, its wins (decided and PAWN_WIN) by depth
         std::atomic<int> max_depth{ 0 };                        // the deepest value written, PAWN_WINs included
         auto const note_depth = [&](int d) {
                 int cur = max_depth.load(std::memory_order_relaxed);
@@ -1024,7 +1027,7 @@ void solve_group_rtb(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPo
                 std::atomic_ref<std::uint8_t> a(table[id]);
                 std::uint8_t c = a.load(std::memory_order_relaxed);
                 while (c == UNKNOWN || c == CHANGED || c == PAWN_DRAW || c == PAWN_WIN)
-                        if (a.compare_exchange_weak(c, v, std::memory_order_relaxed)) return;
+                        if (a.compare_exchange_weak(c, v, std::memory_order_relaxed)) { ++wins_written; return; }
         };
         auto const set_changed = [&](std::uint64_t id) {                        // rtbgen's SET_CHANGED
                 std::uint8_t c = UNKNOWN;
@@ -1051,6 +1054,7 @@ void solve_group_rtb(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPo
                         int md = 0;
                         std::uint64_t const lo = std::uint64_t(col) * P + lo0, hi = std::uint64_t(col) * P + hi0;
                         std::vector<std::uint8_t> sdepth;       // this block's PAWN_WIN depths
+                        std::array<std::uint32_t, 256> wins_by_depth{};
                         for (std::uint64_t id = lo; id < hi; ++id) {
                                 Pos const p = pos(id);
                                 bool any = false, in = false, drawn = false;
@@ -1068,6 +1072,7 @@ void solve_group_rtb(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPo
                                 if (wn < INF) {
                                         fits(wn, MAX_WIN);
                                         md = std::max(md, wn);
+                                        ++wins_by_depth[std::size_t(wn)];
                                         if (!in) { table[id] = win_code(wn); continue; }   // decided
                                         table[id] = PAWN_WIN;                               // provisional
                                         if (sdepth.empty()) sdepth.assign(hi - lo, 0);
@@ -1084,6 +1089,8 @@ void solve_group_rtb(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPo
                                 if (drawn) table[id] = PAWN_DRAW;       // else UNKNOWN: its exits (if any) all lose
                         }
                         note_depth(md);
+                        for (std::size_t d = 0; d < 256; ++d)
+                                if (wins_by_depth[d] != 0) std::atomic_ref<std::uint64_t>(hist[col][d]).fetch_add(wins_by_depth[d], std::memory_order_relaxed);
                         if (!sdepth.empty()) {
                                 auto& z = snapz[col][lo0 / block_size];
                                 z.resize(ZSTD_compressBound(sdepth.size()));
@@ -1119,16 +1126,39 @@ void solve_group_rtb(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPo
                 else note_depth(e + 1);
         };
 
-        // the sweeps
+        // the sweeps, each retrograde (only the CHANGED cells are checked) or forward (every undecided cell is checked,
+        // UNKNOWN or CHANGED). A sweep of X decides the direction of the next sweep of Y: forward when that is cheaper by
+        // egdb_6x6's estimate, c_f U_Y < alpha F, with U_Y the undecided cells of Y (counted by Y's last scan) and F the
+        // wins of X this sweep marks from (written into X by Y's last sweep, and those of pass 0 of this depth). Then X
+        // marks no candidates for Y. EGDB_RTB_DIR = retro, forward or auto (default); EGDB_RTB_ALPHA (default 2:
+        // measured on 6x6 checkers 03-04-01-02, retrograde 48.7 ns per win of F, forward 24.9 ns per undecided cell)
+        static int const dir_mode = [] {
+                std::string const e = std::getenv("EGDB_RTB_DIR") ? std::getenv("EGDB_RTB_DIR") : "auto";
+                return e == "retro" ? 0 : e == "forward" ? 1 : 2;
+        }();
+        static double const alpha = std::getenv("EGDB_RTB_ALPHA") ? std::atof(std::getenv("EGDB_RTB_ALPHA")) : 2.0;
+        static bool const trace = std::getenv("EGDB_RTB_TRACE") != nullptr;
+        Dir dir_next[2] = { dir_mode == 1 ? Dir::forward : Dir::retro, dir_mode == 1 ? Dir::forward : Dir::retro };
+        std::uint64_t undecided[2] = { P, P };                  // as counted by each colour's last scan
+        std::uint64_t wins_into[2] = { 0, 0 };                  // wins written into each colour by the other's last sweep
+        int forward_sweeps = 0;
         int ply = 0;
         for (; ply <= max_depth.load() + 2; ++ply) {
-                int const col = ply % 2;
+                auto const ts = std::chrono::steady_clock::now();
+                int const col = ply % 2, opp = 1 - col;
                 std::uint64_t const base = std::uint64_t(col) * P;
                 int const de = col ? ply - 1 : ply, dw = col ? ply : ply - 1;  // this sweep's own losses and wins
                 std::uint8_t const cl = de <= MAX_LOSS ? loss_code(de) : UNKNOWN;
                 bool const has_w = dw >= 1 && dw <= MAX_WIN;
                 std::uint8_t const cw = has_w ? win_code(dw) : UNKNOWN;
                 bool const read_snap = has_w && snap_has[col][std::size_t(dw)] != 0;
+                Dir const dir = dir_next[col];
+                std::uint64_t const F = wins_into[col] + (has_w ? hist[col][std::size_t(dw)] : 0);
+                if (dir_mode == 2) dir_next[opp] = double(undecided[opp]) < alpha * double(F) ? Dir::forward : Dir::retro;
+                bool const mark = dir_next[opp] == Dir::retro;  // the next sweep of the other colour needs the candidates
+                bool const fwd = dir == Dir::forward;
+                forward_sweeps += fwd;
+                std::atomic<std::uint64_t> undecided_now{ 0 }, wins_now{ 0 };
                 for_blocks(policy, P, [&](std::uint64_t lo, std::uint64_t hi) {
                         std::uint8_t sbuf[block_size];          // this block's PAWN_WIN depths, when needed
                         bool sb = false;
@@ -1138,35 +1168,49 @@ void solve_group_rtb(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPo
                                 if (ZSTD_isError(r)) { std::cerr << "zstd: " << ZSTD_getErrorName(r) << std::endl; std::abort(); }
                                 sb = true;
                         }
-                        // 8 cells at a time: the bytes equal to CHANGED, cl, cw or (with the snapshot) PAWN_WIN found at
-                        // once (the exact zero-byte test), the other cells skipped. Only this cell's own loop writes this
-                        // colour, so a word read stays valid for the cells after the one being handled
-                        std::uint8_t const k_cl = cl, k_cw = cw, k_pw = sb ? PAWN_WIN : CHANGED;
+                        // 8 cells at a time: the bytes to handle found at once (the exact zero-byte test), the others
+                        // skipped. Only this cell's own loop writes this colour, so a word read stays valid for the cells
+                        // after the one being handled
+                        std::uint8_t const k_cl = cl, k_cw = mark ? cw : CHANGED, k_cv = cw, k_pw = sb ? PAWN_WIN : CHANGED;
+                        std::uint8_t const k_un = fwd ? UNKNOWN : CHANGED;
                         int const k_dw = dw, k_de = de, k_ply = ply;
+                        bool const k_mark = mark;
                         std::uint8_t* const cells = table.data();
                         constexpr std::uint64_t ones = 0x0101010101010101ull, low7 = 0x7f7f7f7f7f7f7f7full;
                         auto const zero_bytes = [](std::uint64_t x) { return ~(((x & low7) + low7) | x | low7); };
-                        std::uint64_t const p_ch = ones * CHANGED, p_cl = ones * k_cl, p_cw = ones * k_cw, p_pw = ones * k_pw;
+                        std::uint64_t const p_ch = ones * CHANGED, p_un = ones * UNKNOWN, p_cl = ones * k_cl, p_cw = ones * k_cw,
+                                            p_pw = ones * k_pw, p_hu = ones * k_un;
                         auto const handle = [&](std::uint64_t q) {
                                 std::uint8_t const c = cells[q];
-                                if (c == CHANGED) check_loss(q, k_ply);
+                                if (c == CHANGED || c == k_un) check_loss(q, k_ply);
                                 else if (c == k_cl) mark_wins(q, pos(q), k_de);
                                 else if (c == k_cw) retro(q, pos(q), set_changed);
                                 else if (sb && c == PAWN_WIN && sbuf[q - base - lo] == k_dw) {  // final now
-                                        cells[q] = k_cw;
-                                        retro(q, pos(q), set_changed);
+                                        cells[q] = k_cv;
+                                        if (k_mark) retro(q, pos(q), set_changed);
                                 }
                         };
+                        wins_written = 0;
+                        std::uint64_t und = 0;
                         std::uint64_t q = base + lo, end = base + hi;
-                        for (; q < end && q % 8 != 0; ++q) handle(q);
+                        for (; q < end && q % 8 != 0; ++q) { und += cells[q] == UNKNOWN || cells[q] == CHANGED; handle(q); }
                         for (; q + 8 <= end; q += 8) {
                                 std::uint64_t w;
                                 std::memcpy(&w, cells + q, 8);
-                                std::uint64_t m = zero_bytes(w ^ p_ch) | zero_bytes(w ^ p_cl) | zero_bytes(w ^ p_cw) | zero_bytes(w ^ p_pw);
+                                std::uint64_t const zc = zero_bytes(w ^ p_ch), zu = zero_bytes(w ^ p_un);
+                                und += std::uint64_t(std::popcount(zc | zu));
+                                std::uint64_t m = zc | zero_bytes(w ^ p_hu) | zero_bytes(w ^ p_cl) | zero_bytes(w ^ p_cw) | zero_bytes(w ^ p_pw);
                                 for (; m != 0; m &= m - 1) handle(q + std::uint64_t(std::countr_zero(m)) / 8);
                         }
-                        for (; q < end; ++q) handle(q);
+                        for (; q < end; ++q) { und += cells[q] == UNKNOWN || cells[q] == CHANGED; handle(q); }
+                        undecided_now.fetch_add(und, std::memory_order_relaxed);
+                        wins_now.fetch_add(wins_written, std::memory_order_relaxed);
                 });
+                undecided[col] = undecided_now.load();
+                wins_into[opp] = wins_now.load();
+                if (trace)
+                        std::cout << "rtb ply " << ply << " colour " << col << (fwd ? " forward" : " retro") << (mark ? " mark" : "")
+                                  << " U " << undecided[col] << " F " << F << " wins_out " << wins_into[opp] << " " << seconds_since(ts) << " s" << std::endl;
         }
         double const t_sweeps = seconds_since(t1);
 
@@ -1182,7 +1226,7 @@ void solve_group_rtb(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPo
         });
         if (left.load() != 0) { std::cerr << "rtb: " << left.load() << " PAWN_WINs never reached" << std::endl; std::abort(); }
         g_stats.rounds += seconds_since(t1);
-        std::cout << "rtb steps: sweeps " << t_sweeps << " s (" << ply << " plies), output " << seconds_since(t3)
+        std::cout << "rtb steps: sweeps " << t_sweeps << " s (" << ply << " plies, " << forward_sweeps << " forward), output " << seconds_since(t3)
                   << " s, snapshot " << snap_bytes.load() << " bytes" << std::endl;
 }
 

@@ -979,7 +979,8 @@ void solve_group_cell8(Group const& g, DepthSink<std::uint16_t>& sink, Execution
 //   zbitmap  the same bits, zstd-compressed in blocks of 1 KB (8192 positions), one block cached per thread
 //   snap     a provisional exit win has one code, EXIT_WIN, without its depth; the depths are in a snapshot per colour
 //            (one byte per position, zstd per block of the sweeps), read by the sweep of its colour in step with its
-//            blocks, only at the plies that have such wins: there an EXIT_WIN of the sweep's depth becomes a WIN (it is
+//            blocks, only at the plies that have such wins, and only the blocks that have one (a mask of depths per
+//            block): there an EXIT_WIN of the sweep's depth becomes a WIN (it is
 //            final) and marks its predecessors. A check never needs the depth: an EXIT_WIN still in the table is no
 //            opened win yet. A faster win replaces EXIT_WIN, so no win is ever replaced: no test, and 240 plies
 namespace rtb {
@@ -1022,6 +1023,7 @@ void solve_group_rtb(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPo
         bool const snap = fake == Fake::snap;
         std::vector<std::vector<char>> snapz[2];                // snap: per colour, per block of the sweeps, zstd
         std::vector<std::uint8_t> snap_has[2];                  // snap: per colour, the depths that occur
+        std::vector<std::array<std::uint64_t, 4>> snap_mask[2]; // snap: per colour and block, the depths that occur in it
         std::atomic<std::uint64_t> snap_bytes{ 0 };
         std::uint64_t const P = g.P, T = 2 * P;                 // table_w = [0, P), table_b = [P, 2P)
         auto const pos = [&](std::uint64_t id) { return g.pos(id % P, int(id / P)); };
@@ -1089,7 +1091,7 @@ void solve_group_rtb(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPo
         // pass 0, colour by colour (its blocks are the blocks of the sweeps, for the snapshot)
         auto const t0 = std::chrono::steady_clock::now();
         for (int col = 0; col < 2; ++col) {
-        if (snap) { snapz[col].resize(num_blocks(P)); snap_has[col].assign(256, 0); }
+        if (snap) { snapz[col].resize(num_blocks(P)); snap_mask[col].assign(num_blocks(P), {}); snap_has[col].assign(256, 0); }
         for_blocks(policy, P, [&](std::uint64_t lo0, std::uint64_t hi0) {
                 int md = 0;
                 bool prov = false;
@@ -1117,6 +1119,7 @@ void solve_group_rtb(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPo
                                         table[id] = EXIT_WIN;
                                         if (sdepth.empty()) sdepth.assign(hi - lo, 0);
                                         sdepth[id - lo] = std::uint8_t(wn);
+                                        snap_mask[col][lo0 / block_size][std::size_t(wn) / 64] |= std::uint64_t(1) << (wn % 64);
                                         std::atomic_ref<std::uint8_t>(snap_has[col][std::size_t(wn)]).store(1, std::memory_order_relaxed);
                                         continue;
                                 }
@@ -1199,7 +1202,7 @@ void solve_group_rtb(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPo
                 for_blocks(policy, P, [&](std::uint64_t lo, std::uint64_t hi) {
                         std::uint8_t sbuf[block_size];          // snap: this block's exit win depths, when needed
                         bool sb = false;
-                        if (read_snap) {
+                        if (read_snap && (snap_mask[col][lo / block_size][std::size_t(dw) / 64] >> (dw % 64) & 1)) {
                                 auto const& z = snapz[col][lo / block_size];
                                 if (!z.empty()) {
                                         std::size_t const r = ZSTD_decompress(sbuf, hi - lo, z.data(), z.size());

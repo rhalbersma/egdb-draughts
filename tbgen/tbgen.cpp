@@ -68,6 +68,9 @@
 //                                                            the groups (default material; below it man moves are
 //                                                            exits)
 //        tbgen board                                        the board and rules of this binary (e.g. "8x8 checkers")
+//        tbgen verify <dir> wp bp wm bm <metric> [seq|par]  one material as egdb_6x6's matverify: every slot of both
+//                                                            sides from its files against its successors, and its wdl
+//                                                            files against the values
 //        tbgen plan n <metric> [granularity]                per stored material with at most n pieces: slots,
 //                                                            positions, groups, the largest group, MB needed (rung 0)
 //        tbgen checkall <dir> n <metric> [threads]          every material of at most n pieces against egdb_6x6
@@ -209,7 +212,8 @@ void compress_buffer(std::uint8_t const* raw, std::uint64_t size, std::string co
                         for (; it != extras->end() && it->first < lo + n; ++it) blk.push_back(it->second);
                 }
                 parts[b].resize(ZSTD_compressBound(blk.size()));
-                std::size_t const r = ZSTD_compress(parts[b].data(), parts[b].size(), blk.data(), blk.size(), 3);
+                static int const zlevel = std::getenv("EGDB_ZLEVEL") ? std::atoi(std::getenv("EGDB_ZLEVEL")) : 3;     // EGDB_ZLEVEL: zstd's level (default 3)
+                std::size_t const r = ZSTD_compress(parts[b].data(), parts[b].size(), blk.data(), blk.size(), zlevel);
                 if (ZSTD_isError(r)) { std::cerr << "zstd: " << ZSTD_getErrorName(r) << std::endl; std::exit(1); }
                 parts[b].resize(r);
         });
@@ -572,15 +576,14 @@ std::uint16_t move_value(Pos const& p, Move const& mv)
 // the value recomputed from the successors (for the checks)
 std::uint16_t value_from_successors(Pos const& p)
 {
-        auto const ml = moves(p);
-        if (ml.empty()) return loss(0);
         std::uint16_t best = loss(0);
         bool first = true;
-        for (auto const& mv : ml) {
-                std::uint16_t const x = move_value(p, mv);
+        for_each_move(pad_pos(p), [&](MoveRef const& m) {
+                std::uint16_t const x = move_value(p, to_move(p, m));
                 best = first ? x : better(best, x);
                 first = false;
-        }
+                return true;
+        });
         return best;
 }
 
@@ -1347,6 +1350,42 @@ bool check_all(std::string const& dir, int n, int threads)
         return ok;
 }
 
+// one material as egdb_6x6's matverify: every slot of both sides read from its files and recomputed from its successors
+// (and its wdl files against the values), in parallel with the policy
+template<class ExecutionPolicy>
+bool verify_material(std::string const& dir, Material c, ExecutionPolicy const& policy)
+{
+        if (!stored(c)) { std::cerr << c.name() << " is the mirror of a stored material" << std::endl; return false; }
+        g_dir = dir;
+        g_current = Material{ -1, -1, -1, -1 };                 // the material itself is read from its files
+        MatIndex const& mi = mat_index(c);
+        mat_index(mirror_of(c));
+        open_successors(c);
+        for (int kind : { int(BYTES), int(BYTES) + 1, int(WDL), int(WDL) + 1 }) open_input(c, kind);
+        g_frozen = true;
+        auto const t0 = std::chrono::steady_clock::now();
+        std::atomic<std::uint64_t> checked{ 0 }, bad_s{ 0 }, bad_w{ 0 };
+        for (int side : { 0, 1 })
+                for_blocks(policy, mi.size, [&](std::uint64_t lo, std::uint64_t hi) {
+                        std::uint64_t n = 0, bs = 0, bw = 0;
+                        for (std::uint64_t slot = lo; slot < hi; ++slot) {
+                                Pos p;
+                                if (!mi.pos(slot, side, p)) continue;
+                                std::uint16_t const got = probe(p), sv = value_from_successors(p);
+                                if (sv != got && bs++ < 3) std::cerr << "S " << fen_of(p) << " stored " << got << " from successors " << sv << std::endl;
+                                if (probe_wdl(p) != wdl_of(got) && bw++ < 3) std::cerr << "W " << fen_of(p) << std::endl;
+                                ++n;
+                        }
+                        checked += n; bad_s += bs; bad_w += bw;
+                });
+        g_frozen = false;
+        bool const ok = bad_s == 0 && bad_w == 0;
+        std::cout << "verify " << c.name() << " " << metric_name() << ": " << checked.load() << " positions, " << bad_s.load()
+                  << " differ from their successors, " << bad_w.load() << " from the wdl files, " << seconds_since(t0) << " s"
+                  << (ok ? ", ok" : ", DIFFERENCES") << std::endl;
+        return ok;
+}
+
 // thompson86 (one-sided, every material): d<m|c|z>W-wtm = the plies of a White-to-move win, d<m|c|z>L-btm = 1 + the
 // plies of a Black-to-move loss; here both from the two-sided values, a material's mirror read as its mirror image
 bool compare_thompson86(std::string const& dir, std::string const& dir86, int n)
@@ -1698,6 +1737,11 @@ int main(int argc, char* argv[])
                 }
                 bool const ok = par ? build_material(a[1], mat_at(2), std::execution::par) : build_material(a[1], mat_at(2), std::execution::seq);
                 return ok ? 0 : 1;
+        }
+        if ((a.size() == 7 || a.size() == 8) && a[0] == "verify" && parse_metric(a[6])) {     // verify <dir> wp bp wm bm <metric> [seq|par]
+                Material const c = mat_at(2);
+                if (a.size() == 8 && a[7] == "par") return verify_material(a[1], c, std::execution::par) ? 0 : 1;
+                return verify_material(a[1], c, std::execution::seq) ? 0 : 1;
         }
         if ((a.size() == 4 || a.size() == 5) && a[0] == "checkall" && parse_metric(a[3]))
                 return check_all(a[1], std::stoi(a[2]), a.size() == 5 ? std::stoi(a[4]) : 4) ? 0 : 1;

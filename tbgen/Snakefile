@@ -35,7 +35,8 @@
 # (<dir>/probe/), checked through the prober on every verify-th slot (default 16), and its depth build files are deleted
 # once nothing reads them any more (keep=1 keeps them; wdl_build=drop drops the wdl build files too, when no other metric
 # will be built from them); check=1: checkall against egdb_6x6 at the end (keeps every
-# build file; heavy beyond 8 pieces).
+# build file; heavy beyond 8 pieces). selfcheck=1: every material, once built, checked against its successors
+# (tbgen verify, as egdb_6x6's matverify). EGDB_ZLEVEL=k in the environment: zstd's level for the build files (default 3).
 
 ENGINE = config.get('engine', 'build/itbgen')
 BASE = config.get('dir', 'data/itbgen')
@@ -54,6 +55,7 @@ STATS = 'stats' if str(config.get('stats', 0)) not in ('0', 'false', 'False') el
 PROBE = str(config.get('probe', 1)) not in ('0', 'false', 'False')    # convert every material into the probe format
 CHECK = str(config.get('check', 0)) not in ('0', 'false', 'False')    # checkall against egdb_6x6 at the end (keeps the build files)
 KEEP = str(config.get('keep', 0)) not in ('0', 'false', 'False')      # keep the depth build files after the conversion
+SELFCHECK = str(config.get('selfcheck', 0)) not in ('0', 'false', 'False')  # verify every material once built (tbgen verify)
 VERIFY = int(config.get('verify', 16))                                # the conversion checks every VERIFY-th slot through the prober
 DELETE = PROBE and not KEEP and not CHECK
 DROP_WDL = DELETE and config.get('wdl_build', 'keep') == 'drop'      # drop the wdl build files too (no other metric to build)
@@ -184,8 +186,13 @@ def outputs(m):
     return [temp(f) if DELETE and ('/wdl/' not in f or DROP_WDL) else f for f in files(m)]
 
 
+def verified(m):
+    return f'{D}/{METRIC}/{sub(m)}-{METRIC}.verified'
+
+
 rule all:
-    input: ([probe_done(name(m)) for m in MATERIALS] if PROBE else []) + ([f'{D}/{METRIC}/check-{N}.{METRIC}.ok'] if CHECK or not PROBE else [])
+    input: ([probe_done(name(m)) for m in MATERIALS] if PROBE else []) + ([verified(name(m)) for m in MATERIALS] if SELFCHECK else []) \
+           + ([f'{D}/{METRIC}/check-{N}.{METRIC}.ok'] if CHECK or not (PROBE or SELFCHECK) else [])
 
 
 # one build rule per material: Snakemake (8.30) accepts only constant priorities, so each material gets its own rule
@@ -242,6 +249,22 @@ if PROBE:
             params: m=_n.replace('-', ' '), policy=sched(_n)[1],
                     drop=(f'rm -f {D}/wdl/{sub(_n)}-wdl-wtm{SUF} {D}/wdl/{sub(_n)}-wdl-btm{SUF}' if DROP_WDL and METRIC == 'dtm' else 'true')
             shell: '{ENGINE} convert {D} {params.m} {METRIC} {params.policy} verify={VERIFY} > {log} 2>&1 && touch {output} && {params.drop}'
+
+
+# selfcheck=1: every material, once built, as egdb_6x6's matverify: every slot of both sides from its files against its
+# successors (tbgen verify)
+if SELFCHECK:
+    for _m in MATERIALS:
+        _n = name(_m)
+        rule:
+            name: f'verify_{_n}'
+            input: files(_n), inputs(_m)
+            output: verified(_n)
+            log: f'{D}/{METRIC}/{sub(_n)}-{METRIC}.verify.log'
+            priority: PRIO[_n]
+            threads: sched(_n)[0]
+            params: m=_n.replace('-', ' '), policy=sched(_n)[1]
+            shell: '{ENGINE} verify {D} {params.m} {METRIC} {params.policy} > {log} 2>&1 && touch {output}'
 
 
 rule check:

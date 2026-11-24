@@ -2146,12 +2146,14 @@ std::string fen_of(Pos const& p)
 }
 
 // the start position: (BOARD_H - 2) / 2 rows of men per side (W:W13,...,18:B1,...,6 on 6x6)
-std::string start_fen()
+Pos start_pos()
 {
         Pos p;
         for (int r = 0; r < (BOARD_H - 2) / 2; ++r) { p.m[1] |= row_squares(r); p.m[0] |= row_squares(BOARD_H - 1 - r); }
-        return fen_of(p);
+        return p;
 }
+std::string start_fen() { return fen_of(start_pos()); }
+int start_men() { Pos const p = start_pos(); return int(std::max(p.m[0].size(), p.m[1].size())); }   // a side's men at the start
 
 std::string notation(Move const& mv)
 {

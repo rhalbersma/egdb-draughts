@@ -970,17 +970,34 @@ void solve_group_cell8(Group const& g, DepthSink<std::uint16_t>& sink, Execution
 // pass 0 (its moves all leave the group: it has a capture) can turn up as a predecessor; it holds a decided code, which
 // no marking touches: a win replaces only UNKNOWN, CHANGED, EXIT_DRAW, or a slower win of a position without a capture.
 // The sweeps end past the deepest value written.
+// How a slower win is told apart from a decided one (EGDB_RTB_FAKE, for the comparison; decode by default):
+//   decode   has_capture on the position decoded from its index
+//   lambda   has_capture on the position built by the unmove (a copy with the piece moved back)
+//   codes    the provisional exit wins have codes of their own (EXIT_WIN + k), so the code tells: no test, and a window
+//            of 168 plies instead of 240 (84 codes per class)
+//   bitmap   one bit per position, set by pass 0 for the decided ones (all moves leave the group)
+//   zbitmap  the same bits, zstd-compressed in blocks of 1 KB (8192 positions), one block cached per thread
 namespace rtb {
-constexpr std::uint8_t UNKNOWN = 0, DRAWN = 1, MATE = 121, WIN_IN_ONE = 122, EXIT_DRAW = 254, CHANGED = 255;
-constexpr int KMAX = 120;                                       // codes per class: wins to 239 plies, losses to 238
-constexpr int MAX_DEPTH = 2 * KMAX - 1;
-constexpr bool is_win_code(std::uint8_t c) { return c >= WIN_IN_ONE && c < WIN_IN_ONE + KMAX; }
-constexpr bool is_loss_code(std::uint8_t c) { return c > MATE - KMAX && c <= MATE; }
-constexpr int win_depth(std::uint8_t c) { return 2 * (c - WIN_IN_ONE) + 1; }
-constexpr int loss_depth(std::uint8_t c) { return 2 * (MATE - c); }
-constexpr std::uint8_t win_code(int d) { return std::uint8_t(WIN_IN_ONE + (d - 1) / 2); }
-constexpr std::uint8_t loss_code(int d) { return std::uint8_t(MATE - d / 2); }
-static_assert(loss_code(MAX_DEPTH - 1) > DRAWN && win_code(MAX_DEPTH) < EXIT_DRAW);
+enum class Fake { decode, lambda, codes, bitmap, zbitmap };
+constexpr std::uint8_t UNKNOWN = 0, DRAWN = 1, EXIT_DRAW = 254, CHANGED = 255;
+struct Layout {                                                 // MATE - k: a loss in 2k plies; WIN_IN_ONE + k: a win in 2k + 1
+        int K;                                                  // codes per class
+        std::uint8_t MATE, WIN_IN_ONE, EXIT_WIN;                // EXIT_WIN + k: a provisional exit win in 2k + 1 (codes only)
+        bool codes;
+        int max_depth() const { return 2 * K - 1; }
+        bool won(std::uint8_t c) const { return c >= WIN_IN_ONE && c < WIN_IN_ONE + K; }
+        bool provisional(std::uint8_t c) const { return codes && c >= EXIT_WIN && c < EXIT_WIN + K; }
+        bool lost(std::uint8_t c) const { return c > MATE - K && c <= MATE; }
+        int win_depth(std::uint8_t c) const { return 2 * (c - (won(c) ? WIN_IN_ONE : EXIT_WIN)) + 1; }      // won or provisional
+        int loss_depth(std::uint8_t c) const { return 2 * (MATE - c); }
+        std::uint8_t win_code(int d) const { return std::uint8_t(WIN_IN_ONE + (d - 1) / 2); }
+        std::uint8_t exit_win_code(int d) const { return std::uint8_t(EXIT_WIN + (d - 1) / 2); }
+        std::uint8_t loss_code(int d) const { return std::uint8_t(MATE - d / 2); }
+};
+constexpr Layout wide{ 120, 121, 122, 0, false }, narrow{ 84, 85, 86, 170, true };
+constexpr std::size_t ZB = 1024;                                // zbitmap: bytes of bits per block
+struct ZCache { void const* owner = nullptr; std::uint64_t block = ~std::uint64_t(0); std::array<std::uint8_t, ZB> bits{}; };
+thread_local ZCache zcache;
 }
 
 bool g_rtb = false;
@@ -990,21 +1007,41 @@ void solve_group_rtb(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPo
 {
         using namespace rtb;
         if (g_metric != Metric::dtm) { std::cerr << "rtb: dtm only" << std::endl; std::abort(); }
+        static Fake const fake = [] {
+                std::string const e = std::getenv("EGDB_RTB_FAKE") ? std::getenv("EGDB_RTB_FAKE") : "decode";
+                return e == "lambda" ? Fake::lambda : e == "codes" ? Fake::codes : e == "bitmap" ? Fake::bitmap
+                     : e == "zbitmap" ? Fake::zbitmap : Fake::decode;
+        }();
+        Layout const L = fake == Fake::codes ? narrow : wide;
+        bool const bits_wanted = fake == Fake::bitmap || fake == Fake::zbitmap;
         std::uint64_t const P = g.P, T = 2 * P;                 // table_w = [0, P), table_b = [P, 2P)
         auto const pos = [&](std::uint64_t id) { return g.pos(id % P, int(id / P)); };
         std::vector<std::uint8_t> table(T, UNKNOWN);
+        Plane decided(bits_wanted ? T : 0);                     // bitmap, zbitmap: all moves leave the group
+        std::vector<char> zdata;                                // zbitmap: the blocks, and where each starts
+        std::vector<std::uint64_t> zoff;
         auto const ld = [&](std::uint64_t id) { return std::atomic_ref<std::uint8_t>(table[id]).load(std::memory_order_relaxed); };
         std::atomic<int> max_depth{ 0 };                        // the deepest value written, provisional ones included
-        std::atomic<bool> provisional{ false };                 // pass 0 wrote a provisional exit win
+        std::atomic<bool> any_provisional{ false };             // pass 0 wrote a provisional exit win
         auto const note_depth = [&](int d) {
                 int cur = max_depth.load(std::memory_order_relaxed);
                 while (d > cur && !max_depth.compare_exchange_weak(cur, d, std::memory_order_relaxed)) {}
         };
-        auto const fits = [](int d) {
-                if (d > MAX_DEPTH) { std::cerr << "rtb: depth " << d << " beyond one window" << std::endl; std::abort(); }
+        auto const fits = [&](int d) {
+                if (d > L.max_depth()) { std::cerr << "rtb: depth " << d << " beyond one window" << std::endl; std::abort(); }
         };
-        std::atomic<std::uint64_t> replaced{ 0 }, refused{ 0 };
-        auto const set_win_value = [&](std::uint64_t id, std::uint8_t v) {     // rtbgen's SET_WIN_VALUE, see above
+        auto const ztest = [&](std::uint64_t id) {
+                std::uint64_t const k = id / (8 * ZB);
+                if (zcache.owner != zdata.data() || zcache.block != k) {
+                        std::size_t const r = ZSTD_decompress(zcache.bits.data(), ZB, zdata.data() + zoff[k], zoff[k + 1] - zoff[k]);
+                        if (ZSTD_isError(r)) { std::cerr << "zstd: " << ZSTD_getErrorName(r) << std::endl; std::abort(); }
+                        zcache.owner = zdata.data(); zcache.block = k;
+                }
+                std::uint64_t const j = id % (8 * ZB);
+                return (zcache.bits[j / 8] >> (j % 8) & 1) != 0;
+        };
+        std::atomic<std::uint64_t> attempts{ 0 }, replaced{ 0 }, refused{ 0 };
+        auto const set_win_value = [&](std::uint64_t id, std::uint8_t v, auto const& make) {  // rtbgen's SET_WIN_VALUE, see above
                 std::atomic_ref<std::uint8_t> a(table[id]);
                 std::uint8_t c = a.load(std::memory_order_relaxed);
                 for (;;) {
@@ -1012,8 +1049,16 @@ void solve_group_rtb(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPo
                                 if (a.compare_exchange_weak(c, v, std::memory_order_relaxed)) return;
                                 continue;
                         }
-                        if (!is_win_code(c) || c <= v || !provisional.load(std::memory_order_relaxed)) return;
-                        if (has_capture(pos(id))) { refused.fetch_add(1, std::memory_order_relaxed); return; }  // decided in pass 0
+                        if (L.codes) {                          // the code tells: only a provisional exit win gives way
+                                if (!L.provisional(c) || L.win_depth(c) <= L.win_depth(v)) return;
+                                if (a.compare_exchange_weak(c, v, std::memory_order_relaxed)) { replaced.fetch_add(1, std::memory_order_relaxed); return; }
+                                continue;
+                        }
+                        if (!L.won(c) || c <= v || !any_provisional.load(std::memory_order_relaxed)) return;
+                        attempts.fetch_add(1, std::memory_order_relaxed);
+                        bool const dec = fake == Fake::decode ? has_capture(pos(id)) : fake == Fake::lambda ? has_capture(make())
+                                       : fake == Fake::bitmap ? decided.test(id) : ztest(id);
+                        if (dec) { refused.fetch_add(1, std::memory_order_relaxed); return; }
                         if (a.compare_exchange_weak(c, v, std::memory_order_relaxed)) { replaced.fetch_add(1, std::memory_order_relaxed); return; }
                 }
         };
@@ -1021,14 +1066,15 @@ void solve_group_rtb(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPo
                 std::uint8_t c = UNKNOWN;
                 std::atomic_ref<std::uint8_t>(table[id]).compare_exchange_strong(c, CHANGED, std::memory_order_relaxed);
         };
-        auto const retro = [&](std::uint64_t id, Pos const& p, auto&& f) {     // rtbgen's RETRO: the predecessors
+        auto const retro = [&](std::uint64_t id, Pos const& p, auto&& f) {     // rtbgen's RETRO: f(predecessor, make)
                 std::uint64_t const other = (1 - id / P) * P;
-                for_each_inside_predecessor(g, p, id % P, [&](std::uint64_t i) { f(other + i); });
+                for_each_inside_predecessor(g, p, id % P, [&](std::uint64_t i, auto const& make) { f(other + i, make); });
         };
         auto const mark_wins = [&](std::uint64_t id, Pos const& p, int e) {    // a loss in e: its predecessors won
                 fits(e + 1);
                 note_depth(e + 1);
-                retro(id, p, [&](std::uint64_t u) { set_win_value(u, win_code(e + 1)); });
+                std::uint8_t const v = L.win_code(e + 1);
+                retro(id, p, [&](std::uint64_t u, auto const& make) { set_win_value(u, v, make); });
         };
 
         // pass 0
@@ -1049,24 +1095,43 @@ void solve_group_rtb(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPo
                                 else drawn = true;
                                 return true;
                         });
-                        if (!any) { table[id] = MATE; continue; }
+                        if (!any) { table[id] = L.MATE; continue; }
+                        if (bits_wanted && !in) decided.set_atomic(id);
                         if (wn < INF) {                                 // final if all moves leave, else provisional
                                 fits(wn);
-                                table[id] = win_code(wn);
+                                table[id] = in && L.codes ? L.exit_win_code(wn) : L.win_code(wn);
                                 md = std::max(md, wn);
                                 prov |= in;
                                 continue;
                         }
                         if (!in) {
                                 if (drawn) table[id] = DRAWN;
-                                else { fits(l); table[id] = loss_code(l); md = std::max(md, l + 1); }
+                                else { fits(l); table[id] = L.loss_code(l); md = std::max(md, l + 1); }
                                 continue;
                         }
                         if (drawn) table[id] = EXIT_DRAW;               // else UNKNOWN: its exits (if any) all lose
                 }
                 note_depth(md);
-                if (prov) provisional = true;
+                if (prov) any_provisional = true;
         });
+        if (fake == Fake::zbitmap) {                                    // compress the bits, free the plane
+                std::uint64_t const bytes = decided.w.size() * 8, nb = (bytes + ZB - 1) / ZB;
+                std::vector<std::vector<char>> part(nb);
+                std::vector<std::uint64_t> idx(nb);
+                std::iota(idx.begin(), idx.end(), std::uint64_t(0));
+                auto const* raw = reinterpret_cast<char const*>(decided.w.data());
+                std::for_each(policy, idx.begin(), idx.end(), [&](std::uint64_t k) {
+                        std::array<char, ZB> blk{};
+                        std::memcpy(blk.data(), raw + k * ZB, std::size_t(std::min<std::uint64_t>(ZB, bytes - k * ZB)));
+                        part[k].resize(ZSTD_compressBound(ZB));
+                        std::size_t const n = ZSTD_compress(part[k].data(), part[k].size(), blk.data(), ZB, 1);
+                        part[k].resize(n);
+                });
+                zoff.push_back(0);
+                for (auto const& x : part) { zdata.insert(zdata.end(), x.begin(), x.end()); zoff.push_back(zdata.size()); }
+                std::cout << "rtb zbitmap: " << bytes << " bytes of bits -> " << zdata.size() << " compressed" << std::endl;
+                Plane().w.swap(decided.w);
+        }
         g_stats.pass0 += seconds_since(t0);
         auto const t1 = std::chrono::steady_clock::now();
 
@@ -1078,8 +1143,8 @@ void solve_group_rtb(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPo
                 bool const all = for_each_move(pad_pos(p), [&](MoveRef const& m) {
                         if (!inside_ref(m)) return true;
                         std::uint8_t const c = ld(other + successor_index(g, p, gp, m));
-                        if (!is_win_code(c) || win_depth(c) > ply - 1) return false;
-                        worst = std::max(worst, win_depth(c));
+                        if (!(L.won(c) || L.provisional(c)) || L.win_depth(c) > ply - 1) return false;
+                        worst = std::max(worst, L.win_depth(c));
                         return true;
                 });
                 if (!all) { table[q] = UNKNOWN; return; }
@@ -1089,7 +1154,7 @@ void solve_group_rtb(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPo
                         return true;
                 });
                 fits(e);
-                table[q] = loss_code(e);
+                table[q] = L.loss_code(e);
                 if (e <= ply) mark_wins(q, p, e);                       // in time; a deeper loss waits for its ply
                 else note_depth(e + 1);
         };
@@ -1099,14 +1164,15 @@ void solve_group_rtb(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPo
         for (; ply <= max_depth.load() + 2; ++ply) {
                 std::uint64_t const base = std::uint64_t(ply % 2) * P;
                 int const de = ply % 2 ? ply - 1 : ply, dw = ply % 2 ? ply : ply - 1;  // this sweep's own losses and wins
-                std::uint8_t const cl = de <= MAX_DEPTH - 1 ? loss_code(de) : CHANGED;
-                std::uint8_t const cw = dw >= 1 && dw <= MAX_DEPTH ? win_code(dw) : CHANGED;
+                std::uint8_t const cl = de <= L.max_depth() - 1 ? L.loss_code(de) : CHANGED;
+                bool const has_w = dw >= 1 && dw <= L.max_depth();
+                std::uint8_t const cw = has_w ? L.win_code(dw) : CHANGED, cx = has_w && L.codes ? L.exit_win_code(dw) : CHANGED;
                 for_blocks(policy, P, [&](std::uint64_t lo, std::uint64_t hi) {
                         for (std::uint64_t q = base + lo; q < base + hi; ++q) {
                                 std::uint8_t const c = table[q];        // only this cell's own loop writes this colour
                                 if (c == CHANGED) check_loss(q, ply);
                                 else if (c == cl) mark_wins(q, pos(q), de);
-                                else if (c == cw) retro(q, pos(q), set_changed);
+                                else if (c == cw || c == cx) retro(q, pos(q), [&](std::uint64_t u, auto const&) { set_changed(u); });
                         }
                 });
         }
@@ -1116,13 +1182,13 @@ void solve_group_rtb(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPo
         for_blocks(policy, T, [&](std::uint64_t lo, std::uint64_t hi) {
                 for (std::uint64_t id = lo; id < hi; ++id) {
                         std::uint8_t const c = table[id];
-                        std::uint16_t const v = is_win_code(c) ? win(win_depth(c)) : is_loss_code(c) ? loss(loss_depth(c)) : 0;
+                        std::uint16_t const v = L.won(c) || L.provisional(c) ? win(L.win_depth(c)) : L.lost(c) ? loss(L.loss_depth(c)) : 0;
                         if (v != 0) sink.put(int(id / P), id % P, pos(id), v);
                 }
         });
         g_stats.rounds += seconds_since(t1);
         std::cout << "rtb steps: sweeps " << t_sweeps << " s (" << ply << " plies), output " << seconds_since(t3)
-                  << " s; provisional wins replaced " << replaced.load() << ", refused (capture) " << refused.load() << std::endl;
+                  << " s; slower wins: tests " << attempts.load() << ", replaced " << replaced.load() << ", refused " << refused.load() << std::endl;
 }
 
 // ---------------------------------------------------------------- one group: pass 0 and the rounds

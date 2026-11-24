@@ -547,7 +547,8 @@ std::map<std::pair<int, int>, std::uint64_t> tempo_counts(Material c)
 // king unmoves from the ray attacks on padded bitboards (a king on t came from a square it reaches over empty squares;
 // one square with short kings: English checkers, egdb_6x6's LONG_KINGS), their indices by the index update; and in a
 // wave man unmoves (men move one square forward in both games), by the full index. Captures and promotions leave the
-// group, so their rules never enter here
+// group, so their rules never enter here. A callback that takes a second argument gets a function that builds the
+// predecessor's position on demand (a copy of q with the piece moved back), for the rare caller that needs it
 template<class F>
 void for_each_inside_predecessor(Group const& g, Pos const& q, std::uint64_t gq, F&& f)
 {
@@ -562,7 +563,18 @@ void for_each_inside_predecessor(Group const& g, Pos const& q, std::uint64_t gq,
                                 int const fr = tp + STEP[d];
                                 if (fr >= 0 && fr < PAD_SIZE && empty.contains(std::size_t(fr))) reach.insert(std::size_t(fr));
                         }
-                        for (auto const fr : reach) f(g.king_moved_to(q, gq, mover, int(t), DENSE_OF[fr], mover));
+                        for (auto const fr : reach) {
+                                std::uint64_t const u = g.king_moved_to(q, gq, mover, int(t), DENSE_OF[fr], mover);
+                                auto const make = [&] {
+                                        Pos pr = q;
+                                        pr.k[mover].erase(t);
+                                        pr.k[mover].insert(std::size_t(DENSE_OF[fr]));
+                                        pr.stm = mover;
+                                        return pr;
+                                };
+                                if constexpr (std::is_invocable_v<F&, std::uint64_t, decltype(make) const&>) f(u, make);
+                                else f(u);
+                        }
                 }
         }
         if (!men_inside()) return;
@@ -574,7 +586,9 @@ void for_each_inside_predecessor(Group const& g, Pos const& q, std::uint64_t gq,
                         pr.m[mover].erase(t);
                         pr.m[mover].insert(std::size_t(ray[0]));
                         pr.stm = mover;
-                        f(g.index(pr));
+                        auto const make = [&] { return pr; };
+                        if constexpr (std::is_invocable_v<F&, std::uint64_t, decltype(make) const&>) f(g.index(pr), make);
+                        else f(g.index(pr));
                 }
 }
 

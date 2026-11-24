@@ -402,14 +402,16 @@ std::vector<Material> successors_of(Material c)
 }
 
 // open every file a build of c can read, and fill the index memo, so that the parallel passes only read the maps
+int g_wdl = 0;                                                  // 3: the wdl3 loop, 2: the wdl2 loop (they read wdl files only)
+
 void open_successors(Material c)
 {
         mat_index(c);
         for (Material const m : successors_of(c)) {
                 mat_index(m);
                 mat_index(mirror_of(m));
-                for (int kind : g_metric == Metric::dtm ? std::vector<int>{ BYTES, BYTES + 1 } : std::vector<int>{ WDL, WDL + 1 })
-                        open_input(m, kind);                    // dtm: the depths with their signs; dtc, dtz: the signs
+                for (int kind : g_metric == Metric::dtm && g_wdl == 0 ? std::vector<int>{ BYTES, BYTES + 1 } : std::vector<int>{ WDL, WDL + 1 })
+                        open_input(m, kind);                    // dtm: the depths with their signs; dtc, dtz, wdl loops: the signs
         }
 }
 
@@ -1230,6 +1232,218 @@ void solve_group_rtb(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPo
                   << " s, snapshot " << snap_bytes.load() << " bytes" << std::endl;
 }
 
+// ---------------------------------------------------------------- one group, WDL only: the 3-bit and the 2-bit loop
+//
+// Win, draw or loss without depths, so without a ply order: a value may be used as soon as it is written. The exits
+// are looked up as wdl only (probe_wdl). For now the depth files written beside the wdl files hold a placeholder
+// (win 1, loss 2): only the wdl files are results. Both loops keep a byte per position; the 2-bit and 3-bit names
+// are about the states they need, not (yet) their packing.
+//
+// wdl3, 8 states, retrograde with fresh and candidate states in the cell (no list, no recomputing of draws):
+//   UNKNOWN, CHANGED (a loss candidate), WIN_FRESH and LOSS_FRESH (decided, predecessors not marked yet), WIN, LOSS,
+//   PAWN_DRAW (a man move out of the group draws, moves inside remain: can still win), CAPT_DRAW (decided draw)
+//   Sweeps alternate between the colours, each cell read once, 8 at a time:
+//     LOSS_FRESH  its predecessors -> WIN_FRESH (over UNKNOWN, CHANGED, PAWN_DRAW); itself -> LOSS
+//     WIN_FRESH   its predecessors UNKNOWN -> CHANGED; itself -> WIN
+//     CHANGED     the delayed check: every move inside to a win -> LOSS, and its predecessors WIN_FRESH at once;
+//                 otherwise -> UNKNOWN
+//   until two sweeps in a row find nothing to do.
+// wdl2, 4 states (UNKNOWN, WIN, LOSS, DRAW: an exit draws or a decided draw, as Chinook's at-least-a-draw), the
+//   minimal Chinook-style loop: forward passes in place (UNKNOWN: a move inside to a loss -> WIN, every move inside
+//   to a win -> LOSS; DRAW: a capture test first, a capture position is final, else a move inside to a loss -> WIN),
+//   until a pass changes fewer than 1 in 32 positions; the changes of the next pass are the queue (a list), processed
+//   in levels: a queued LOSS makes an UNKNOWN predecessor WIN, a DRAW one only after a capture test; a queued WIN
+//   makes an UNKNOWN predecessor be evaluated at once (no candidate state), a DRAW one is skipped (it cannot lose).
+namespace wdlx {
+constexpr std::uint8_t WIN = 3, WIN_FRESH = 4, LOSS_FRESH = 0xf8, LOSS = 0xf9, CAPT_DRAW = 0xfa, PAWN_DRAW = 0xfb,
+                       CHANGED = 0xfd, UNKNOWN = 0xfe;
+constexpr std::uint8_t ANY_DRAW = PAWN_DRAW;                    // wdl2: both draws in one state
+}
+
+template<class ExecutionPolicy>
+void solve_group_wdl(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPolicy const& policy)
+{
+        using namespace wdlx;
+        bool const three = g_wdl == 3;
+        std::uint64_t const P = g.P, T = 2 * P;
+        auto const pos = [&](std::uint64_t id) { return g.pos(id % P, int(id / P)); };
+        std::vector<std::uint8_t> table(T, UNKNOWN);
+        std::uint8_t* const cells = table.data();
+        auto const ld = [&](std::uint64_t id) { return std::atomic_ref<std::uint8_t>(cells[id]).load(std::memory_order_relaxed); };
+        auto const cas = [&](std::uint64_t id, std::uint8_t from, std::uint8_t to) {
+                return std::atomic_ref<std::uint8_t>(cells[id]).compare_exchange_strong(from, to, std::memory_order_relaxed);
+        };
+        auto const retro = [&](std::uint64_t id, Pos const& p, auto&& f) {
+                std::uint64_t const other = (1 - id / P) * P;
+                for_each_inside_predecessor(g, p, id % P, [&](std::uint64_t i) { f(other + i); });
+        };
+        auto const won = [&](std::uint8_t c) { return c == WIN || c == WIN_FRESH; };
+        auto const lost = [&](std::uint8_t c) { return c == LOSS || c == LOSS_FRESH; };
+        std::atomic<std::uint64_t> evals{ 0 }, captests{ 0 };
+
+        // pass 0: the exits as wdl
+        auto const t0 = std::chrono::steady_clock::now();
+        for (int col = 0; col < 2; ++col)
+                for_blocks(policy, P, [&](std::uint64_t lo0, std::uint64_t hi0) {
+                        for (std::uint64_t id = std::uint64_t(col) * P + lo0; id < std::uint64_t(col) * P + hi0; ++id) {
+                                Pos const p = pos(id);
+                                bool any = false, in = false, drawn = false, wins = false;
+                                for_each_move(pad_pos(p), [&](MoveRef const& m) {
+                                        any = true;
+                                        if (inside_ref(m)) { in = true; return true; }
+                                        std::uint8_t const r = probe_wdl(to_move(p, m).next);     // the child's, for its side to move
+                                        if (r == WDL_LOSS) wins = true;
+                                        else if (r == WDL_DRAW) drawn = true;
+                                        return true;
+                                });
+                                std::uint8_t c = UNKNOWN;
+                                if (!any) c = three ? LOSS_FRESH : LOSS;
+                                else if (wins) c = three ? WIN_FRESH : WIN;            // final: wdl has no faster win
+                                else if (!in) c = drawn ? (three ? CAPT_DRAW : ANY_DRAW) : (three ? LOSS_FRESH : LOSS);
+                                else if (drawn) c = three ? PAWN_DRAW : ANY_DRAW;
+                                cells[id] = c;
+                        }
+                });
+        g_stats.pass0 += seconds_since(t0);
+        auto const t1 = std::chrono::steady_clock::now();
+        int sweeps = 0, forward_passes = 0, levels = 0;
+        std::uint64_t queued = 0;
+        constexpr std::uint64_t ones = 0x0101010101010101ull, low7 = 0x7f7f7f7f7f7f7f7full;
+        auto const zero_bytes = [](std::uint64_t x) { return ~(((x & low7) + low7) | x | low7); };
+
+        if (three) {
+                auto const set_win_fresh = [&](std::uint64_t y) {
+                        std::atomic_ref<std::uint8_t> a(cells[y]);
+                        std::uint8_t c = a.load(std::memory_order_relaxed);
+                        while (c == UNKNOWN || c == CHANGED || c == PAWN_DRAW)
+                                if (a.compare_exchange_weak(c, WIN_FRESH, std::memory_order_relaxed)) return;
+                };
+                auto const set_changed = [&](std::uint64_t y) { cas(y, UNKNOWN, CHANGED); };
+                auto const check_loss = [&](std::uint64_t q) {          // every move inside to a win (its exits all lose)
+                        evals.fetch_add(1, std::memory_order_relaxed);
+                        Pos const p = pos(q);
+                        std::uint64_t const gp = q % P, other = (1 - q / P) * P;
+                        bool const all = for_each_move(pad_pos(p), [&](MoveRef const& m) {
+                                return !inside_ref(m) || won(ld(other + successor_index(g, p, gp, m)));
+                        });
+                        if (!all) { cells[q] = UNKNOWN; return; }
+                        cells[q] = LOSS;
+                        retro(q, p, set_win_fresh);
+                };
+                for (int idle = 0; idle < 2; ++sweeps) {
+                        int const col = sweeps % 2;
+                        std::uint64_t const base = std::uint64_t(col) * P;
+                        std::atomic<bool> work{ false };
+                        for_blocks(policy, P, [&](std::uint64_t lo, std::uint64_t hi) {
+                                bool any = false;
+                                auto const handle = [&](std::uint64_t q) {
+                                        std::uint8_t const c = cells[q];        // only this cell's own loop writes this colour
+                                        if (c == LOSS_FRESH) { cells[q] = LOSS; retro(q, pos(q), set_win_fresh); any = true; }
+                                        else if (c == WIN_FRESH) { cells[q] = WIN; retro(q, pos(q), set_changed); any = true; }
+                                        else if (c == CHANGED) { check_loss(q); any = true; }
+                                };
+                                std::uint64_t const p_lf = ones * LOSS_FRESH, p_wf = ones * WIN_FRESH, p_ch = ones * CHANGED;
+                                std::uint64_t q = base + lo, end = base + hi;
+                                for (; q < end && q % 8 != 0; ++q) handle(q);
+                                for (; q + 8 <= end; q += 8) {
+                                        std::uint64_t w;
+                                        std::memcpy(&w, cells + q, 8);
+                                        std::uint64_t m = zero_bytes(w ^ p_lf) | zero_bytes(w ^ p_wf) | zero_bytes(w ^ p_ch);
+                                        for (; m != 0; m &= m - 1) handle(q + std::uint64_t(std::countr_zero(m)) / 8);
+                                }
+                                for (; q < end; ++q) handle(q);
+                                if (any) work.store(true, std::memory_order_relaxed);
+                        });
+                        idle = work.load() ? 0 : idle + 1;
+                }
+        } else {
+                // forward: an UNKNOWN or non-capture ANY_DRAW cell evaluates its moves inside, in place (it writes only itself)
+                auto const evaluate = [&](std::uint64_t q, Pos const& p, bool can_lose) -> std::uint8_t {
+                        evals.fetch_add(1, std::memory_order_relaxed);
+                        std::uint64_t const gp = q % P, other = (1 - q / P) * P;
+                        bool all_won = true, some_lost = false;
+                        for_each_move(pad_pos(p), [&](MoveRef const& m) {
+                                if (!inside_ref(m)) return true;
+                                std::uint8_t const c = ld(other + successor_index(g, p, gp, m));
+                                if (c == LOSS) { some_lost = true; return false; }
+                                if (c != WIN) all_won = false;
+                                return true;
+                        });
+                        return some_lost ? WIN : can_lose && all_won ? LOSS : UNKNOWN;
+                };
+                std::vector<std::uint64_t> queue;
+                bool record = false;
+                for (int quiet = 0; quiet < 2; ++sweeps) {              // until two passes change nothing, or the queue takes over
+                        int const col = sweeps % 2;
+                        std::uint64_t const base = std::uint64_t(col) * P;
+                        std::atomic<std::uint64_t> changes{ 0 };
+                        std::vector<std::vector<std::uint64_t>> rec(record ? num_blocks(P) : 0);
+                        for_blocks(policy, P, [&](std::uint64_t lo, std::uint64_t hi) {
+                                std::uint64_t n = 0;
+                                for (std::uint64_t q = base + lo; q < base + hi; ++q) {
+                                        std::uint8_t const c = cells[q];
+                                        if (c != UNKNOWN && c != ANY_DRAW) continue;
+                                        Pos const p = pos(q);
+                                        if (c == ANY_DRAW) {
+                                                captests.fetch_add(1, std::memory_order_relaxed);
+                                                if (has_capture(p)) continue;           // a decided draw
+                                        }
+                                        std::uint8_t const r = evaluate(q, p, c == UNKNOWN);
+                                        if (r == UNKNOWN) continue;
+                                        cells[q] = r;
+                                        ++n;
+                                        if (record) rec[lo / block_size].push_back(q);
+                                }
+                                changes.fetch_add(n, std::memory_order_relaxed);
+                        });
+                        ++forward_passes;
+                        if (record) { for (auto& v : rec) queue.insert(queue.end(), v.begin(), v.end()); break; }
+                        quiet = changes.load() == 0 ? quiet + 1 : 0;
+                        if (quiet == 0 && changes.load() < T / 32) record = true;     // the next pass seeds the queue
+                }
+                // the queue, in levels: each level's predecessors, decided in place, are the next level
+                while (!queue.empty()) {
+                        ++levels;
+                        queued += queue.size();
+                        std::vector<std::vector<std::uint64_t>> next(num_blocks(queue.size()));
+                        for_blocks(policy, queue.size(), [&](std::uint64_t lo, std::uint64_t hi) {
+                                auto& out = next[lo / block_size];
+                                for (std::uint64_t j = lo; j < hi; ++j) {
+                                        std::uint64_t const q = queue[j];
+                                        bool const qlost = ld(q) == LOSS;
+                                        retro(q, pos(q), [&](std::uint64_t y) {
+                                                std::uint8_t const c = ld(y);
+                                                if (qlost) {
+                                                        if (c == UNKNOWN) { if (cas(y, UNKNOWN, WIN)) out.push_back(y); }
+                                                        else if (c == ANY_DRAW) {
+                                                                captests.fetch_add(1, std::memory_order_relaxed);
+                                                                if (!has_capture(pos(y)) && cas(y, ANY_DRAW, WIN)) out.push_back(y);
+                                                        }
+                                                } else if (c == UNKNOWN) {
+                                                        std::uint8_t const r = evaluate(y, pos(y), true);
+                                                        if (r != UNKNOWN && cas(y, UNKNOWN, r)) out.push_back(y);
+                                                }
+                                        });
+                                }
+                        });
+                        queue.clear();
+                        for (auto& v : next) queue.insert(queue.end(), v.begin(), v.end());
+                }
+        }
+        double const t_rounds = seconds_since(t1);
+        for_blocks(policy, T, [&](std::uint64_t lo, std::uint64_t hi) {
+                for (std::uint64_t id = lo; id < hi; ++id) {
+                        std::uint8_t const c = cells[id];
+                        std::uint16_t const v = won(c) ? win(1) : lost(c) ? loss(2) : 0;      // placeholder depths
+                        if (v != 0) sink.put(int(id / P), id % P, pos(id), v);
+                }
+        });
+        g_stats.rounds += seconds_since(t1);
+        std::cout << "wdl" << g_wdl << " steps: rounds " << t_rounds << " s, " << sweeps << " sweeps";
+        if (!three) std::cout << " (" << forward_passes << " forward), queue " << queued << " entries in " << levels << " levels";
+        std::cout << ", evaluations " << evals.load() << ", capture tests " << captests.load() << std::endl;
+}
+
 // ---------------------------------------------------------------- one group: pass 0 and the rounds
 
 // The values go to the depth sink: frontier rounds never read them back, so they write straight into it; scan mode
@@ -1237,6 +1451,7 @@ void solve_group_rtb(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPo
 template<class ExecutionPolicy>
 void solve_group(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPolicy const& policy)
 {
+        if (g_wdl != 0) { solve_group_wdl(g, sink, policy); return; }
         if (g_cell8 && g_rtb) { solve_group_rtb(g, sink, policy); return; }
         if (g_cell8) { solve_group_cell8(g, sink, policy); return; }
         std::uint64_t const P = g.P, T = 2 * P;                 // position id = stm * P + index in the group
@@ -2086,6 +2301,7 @@ int main(int argc, char* argv[])
                         else if (a[i] == "scan" || a[i] == "frontier") g_frontier = a[i] == "frontier";
                         else if (a[i] == "cell8") { g_cell8 = true; g_frontier = false; }
                         else if (a[i] == "rtb") { g_cell8 = g_rtb = true; g_frontier = false; }
+                        else if (a[i] == "wdl3" || a[i] == "wdl2") { g_wdl = a[i] == "wdl3" ? 3 : 2; g_cell8 = true; g_frontier = false; }
                         else if (a[i] == "raw" || a[i] == "compressed") g_compressed = a[i] == "compressed";
                         else if (a[i] == "stats") g_write_stats = true;
                         else if (a[i].starts_with("mem=")) g_mem_mb = std::stoull(a[i].substr(4));

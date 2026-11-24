@@ -937,6 +937,133 @@ statistics); checkers 253 plies at 7 pieces (Trice–Dodgen) and 279 at 10 (Gilb
 A build that goes deeper stops with an error naming the material and its depth; the remedy is a larger S, not a side
 path.
 
+### 7.6 rtbgen's sweeps carried over to DTM (`rtb`)
+
+`tbgen build … rtb` (`solve_group_rtb`) is R. de Man's rtbgen iteration on our byte cell, for DTM within one window.
+Two tables of one byte per position (`table_w`, `table_b`), **one sweep per ply over one colour** (white at even
+plies, black at odd), rtbgen's `tbl` dispatch on the code, the loss depth computed from the successors' codes, and
+the predecessors of a new loss marked won at once (rtbgen's fused `iter()`). In DTM a code covers two plies (wins
+odd, losses even), so a window is 245 plies (wins) / 246 (losses).
+
+**Codes: rtbgenp's (his generator with pawns; our men are his pawns), his names, values and order**, wins from the
+bottom up, losses from the top down:
+
+| code | value | meaning |
+|---|---|---|
+| `ILLEGAL` | 0 | unused: draughts has no illegal positions |
+| `CAPT_WIN` | 1 | unused: a capture win has a depth here, a `WIN_IN_ONE + k` |
+| `PAWN_WIN` | 2 | a man move out of the group wins and moves inside remain: **provisional**, its depth in the snapshot |
+| `WIN_IN_ONE + k` | 3 … 125 | a win in 2k + 1 plies |
+| `MATE − k` | 249 … 126 | a loss in 2k plies (`MATE`: no moves); 0xf8 = `MATE − 1` is a loss in 2, not rtbgen's `LOSS_IN_ONE` |
+| `CAPT_DRAW` | 0xfa | decided in pass 0 as a draw (all moves leave the group) |
+| `PAWN_DRAW` | 0xfb | undecided, cannot lose: a man move out of the group draws |
+| `CAPT_CLOSS` | 0xfc | unused: no 50-move rule |
+| `CHANGED` | 0xfd | a loss candidate |
+| `UNKNOWN` | 0xfe | undecided; a draw at the end |
+| `BROKEN` | 0xff | unused: the index has no broken slots |
+
+**Compulsory capture makes `CAPT_` final and leaves `PAWN_` provisional.** In chess both are lower bounds (a quiet
+move may be better). In draughts a capture position has only captures, decided in pass 0; a man move out of the group
+stands next to king moves inside, which may be better. The win marking writes only over `UNKNOWN`, `CHANGED`,
+`PAWN_DRAW` and `PAWN_WIN`, and **no win is ever replaced**: a loss marks its predecessors exactly once, at its ply
+(a loss found in time by a check at once; the losses of pass 0 and the early ones, below, by dispatch on their code at
+their ply, as rtbgen's `tbl[MATE]`), so a win written then is final. That makes the unmoves safe **without a test of
+compulsory capture**: a "fake" predecessor (a position with a capture, which the unmove cannot see) holds a decided
+code, which no marking touches. A first version with rtbgen's keep-the-smaller-byte overwrite gave 7 M wrong wins
+(decided capture wins replaced by faster fake ones), caught by the successor check.
+
+**No exit lists.** The loss check, once every move inside reaches an opened win, looks the exits up again and writes
+loss(max(slowest win + 1, slowest losing exit)): a loss deeper than the current ply is written early (exact, final)
+and marks its wins at its own ply. A provisional exit win is the single code `PAWN_WIN`; its depth goes into a
+**snapshot per colour, zstd per 4096-position block of the sweeps, with a mask of the depths in each block**: the
+sweep of its colour unpacks only the blocks with a `PAWN_WIN` of its depth, in step with its own blocks (sequential,
+so it compresses: a few % of the table on the largest 10×10 materials), and turns it into a `WIN_IN_ONE + k` there.
+A check never needs that depth: a `PAWN_WIN` still in the table is no opened win yet.
+
+**The sweep reads 8 cells at a time** (the exact zero-byte test for the codes it handles, as cell8's `scan_eq`): a
+plain byte loop made the same work 16 % slower; with the word scan the loop is about 19 % faster than before.
+
+**Ways to tell a slower win from a decided one** (measured before settling on the snapshot; sweeps, all byte-identical):
+
+| | 6×6 intl to 7 | 6×6 checkers to 7 | 8×8 checkers to 5 | 10×10 intl to 5 |
+|---|---|---|---|---|
+| decode + `has_capture` | 27.8 s | 34.8 s | 15.8 s | 118.2 s |
+| position from the unmove + `has_capture` | 26.8 | 34.4 | 15.3 | 116.1 |
+| separate codes (`EXIT_WIN + k`, window 168 plies) | 21.7 | 29.2 | 15.3 | 110.0 |
+| raw bit map of decided positions | 25.7 | 32.3 | 15.2 | 113.8 |
+| zstd bit map (1 KB blocks, random access) | 50.2 | 60.2 | 18.3 | 145.2 |
+| **snapshot with block masks** (no test, 240 plies) | 24.9 (codes 24.2) | 29.6 (codes 29.8) | 16.1 (codes 15.3) | 112.4 (codes 110.8) |
+
+The last row ran later, next to codes again (in brackets); within the noise of the runs, the two are level.
+
+**Adaptive directions, per table per sweep** (`EGDB_RTB_DIR=retro|forward|auto`, `EGDB_RTB_ALPHA`): a sweep of X
+decides the next sweep of Y, forward (every undecided cell checked) when U_Y < α F (U_Y from Y's last scan, F the
+wins this sweep marks from), and then marks no candidates for Y. Measured per sweep on 6×6 checkers 03-04-01-02:
+retrograde 10.7 ms + 48.7 ns per win of F, forward 11.5 ms + 24.9 ns per undecided cell, so α = 2; the best direction
+per sweep in hindsight gains 3 %. The draws keep U large: auto saves 6 % (international) and 1.4 % (checkers) of the
+sweeps on the 6×6 ladders.
+
+**Results.** Byte-identical to cell8 on 8×8 3-4 and 10×10 2-4 kings and on every material of 6×6 international and
+checkers to 7 pieces, 8×8 checkers and 10×10 international to 5 pieces (`checkall` passes on the 6×6 ladders). Sweeps
+against cell8's rounds: 8×8 kings 3-4 38.5 against 51.9 s; 10×10 kings 2-4 level; the ladders' totals 3–18 % faster.
+**Limits**: DTM only, one window (it stops beyond 245 plies): the reductions, and DTC/DTZ (two codes per ply), are open.
+
+**rtbgen's own fusion, measured** (a scratch copy of rtbgen with its `iter()` split into separate sweeps, which find
+the new losses again by their codes, byte-identical tables): unfused is 1.18–1.28× slower at 4 pieces and 1.23–1.31×
+at 5 pieces pawnless (310.6 s fused against 382.6 and 408.3 s over 60 tables). Without a list of new losses an extra
+sweep costs a full pass; cell8's separate win marking already scanned by code, which is why fusing did not pay there.
+
+### 7.7 WDL loops as rule tables (`wdl3`, `wdl2`)
+
+Without depths there is no ply order: a value may be used as soon as it is written. A WDL loop is **a state machine
+on the cell codes**: (forward, value, successors) → value, and (retro, value of the decided successor, value of the
+predecessor) → value. rtbgen's three tables are such a machine, updated every ply: `tbl[code]` is the dispatch (what
+a sweep does with a cell), `win_loss[code]` a successor's contribution to the loss check (a win of the opponent → my
+loss, 0 if it does not count yet), `loss_win[code]` the retro target (my loss → my predecessor's win). Without a ply
+order the tables stay fixed. `solve_group_wdl` takes a rule set of 256-entry tables (pass-0 codes, `act`, `after`,
+`counts_win`, `counts_loss`, `on_loss`, `on_win`, the forward transitions) and runs it with one loop: retrograde
+sweeps (word-wise, over the codes with an action), forward passes, a queue in levels.
+
+| rule set | states | per side to move | loop |
+|---|---|---|---|
+| `wdl3` | `UNKNOWN`, `CHANGED`, `WIN_FRESH`, `WIN`, `LOSS_FRESH`, `LOSS`, `PAWN_DRAW`, `CAPT_DRAW` | 3 bits (6 per slot) | retrograde sweeps alternating between the colours: a fresh loss marks its predecessors `WIN_FRESH` (a write), a fresh win marks them `CHANGED`, a candidate is checked once and a loss marks its wins at once, until two sweeps in a row find nothing |
+| `wdl2` (Chinook-style, minimal) | `UNKNOWN`, `WIN`, `LOSS`, `ANY_DRAW` (Chinook's at-least-a-draw) | 2 bits (4 per slot) | forward passes in place (a capture test on `ANY_DRAW` cells), then the changes of the next pass as a queue, in levels: a queued loss makes U predecessors W directly, D ones after a capture test; a queued win makes U predecessors be evaluated at once |
+
+Freshness replaces the ply: `WIN_FRESH` and `LOSS_FRESH` make every value propagate exactly once. A winning exit is
+final at once (WDL has no faster win), so wdl3 needs no snapshot. Both read only the successors' wdl files and match
+cell8's wdl files on 6×6 international and checkers to 7 pieces (268 + 268). Rounds: wdl3 23.6 s and 34.2 s, wdl2
+52.6 s and 61.2 s; wdl3 does half the evaluations (62 M against 131 M, 109 M against 223 M) and no capture tests
+(wdl2: 129 M and 71 M). For now both keep a byte per cell and write placeholder depth files beside the wdl files.
+
+**Chinook against 3 bits** (Lake–Schaeffer–Lu 1994, Schaeffer et al. 2003): with 2 bits, the fresh state lives
+outside the table (the queue: the changes of the last forward pass, then appended), there is no candidate state (a
+predecessor of a win is re-evaluated at every successor that becomes won), the predecessor of a loss gets a full
+re-evaluation instead of a write, and the merged D (a capture draw is exact, an exit draw is at least a draw) costs a
+decode and a capture test per D cell per forward pass. Counted on our ladders, capture draws are 6–7 % of all
+positions (capture positions are mostly wins for the capturer in even material: 78 % on 6×6, 95 % on 8×8; most capture
+draws are one piece up). The third bit removes the queue, the repeated evaluations, the evaluation of predecessors of
+losses and the capture tests. In the partial-information databases (Björnsson–Schaeffer–Sturtevant 2005) our
+`PAWN_DRAW` is their TW (at least a draw) and `CAPT_DRAW` their TT.
+
+### 7.8 Plan: exact DTC or DTZ at WDL memory, by per-ply decision logs
+
+In DTC and DTZ every exit has depth 1 (a conversion or a zeroing move ends the count), so a cell never needs an exit
+depth: **with rtbgen's ply discipline the depth of a value is the sweep in which it is decided**. wdl3 with that
+discipline plus a log gives the exact metric at 6 bits per slot in RAM:
+
+- **what is logged**: per colour and ply, the positions decided at that ply, as a bit map (the class is in the WDL).
+  A loss is logged by the sweep that finds it, at the scan position; a win when its own colour's next sweep turns
+  `WIN_FRESH` into `WIN`; both in index order, so the bit maps compress;
+- **sequential writes only**: each block of a sweep compresses its piece into its own buffer; after the sweep the
+  pieces, in block order, with a small header (ply, colour, piece sizes), go into **one append to one log file**;
+- **the merge**: per colour, all segments of that colour read side by side, each sequentially, block by block (cell8's
+  merge of window snapshots, with a window of one ply), written sequentially as the DTC or DTZ file; two levels if the
+  number of plies outgrows the read-ahead;
+- **the slicing chooses the metric**: whole-material groups (man moves inside, captures and promotions exits) give
+  DTC; one men configuration per group (only king moves inside, every man move an exit) gives DTZ; Chinook-style slices
+  by leading rank give neither (the distance to leaving the slice). In-place (Gauss–Seidel) sweeps give only lower
+  bounds (Lake et al. 1992); the log needs the ply discipline. DTM does not fit: there an exit carries a depth.
+
 ## 8. Best of breed for draughts
 
 Take from syzygy: the metric split (WDL + DTZ), one value cell with codes, the fused round, level synchrony.

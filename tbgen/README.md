@@ -94,6 +94,21 @@ deeper than n − 1.
 Disk, as rule 6: the group's arrays in RAM; finished materials read through read-only memory maps; each file written
 once, sequentially, to a temporary name and then renamed.
 
+## rtbgen's sweeps (`rtb`) and the WDL loops (`wdl3`, `wdl2`)
+
+Instead of `cell8`, the build options take (synthesis §7.6–7.8):
+
+* **`rtb`** (`solve_group_rtb`, dtm only, one window of 245 plies): rtbgen's iteration with rtbgenp's codes and names
+  (`WIN_IN_ONE + k`, `MATE − k`, `PAWN_WIN`, `PAWN_DRAW`, `CAPT_DRAW`, `CHANGED`, `UNKNOWN`): one sweep per ply over
+  one colour, fused win marking, the loss depth from the successors' codes, no exit lists (provisional exit wins as
+  `PAWN_WIN` with their depths in a zstd snapshot per block), no test of compulsory capture. Byte-identical to `cell8`.
+  `EGDB_RTB_DIR=retro|forward|auto` (default auto) chooses each sweep's direction per table, `EGDB_RTB_ALPHA` (default
+  2) its threshold, `EGDB_RTB_TRACE` prints a line per sweep.
+* **`wdl3`, `wdl2`** (`solve_group_wdl`): win, draw or loss only, as rule tables on one loop; wdl3 with 8 states
+  (fresh and candidate states in the cell, retrograde sweeps), wdl2 Chinook-style with 4 states (forward passes, then a
+  queue). Both read only the successors' wdl files; for now they write placeholder depth files beside the wdl files,
+  which are the results (identical to `cell8`'s).
+
 ## Build and run
 
 With CMake's two steps, which check the machine (cores, memory, disk) and write the Snakemake profile, see

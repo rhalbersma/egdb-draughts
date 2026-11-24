@@ -283,6 +283,9 @@ Read verbatim (HTML fetched and converted to text).
    4. **Compress**: 1%.
    5. **Verify**: 40%; full range, on the *compressed* data, checks consistency within the slice and against earlier databases.
    - **Losing side**: a full successor re-scan; no counters.
+   - **What the phase list leaves out** (reread in full): Table 3 has no DoWinningMoves, and the paper does not say whether it was dropped; it says the code is "updated versions of those used to compute the CHINOOK 8-piece databases (Lake et al., 1994). This code had not been touched since … 1993". The one-shot push may simply be folded into a phase or left out of the summary.
+   - **Why at-least-a-draw**: "Using D to mean at-least-a-draw instead of exactly a draw is useful, since it reduces the amount of disk I/O done by the program (see the Lookups phase)". Non-captures "iterates over all positions in the slice, skipping over capture positions (their values are fixed) and W/L positions … unresolved positions and draw positions are considered; the former to discover whether the position is a W/L/D and the latter to see if the D can become a W". With 2 bits a capture draw and an at-least-a-draw share one code, so the skip needs a capture test (or the move generation) per D cell per pass. **[my analysis]**
+   - **The queue**: "The positions that change value are saved in a queue. For subsequent iterations, the only positions whose value can be resolved are those that are a predecessor of a queue position." The queue holds only newly decided W and L (Non-captures resolves only wins and losses).
 7. **Parallelism / memory**:
    - Threads split the index range.
    - Many slices run concurrently, scheduled by the TrellisDAG tool. Data-file management stayed manual and error-prone.
@@ -419,6 +422,7 @@ Read verbatim (HTML fetched and converted to text).
    - Final values: WW, TT, LL (exact), plus LT, LW, TW (lower/upper bounds).
    - Values used during construction: uLW, uTW, uTT, uLT. These "would become" the corresponding bound if the analysis stopped now. The initial value is uTT (the old "unknown", which decides to a draw).
    - That makes 10 states. **[my analysis]** 4 bits per position; the paper gives no encoding.
+   - **Fig. 2** is the partial order of the six final values (an arrow: strictly greater): LL → LT → TT → TW → WW, and LT → LW → TW; TT and LW are incomparable (max(TT, LW) = TW). Table 2 extends the max to all ten values. **[my analysis]** In tbgen's codes, `PAWN_DRAW` (an exit draws: can still win) is TW and `CAPT_DRAW` (decided draw) is TT during a full-information build; Chinook's 2-bit D merges the two (synthesis §7.7).
 4. **Indexing**: Chinook's slicing by leading rank (results reported per Black/White leading-rank pair). Positions whose children lie in uncomputed databases (e.g. a second king appears) get **LW**.
 5. **Working storage**: not discussed beyond the value set.
 6. **Passes**: Generic retrograde pseudo-code (Table 1). Repeat full sweeps; for each position that is not completed, set value = max(negated children values) and count changes, until no change. Then apply `decide` to every position.

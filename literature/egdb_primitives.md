@@ -1194,8 +1194,9 @@ material). Every file identical to the references; `verify` passes on all 134 ma
 |---|---|---|---|
 | `bits=3` (candidates in the cell, 73 sweeps) | 16.8 s | | 174 MB |
 | `bits=2`, the queue of wins (3 forward passes, 31 levels, 35 M entries) | 22–23 s | 246 M | 251 MB |
-| `bits=2`, the level's candidates sorted and uniqued (`EGDB_WDL2_UNIQ`) | 20–21 s | 233 M | 916 MB |
-| the same through a flat_set per block of the queue | 39.8 s | 233 M | 784 MB |
+| `bits=2`, the level's candidates a flat_set (`EGDB_WDL2_UNIQ`): one range insertion per block of the queue, the sets merged in pairs | 22.4 s | 233 M | 544 MiB |
+| `bits=2`, one vector of all candidates, sorted and uniqued (`EGDB_WDL2_UNIQ=vector`) | 21.5 s | 233 M | 900 MiB |
+| (flat_sets filled by single insertions) | 39.8 s | 233 M | 784 MB |
 
 On the shallow 6×6 groups 2 and 3 bits are level; here the candidate code is worth a quarter, and the queue (8 bytes
 per entry, outside the table) costs more memory than the third bit saves. A uniqued candidate list checks once, as

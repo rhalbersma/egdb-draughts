@@ -101,6 +101,15 @@
 #include <execution>
 #include <filesystem>
 #include <fstream>
+#if __has_include(<flat_set>)
+#include <flat_set>
+template<class T> using FlatSet = std::flat_set<T>;
+#define EGDB_SORTED_UNIQUE std::sorted_unique
+#else
+#include <boost/container/flat_set.hpp>
+template<class T> using FlatSet = boost::container::flat_set<T>;
+#define EGDB_SORTED_UNIQUE boost::container::ordered_unique_range
+#endif
 #include <thread>
 #include <tuple>
 
@@ -2454,36 +2463,58 @@ void solve_group_wdl4s(Group const& g, DepthSink<std::uint16_t>& sink, Execution
         if (quiet == 2) queue.clear();
         static bool const uniq = std::getenv("EGDB_WDL2_UNIQ") != nullptr;
         std::uint64_t cand_raw = 0, cand_max = 0;
-        // EGDB_WDL2_UNIQ: the candidates of a level (the UNKNOWN predecessors of its wins) sorted and uniqued, each
-        // checked once. Measured on 8x8 checkers 3 v 4 kings: 233 M evaluations against 246 M, rounds 20-21 s against
-        // 22-23 s, but the candidates before the unique are 4.6 times the wins (164 M against 35 M): peak RSS 916 MB
-        // against 251 MB (3 bits, candidates in the cell: 16.8 s, 174 MB). A flat_set per block of the queue (insert
-        // one by one, then the same merge) removed 5 % of the candidates early and took 39.8 s. Off by default
+        // EGDB_WDL2_UNIQ: the candidates of a level (the UNKNOWN predecessors of its wins) as a flat_set, each checked
+        // once. Every block of the queue fills its own flat_set with one range insertion (a sort and a unique of its
+        // candidates); the sets are then merged in pairs, in parallel (linear merges of sorted unique ranges), into the
+        // level's set. EGDB_WDL2_UNIQ=vector: one vector of all candidates, sorted and uniqued
+        static bool const as_vector = uniq && std::string(std::getenv("EGDB_WDL2_UNIQ")) == "vector";
         while (uniq && !queue.empty()) {
                 ++levels;
                 queued += queue.size();
-                std::vector<std::vector<std::uint64_t>> part(num_blocks(queue.size()));
+                std::uint64_t const nq = num_blocks(queue.size());
+                std::vector<FlatSet<std::uint64_t>> sets(nq);
+                std::vector<std::vector<std::uint64_t>> part(as_vector ? nq : 0);
+                std::atomic<std::uint64_t> raw{ 0 };
                 for_blocks(policy, queue.size(), [&](std::uint64_t lo, std::uint64_t hi) {
-                        auto& out = part[lo / block_size];
+                        std::vector<std::uint64_t> out;
                         for (std::uint64_t j = lo; j < hi; ++j) {
                                 std::uint64_t const q = queue[j], other = (1 - q / P) * P;
                                 for_each_inside_predecessor(g, pos(q), q % P, [&](std::uint64_t i) {
                                         if (cells.get(other + i) == UNKNOWN) out.push_back(other + i);
                                 });
                         }
+                        raw.fetch_add(out.size(), std::memory_order_relaxed);
+                        if (as_vector) part[lo / block_size] = std::move(out);
+                        else sets[lo / block_size].insert(out.begin(), out.end());
                 });
-                std::vector<std::uint64_t> cand;
-                for (auto& v : part) cand.insert(cand.end(), v.begin(), v.end());
-                part.clear();
-                cand_raw += cand.size();
-                std::sort(policy, cand.begin(), cand.end());
-                cand.erase(std::unique(cand.begin(), cand.end()), cand.end());
-                cand_max = std::max<std::uint64_t>(cand_max, cand.size());
-                std::vector<std::vector<std::uint64_t>> next(num_blocks(cand.size()));
-                for_blocks(policy, cand.size(), [&](std::uint64_t lo, std::uint64_t hi) {
+                cand_raw += raw.load();
+                FlatSet<std::uint64_t> level;
+                if (as_vector) {
+                        std::vector<std::uint64_t> cand;
+                        for (auto& v : part) cand.insert(cand.end(), v.begin(), v.end());
+                        part.clear();
+                        std::sort(policy, cand.begin(), cand.end());
+                        cand.erase(std::unique(cand.begin(), cand.end()), cand.end());
+                        level.insert(EGDB_SORTED_UNIQUE, cand.begin(), cand.end());
+                } else {
+                        for (std::uint64_t step = 1; step < nq; step *= 2) {    // merge in pairs
+                                std::vector<std::uint64_t> idx;
+                                for (std::uint64_t k = 0; k + step < nq; k += 2 * step) idx.push_back(k);
+                                std::for_each(policy, idx.begin(), idx.end(), [&](std::uint64_t k) {
+                                        sets[k].insert(EGDB_SORTED_UNIQUE, sets[k + step].begin(), sets[k + step].end());
+                                        FlatSet<std::uint64_t>().swap(sets[k + step]);
+                                });
+                        }
+                        level = std::move(sets[0]);
+                }
+                sets.clear();
+                cand_max = std::max<std::uint64_t>(cand_max, level.size());
+                std::vector<std::vector<std::uint64_t>> next(num_blocks(level.size()));
+                auto const first = level.begin();
+                for_blocks(policy, level.size(), [&](std::uint64_t lo, std::uint64_t hi) {
                         rec = &next[lo / block_size];
                         for (std::uint64_t j = lo; j < hi; ++j) {
-                                std::uint64_t const y = cand[j];
+                                std::uint64_t const y = *(first + std::ptrdiff_t(j));
                                 Pos const py = pos(y);
                                 if (!all_won(y, py)) continue;
                                 std::uint8_t c = UNKNOWN;

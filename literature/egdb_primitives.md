@@ -1188,6 +1188,19 @@ tbgen build <dir> wp bp wm bm wdl|dtz|dtc|dtm [bits=8|4|3|2] [primary=depth|wdl]
 material). Every file identical to the references; `verify` passes on all 134 materials for wdl, dtz and dtm;
 `checkall` to 5 pieces passes for dtm, dtz and dtc.
 
+**Candidates, on a deeper table** (8×8 checkers, 3 v 4 kings, 2.4 × 10⁸ positions, wdl; identical files):
+
+| build | rounds | evaluations | peak RSS |
+|---|---|---|---|
+| `bits=3` (candidates in the cell, 73 sweeps) | 16.8 s | | 174 MB |
+| `bits=2`, the queue of wins (3 forward passes, 31 levels, 35 M entries) | 22–23 s | 246 M | 251 MB |
+| `bits=2`, the level's candidates sorted and uniqued (`EGDB_WDL2_UNIQ`) | 20–21 s | 233 M | 916 MB |
+| the same through a flat_set per block of the queue | 39.8 s | 233 M | 784 MB |
+
+On the shallow 6×6 groups 2 and 3 bits are level; here the candidate code is worth a quarter, and the queue (8 bytes
+per entry, outside the table) costs more memory than the third bit saves. A uniqued candidate list checks once, as
+the code does, but holds the candidates before the unique: 4.6 times the wins.
+
 | build | rounds int. | rounds checkers | peak RSS |
 |---|---|---|---|
 | dtm | 17.7 s | 23.6 s | 122 / 119 MiB |

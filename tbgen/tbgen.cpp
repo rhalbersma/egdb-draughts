@@ -2452,6 +2452,51 @@ void solve_group_wdl4s(Group const& g, DepthSink<std::uint16_t>& sink, Execution
                 if (!recording && quiet == 0 && changes.load() < T / qd) recording = 1;
         }
         if (quiet == 2) queue.clear();
+        static bool const uniq = std::getenv("EGDB_WDL2_UNIQ") != nullptr;
+        std::uint64_t cand_raw = 0, cand_max = 0;
+        // EGDB_WDL2_UNIQ: the candidates of a level (the UNKNOWN predecessors of its wins) sorted and uniqued, each
+        // checked once. Measured on 8x8 checkers 3 v 4 kings: 233 M evaluations against 246 M, rounds 20-21 s against
+        // 22-23 s, but the candidates before the unique are 4.6 times the wins (164 M against 35 M): peak RSS 916 MB
+        // against 251 MB (3 bits, candidates in the cell: 16.8 s, 174 MB). A flat_set per block of the queue (insert
+        // one by one, then the same merge) removed 5 % of the candidates early and took 39.8 s. Off by default
+        while (uniq && !queue.empty()) {
+                ++levels;
+                queued += queue.size();
+                std::vector<std::vector<std::uint64_t>> part(num_blocks(queue.size()));
+                for_blocks(policy, queue.size(), [&](std::uint64_t lo, std::uint64_t hi) {
+                        auto& out = part[lo / block_size];
+                        for (std::uint64_t j = lo; j < hi; ++j) {
+                                std::uint64_t const q = queue[j], other = (1 - q / P) * P;
+                                for_each_inside_predecessor(g, pos(q), q % P, [&](std::uint64_t i) {
+                                        if (cells.get(other + i) == UNKNOWN) out.push_back(other + i);
+                                });
+                        }
+                });
+                std::vector<std::uint64_t> cand;
+                for (auto& v : part) cand.insert(cand.end(), v.begin(), v.end());
+                part.clear();
+                cand_raw += cand.size();
+                std::sort(policy, cand.begin(), cand.end());
+                cand.erase(std::unique(cand.begin(), cand.end()), cand.end());
+                cand_max = std::max<std::uint64_t>(cand_max, cand.size());
+                std::vector<std::vector<std::uint64_t>> next(num_blocks(cand.size()));
+                for_blocks(policy, cand.size(), [&](std::uint64_t lo, std::uint64_t hi) {
+                        rec = &next[lo / block_size];
+                        for (std::uint64_t j = lo; j < hi; ++j) {
+                                std::uint64_t const y = cand[j];
+                                Pos const py = pos(y);
+                                if (!all_won(y, py)) continue;
+                                std::uint8_t c = UNKNOWN;
+                                while (c == UNKNOWN)
+                                        if (cells.cas(y, c, LOSS)) { mark_wins(y, py); break; }
+                        }
+                        rec = nullptr;
+                        flush(dummy);
+                });
+                queue.clear();
+                for (auto& v : next) queue.insert(queue.end(), v.begin(), v.end());
+        }
+        if (uniq) std::cout << "uniqued queue: candidates " << cand_raw << " before, largest level " << cand_max << " after" << std::endl;
         while (!queue.empty()) {
                 ++levels;
                 queued += queue.size();

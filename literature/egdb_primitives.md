@@ -1045,11 +1045,22 @@ draws are one piece up). The third bit removes the queue, the repeated evaluatio
 losses and the capture tests. In the partial-information databases (Björnsson–Schaeffer–Sturtevant 2005) our
 `PAWN_DRAW` is their TW (at least a draw) and `CAPT_DRAW` their TT.
 
-### 7.8 Plan: exact DTC or DTZ at WDL memory, by per-ply decision logs
+### 7.8 Exact DTC or DTZ at WDL memory, by per-ply decision logs (`wdlz`)
 
 In DTC and DTZ every exit has depth 1 (a conversion or a zeroing move ends the count), so a cell never needs an exit
-depth: **with rtbgen's ply discipline the depth of a value is the sweep in which it is decided**. wdl3 with that
-discipline plus a log gives the exact metric at 6 bits per slot in RAM:
+depth: **with rtbgen's ply discipline the depth of a value is the round in which it is decided**. The WDL loop with
+that discipline plus a log gives the exact metric. Without parity (unlike DTM) the check must tell the wins of the
+previous ply from those of the current one, so the fresh codes come in two generations (by the parity of the ply):
+10 states, **4 bits per side** (8 per slot), not 3. Implemented as `tbgen build … wdlz` (`solve_group_wdlz`), round n
+over both colours in three word-wise scans: the losses of ply n − 1 mark their wins, the wins of ply n − 1 mark
+candidates, the candidates are checked against wins of earlier plies only. It stops after two idle rounds (pass 0's
+codes of parity 1 wait for round 2; a first version stopped after one and lost the wins in 1 of materials without
+positions lacking moves) and aborts on a fresh code left over. The log stays in RAM for now (the data an append-only
+file would hold). On 6×6 international and checkers to 7 pieces its dtz and wdl files are identical to cell8 dtz's
+(536 + 536); the rounds take about as long, the merge adds 4–5 s (45.0 against 40.4 s, 42.4 against 37.4 s in total),
+the log is 63 and 74 MB (about 1.5–1.8 bits per position). Its memory gain shows only once the cells are nibbles.
+
+The design:
 
 - **what is logged**: per colour and ply, the positions decided at that ply, as a bit map (the class is in the WDL).
   A loss is logged by the sweep that finds it, at the scan position; a win when its own colour's next sweep turns

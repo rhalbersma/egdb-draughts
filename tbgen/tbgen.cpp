@@ -1522,6 +1522,65 @@ struct Nibbles {
         }
 };
 
+// 21 cells of 3 bits per 64-bit word, the colours apart (cell i of colour c in word c * Pw + i / 21). A block of a
+// sweep is not a whole number of words, so the owner's write is an atomic xor of the bits that change (it knows the
+// old code: nobody else writes its colour); cas swaps the word
+struct Packed3 {
+        static constexpr int bits = 3;
+        std::uint64_t P, Pw;
+        std::vector<std::uint64_t> t;
+        static constexpr std::uint64_t ones = 0x1249249249249249ull, low2 = 3 * ones, high = 4 * ones;
+        Packed3(std::uint64_t p, std::uint8_t init) : P(p), Pw((p + 20) / 21), t(2 * ((p + 20) / 21) + 1, ones * init) {}
+        std::size_t bytes() const { return 8 * t.size(); }
+        std::uint64_t at(std::uint64_t id) const { return (id / P) * Pw + (id % P) / 21; }
+        int shift(std::uint64_t id) const { return int(3 * ((id % P) % 21)); }
+        std::uint8_t get(std::uint64_t id) const
+        {
+                return std::uint8_t(std::atomic_ref<std::uint64_t>(const_cast<std::uint64_t&>(t[at(id)])).load(std::memory_order_relaxed) >> shift(id) & 7);
+        }
+        void put(std::uint64_t id, std::uint8_t c)
+        {
+                std::atomic_ref<std::uint64_t> a(t[at(id)]);
+                int const sh = shift(id);
+                std::uint64_t const old = a.load(std::memory_order_relaxed) >> sh & 7;
+                a.fetch_xor((old ^ c) << sh, std::memory_order_relaxed);
+        }
+        bool cas(std::uint64_t id, std::uint8_t& from, std::uint8_t to)
+        {
+                std::atomic_ref<std::uint64_t> a(t[at(id)]);
+                int const sh = shift(id);
+                std::uint64_t w = a.load(std::memory_order_relaxed);
+                for (;;) {
+                        std::uint8_t const n = std::uint8_t(w >> sh & 7);
+                        if (n != from) { from = n; return false; }
+                        if (a.compare_exchange_weak(w, (w & ~(std::uint64_t(7) << sh)) | std::uint64_t(to) << sh, std::memory_order_relaxed)) return true;
+                }
+        }
+        template<class F> void scan(int col, std::uint64_t lo, std::uint64_t hi, std::array<std::uint8_t, 8> const& codes, std::uint8_t cu, std::uint8_t cc, std::uint64_t& und, F&& handle)
+        {
+                auto const zero = [](std::uint64_t x) { return ~(((x & low2) + low2) | x) & high; };     // the high bit of each zero field
+                std::uint64_t pat[8];
+                for (std::size_t k = 0; k < 8; ++k) pat[k] = ones * codes[k];
+                std::uint64_t const pu = ones * cu, pc = ones * cc, b0 = std::uint64_t(col) * P;
+                std::uint64_t const* const base = t.data() + std::uint64_t(col) * Pw;
+                auto const one = [&](std::uint64_t q) {
+                        std::uint8_t const c = get(q);
+                        und += c == cu || c == cc;
+                        for (std::uint8_t k : codes) if (c == k) { handle(q); return; }
+                };
+                std::uint64_t i = lo;
+                for (; i < hi && i % 21 != 0; ++i) one(b0 + i);
+                for (; i + 21 <= hi; i += 21) {
+                        std::uint64_t const w = std::atomic_ref<std::uint64_t>(const_cast<std::uint64_t&>(base[i / 21])).load(std::memory_order_relaxed);
+                        und += std::uint64_t(std::popcount(zero(w ^ pu) | zero(w ^ pc)));
+                        std::uint64_t m = 0;
+                        for (std::size_t k = 0; k < 8; ++k) m |= zero(w ^ pat[k]);
+                        for (; m != 0; m &= m - 1) handle(b0 + i + std::uint64_t(std::countr_zero(m)) / 3);
+                }
+                for (; i < hi; ++i) one(b0 + i);
+        }
+};
+
 struct Mode {
         int bits = 8;
         bool parity = false;            // dtm: wins odd, losses even (one code per two plies)
@@ -1881,7 +1940,8 @@ void solve_group_engine(Group const& g, DepthSink<std::uint16_t>& sink, Executio
 template<class ExecutionPolicy>
 void solve_group_eng(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPolicy const& policy)
 {
-        if (g_eng.bits == 4) solve_group_engine<eng::Nibbles>(g, sink, policy, g_eng);
+        if (g_eng.bits == 3) solve_group_engine<eng::Packed3>(g, sink, policy, g_eng);
+        else if (g_eng.bits == 4) solve_group_engine<eng::Nibbles>(g, sink, policy, g_eng);
         else solve_group_engine<eng::Bytes>(g, sink, policy, g_eng);
 }
 

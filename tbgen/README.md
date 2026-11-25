@@ -113,6 +113,9 @@ window with reductions, a direction (forward or retrograde) chosen per sweep, ov
 * `EGDB_RTB_WINDOW=k` forces a small window, `EGDB_RTB_DIR=retro|forward|auto` the direction, `EGDB_CACHE_MB=n` the size
   of the cache of decompressed input blocks (default 256; `src/block_cache.hpp`: one cache for all threads, bounded,
   lock-free for readers; stress test `src/block_cache_test.cpp`).
+* `tbgen probebench <dir> n <metric> [threads] [probes] [uniform|walk]`: throughput and latency of the prober on a
+  store's probe files (percentiles per probe; uniform positions, or random games probing every node and its children;
+  a pass with an empty cache and a pass with a warm one).
 * `tbgen/Snakefile` drives a whole run: memory first, then cores (`policy=share`), the critical path on all cores,
   and `granularity=auto`: a material is cut into finer groups only if it does not fit the budget whole.
 

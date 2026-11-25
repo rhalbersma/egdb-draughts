@@ -40,6 +40,7 @@ class SharedBlockCache
         std::size_t n_;
         std::unique_ptr<Slot[]> slots_;
         std::uint8_t* data_;
+        std::atomic<std::uint64_t> loads_{ 0 };                 // blocks loaded (the misses)
 
 public:
         explicit SharedBlockCache(std::uint64_t capacity_bytes)
@@ -57,6 +58,7 @@ public:
 
         std::size_t slots() const { return n_; }
         std::uint64_t bytes() const { return std::uint64_t(n_) * BlockBytes; }
+        std::uint64_t loads() const { return loads_.load(std::memory_order_relaxed); }
 
         template<class Load, class Use>
         auto read(std::uint64_t id, Load&& load, Use&& use)
@@ -73,6 +75,7 @@ public:
                         }
                         if (!s.version.compare_exchange_strong(v, v + 1, std::memory_order_acquire)) continue;
                         load(block);
+                        loads_.fetch_add(1, std::memory_order_relaxed);
                         s.id.store(id, std::memory_order_release);
                         s.version.store(v + 2, std::memory_order_release);
                 }

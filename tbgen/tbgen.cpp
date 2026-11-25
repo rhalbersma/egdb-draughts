@@ -101,6 +101,7 @@
 #include <execution>
 #include <filesystem>
 #include <fstream>
+#include <random>
 #include "../src/block_cache.hpp"
 #include <optional>
 #include <oneapi/tbb/global_control.h>
@@ -194,7 +195,9 @@ struct ZFile {
 std::uint64_t const g_cache_bytes = (std::getenv("EGDB_CACHE_MB") ? std::uint64_t(std::atoll(std::getenv("EGDB_CACHE_MB"))) : 256) << 20;
 int g_threads = 1;                                              // the threads of this run
 inline std::atomic<std::uint64_t> g_next_block{ 0 };
-inline SharedBlockCache<2 * 4096>& zcache() { static SharedBlockCache<2 * 4096> c(g_cache_bytes); return c; }
+// a slot is two pages of address space, but a block without escape tokens touches only the first: the allowance counts
+// one page per slot (its real memory unless blocks carry tokens)
+inline SharedBlockCache<2 * 4096>& zcache() { static SharedBlockCache<2 * 4096> c(2 * g_cache_bytes); return c; }
 
 std::string zpath(std::string const& path) { return path + ".z"; }
 std::string xpath(std::string const& path) { return path + ".x"; }
@@ -3575,6 +3578,88 @@ bool convert_material(std::string const& dir, Material c, int stride, ExecutionP
 
 // probe <dir> <metric> [FEN...]: the value of each position (default: the start position) and of each of its moves,
 // from the finished files under <dir>
+// probebench: throughput and latency of the prober on the probe files of a store.
+//   uniform   positions drawn uniformly over the slots of all materials (no locality: the worst case for the cache)
+//   walk      random games: from a uniform position, 12 random moves; at every node the position and each of its
+//             children are probed, as a search would (consecutive probes are related positions)
+// Each thread draws its own positions; every probe is timed on its own (the clock costs about 20 ns of each). Two
+// passes over the same probes: the first with an empty cache of decompressed blocks, the second with what the first
+// left in it. Reported per pass and kind (wdl: pwdl; depth: pvalue): probes per second over all threads, the mean
+// and the percentiles of one probe, and the blocks decompressed.
+bool probe_bench(std::string const& dir, int n, int threads, std::uint64_t probes, bool walk)
+{
+        g_dir = dir;
+        open_probe_all(dir, n);
+        std::vector<Material> mats;
+        std::vector<std::uint64_t> cum;
+        std::uint64_t total = 0;
+        for (auto const& [m, f] : g_probe) { mats.push_back(m); total += mat_index(m).size; cum.push_back(total); }
+        if (mats.empty()) { std::cerr << "no probe files in " << dir << std::endl; return false; }
+        auto const draw = [&](std::mt19937_64& rng) {
+                for (;;) {
+                        std::uint64_t const r = rng() % total;
+                        std::size_t const k = std::size_t(std::ranges::upper_bound(cum, r) - cum.begin());
+                        MatIndex const& mi = mat_index(mats[k]);
+                        Pos p;
+                        if (mi.pos(rng() % mi.size, int(rng() & 1), p)) return p;
+                }
+        };
+        // the probes of every thread, fixed before the clock starts
+        auto work = std::vector<std::vector<Pos>>(std::size_t(threads));
+        for (int t = 0; t < threads; ++t) {
+                std::mt19937_64 rng(std::uint64_t(t) * 7919 + 1);
+                auto& w = work[std::size_t(t)];
+                while (w.size() < probes) {
+                        Pos p = draw(rng);
+                        if (!walk) { w.push_back(p); continue; }
+                        for (int step = 0; step < 12 && w.size() < probes; ++step) {
+                                w.push_back(p);
+                                auto const ml = moves(p);
+                                if (ml.empty()) break;
+                                for (auto const& mv : ml) if (w.size() < probes) w.push_back(mv.next);
+                                std::size_t pick = std::size_t(rng() % ml.size()), i = 0;
+                                for (auto const& mv : ml) if (i++ == pick) p = mv.next;
+                                if ((p.m[0] | p.k[0]).empty() || (p.m[1] | p.k[1]).empty()) break;
+                        }
+                }
+        }
+        std::cout << "probebench " << metric_name() << " " << (walk ? "walk" : "uniform") << ": " << mats.size() << " materials, " << total
+                  << " slots, " << threads << " threads, " << probes << " probes each, cache " << zcache().slots() << " blocks (" << (g_cache_bytes >> 20) << " MB)" << std::endl;
+        for (int kind = 0; kind < 2; ++kind)
+                for (int pass = 0; pass < 2; ++pass) {
+                        auto ns = std::vector<std::vector<std::uint32_t>>(std::size_t(threads));
+                        std::uint64_t const loads0 = zcache().loads();
+                        std::atomic<std::uint64_t> sink{ 0 };
+                        auto const t0 = std::chrono::steady_clock::now();
+                        std::vector<std::thread> pool;
+                        for (int t = 0; t < threads; ++t)
+                                pool.emplace_back([&, t] {
+                                        auto& out = ns[std::size_t(t)];
+                                        out.reserve(work[std::size_t(t)].size());
+                                        std::uint64_t acc = 0;
+                                        for (Pos const& p : work[std::size_t(t)]) {
+                                                auto const a = std::chrono::steady_clock::now();
+                                                acc += kind == 0 ? pwdl(p) : pvalue(p);
+                                                out.push_back(std::uint32_t(std::min<std::int64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - a).count(), 0xffffffff)));
+                                        }
+                                        sink += acc;
+                                });
+                        for (auto& th : pool) th.join();
+                        double const secs = seconds_since(t0);
+                        std::vector<std::uint32_t> all;
+                        for (auto& v : ns) all.insert(all.end(), v.begin(), v.end());
+                        std::ranges::sort(all);
+                        auto const pct = [&](double q) { return all[std::min(all.size() - 1, std::size_t(q * double(all.size())))]; };
+                        double mean = 0;
+                        for (std::uint32_t x : all) mean += x;
+                        mean /= double(all.size());
+                        std::cout << (kind == 0 ? "wdl  " : "depth") << (pass == 0 ? " cold" : " warm") << ": " << std::uint64_t(double(all.size()) / secs) << " probes/s, mean "
+                                  << std::uint64_t(mean) << " ns, p50 " << pct(0.50) << ", p90 " << pct(0.90) << ", p99 " << pct(0.99) << ", p99.9 " << pct(0.999)
+                                  << ", max " << all.back() << " ns; " << zcache().loads() - loads0 << " blocks decompressed" << std::endl;
+                }
+        return true;
+}
+
 bool probe_positions(std::string const& dir, std::vector<std::string> fens)
 {
         g_dir = dir;
@@ -3696,6 +3781,10 @@ int main(int argc, char* argv[])
                 return check_all(a[1], std::stoi(a[2]), a.size() == 5 ? std::stoi(a[4]) : 4) ? 0 : 1;
         if (a.size() == 5 && a[0] == "cmp86" && parse_metric(a[4])) return compare_thompson86(a[1], a[2], std::stoi(a[3])) ? 0 : 1;
         if (a.size() == 3 && a[0] == "order") return check_order(a[1], std::stoi(a[2])) ? 0 : 1;
+        // probebench <dir> n <metric> [threads] [probes per thread] [uniform|walk]
+        if (a.size() >= 4 && a.size() <= 7 && a[0] == "probebench" && parse_metric(a[3]))
+                return probe_bench(a[1], std::stoi(a[2]), a.size() > 4 ? std::stoi(a[4]) : 1, a.size() > 5 ? std::stoull(a[5]) : 1000000,
+                                   a.size() > 6 && a[6] == "walk") ? 0 : 1;
         if (a.size() >= 3 && a[0] == "probe" && parse_metric(a[2])) return probe_positions(a[1], std::vector<std::string>(a.begin() + 3, a.end())) ? 0 : 1;
         if (a.size() >= 7 && a.size() <= 9 && a[0] == "convert" && parse_metric(a[6])) {
                 bool par = false;

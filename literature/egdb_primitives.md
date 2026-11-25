@@ -1158,6 +1158,48 @@ steps; then the packed cells.
 6. one command line (`target`, `primary`, `bits`, `slice`, with automatic defaults); the old modes retired once
    matched. Later: the -K variants and paging (chesstb's in-RAM compression of idle groups).
 
+**Built** (`solve_group_engine`, the default of `tbgen build`): stages 1 to 6 except the set-bits encoding.
+
+```
+tbgen build <dir> wp bp wm bm wdl|dtz|dtc|dtm [bits=8|4|3|2] [primary=depth|wdl] [material|tempi|configuration]
+```
+
+- **One loop.** The codes come from a codec (rtbgenp's layout in 8 bits or with exit depths, a compact one otherwise),
+  the cells from a store (bytes, nibbles, 21 cells of 3 bits per word). Ordered with depths for dtm (parity), dtz and
+  dtc; unordered for wdl: one fresh win and one fresh loss code, handled whenever met and then `WON` or `LOST` (8 codes).
+- **The depths as a by-product of wdl are the same loop with a narrow cell**: a 4-bit cell has 5 win and 5 loss codes,
+  so the window is 5 plies and a reduction runs every other ply; its snapshots are the log of the plies. `primary=wdl`
+  selects it; wdlz's own loop is not needed.
+- **Exits with depths without parity** (dtc on tempi or configuration groups): `PAWN_WIN` in the DTZ layout. A sweep
+  finalises the provisional wins of both its depths, and corrects an inside win in p written over a `PAWN_WIN` in p − 1.
+- **wdl target**: on dtz's groups, wdl files only (the sink keeps 0.5 byte per slot). `bits=2` runs the older
+  forward-and-queue loop (four states have no fresh code); it still keeps a byte per cell.
+- **verify** for wdl checks every outcome against its moves (necessary, not sufficient); a depth build into the same
+  directory compares its outcomes with the wdl files, which completes it.
+- **The inputs' decompression cache is shared by the threads** (a block is decompressed once, in place).
+
+6×6 international / checkers to 7 pieces, one material per process, 4 threads (rounds; peak RSS of the largest
+material). Every file identical to the references; `verify` passes on all 134 materials for wdl, dtz and dtm;
+`checkall` to 5 pieces passes for dtm, dtz and dtc.
+
+| build | rounds int. | rounds checkers | peak RSS |
+|---|---|---|---|
+| dtm | 17.7 s | 23.6 s | 122 / 119 MiB |
+| dtz | 7.4 s | 8.6 s | 62 MiB |
+| dtc | 8.9 s | 11.9 s | 73 MiB |
+| dtz `primary=wdl` (4 bits) | 13.5 s | 15.3 s | 63 MiB |
+| dtc `primary=wdl` (4 bits) | 18.1 s | 23.4 s | 72 / 79 MiB |
+| wdl (8 bits) | 7.1 s | 8.5 s | 35 MiB |
+| wdl `bits=4` | 8.1 s | 9.0 s | 34 MiB |
+| wdl `bits=3` | 8.7 s | 9.5 s | 34 MiB |
+| wdl `bits=2` (forward and queue) | 36.9 s | 31.9 s | 35 MiB |
+
+Before: cell8 dtm 257 / 290 MiB, rtb dtm 184 / 196 MiB, wdl3 20.4 / 27.0 s and 86 MiB. On these small tables the
+narrow cells cost time and save nothing: the output and the inputs are the peak, the largest group's table is 2.6 MB
+(19 MB for dtm and dtc, whole material). Finer groups are identical in value (dtc, dtm, dtz on tempi and configuration
+groups to 6 pieces) and slower here (thousands of tiny groups); both are for tables that do not fit. Open: the
+set-bits encoding, true 2-bit packing, retiring the older loops, the -K variants, paging.
+
 ## 8. Best of breed for draughts
 
 Take from syzygy: the metric split (WDL + DTZ), one value cell with codes, the fused round, level synchrony.

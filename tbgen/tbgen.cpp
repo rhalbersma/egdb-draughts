@@ -61,7 +61,7 @@
 //
 // build: g++-14 -std=c++23 -O2 -march=native -fopenmp -I<xstd-bits>/include -I<xstd-ints>/include
 //        -I<xstd-misc>/include -I<tabula>/include tbgen/tbgen.cpp -lzstd -ltbb -o itbgen
-// usage: tbgen build <dir> wp bp wm bm <metric> [seq|par] [frontier|scan|cell8] [auto|groups|bytes|array] [compressed|raw] [stats] [material|tempi|configuration] [mem=MB]
+// usage: tbgen build <dir> wp bp wm bm <metric> [seq|par] [bits=8|4|3|2] [primary=depth|wdl] [frontier|scan|cell8|rtb|wdl3|wdl2|wdlz] [auto|groups|bytes|array] [compressed|raw] [stats] [material|tempi|configuration] [mem=MB]
 //                                                            build one material (its captures and promotions must exist);
 //                                                            the depth sink by the claim mem=MB (auto: the array if rung 0
 //                                                            fits, else group files), or as given; the granularity of
@@ -2970,10 +2970,39 @@ bool verify_material(std::string const& dir, Material c, ExecutionPolicy const& 
         MatIndex const& mi = mat_index(c);
         mat_index(mirror_of(c));
         open_successors(c);
-        for (int kind : { int(BYTES), int(BYTES) + 1, int(WDL), int(WDL) + 1 }) open_input(c, kind);
+        for (int kind : { int(BYTES), int(BYTES) + 1, int(WDL), int(WDL) + 1 })
+                if (!(g_wdl_only && kind < WDL)) open_input(c, kind);
         g_frozen = true;
         auto const t0 = std::chrono::steady_clock::now();
         std::atomic<std::uint64_t> checked{ 0 }, bad_s{ 0 }, bad_w{ 0 };
+        if (g_wdl_only) {
+                // wdl files alone: every position's outcome is the best of its moves' (necessary, not sufficient: a set of
+                // draws labelled as wins that only lead to each other passes; the full check is a depth build over the same
+                // wdl files, which compares its outcomes with them)
+                for (int side : { 0, 1 })
+                        for_blocks(policy, mi.size, [&](std::uint64_t lo, std::uint64_t hi) {
+                                std::uint64_t n = 0, bs = 0;
+                                for (std::uint64_t slot = lo; slot < hi; ++slot) {
+                                        Pos p;
+                                        if (!mi.pos(slot, side, p)) continue;
+                                        bool win_ = false, draw = false;
+                                        for_each_move(pad_pos(p), [&](MoveRef const& m) {
+                                                std::uint8_t const r = probe_wdl(to_move(p, m).next);
+                                                if (r == WDL_LOSS) win_ = true;
+                                                else if (r == WDL_DRAW) draw = true;
+                                                return !win_;
+                                        });
+                                        std::uint8_t const want = win_ ? WDL_WIN : draw ? WDL_DRAW : WDL_LOSS;
+                                        if (probe_wdl(p) != want && bs++ < 3) std::cerr << "W " << fen_of(p) << " stored " << int(probe_wdl(p)) << " from successors " << int(want) << std::endl;
+                                        ++n;
+                                }
+                                checked += n; bad_s += bs;
+                        });
+                g_frozen = false;
+                std::cout << "verify " << c.name() << " wdl: " << checked.load() << " positions, " << bad_s.load() << " differ from their successors, "
+                          << seconds_since(t0) << " s" << (bad_s == 0 ? ", ok" : ", DIFFERENCES") << std::endl;
+                return bad_s == 0;
+        }
         for (int side : { 0, 1 })
                 for_blocks(policy, mi.size, [&](std::uint64_t lo, std::uint64_t hi) {
                         std::uint64_t n = 0, bs = 0, bw = 0;
@@ -3330,7 +3359,13 @@ int main(int argc, char* argv[])
         init_tables();
         init_cc();
         g_granularity = Granularity::material;             // tbgen's default: the whole material class (dtz: by total tempo)
-        std::vector<std::string> const a(argv + 1, argv + argc);
+        std::vector<std::string> a(argv + 1, argv + argc);
+        // the target wdl: the engine's unordered mode on dtz's groups (WDL does not depend on the slicing), wdl files only
+        if (a.size() >= 7 && (a[0] == "build" || a[0] == "verify") && a[6] == "wdl") {
+                a[6] = "dtz";
+                g_eng.ordered = false; g_wdl = 1; g_wdl_only = true;
+        }
+        if (a.size() >= 3 && a[0] == "plan" && a[2] == "wdl") a[2] = "dtz";
         auto mat_at = [&](std::size_t i) {                             // wp bp wm bm
                 int const wp = std::stoi(a[i]), bp = std::stoi(a[i + 1]), wm = std::stoi(a[i + 2]), bm = std::stoi(a[i + 3]);
                 if (wm < 0 || bm < 0 || wm > wp || bm > bp) { std::cerr << "not a material: wp bp wm bm" << std::endl; std::exit(2); }
@@ -3352,16 +3387,19 @@ int main(int argc, char* argv[])
         }
         if (a.size() >= 7 && a.size() <= 18 && a[0] == "build" && parse_metric(a[6])) {
                 bool par = false;                                       // the execution policy: par or seq
+                bool primary_wdl = false, bits_given = false;
+                g_engine = g_cell8 = true; g_frontier = false;          // the generic engine, unless an older loop is named
                 if (char const* e = std::getenv("EGDB_WDL_NIBBLES"); e && *e == '1') g_wdl_nibbles = true;
                 for (std::size_t i = 7; i < a.size(); ++i) {
                         if (a[i] == "seq" || a[i] == "par") par = a[i] == "par";
-                        else if (a[i] == "scan" || a[i] == "frontier") g_frontier = a[i] == "frontier";
-                        else if (a[i] == "cell8") { g_cell8 = true; g_frontier = false; }
-                        else if (a[i] == "rtb") { g_cell8 = g_rtb = true; g_frontier = false; }
-                        else if (a[i] == "wdl3" || a[i] == "wdl2") { g_wdl = a[i] == "wdl3" ? 3 : 2; g_cell8 = true; g_frontier = false; }
-                        else if (a[i] == "wdlz") { g_wdl = 4; g_cell8 = true; g_frontier = false; }
-                        else if (a[i] == "eng") { g_engine = g_cell8 = true; g_frontier = false; }
-                        else if (a[i].starts_with("bits=")) g_eng.bits = std::stoi(a[i].substr(5));
+                        else if (a[i] == "scan" || a[i] == "frontier") { g_frontier = a[i] == "frontier"; g_cell8 = g_engine = false; }
+                        else if (a[i] == "cell8") { g_cell8 = true; g_frontier = g_engine = false; }
+                        else if (a[i] == "rtb") { g_cell8 = g_rtb = true; g_frontier = g_engine = false; }
+                        else if (a[i] == "wdl3" || a[i] == "wdl2") { g_wdl = a[i] == "wdl3" ? 3 : 2; g_cell8 = true; g_frontier = g_engine = false; }
+                        else if (a[i] == "wdlz") { g_wdl = 4; g_cell8 = true; g_frontier = g_engine = false; }
+                        else if (a[i] == "eng") {}
+                        else if (a[i].starts_with("bits=")) { g_eng.bits = std::stoi(a[i].substr(5)); bits_given = true; }
+                        else if (a[i] == "primary=wdl" || a[i] == "primary=depth") primary_wdl = a[i] == "primary=wdl";
                         else if (a[i] == "wdl") { g_eng.ordered = false; g_wdl = 1; g_wdl_only = true; }
                         else if (a[i] == "raw" || a[i] == "compressed") g_compressed = a[i] == "compressed";
                         else if (a[i] == "stats") g_write_stats = true;
@@ -3374,7 +3412,15 @@ int main(int argc, char* argv[])
                 if (g_engine) {
                         g_eng.parity = g_eng.ordered && g_metric == Metric::dtm;
                         g_eng.exit_depths = g_eng.ordered && (g_metric == Metric::dtm || (g_metric == Metric::dtc && g_granularity != Granularity::material));
+                        // primary=wdl: the depths as a by-product of a 4-bit table (a reduction every other ply is the log)
+                        if (primary_wdl && !bits_given) g_eng.bits = 4;
+                        if (g_wdl_only && g_eng.bits == 2) { g_engine = false; g_wdl = 2; }     // 4 states: the forward-and-queue loop
+                        else if (!(g_eng.bits == 8 || (g_eng.bits == 4 && !g_eng.exit_depths) || (g_eng.bits == 3 && !g_eng.ordered))) {
+                                std::cerr << "bits: 8 for every target; 4 for wdl, dtz and dtc with exits in 1 (dtc: whole-material groups); 3 and 2 for wdl" << std::endl;
+                                return 2;
+                        }
                 }
+                if (g_wdl_only) { g_group_files = false; g_byte_sink = true; g_sink_auto = false; }
                 bool const ok = par ? build_material(a[1], mat_at(2), std::execution::par) : build_material(a[1], mat_at(2), std::execution::seq);
                 return ok ? 0 : 1;
         }
@@ -3399,7 +3445,7 @@ int main(int argc, char* argv[])
                 bool const ok = par ? convert_material(a[1], mat_at(2), stride, std::execution::par) : convert_material(a[1], mat_at(2), stride, std::execution::seq);
                 return ok ? 0 : 1;
         }
-        std::cerr << "usage: " << (CHECKERS ? "ctbgen" : "itbgen") << " build <dir> wp bp wm bm dtm|dtc|dtz [seq|par] [frontier|scan|cell8] [auto|groups|bytes|array] [compressed|raw] [stats] [material|tempi|configuration] [mem=MB] | bench n [samples] | plan n dtm|dtc|dtz [granularity] | checkall <dir> n dtm|dtc|dtz [threads]"
+        std::cerr << "usage: " << (CHECKERS ? "ctbgen" : "itbgen") << " build <dir> wp bp wm bm wdl|dtz|dtc|dtm [seq|par] [bits=8|4|3|2] [primary=depth|wdl] [frontier|scan|cell8|rtb|wdl3|wdl2|wdlz] [auto|groups|bytes|array] [compressed|raw] [stats] [material|tempi|configuration] [mem=MB] | bench n [samples] | plan n dtm|dtc|dtz [granularity] | checkall <dir> n dtm|dtc|dtz [threads]"
                      " | cmp86 <dir> <dir_thompson86> n dtm|dtc|dtz | order <dir> n | probe <dir> dtm|dtc|dtz [FEN...] | convert <dir> wp bp wm bm dtm|dtc|dtz [seq|par] [verify=N]" << std::endl;
         return 2;
 }

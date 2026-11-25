@@ -94,6 +94,25 @@ deeper than n − 1.
 Disk, as rule 6: the group's arrays in RAM; finished materials read through read-only memory maps; each file written
 once, sequentially, to a temporary name and then renamed.
 
+## The generic engine (the default)
+
+```
+tbgen build <dir> wp bp wm bm wdl|dtz|dtc|dtm [bits=8|4|3|2] [primary=depth|wdl] [material|tempi|configuration] ...
+tbgen verify <dir> wp bp wm bm wdl|dtz|dtc|dtm [par]
+```
+
+One loop (`solve_group_engine`, synthesis 7.9) builds every target: rtbgen's sweeps with rtbgenp's codes, a sliding
+window with reductions, a direction (forward or retrograde) chosen per sweep, over cells of 8, 4 or 3 bits.
+* `wdl` writes wdl files only, on dtz's groups; `bits=3` (21 cells per word), `4` or `8` (fastest); `bits=2` runs the
+  older forward-and-queue loop.
+* `dtz`, `dtc`, `dtm`: 8 bits. `primary=wdl` (dtz, and dtc on whole-material groups) builds the depths as a
+  by-product of a 4-bit table: a reduction every other ply, whose snapshots are the log of the plies.
+* `tempi` and `configuration` cut a material into finer groups (man moves become exits with their depths).
+* `verify` for `wdl` checks outcomes against the moves; a depth build into the same directory completes the check.
+* The older loops stay available by name as references: `cell8`, `rtb`, `wdl3`, `wdl2`, `wdlz`, `frontier`, `scan`.
+* `EGDB_RTB_WINDOW=k` forces a small window, `EGDB_RTB_DIR=retro|forward|auto` the direction, `EGDB_CACHE_BLOCKS=n` a
+  bounded per-thread cache of the inputs instead of the shared one.
+
 ## rtbgen's sweeps (`rtb`) and the WDL loops (`wdl3`, `wdl2`)
 
 Instead of `cell8`, the build options take (synthesis §7.6–7.8):

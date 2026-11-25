@@ -1809,7 +1809,7 @@ void solve_group_engine(Group const& g, DepthSink<std::uint16_t>& sink, Executio
                                 } else if (c == cw || c == cw2) {
                                         any = true;
                                         if (!ord) cells.put(q, WON);
-                                        else if (sb && !par && c == cw2 && sbuf[q - base0 - lo] == dw1) cells.put(q, cw);
+                                        else if (sb && !par && has_w && c == cw2 && sbuf[q - base0 - lo] == dw1) cells.put(q, cw);
                                         if (mark) retro(q, pos(q), set_changed);
                                 } else if (sb && c == PAWN_WIN) {
                                         int const d = sbuf[q - base0 - lo];

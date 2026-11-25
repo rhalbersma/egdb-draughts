@@ -989,14 +989,19 @@ void solve_group_cell8(Group const& g, DepthSink<std::uint16_t>& sink, Execution
 namespace rtb {
 constexpr std::uint8_t ILLEGAL = 0, CAPT_WIN = 1, PAWN_WIN = 2, WIN_IN_ONE = 3, LOSS_IN_ONE = 0xf8, MATE = 0xf9,
                        CAPT_DRAW = 0xfa, PAWN_DRAW = 0xfb, CAPT_CLOSS = 0xfc, CHANGED = 0xfd, UNKNOWN = 0xfe, BROKEN = 0xff;
-constexpr int MAX_WIN = 245, MAX_LOSS = 246;                    // WIN_IN_ONE + 122 = 125, MATE - 123 = 126
-constexpr bool won(std::uint8_t c) { return c >= WIN_IN_ONE && c <= WIN_IN_ONE + (MAX_WIN - 1) / 2; }
-constexpr bool lost(std::uint8_t c) { return c >= MATE - MAX_LOSS / 2 && c <= MATE; }
-constexpr int win_depth(std::uint8_t c) { return 2 * (c - WIN_IN_ONE) + 1; }
-constexpr int loss_depth(std::uint8_t c) { return 2 * (MATE - c); }
-constexpr std::uint8_t win_code(int d) { return std::uint8_t(WIN_IN_ONE + (d - 1) / 2); }
-constexpr std::uint8_t loss_code(int d) { return std::uint8_t(MATE - d / 2); }
-static_assert(win_code(MAX_WIN) + 1 == loss_code(MAX_LOSS) && loss_code(2) == LOSS_IN_ONE);
+// the depth codes: in DTM one code per two plies (wins odd, losses even); in DTZ and DTC one per ply and class (no
+// parity: rtbgen's DTZ layout, a win in d is WIN_IN_ONE + d - 1, a loss in d is MATE - d)
+struct DepthCodes {
+        bool dtm;
+        int max_win, max_loss;
+        bool won(std::uint8_t c) const { return c >= WIN_IN_ONE && c <= win_code(max_win); }
+        bool lost(std::uint8_t c) const { return c >= loss_code(max_loss) && c <= MATE; }
+        int win_depth(std::uint8_t c) const { return dtm ? 2 * (c - WIN_IN_ONE) + 1 : c - WIN_IN_ONE + 1; }
+        int loss_depth(std::uint8_t c) const { return dtm ? 2 * (MATE - c) : MATE - c; }
+        std::uint8_t win_code(int d) const { return std::uint8_t(dtm ? WIN_IN_ONE + (d - 1) / 2 : WIN_IN_ONE + d - 1); }
+        std::uint8_t loss_code(int d) const { return std::uint8_t(dtm ? MATE - d / 2 : MATE - d); }
+};
+constexpr DepthCodes dtm_codes{ true, 245, 246 }, dtz_codes{ false, 123, 122 };  // DTM: 125 / 126; DTZ: 125 / 127
 inline thread_local std::uint64_t wins_written = 0;             // per thread: wins written by the current block
 enum class Dir { retro, forward };
 }
@@ -1007,7 +1012,15 @@ template<class ExecutionPolicy>
 void solve_group_rtb(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPolicy const& policy)
 {
         using namespace rtb;
-        if (g_metric != Metric::dtm) { std::cerr << "rtb: dtm only" << std::endl; std::abort(); }
+        bool const dtm = g_metric == Metric::dtm;               // DTZ, DTC: every exit has depth 1 (no PAWN_WIN, no snapshot)
+        DepthCodes const Z = dtm ? dtm_codes : dtz_codes;
+        int const MAX_WIN = Z.max_win, MAX_LOSS = Z.max_loss;
+        auto const won = [&](std::uint8_t c) { return Z.won(c); };
+        auto const lost = [&](std::uint8_t c) { return Z.lost(c); };
+        auto const win_depth = [&](std::uint8_t c) { return Z.win_depth(c); };
+        auto const loss_depth = [&](std::uint8_t c) { return Z.loss_depth(c); };
+        auto const win_code = [&](int d) { return Z.win_code(d); };
+        auto const loss_code = [&](int d) { return Z.loss_code(d); };
         std::uint64_t const P = g.P, T = 2 * P;                 // table_w = [0, P), table_b = [P, 2P)
         auto const pos = [&](std::uint64_t id) { return g.pos(id % P, int(id / P)); };
         std::vector<std::uint8_t> table(T, UNKNOWN);
@@ -1025,10 +1038,13 @@ void solve_group_rtb(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPo
         auto const fits = [](int d, int max) {
                 if (d > max) { std::cerr << "rtb: depth " << d << " beyond one window" << std::endl; std::abort(); }
         };
-        auto const set_win_value = [&](std::uint64_t id, std::uint8_t v) {     // rtbgen's SET_WIN_VALUE, over the undecided
+        // rtbgen's SET_WIN_VALUE, over the undecided. DTZ and DTC also over a slower win: a sweep marks the wins of two
+        // loss depths (p - 1 and p), and a win in p + 1 may reach a cell before its win in p does. Safe there: every win
+        // decided in pass 0 is a win in 1 (an exit), the fastest, so no fake predecessor's value is ever replaced
+        auto const set_win_value = [&](std::uint64_t id, std::uint8_t v) {
                 std::atomic_ref<std::uint8_t> a(table[id]);
                 std::uint8_t c = a.load(std::memory_order_relaxed);
-                while (c == UNKNOWN || c == CHANGED || c == PAWN_DRAW || c == PAWN_WIN)
+                while (c == UNKNOWN || c == CHANGED || c == PAWN_DRAW || c == PAWN_WIN || (!dtm && won(c) && win_depth(c) > win_depth(v)))
                         if (a.compare_exchange_weak(c, v, std::memory_order_relaxed)) { ++wins_written; return; }
         };
         auto const set_changed = [&](std::uint64_t id) {                        // rtbgen's SET_CHANGED
@@ -1075,7 +1091,7 @@ void solve_group_rtb(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPo
                                         fits(wn, MAX_WIN);
                                         md = std::max(md, wn);
                                         ++wins_by_depth[std::size_t(wn)];
-                                        if (!in) { table[id] = win_code(wn); continue; }   // decided
+                                        if (!in || !dtm) { table[id] = win_code(wn); continue; }   // decided (DTZ, DTC: a win in 1)
                                         table[id] = PAWN_WIN;                               // provisional
                                         if (sdepth.empty()) sdepth.assign(hi - lo, 0);
                                         sdepth[id - lo] = std::uint8_t(wn);
@@ -1118,10 +1134,11 @@ void solve_group_rtb(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPo
                 });
                 if (!all) { table[q] = UNKNOWN; return; }
                 int e = worst + 1;
-                for_each_move(pad_pos(p), [&](MoveRef const& m) {      // the exits all lose (else pass 0 wrote a win or PAWN_DRAW)
-                        if (!inside_ref(m)) e = std::max(e, plies(move_value(p, to_move(p, m))));
-                        return true;
-                });
+                if (dtm)                                                // DTZ, DTC: a losing exit takes 1 ply, never the slowest
+                        for_each_move(pad_pos(p), [&](MoveRef const& m) {      // the exits all lose (else pass 0 wrote a win or PAWN_DRAW)
+                                if (!inside_ref(m)) e = std::max(e, plies(move_value(p, to_move(p, m))));
+                                return true;
+                        });
                 fits(e, MAX_LOSS);
                 table[q] = loss_code(e);
                 if (e <= ply) mark_wins(q, p, e);                       // in time; a deeper loss waits for its ply
@@ -1149,13 +1166,17 @@ void solve_group_rtb(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPo
                 auto const ts = std::chrono::steady_clock::now();
                 int const col = ply % 2, opp = 1 - col;
                 std::uint64_t const base = std::uint64_t(col) * P;
-                int const de = col ? ply - 1 : ply, dw = col ? ply : ply - 1;  // this sweep's own losses and wins
-                std::uint8_t const cl = de <= MAX_LOSS ? loss_code(de) : UNKNOWN;
-                bool const has_w = dw >= 1 && dw <= MAX_WIN;
-                std::uint8_t const cw = has_w ? win_code(dw) : UNKNOWN;
-                bool const read_snap = has_w && snap_has[col][std::size_t(dw)] != 0;
+                // this sweep's own losses and wins: DTM one depth each (by parity), DTZ and DTC both p - 1 and p
+                int const de = col ? ply - 1 : ply, dw = col ? ply : ply - 1;
+                int const de2 = dtm ? de : ply, dw2 = dtm ? dw : ply;   // DTZ, DTC: de = dw = p - 1 is the other depth
+                int const de1 = dtm ? de : ply - 1, dw1 = dtm ? dw : ply - 1;
+                std::uint8_t const cl = de1 >= 0 && de1 <= MAX_LOSS ? loss_code(de1) : UNKNOWN;
+                std::uint8_t const cl2 = de2 >= 0 && de2 <= MAX_LOSS ? loss_code(de2) : UNKNOWN;
+                bool const has_w = dw1 >= 1 && dw1 <= MAX_WIN, has_w2 = dw2 >= 1 && dw2 <= MAX_WIN;
+                std::uint8_t const cw = has_w ? win_code(dw1) : UNKNOWN, cw2 = has_w2 ? win_code(dw2) : UNKNOWN;
+                bool const read_snap = dtm && has_w && snap_has[col][std::size_t(dw)] != 0;
                 Dir const dir = dir_next[col];
-                std::uint64_t const F = wins_into[col] + (has_w ? hist[col][std::size_t(dw)] : 0);
+                std::uint64_t const F = wins_into[col] + (has_w ? hist[col][std::size_t(dw1)] : 0) + (!dtm && has_w2 ? hist[col][std::size_t(dw2)] : 0);
                 if (dir_mode == 2) dir_next[opp] = double(undecided[opp]) < alpha * double(F) ? Dir::forward : Dir::retro;
                 bool const mark = dir_next[opp] == Dir::retro;  // the next sweep of the other colour needs the candidates
                 bool const fwd = dir == Dir::forward;
@@ -1173,20 +1194,22 @@ void solve_group_rtb(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPo
                         // 8 cells at a time: the bytes to handle found at once (the exact zero-byte test), the others
                         // skipped. Only this cell's own loop writes this colour, so a word read stays valid for the cells
                         // after the one being handled
-                        std::uint8_t const k_cl = cl, k_cw = mark ? cw : CHANGED, k_cv = cw, k_pw = sb ? PAWN_WIN : CHANGED;
+                        std::uint8_t const k_cl = cl, k_cl2 = cl2, k_cw = mark ? cw : CHANGED, k_cw2 = mark ? cw2 : CHANGED, k_cv = cw,
+                                           k_pw = sb ? PAWN_WIN : CHANGED;
                         std::uint8_t const k_un = fwd ? UNKNOWN : CHANGED;
-                        int const k_dw = dw, k_de = de, k_ply = ply;
+                        int const k_dw = dw, k_ply = ply;
                         bool const k_mark = mark;
                         std::uint8_t* const cells = table.data();
                         constexpr std::uint64_t ones = 0x0101010101010101ull, low7 = 0x7f7f7f7f7f7f7f7full;
                         auto const zero_bytes = [](std::uint64_t x) { return ~(((x & low7) + low7) | x | low7); };
-                        std::uint64_t const p_ch = ones * CHANGED, p_un = ones * UNKNOWN, p_cl = ones * k_cl, p_cw = ones * k_cw,
-                                            p_pw = ones * k_pw, p_hu = ones * k_un;
+                        std::uint64_t const p_ch = ones * CHANGED, p_un = ones * UNKNOWN, p_cl = ones * k_cl, p_cl2 = ones * k_cl2,
+                                            p_cw = ones * k_cw, p_cw2 = ones * k_cw2, p_pw = ones * k_pw, p_hu = ones * k_un;
                         auto const handle = [&](std::uint64_t q) {
                                 std::uint8_t const c = cells[q];
                                 if (c == CHANGED || c == k_un) check_loss(q, k_ply);
-                                else if (c == k_cl) mark_wins(q, pos(q), k_de);
-                                else if (c == k_cw) retro(q, pos(q), set_changed);
+                                else if (c == UNKNOWN) return;
+                                else if (c == k_cl || c == k_cl2) mark_wins(q, pos(q), loss_depth(c));
+                                else if (c == k_cw || c == k_cw2) retro(q, pos(q), set_changed);
                                 else if (sb && c == PAWN_WIN && sbuf[q - base - lo] == k_dw) {  // final now
                                         cells[q] = k_cv;
                                         if (k_mark) retro(q, pos(q), set_changed);
@@ -1201,7 +1224,8 @@ void solve_group_rtb(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPo
                                 std::memcpy(&w, cells + q, 8);
                                 std::uint64_t const zc = zero_bytes(w ^ p_ch), zu = zero_bytes(w ^ p_un);
                                 und += std::uint64_t(std::popcount(zc | zu));
-                                std::uint64_t m = zc | zero_bytes(w ^ p_hu) | zero_bytes(w ^ p_cl) | zero_bytes(w ^ p_cw) | zero_bytes(w ^ p_pw);
+                                std::uint64_t m = zc | zero_bytes(w ^ p_hu) | zero_bytes(w ^ p_cl) | zero_bytes(w ^ p_cl2) | zero_bytes(w ^ p_cw)
+                                                | zero_bytes(w ^ p_cw2) | zero_bytes(w ^ p_pw);
                                 for (; m != 0; m &= m - 1) handle(q + std::uint64_t(std::countr_zero(m)) / 8);
                         }
                         for (; q < end; ++q) { und += cells[q] == UNKNOWN || cells[q] == CHANGED; handle(q); }

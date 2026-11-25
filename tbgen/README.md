@@ -108,7 +108,7 @@ Instead of `cell8`, the build options take (synthesis §7.6–7.8):
 * **`wdl3`, `wdl2`** (`solve_group_wdl`): win, draw or loss only, as rule tables on one loop; wdl3 with 8 states
   (fresh and candidate states in the cell, retrograde sweeps), wdl2 Chinook-style with 4 states (forward passes, then a
   queue). Both read only the successors' wdl files; for now they write placeholder depth files beside the wdl files,
-  which are the results (identical to `cell8`'s).
+  which are the results (identical to `cell8`'s). `EGDB_WDL_NIBBLES=1` stores a cell in a nibble (half the table).
 * **`wdlz`** (`solve_group_wdlz`, dtz or dtc): WDL with the depth as a by-product. The WDL loop with rtbgen's ply
   discipline (every exit has depth 1, so a value's depth is the round that decides it), fresh codes in two generations
   (10 states, 4 bits per side), and a log of each round's decisions (a zstd bit map per block), merged at the end into

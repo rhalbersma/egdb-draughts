@@ -1048,7 +1048,21 @@ Freshness replaces the ply: `WIN_FRESH` and `LOSS_FRESH` make every value propag
 final at once (WDL has no faster win), so wdl3 needs no snapshot. Both read only the successors' wdl files and match
 cell8's wdl files on 6×6 international and checkers to 7 pieces (268 + 268). Rounds: wdl3 23.6 s and 34.2 s, wdl2
 52.6 s and 61.2 s; wdl3 does half the evaluations (62 M against 131 M, 109 M against 223 M) and no capture tests
-(wdl2: 129 M and 71 M). For now both keep a byte per cell and write placeholder depth files beside the wdl files.
+(wdl2: 129 M and 71 M). They write placeholder depth files beside the wdl files for now.
+
+**Packing: a nibble per cell** (`EGDB_WDL_NIBBLES=1`). The rule tables keep their byte codes: the low nibbles of the
+wdl3 and wdl2 codes are distinct, so a cell stores `c & 15` and reads back `n < 8 ? n : 0xf0 | n`. The colours are
+stored apart (each block of a sweep owns its bytes), the scan takes 16 cells per word, and every write is a byte
+compare-and-swap (a predecessor's write may meet the neighbour's). Identical wdl files. On the largest material of the
+6×6 ladders to 7 pieces (one material per process, peak RSS): the table drops from 23.0 to 11.5 MB, peak RSS from 86.0
+to 76.1 MiB (international) and 82.8 to 75.7 MiB (checkers), the rounds grow 7–12 % (wdl3 20.4 → 21.9 s and 27.0 →
+29.5 s, wdl2 32.6 → 36.5 s and 40.0 → 43.8 s). The table is a quarter of the peak: the rest is the output (2.5 bytes
+per slot for the four files) and the successors (their wdl files). For comparison, rtb dtz 85 MiB (a byte table,
+the successors' wdl files only), rtb dtm 184–196 MiB (it also reads the successors' depth files for the exits), cell8
+dtm 257–290 MiB. Next steps: an encoding in which every write by another thread only sets bits (`UNKNOWN` 000,
+`CHANGED` 001, `PAWN_DRAW` 010, `WIN_FRESH` 011, the decided states with the high bit), so that a predecessor's write
+is one atomic or without a retry and the owner's own writes an xor of a code it knows; then 21 cells of 3 bits per
+64-bit word (3.05 bits per cell).
 
 **Chinook against 3 bits** (Lake–Schaeffer–Lu 1994, Schaeffer et al. 2003): with 2 bits, the fresh state lives
 outside the table (the queue: the changes of the last forward pass, then appended), there is no candidate state (a

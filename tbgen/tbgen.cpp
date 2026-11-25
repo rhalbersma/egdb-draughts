@@ -1370,8 +1370,8 @@ void solve_group_rtb(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPo
 //               are the queue (a list), processed in levels (a queued loss: UNKNOWN predecessors WIN, ANY_DRAW ones
 //               after a capture test; a queued win: UNKNOWN predecessors evaluated at once)
 // The exits are looked up as wdl only. For now the depth files written beside the wdl files hold a placeholder
-// (win 1, loss 2): only the wdl files are results. Both rule sets keep a byte per position; 3 and 2 bits are the
-// states they need, not (yet) their packing.
+// (win 1, loss 2): only the wdl files are results. A cell is a byte, or a nibble (EGDB_WDL_NIBBLES=1, the cell
+// stores below).
 namespace wdlx {
 constexpr std::uint8_t EVALUATE = 0, WIN = 3, WIN_FRESH = 4, LOSS_FRESH = 0xf8, LOSS = 0xf9, CAPT_DRAW = 0xfa,
                        PAWN_DRAW = 0xfb, CHANGED = 0xfd, UNKNOWN = 0xfe;
@@ -1431,19 +1431,113 @@ inline Rules const& wdl2_rules()
 }
 }
 
-template<class ExecutionPolicy>
-void solve_group_wdl(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPolicy const& policy)
+// The cell stores of the WDL loops: a byte per cell, or a nibble per cell (two cells per byte, half the table). The
+// rules keep their byte codes: a code's low nibble is distinct among the codes of wdl3 and wdl2, so a nibble stores
+// c & 15 and reads back n < 8 ? n : 0xf0 | n. A colour's cells are stored apart (cell i of colour c in byte
+// c * Pb + i / 2), so a block of the scans owns its bytes. Two cells share a byte, so every write is a compare-and-swap
+// of the byte (a predecessor's write may meet the other nibble's at the same time).
+namespace wdlx {
+inline constexpr std::uint8_t nib_enc(std::uint8_t c) { return std::uint8_t(c & 15); }
+inline constexpr std::uint8_t nib_dec(std::uint8_t n) { return n < 8 ? n : std::uint8_t(0xf0 | n); }
+static_assert([] { for (std::uint8_t c : { WIN, WIN_FRESH, LOSS_FRESH, LOSS, CAPT_DRAW, PAWN_DRAW, CHANGED, UNKNOWN }) if (nib_dec(nib_enc(c)) != c) return false; return true; }());
+
+struct ByteCells {
+        static constexpr char const* name = "bytes";
+        std::uint64_t P;
+        std::vector<std::uint8_t> t;
+        ByteCells(std::uint64_t p, std::uint8_t init) : P(p), t(2 * p, init) {}
+        std::size_t bytes() const { return t.size(); }
+        std::uint8_t get(std::uint64_t id) const { return std::atomic_ref<std::uint8_t>(const_cast<std::uint8_t&>(t[id])).load(std::memory_order_relaxed); }
+        void set(std::uint64_t id, std::uint8_t c) { std::atomic_ref<std::uint8_t>(t[id]).store(c, std::memory_order_relaxed); }
+        bool cas(std::uint64_t id, std::uint8_t& from, std::uint8_t to) {
+                return std::atomic_ref<std::uint8_t>(t[id]).compare_exchange_weak(from, to, std::memory_order_relaxed);
+        }
+        // the cells of colour col in [lo, hi) whose code matches one of the patterns: handle(id), 8 cells per word
+        template<class F> bool scan(int col, std::uint64_t lo, std::uint64_t hi, std::vector<std::uint8_t> const& codes, F&& handle) {
+                constexpr std::uint64_t ones = 0x0101010101010101ull, low7 = 0x7f7f7f7f7f7f7f7full;
+                auto const zero = [](std::uint64_t x) { return ~(((x & low7) + low7) | x | low7); };
+                std::uint64_t pat[8]; std::size_t np = 0;
+                for (std::uint8_t c : codes) pat[np++] = ones * c;
+                std::uint8_t const* const cells = t.data();
+                bool any = false;
+                std::uint64_t q = std::uint64_t(col) * P + lo, end = std::uint64_t(col) * P + hi;
+                for (; q < end && q % 8 != 0; ++q) any |= handle(q);
+                for (; q + 8 <= end; q += 8) {
+                        std::uint64_t w;
+                        std::memcpy(&w, cells + q, 8);
+                        std::uint64_t m = 0;
+                        for (std::size_t k = 0; k < np; ++k) m |= zero(w ^ pat[k]);
+                        for (; m != 0; m &= m - 1) any |= handle(q + std::uint64_t(std::countr_zero(m)) / 8);
+                }
+                for (; q < end; ++q) any |= handle(q);
+                return any;
+        }
+};
+
+struct NibbleCells {
+        static constexpr char const* name = "nibbles";
+        std::uint64_t P, Pb;
+        std::vector<std::uint8_t> t;
+        NibbleCells(std::uint64_t p, std::uint8_t init) : P(p), Pb((p + 1) / 2), t(2 * ((p + 1) / 2) + 8, std::uint8_t(nib_enc(init) * 0x11)) {}
+        std::size_t bytes() const { return t.size(); }
+        std::uint8_t* at(std::uint64_t id) { return &t[(id / P) * Pb + (id % P) / 2]; }
+        std::uint8_t const* at(std::uint64_t id) const { return &t[(id / P) * Pb + (id % P) / 2]; }
+        static int shift(std::uint64_t id, std::uint64_t P) { return int(4 * ((id % P) & 1)); }
+        std::uint8_t get(std::uint64_t id) const {
+                std::uint8_t const b = std::atomic_ref<std::uint8_t>(const_cast<std::uint8_t&>(*at(id))).load(std::memory_order_relaxed);
+                return nib_dec(std::uint8_t(b >> shift(id, P) & 15));
+        }
+        bool cas(std::uint64_t id, std::uint8_t& from, std::uint8_t to) {
+                std::atomic_ref<std::uint8_t> a(*at(id));
+                int const sh = shift(id, P);
+                std::uint8_t b = a.load(std::memory_order_relaxed);
+                for (;;) {
+                        std::uint8_t const n = std::uint8_t(b >> sh & 15);
+                        if (n != nib_enc(from)) { from = nib_dec(n); return false; }
+                        std::uint8_t const nb = std::uint8_t((b & ~(15 << sh)) | nib_enc(to) << sh);
+                        if (a.compare_exchange_weak(b, nb, std::memory_order_relaxed)) return true;
+                }
+        }
+        void set(std::uint64_t id, std::uint8_t c) {
+                std::atomic_ref<std::uint8_t> a(*at(id));
+                int const sh = shift(id, P);
+                std::uint8_t b = a.load(std::memory_order_relaxed);
+                while (!a.compare_exchange_weak(b, std::uint8_t((b & ~(15 << sh)) | nib_enc(c) << sh), std::memory_order_relaxed)) {}
+        }
+        // 16 cells per word (block bounds are multiples of 16, so a word never spans two blocks)
+        template<class F> bool scan(int col, std::uint64_t lo, std::uint64_t hi, std::vector<std::uint8_t> const& codes, F&& handle) {
+                constexpr std::uint64_t ones = 0x1111111111111111ull, low3 = 0x7777777777777777ull;
+                auto const zero = [](std::uint64_t x) { return ~(((x & low3) + low3) | x | low3); };
+                std::uint64_t pat[8]; std::size_t np = 0;
+                for (std::uint8_t c : codes) pat[np++] = ones * nib_enc(c);
+                std::uint64_t const b0 = std::uint64_t(col) * P;
+                std::uint8_t const* const base = t.data() + std::uint64_t(col) * Pb;
+                bool any = false;
+                std::uint64_t i = lo;
+                for (; i < hi && i % 16 != 0; ++i) any |= handle(b0 + i);
+                for (; i + 16 <= hi; i += 16) {
+                        std::uint64_t w;
+                        std::memcpy(&w, base + i / 2, 8);
+                        std::uint64_t m = 0;
+                        for (std::size_t k = 0; k < np; ++k) m |= zero(w ^ pat[k]);
+                        for (; m != 0; m &= m - 1) any |= handle(b0 + i + std::uint64_t(std::countr_zero(m)) / 4);
+                }
+                for (; i < hi; ++i) any |= handle(b0 + i);
+                return any;
+        }
+};
+}
+static_assert(block_size % 16 == 0);
+
+template<class Cells, class ExecutionPolicy>
+void solve_group_wdl_in(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPolicy const& policy)
 {
         using namespace wdlx;
         Rules const& R = g_wdl == 3 ? wdl3_rules() : wdl2_rules();
         std::uint64_t const P = g.P, T = 2 * P;
         auto const pos = [&](std::uint64_t id) { return g.pos(id % P, int(id / P)); };
-        std::vector<std::uint8_t> table(T, R.inside);
-        std::uint8_t* const cells = table.data();
-        auto const ld = [&](std::uint64_t id) { return std::atomic_ref<std::uint8_t>(cells[id]).load(std::memory_order_relaxed); };
-        auto const cas = [&](std::uint64_t id, std::uint8_t from, std::uint8_t to) {
-                return std::atomic_ref<std::uint8_t>(cells[id]).compare_exchange_strong(from, to, std::memory_order_relaxed);
-        };
+        Cells cells(P, R.inside);
+        auto const ld = [&](std::uint64_t id) { return cells.get(id); };
         auto const retro = [&](std::uint64_t id, Pos const& p, auto&& f) {
                 std::uint64_t const other = (1 - id / P) * P;
                 for_each_inside_predecessor(g, p, id % P, [&](std::uint64_t i) { f(other + i); });
@@ -1465,8 +1559,8 @@ void solve_group_wdl(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPo
                                         else if (r == WDL_DRAW) drawn = true;
                                         return true;
                                 });
-                                cells[id] = !any ? R.no_moves : wins ? R.exit_win : !in ? (drawn ? R.exits_draw : R.exits_loss)
-                                          : drawn ? R.inside_exit_draw : R.inside;
+                                cells.set(id, !any ? R.no_moves : wins ? R.exit_win : !in ? (drawn ? R.exits_draw : R.exits_loss)
+                                          : drawn ? R.inside_exit_draw : R.inside);
                         }
                 });
         g_stats.pass0 += seconds_since(t0);
@@ -1489,8 +1583,7 @@ void solve_group_wdl(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPo
         };
         // a predecessor y of a decided q: its transition (on_loss or on_win); true if y changed
         auto const transition = [&](std::uint64_t y, bool q_lost) -> std::uint8_t {
-                std::atomic_ref<std::uint8_t> a(cells[y]);
-                std::uint8_t c = a.load(std::memory_order_relaxed);
+                std::uint8_t c = cells.get(y);
                 for (;;) {
                         std::uint8_t to = q_lost ? R.on_loss[c] : R.on_win[c];
                         if (to == c) return c;
@@ -1502,32 +1595,30 @@ void solve_group_wdl(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPo
                                 captests.fetch_add(1, std::memory_order_relaxed);
                                 if (has_capture(pos(y))) return c;      // a decided draw: not a real predecessor
                         }
-                        if (a.compare_exchange_weak(c, to, std::memory_order_relaxed)) return to;
+                        if (cells.cas(y, c, to)) return to;
                 }
         };
         int sweeps = 0, forward_passes = 0, levels = 0;
         std::uint64_t queued = 0;
-        constexpr std::uint64_t ones = 0x0101010101010101ull, low7 = 0x7f7f7f7f7f7f7f7full;
-        auto const zero_bytes = [](std::uint64_t x) { return ~(((x & low7) + low7) | x | low7); };
 
         if (R.mode == Mode::sweeps) {
-                std::vector<std::uint64_t> patterns;            // the codes with an action, for the word-wise scan
-                for (int c = 0; c < 256; ++c) if (R.act[std::size_t(c)] != NONE) patterns.push_back(ones * std::uint64_t(c));
+                std::vector<std::uint8_t> codes;                // the codes with an action, for the word-wise scan
+                for (int c = 0; c < 256; ++c) if (R.act[std::size_t(c)] != NONE) codes.push_back(std::uint8_t(c));
                 auto const handle = [&](std::uint64_t q) {
-                        std::uint8_t const c = cells[q];                // only this cell's own loop writes this colour
+                        std::uint8_t const c = cells.get(q);            // only this cell's own loop writes this colour
                         switch (R.act[c]) {
                         case MARK_WINS:
-                                cells[q] = R.after[c];
+                                cells.set(q, R.after[c]);
                                 retro(q, pos(q), [&](std::uint64_t y) { transition(y, true); });
                                 return true;
                         case MARK_CANDIDATES:
-                                cells[q] = R.after[c];
+                                cells.set(q, R.after[c]);
                                 retro(q, pos(q), [&](std::uint64_t y) { transition(y, false); });
                                 return true;
                         case CHECK: {                                   // the delayed check; a loss marks its wins at once
                                 Pos const p = pos(q);
-                                if (summarize(q, p, false) != Summary::all_won) { cells[q] = R.check_fail; return true; }
-                                cells[q] = R.check_loss;
+                                if (summarize(q, p, false) != Summary::all_won) { cells.set(q, R.check_fail); return true; }
+                                cells.set(q, R.check_loss);
                                 retro(q, p, [&](std::uint64_t y) { transition(y, true); });
                                 return true;
                         }
@@ -1535,21 +1626,10 @@ void solve_group_wdl(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPo
                         }
                 };
                 for (int idle = 0; idle < 2; ++sweeps) {
-                        std::uint64_t const base = std::uint64_t(sweeps % 2) * P;
+                        int const col = sweeps % 2;
                         std::atomic<bool> work{ false };
                         for_blocks(policy, P, [&](std::uint64_t lo, std::uint64_t hi) {
-                                bool any = false;
-                                std::uint64_t q = base + lo, end = base + hi;
-                                for (; q < end && q % 8 != 0; ++q) any |= handle(q);
-                                for (; q + 8 <= end; q += 8) {
-                                        std::uint64_t w;
-                                        std::memcpy(&w, cells + q, 8);
-                                        std::uint64_t m = 0;
-                                        for (std::uint64_t pt : patterns) m |= zero_bytes(w ^ pt);
-                                        for (; m != 0; m &= m - 1) any |= handle(q + std::uint64_t(std::countr_zero(m)) / 8);
-                                }
-                                for (; q < end; ++q) any |= handle(q);
-                                if (any) work.store(true, std::memory_order_relaxed);
+                                if (cells.scan(col, lo, hi, codes, handle)) work.store(true, std::memory_order_relaxed);
                         });
                         idle = work.load() ? 0 : idle + 1;
                 }
@@ -1564,7 +1644,7 @@ void solve_group_wdl(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPo
                         for_blocks(policy, P, [&](std::uint64_t lo, std::uint64_t hi) {
                                 std::uint64_t n = 0;
                                 for (std::uint64_t q = base + lo; q < base + hi; ++q) {
-                                        std::uint8_t const c = cells[q];
+                                        std::uint8_t const c = cells.get(q);
                                         if (!R.fwd[c]) continue;
                                         Pos const p = pos(q);
                                         if (R.test_fwd[c]) {
@@ -1574,7 +1654,7 @@ void solve_group_wdl(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPo
                                         Summary const sm = summarize(q, p, true);
                                         std::uint8_t const to = sm == Summary::some_lost ? R.fwd_win[c] : sm == Summary::all_won && R.lossable[c] ? R.fwd_loss[c] : c;
                                         if (to == c) continue;
-                                        cells[q] = to;
+                                        cells.set(q, to);
                                         ++n;
                                         if (record) rec[lo / block_size].push_back(q);
                                 }
@@ -1609,15 +1689,24 @@ void solve_group_wdl(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPo
         double const t_rounds = seconds_since(t1);
         for_blocks(policy, T, [&](std::uint64_t lo, std::uint64_t hi) {
                 for (std::uint64_t id = lo; id < hi; ++id) {
-                        std::uint8_t const c = cells[id];
+                        std::uint8_t const c = cells.get(id);
                         std::uint16_t const v = R.counts_win[c] ? win(1) : R.counts_loss[c] ? loss(2) : 0;     // placeholder depths
                         if (v != 0) sink.put(int(id / P), id % P, pos(id), v);
                 }
         });
         g_stats.rounds += seconds_since(t1);
-        std::cout << "wdl" << g_wdl << " steps: rounds " << t_rounds << " s, " << sweeps << " sweeps";
+        std::cout << "wdl" << g_wdl << " steps (" << Cells::name << ", table " << cells.bytes() << " bytes): rounds " << t_rounds << " s, " << sweeps << " sweeps";
         if (R.mode == Mode::forward_then_queue) std::cout << " (" << forward_passes << " forward), queue " << queued << " entries in " << levels << " levels";
         std::cout << ", evaluations " << evals.load() << ", capture tests " << captests.load() << std::endl;
+}
+
+bool g_wdl_nibbles = false;                                     // EGDB_WDL_NIBBLES=1: the WDL loops' cells as nibbles
+
+template<class ExecutionPolicy>
+void solve_group_wdl(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPolicy const& policy)
+{
+        if (g_wdl_nibbles) solve_group_wdl_in<wdlx::NibbleCells>(g, sink, policy);
+        else solve_group_wdl_in<wdlx::ByteCells>(g, sink, policy);
 }
 
 // ---------------------------------------------------------------- one group: WDL with DTZ (or DTC) as a by-product
@@ -2650,6 +2739,7 @@ int main(int argc, char* argv[])
         }
         if (a.size() >= 7 && a.size() <= 14 && a[0] == "build" && parse_metric(a[6])) {
                 bool par = false;                                       // the execution policy: par or seq
+                if (char const* e = std::getenv("EGDB_WDL_NIBBLES"); e && *e == '1') g_wdl_nibbles = true;
                 for (std::size_t i = 7; i < a.size(); ++i) {
                         if (a[i] == "seq" || a[i] == "par") par = a[i] == "par";
                         else if (a[i] == "scan" || a[i] == "frontier") g_frontier = a[i] == "frontier";

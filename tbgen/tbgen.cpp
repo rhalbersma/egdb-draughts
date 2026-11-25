@@ -402,7 +402,7 @@ std::vector<Material> successors_of(Material c)
 }
 
 // open every file a build of c can read, and fill the index memo, so that the parallel passes only read the maps
-int g_wdl = 0;                                                  // 3: the wdl3 loop, 2: the wdl2 loop (they read wdl files only)
+int g_wdl = 0;                                                  // 3: wdl3, 2: wdl2, 4: wdlz (they read wdl files only)
 
 void open_successors(Material c)
 {
@@ -1507,6 +1507,183 @@ void solve_group_wdl(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPo
         std::cout << ", evaluations " << evals.load() << ", capture tests " << captests.load() << std::endl;
 }
 
+// ---------------------------------------------------------------- one group: WDL with DTZ (or DTC) as a by-product
+//
+// `wdlz` (synthesis 7.8): the WDL loop with rtbgen's ply discipline, and a log of the plies. In DTZ and DTC every exit
+// has depth 1 (a zeroing move or a conversion ends the count), so no cell holds a depth: a value's depth is the round
+// that decides it, and each round logs its decisions, per colour, as a zstd bit map per block of the scans (in RAM for
+// now: the same data an append-only file would hold). DTZ has no parity, so a round's check must tell the wins of the
+// previous ply from those of the current one: the fresh codes come in two generations, by the parity of the ply. Ten
+// states, 4 bits per side to move (a byte for now):
+//   UNKNOWN, CHANGED, PAWN_DRAW (an exit draws, moves inside remain), CAPT_DRAW (decided draw), WIN, LOSS (propagated),
+//   W[g], L[g] (decided at a ply of parity g, not propagated yet)
+// Pass 0: no moves L[0]; an exit wins W[1] (a win in 1, final); only exits, all lose L[1]; an exit draws PAWN_DRAW or
+// CAPT_DRAW. Round n, both colours, three scans:
+//   A    the losses of ply n - 1 mark their predecessors W[n % 2] (over UNKNOWN, CHANGED, PAWN_DRAW), become LOSS, logged
+//   B1   the wins of ply n - 1 mark their predecessors CHANGED (over UNKNOWN), become WIN, logged
+//   B2   a candidate is lost in n (L[n % 2]) if every move inside reaches a WIN (not a W[n % 2]: a win in n)
+// The merge reads, per block, the pieces of every segment that covers it, and gives each decided position its depth.
+namespace wdlzx {
+constexpr std::uint8_t WIN = 3, W0 = 4, W1 = 5, L0 = 0xf6, L1 = 0xf7, LOSS = 0xf9, CAPT_DRAW = 0xfa, PAWN_DRAW = 0xfb,
+                       CHANGED = 0xfd, UNKNOWN = 0xfe;
+constexpr std::uint8_t W(int g) { return std::uint8_t(W0 + g); }
+constexpr std::uint8_t L(int g) { return std::uint8_t(L0 + g); }
+}
+
+template<class ExecutionPolicy>
+void solve_group_wdlz(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPolicy const& policy)
+{
+        using namespace wdlzx;
+        if (g_metric == Metric::dtm) { std::cerr << "wdlz: dtz or dtc only (in dtm an exit carries a depth)" << std::endl; std::abort(); }
+        std::uint64_t const P = g.P, T = 2 * P, NB = num_blocks(P);
+        auto const pos = [&](std::uint64_t id) { return g.pos(id % P, int(id / P)); };
+        std::vector<std::uint8_t> table(T, UNKNOWN);
+        std::uint8_t* const cells = table.data();
+        auto const ld = [&](std::uint64_t id) { return std::atomic_ref<std::uint8_t>(cells[id]).load(std::memory_order_relaxed); };
+        auto const retro = [&](std::uint64_t id, Pos const& p, auto&& f) {
+                std::uint64_t const other = (1 - id / P) * P;
+                for_each_inside_predecessor(g, p, id % P, [&](std::uint64_t i) { f(other + i); });
+        };
+        auto const set_win = [&](std::uint64_t y, std::uint8_t v) {
+                std::atomic_ref<std::uint8_t> a(cells[y]);
+                std::uint8_t c = a.load(std::memory_order_relaxed);
+                while (c == UNKNOWN || c == CHANGED || c == PAWN_DRAW)
+                        if (a.compare_exchange_weak(c, v, std::memory_order_relaxed)) return;
+        };
+        auto const set_changed = [&](std::uint64_t y) {
+                std::uint8_t c = UNKNOWN;
+                std::atomic_ref<std::uint8_t>(cells[y]).compare_exchange_strong(c, CHANGED, std::memory_order_relaxed);
+        };
+        std::atomic<std::uint64_t> evals{ 0 }, log_bytes{ 0 };
+
+        // pass 0: the exits as wdl (a zeroing move or a conversion: depth 1 whatever comes after)
+        auto const t0 = std::chrono::steady_clock::now();
+        for (int col = 0; col < 2; ++col)
+                for_blocks(policy, P, [&](std::uint64_t lo0, std::uint64_t hi0) {
+                        for (std::uint64_t id = std::uint64_t(col) * P + lo0; id < std::uint64_t(col) * P + hi0; ++id) {
+                                Pos const p = pos(id);
+                                bool any = false, in = false, drawn = false, wins = false;
+                                for_each_move(pad_pos(p), [&](MoveRef const& m) {
+                                        any = true;
+                                        if (inside_ref(m)) { in = true; return true; }
+                                        std::uint8_t const r = probe_wdl(to_move(p, m).next);
+                                        if (r == WDL_LOSS) wins = true;
+                                        else if (r == WDL_DRAW) drawn = true;
+                                        return true;
+                                });
+                                cells[id] = !any ? L(0) : wins ? W(1) : !in ? (drawn ? CAPT_DRAW : L(1)) : drawn ? PAWN_DRAW : UNKNOWN;
+                        }
+                });
+        g_stats.pass0 += seconds_since(t0);
+        auto const t1 = std::chrono::steady_clock::now();
+
+        // the log: segments of (depth, colour), a zstd bit map per block of the scans (empty if nothing was logged)
+        struct Segment { int depth, col; std::vector<std::vector<char>> chunk; };
+        std::vector<Segment> log;
+        constexpr std::uint64_t ones = 0x0101010101010101ull, low7 = 0x7f7f7f7f7f7f7f7full;
+        auto const zero_bytes = [](std::uint64_t x) { return ~(((x & low7) + low7) | x | low7); };
+        // one scan of a colour for one code: handle(q) for each cell holding it; with a depth >= 0, the cells are logged
+        auto const scan = [&](int col, std::uint8_t code, int depth, auto&& handle) {
+                std::uint64_t const base = std::uint64_t(col) * P;
+                Segment seg{ depth, col, {} };
+                if (depth >= 0) seg.chunk.resize(NB);
+                std::atomic<bool> any{ false };
+                for_blocks(policy, P, [&](std::uint64_t lo, std::uint64_t hi) {
+                        std::array<std::uint64_t, block_size / 64> bits{};
+                        bool hit = false;
+                        auto const one = [&](std::uint64_t q) {
+                                handle(q);
+                                hit = true;
+                                if (depth >= 0) bits[(q - base - lo) / 64] |= std::uint64_t(1) << ((q - base - lo) % 64);
+                        };
+                        std::uint64_t const pt = ones * code;
+                        std::uint64_t q = base + lo, end = base + hi;
+                        for (; q < end && q % 8 != 0; ++q) if (cells[q] == code) one(q);
+                        for (; q + 8 <= end; q += 8) {
+                                std::uint64_t w;
+                                std::memcpy(&w, cells + q, 8);
+                                for (std::uint64_t m = zero_bytes(w ^ pt); m != 0; m &= m - 1) one(q + std::uint64_t(std::countr_zero(m)) / 8);
+                        }
+                        for (; q < end; ++q) if (cells[q] == code) one(q);
+                        if (!hit) return;
+                        any.store(true, std::memory_order_relaxed);
+                        if (depth < 0) return;
+                        auto& z = seg.chunk[lo / block_size];
+                        z.resize(ZSTD_compressBound(sizeof bits));
+                        z.resize(ZSTD_compress(z.data(), z.size(), bits.data(), sizeof bits, 1));
+                        log_bytes.fetch_add(z.size(), std::memory_order_relaxed);
+                });
+                if (depth >= 0 && any.load()) log.push_back(std::move(seg));
+                return any.load();
+        };
+        auto const check_loss = [&](std::uint64_t q, int n) {   // every move inside reaches a WIN (a win in fewer than n)
+                evals.fetch_add(1, std::memory_order_relaxed);
+                Pos const p = pos(q);
+                std::uint64_t const gp = q % P, other = (1 - q / P) * P;
+                bool const all = for_each_move(pad_pos(p), [&](MoveRef const& m) {
+                        return !inside_ref(m) || ld(other + successor_index(g, p, gp, m)) == WIN;
+                });
+                cells[q] = all ? L(n % 2) : UNKNOWN;
+        };
+        int n = 1;
+        for (int idle = 0;; ++n) {                              // two idle rounds: pass 0's codes of parity 1 wait for round 2
+                bool work = false;
+                int const gp = (n - 1) % 2, gn = n % 2;
+                for (int col = 0; col < 2; ++col)               // A: the losses of ply n - 1 -> wins in n
+                        work |= scan(col, L(gp), n - 1, [&](std::uint64_t q) {
+                                cells[q] = LOSS;
+                                retro(q, pos(q), [&](std::uint64_t y) { set_win(y, W(gn)); });
+                        });
+                for (int col = 0; col < 2; ++col)               // B1: the wins of ply n - 1 -> candidates
+                        work |= scan(col, W(gp), n - 1, [&](std::uint64_t q) {
+                                cells[q] = WIN;
+                                retro(q, pos(q), set_changed);
+                        });
+                for (int col = 0; col < 2; ++col)               // B2: the candidates -> losses in n
+                        work |= scan(col, CHANGED, -1, [&](std::uint64_t q) { check_loss(q, n); });
+                idle = work ? 0 : idle + 1;
+                if (idle == 2) break;
+        }
+        double const t_rounds = seconds_since(t1);
+
+        // the merge: per block, the pieces of every segment that covers it give the depths
+        auto const t2 = std::chrono::steady_clock::now();
+        std::vector<std::vector<std::uint32_t>> covers[2];
+        for (int col = 0; col < 2; ++col) covers[col].resize(NB);
+        for (std::uint32_t k = 0; k < log.size(); ++k)
+                for (std::uint64_t b = 0; b < NB; ++b)
+                        if (!log[k].chunk[b].empty()) covers[log[k].col][b].push_back(k);
+        std::atomic<bool> missing{ false };
+        for (int col = 0; col < 2; ++col)
+                for_blocks(policy, P, [&](std::uint64_t lo, std::uint64_t hi) {
+                        std::uint64_t const b = lo / block_size, base = std::uint64_t(col) * P;
+                        std::array<std::uint16_t, block_size> depth;
+                        depth.fill(0xffff);
+                        for (std::uint32_t k : covers[col][b]) {
+                                std::array<std::uint64_t, block_size / 64> bits{};
+                                auto const& z = log[k].chunk[b];
+                                std::size_t const r = ZSTD_decompress(bits.data(), sizeof bits, z.data(), z.size());
+                                if (ZSTD_isError(r)) { std::cerr << "zstd: " << ZSTD_getErrorName(r) << std::endl; std::abort(); }
+                                for (std::size_t w = 0; w < bits.size(); ++w)
+                                        for (std::uint64_t m = bits[w]; m != 0; m &= m - 1)
+                                                depth[w * 64 + std::size_t(std::countr_zero(m))] = std::uint16_t(log[k].depth);
+                        }
+                        for (std::uint64_t q = base + lo; q < base + hi; ++q) {
+                                std::uint8_t const c = cells[q];
+                                bool const w = c == WIN, l = c == LOSS;
+                                if (c == W0 || c == W1 || c == L0 || c == L1 || c == CHANGED) { missing.store(true, std::memory_order_relaxed); continue; }
+                                if (!w && !l) continue;
+                                std::uint16_t const d = depth[q - base - lo];
+                                if (d == 0xffff) { missing.store(true, std::memory_order_relaxed); continue; }
+                                sink.put(col, q % P, pos(q), w ? win(d) : loss(d));
+                        }
+                });
+        if (missing.load()) { std::cerr << "wdlz: a decided position without a logged depth, or a fresh code left" << std::endl; std::abort(); }
+        g_stats.rounds += seconds_since(t1);
+        std::cout << "wdlz steps: rounds " << t_rounds << " s (" << n << " rounds), merge " << seconds_since(t2) << " s, log "
+                  << log.size() << " segments, " << log_bytes.load() << " bytes, checks " << evals.load() << std::endl;
+}
+
 // ---------------------------------------------------------------- one group: pass 0 and the rounds
 
 // The values go to the depth sink: frontier rounds never read them back, so they write straight into it; scan mode
@@ -1514,6 +1691,7 @@ void solve_group_wdl(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPo
 template<class ExecutionPolicy>
 void solve_group(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPolicy const& policy)
 {
+        if (g_wdl == 4) { solve_group_wdlz(g, sink, policy); return; }
         if (g_wdl != 0) { solve_group_wdl(g, sink, policy); return; }
         if (g_cell8 && g_rtb) { solve_group_rtb(g, sink, policy); return; }
         if (g_cell8) { solve_group_cell8(g, sink, policy); return; }
@@ -2365,6 +2543,7 @@ int main(int argc, char* argv[])
                         else if (a[i] == "cell8") { g_cell8 = true; g_frontier = false; }
                         else if (a[i] == "rtb") { g_cell8 = g_rtb = true; g_frontier = false; }
                         else if (a[i] == "wdl3" || a[i] == "wdl2") { g_wdl = a[i] == "wdl3" ? 3 : 2; g_cell8 = true; g_frontier = false; }
+                        else if (a[i] == "wdlz") { g_wdl = 4; g_cell8 = true; g_frontier = false; }
                         else if (a[i] == "raw" || a[i] == "compressed") g_compressed = a[i] == "compressed";
                         else if (a[i] == "stats") g_write_stats = true;
                         else if (a[i].starts_with("mem=")) g_mem_mb = std::stoull(a[i].substr(4));

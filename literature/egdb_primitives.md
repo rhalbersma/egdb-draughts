@@ -1006,7 +1006,22 @@ sweeps on the 6×6 ladders.
 **Results.** Byte-identical to cell8 on 8×8 3-4 and 10×10 2-4 kings and on every material of 6×6 international and
 checkers to 7 pieces, 8×8 checkers and 10×10 international to 5 pieces (`checkall` passes on the 6×6 ladders). Sweeps
 against cell8's rounds: 8×8 kings 3-4 38.5 against 51.9 s; 10×10 kings 2-4 level; the ladders' totals 3–18 % faster.
-**Limits**: DTM only, one window (it stops beyond 245 plies): the reductions, and DTC/DTZ (two codes per ply), are open.
+**DTZ and DTC** use rtbgen's DTZ layout (no parity: a win in d is `WIN_IN_ONE + d − 1`, a loss in d is `MATE − d`,
+a window of 123 / 122 plies). Every exit has depth 1, so a winning exit is a win in 1 and final (no `PAWN_WIN`, no
+snapshot) and the check needs no exit lookups. A sweep handles losses and wins of both depths p − 1 and p, so a win in
+p + 1 may reach a cell before its win in p: there the win marking also replaces a slower win, safe because every win
+decided in pass 0 is a win in 1. Byte-identical to cell8; rounds 40–50 % faster (dtz 9.2 against 14.8 s and 9.8
+against 18.3 s, dtc 11.0 against 17.2 s and 12.9 against 25.7 s on the 6×6 ladders to 7 pieces), about half of wdlz's.
+
+**Reductions: a sliding window.** The codes hold depth − base (base even, so DTM keeps its parity; a win's offset is at
+least 1, so a DTZ win at the base is not confused with `PAWN_WIN`). When a sweep's depths would no longer fit, the base
+moves just behind the ply (p − 2 in DTM, p − 4 in DTZ and DTC, where a check may still need a win of p − 2); the
+depths below it go to a snapshot (their codes as they are, zstd per block) and become `WON` or `LOST`; the rest is
+re-encoded; `WIN_LATER` and `LOSS_LATER` (DTM: deep pass-0 values, early losses) are re-evaluated from their exits.
+`PAWN_WIN` depths are 16 bits in their snapshot. The merge takes a `WON` or `LOST` cell's value from the one snapshot
+that has it. `EGDB_RTB_WINDOW=k` forces a small window: with 8 plies (346–2,140 reductions per ladder) every file of
+dtm, dtz and dtc on the 6×6 ladders to 7 pieces is identical to cell8's. A forced DTM reduction costs about 15 ms on
+these groups (a pass over the table, the late cells re-evaluated); at the real window no build here reduces.
 
 **rtbgen's own fusion, measured** (a scratch copy of rtbgen with its `iter()` split into separate sweeps, which find
 the new losses again by their codes, byte-identical tables): unfused is 1.18–1.28× slower at 4 pieces and 1.23–1.31×

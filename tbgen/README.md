@@ -98,7 +98,8 @@ once, sequentially, to a temporary name and then renamed.
 
 Instead of `cell8`, the build options take (synthesis §7.6–7.8):
 
-* **`rtb`** (`solve_group_rtb`, dtm only, one window of 245 plies): rtbgen's iteration with rtbgenp's codes and names
+* **`rtb`** (`solve_group_rtb`, dtm, dtz and dtc, a sliding window with reductions; `EGDB_RTB_WINDOW=k` forces a small
+  one for tests): rtbgen's iteration with rtbgenp's codes and names
   (`WIN_IN_ONE + k`, `MATE − k`, `PAWN_WIN`, `PAWN_DRAW`, `CAPT_DRAW`, `CHANGED`, `UNKNOWN`): one sweep per ply over
   one colour, fused win marking, the loss depth from the successors' codes, no exit lists (provisional exit wins as
   `PAWN_WIN` with their depths in a zstd snapshot per block), no test of compulsory capture. Byte-identical to `cell8`.

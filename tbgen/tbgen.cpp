@@ -2139,39 +2139,39 @@ struct NibbleCells {
         }
 };
 
-// wdl2's four states in 2 bits, 32 cells per 64-bit word, the colours apart (cell i of colour c in word
-// c * Pw + i / 32). Every write swaps the word (in the queue phase any thread may write any cell)
+// wdl2's four states in 2 bits, 4 cells per byte, the colours apart (cell i of colour c in byte c * Pb + i / 4).
+// A block of a pass owns its bytes (block bounds are multiples of 4 cells) and only it writes its colour in pass 0
+// and the forward passes, so set is a plain write; in the queue phase any thread may write any cell: cas swaps the byte
 struct Bits2Cells {
         static constexpr char const* name = "2 bits";
         static constexpr std::uint8_t enc(std::uint8_t c) { return c == UNKNOWN ? 0 : c == ANY_DRAW ? 1 : c == LOSS ? 2 : 3; }
         static constexpr std::uint8_t dec(std::uint8_t n) { constexpr std::uint8_t d[4] = { UNKNOWN, ANY_DRAW, LOSS, WIN }; return d[n]; }
-        std::uint64_t P, Pw;
-        std::vector<std::uint64_t> t;
-        Bits2Cells(std::uint64_t p, std::uint8_t init) : P(p), Pw((p + 31) / 32), t(2 * ((p + 31) / 32), 0x5555555555555555ull * enc(init)) {}
-        std::size_t bytes() const { return 8 * t.size(); }
-        std::uint64_t at(std::uint64_t id) const { return (id / P) * Pw + (id % P) / 32; }
-        int shift(std::uint64_t id) const { return int(2 * ((id % P) & 31)); }
+        std::uint64_t P, Pb;
+        std::vector<std::uint8_t> t;
+        Bits2Cells(std::uint64_t p, std::uint8_t init) : P(p), Pb((p + 3) / 4), t(2 * ((p + 3) / 4), std::uint8_t(0x55 * enc(init))) {}
+        std::size_t bytes() const { return t.size(); }
+        std::uint64_t at(std::uint64_t id) const { return (id / P) * Pb + (id % P) / 4; }
+        int shift(std::uint64_t id) const { return int(2 * ((id % P) & 3)); }
         std::uint8_t get(std::uint64_t id) const
         {
-                return dec(std::uint8_t(std::atomic_ref<std::uint64_t>(const_cast<std::uint64_t&>(t[at(id)])).load(std::memory_order_relaxed) >> shift(id) & 3));
+                return dec(std::uint8_t(std::atomic_ref<std::uint8_t>(const_cast<std::uint8_t&>(t[at(id)])).load(std::memory_order_relaxed) >> shift(id) & 3));
         }
         bool cas(std::uint64_t id, std::uint8_t& from, std::uint8_t to)
         {
-                std::atomic_ref<std::uint64_t> a(t[at(id)]);
+                std::atomic_ref<std::uint8_t> a(t[at(id)]);
                 int const sh = shift(id);
-                std::uint64_t w = a.load(std::memory_order_relaxed);
+                std::uint8_t w = a.load(std::memory_order_relaxed);
                 for (;;) {
                         std::uint8_t const n = std::uint8_t(w >> sh & 3);
                         if (n != enc(from)) { from = dec(n); return false; }
-                        if (a.compare_exchange_weak(w, (w & ~(std::uint64_t(3) << sh)) | std::uint64_t(enc(to)) << sh, std::memory_order_relaxed)) return true;
+                        if (a.compare_exchange_weak(w, std::uint8_t((w & ~(3 << sh)) | enc(to) << sh), std::memory_order_relaxed)) return true;
                 }
         }
         void set(std::uint64_t id, std::uint8_t c)
         {
-                std::atomic_ref<std::uint64_t> a(t[at(id)]);
+                std::uint8_t& b = t[at(id)];
                 int const sh = shift(id);
-                std::uint64_t w = a.load(std::memory_order_relaxed);
-                while (!a.compare_exchange_weak(w, (w & ~(std::uint64_t(3) << sh)) | std::uint64_t(enc(c)) << sh, std::memory_order_relaxed)) {}
+                b = std::uint8_t((b & ~(3 << sh)) | enc(c) << sh);
         }
         template<class F> bool scan(int col, std::uint64_t lo, std::uint64_t hi, std::vector<std::uint8_t> const& codes, F&& handle)
         {

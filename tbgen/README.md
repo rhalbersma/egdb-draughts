@@ -103,8 +103,8 @@ tbgen verify <dir> wp bp wm bm wdl|dtz|dtc|dtm [par]
 
 One loop (`solve_group_engine`, synthesis 7.9) builds every target: rtbgen's sweeps with rtbgenp's codes, a sliding
 window with reductions, a direction (forward or retrograde) chosen per sweep, over cells of 8, 4 or 3 bits.
-* `wdl` writes wdl files only, on dtz's groups; `bits=3` (21 cells per word), `4` or `8` (fastest); `bits=2` runs the
-  older forward-and-queue loop on 2-bit cells (4 per byte).
+* `wdl` writes wdl files only, on dtz's groups; `bits=3` (21 cells per word), `4` or `8` (fastest); `bits=2` is a four-state
+  loop on 2-bit cells (4 per byte): losses mark their wins once, forward passes over the unknown cells, then a queue.
 * `dtz`, `dtc`, `dtm`: 8 bits. `primary=wdl` (dtz, and dtc on whole-material groups) builds the depths as a
   by-product of a 4-bit table: a reduction every other ply, whose snapshots are the log of the plies.
 * `tempi` and `configuration` cut a material into finer groups (man moves become exits with their depths).

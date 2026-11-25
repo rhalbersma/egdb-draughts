@@ -2318,7 +2318,8 @@ void solve_group_wdl_in(Group const& g, DepthSink<std::uint16_t>& sink, Executio
                         ++forward_passes;
                         if (record) { for (auto& v : rec) queue.insert(queue.end(), v.begin(), v.end()); break; }
                         quiet = changes.load() == 0 ? quiet + 1 : 0;
-                        if (quiet == 0 && changes.load() < T / 32) record = true;     // the next pass seeds the queue
+                        static std::uint64_t const qd = std::getenv("EGDB_WDL2_Q") ? std::uint64_t(std::atoll(std::getenv("EGDB_WDL2_Q"))) : 32;
+                        if (quiet == 0 && changes.load() < T / qd) record = true;     // the next pass seeds the queue
                 }
                 // the queue, in levels: each level's predecessors, decided in place, are the next level
                 while (!queue.empty()) {
@@ -2355,13 +2356,146 @@ void solve_group_wdl_in(Group const& g, DepthSink<std::uint16_t>& sink, Executio
         std::cout << ", evaluations " << evals.load() << ", capture tests " << captests.load() << std::endl;
 }
 
+// wdl in four states (UNKNOWN, WIN, LOSS, ANY_DRAW), the engine's shape without its fresh and candidate codes:
+//   pass 0      as wdl2's: ANY_DRAW is an exit that draws (a decided capture draw, or at least a draw)
+//   the losses  every loss marks its predecessors won exactly once: pass 0's in one scan, a later one when it is found.
+//               An UNKNOWN predecessor directly, an ANY_DRAW one after a capture test (a capture draw is decided)
+//   forward     passes over the UNKNOWN cells only, alternating between the colours: every move inside to a WIN is a
+//               loss. ANY_DRAW cells are never evaluated: they can only become wins, through the marks
+//   the queue   when a pass changes little (fewer than 1 in EGDB_WDL2_Q positions, default 8), the wins written by the
+//               next two passes (one per colour) are recorded and then propagated in levels: the UNKNOWN predecessors
+//               of a queued win are evaluated at once
+template<class Cells, class ExecutionPolicy>
+void solve_group_wdl4s(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPolicy const& policy)
+{
+        using namespace wdlx;
+        std::uint64_t const P = g.P, T = 2 * P, NB = num_blocks(P);
+        auto const pos = [&](std::uint64_t id) { return g.pos(id % P, int(id / P)); };
+        Cells cells(P, UNKNOWN);
+        std::atomic<std::uint64_t> evals{ 0 }, captests{ 0 };
+        auto const t0 = std::chrono::steady_clock::now();
+        for (int col = 0; col < 2; ++col)
+                for_blocks(policy, P, [&](std::uint64_t lo0, std::uint64_t hi0) {
+                        for (std::uint64_t id = std::uint64_t(col) * P + lo0; id < std::uint64_t(col) * P + hi0; ++id) {
+                                Pos const p = pos(id);
+                                bool any = false, in = false, drawn = false, wins = false;
+                                for_each_move(pad_pos(p), [&](MoveRef const& m) {
+                                        any = true;
+                                        if (inside_ref(m)) { in = true; return true; }
+                                        std::uint8_t const r = probe_wdl(to_move(p, m).next);
+                                        if (r == WDL_LOSS) wins = true;
+                                        else if (r == WDL_DRAW) drawn = true;
+                                        return true;
+                                });
+                                cells.set(id, !any ? LOSS : wins ? WIN : drawn ? ANY_DRAW : !in ? LOSS : UNKNOWN);
+                        }
+                });
+        g_stats.pass0 += seconds_since(t0);
+        auto const t1 = std::chrono::steady_clock::now();
+        thread_local std::vector<std::uint64_t>* rec = nullptr;         // this thread's record of the wins it writes
+        thread_local std::uint64_t n_ev = 0, n_ct = 0, n_ch = 0;
+        // q is lost: its predecessors are won
+        auto const mark_wins = [&](std::uint64_t q, Pos const& p) {
+                std::uint64_t const other = (1 - q / P) * P;
+                for_each_inside_predecessor(g, p, q % P, [&](std::uint64_t i) {
+                        std::uint64_t const y = other + i;
+                        std::uint8_t c = cells.get(y);
+                        if (c == ANY_DRAW) { ++n_ct; if (has_capture(pos(y))) return; }
+                        while (c == UNKNOWN || c == ANY_DRAW)
+                                if (cells.cas(y, c, WIN)) { ++n_ch; if (rec) rec->push_back(y); return; }
+                });
+        };
+        auto const all_won = [&](std::uint64_t q, Pos const& p) {
+                ++n_ev;
+                std::uint64_t const gp = q % P, other = (1 - q / P) * P;
+                return for_each_move(pad_pos(p), [&](MoveRef const& m) {
+                        return !inside_ref(m) || cells.get(other + successor_index(g, p, gp, m)) == WIN;
+                });
+        };
+        auto const flush = [&](std::atomic<std::uint64_t>& changes) {
+                evals.fetch_add(n_ev, std::memory_order_relaxed); captests.fetch_add(n_ct, std::memory_order_relaxed);
+                changes.fetch_add(n_ch, std::memory_order_relaxed);
+                n_ev = n_ct = n_ch = 0;
+        };
+        std::atomic<std::uint64_t> dummy{ 0 };
+        for (int col = 0; col < 2; ++col)                       // pass 0's losses
+                for_blocks(policy, P, [&](std::uint64_t lo, std::uint64_t hi) {
+                        rec = nullptr;
+                        for (std::uint64_t q = std::uint64_t(col) * P + lo; q < std::uint64_t(col) * P + hi; ++q)
+                                if (cells.get(q) == LOSS) mark_wins(q, pos(q));
+                        flush(dummy);
+                });
+        static std::uint64_t const qd = std::getenv("EGDB_WDL2_Q") ? std::uint64_t(std::atoll(std::getenv("EGDB_WDL2_Q"))) : 8;
+        int passes = 0, levels = 0, recording = 0, quiet = 0;
+        std::uint64_t queued = 0;
+        std::vector<std::uint64_t> queue;
+        for (; quiet < 2; ++passes) {
+                int const col = passes % 2;
+                std::atomic<std::uint64_t> changes{ 0 };
+                std::vector<std::vector<std::uint64_t>> recs(recording ? NB : 0);
+                for_blocks(policy, P, [&](std::uint64_t lo, std::uint64_t hi) {
+                        rec = recording ? &recs[lo / block_size] : nullptr;
+                        for (std::uint64_t q = std::uint64_t(col) * P + lo; q < std::uint64_t(col) * P + hi; ++q) {
+                                if (cells.get(q) != UNKNOWN) continue;
+                                Pos const p = pos(q);
+                                if (!all_won(q, p)) continue;
+                                cells.set(q, LOSS);             // only this block writes its colour in a forward pass
+                                ++n_ch;
+                                mark_wins(q, p);
+                        }
+                        rec = nullptr;
+                        flush(changes);
+                });
+                for (auto& v : recs) queue.insert(queue.end(), v.begin(), v.end());
+                quiet = changes.load() == 0 ? quiet + 1 : 0;
+                if (recording && ++recording == 3) { ++passes; break; }  // both colours recorded: the queue takes over
+                if (!recording && quiet == 0 && changes.load() < T / qd) recording = 1;
+        }
+        if (quiet == 2) queue.clear();
+        while (!queue.empty()) {
+                ++levels;
+                queued += queue.size();
+                std::vector<std::vector<std::uint64_t>> next(num_blocks(queue.size()));
+                for_blocks(policy, queue.size(), [&](std::uint64_t lo, std::uint64_t hi) {
+                        rec = &next[lo / block_size];
+                        for (std::uint64_t j = lo; j < hi; ++j) {
+                                std::uint64_t const q = queue[j], other = (1 - q / P) * P;
+                                for_each_inside_predecessor(g, pos(q), q % P, [&](std::uint64_t i) {
+                                        std::uint64_t const y = other + i;
+                                        if (cells.get(y) != UNKNOWN) return;
+                                        Pos const py = pos(y);
+                                        if (!all_won(y, py)) return;
+                                        std::uint8_t c = UNKNOWN;
+                                        while (c == UNKNOWN)
+                                                if (cells.cas(y, c, LOSS)) { mark_wins(y, py); return; }
+                                });
+                        }
+                        rec = nullptr;
+                        flush(dummy);
+                });
+                queue.clear();
+                for (auto& v : next) queue.insert(queue.end(), v.begin(), v.end());
+        }
+        double const t_rounds = seconds_since(t1);
+        for_blocks(policy, T, [&](std::uint64_t lo, std::uint64_t hi) {
+                for (std::uint64_t id = lo; id < hi; ++id) {
+                        std::uint8_t const c = cells.get(id);
+                        if (c == WIN || c == LOSS) sink.put(int(id / P), id % P, pos(id), c == WIN ? win(1) : loss(2));
+                }
+        });
+        g_stats.rounds += seconds_since(t1);
+        std::cout << "wdl 4 states steps (" << Cells::name << ", table " << cells.bytes() << " bytes): rounds " << t_rounds << " s, " << passes
+                  << " forward passes, queue " << queued << " entries in " << levels << " levels, evaluations " << evals.load()
+                  << ", capture tests " << captests.load() << std::endl;
+}
+
 bool g_wdl_bits2 = false;                                       // wdl bits=2: wdl2's cells in 2 bits
 bool g_wdl_nibbles = false;                                     // EGDB_WDL_NIBBLES=1: the WDL loops' cells as nibbles
 
 template<class ExecutionPolicy>
 void solve_group_wdl(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPolicy const& policy)
 {
-        if (g_wdl_bits2 && g_wdl == 2) solve_group_wdl_in<wdlx::Bits2Cells>(g, sink, policy);
+        if (g_wdl_bits2 && g_wdl == 2) solve_group_wdl4s<wdlx::Bits2Cells>(g, sink, policy);
         else if (g_wdl_nibbles) solve_group_wdl_in<wdlx::NibbleCells>(g, sink, policy);
         else solve_group_wdl_in<wdlx::ByteCells>(g, sink, policy);
 }

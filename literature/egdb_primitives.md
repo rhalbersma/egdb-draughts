@@ -1173,7 +1173,8 @@ tbgen build <dir> wp bp wm bm wdl|dtz|dtc|dtm [bits=8|4|3|2] [primary=depth|wdl]
 - **Exits with depths without parity** (dtc on tempi or configuration groups): `PAWN_WIN` in the DTZ layout. A sweep
   finalises the provisional wins of both its depths, and corrects an inside win in p written over a `PAWN_WIN` in p − 1.
 - **wdl target**: on dtz's groups, wdl files only (the sink keeps 0.5 byte per slot). `bits=2` runs the older
-  forward-and-queue loop (four states have no fresh code); it still keeps a byte per cell.
+  forward-and-queue loop (four states have no fresh code) on 2-bit cells, 32 per 64-bit word, every write a swap of
+  the word.
 - **verify** for wdl checks every outcome against its moves (necessary, not sufficient); a depth build into the same
   directory compares its outcomes with the wdl files, which completes it.
 - **The inputs' decompression cache is shared by the threads** (a block is decompressed once, in place).
@@ -1192,13 +1193,13 @@ material). Every file identical to the references; `verify` passes on all 134 ma
 | wdl (8 bits) | 7.1 s | 8.5 s | 35 MiB |
 | wdl `bits=4` | 8.1 s | 9.0 s | 34 MiB |
 | wdl `bits=3` | 8.7 s | 9.5 s | 34 MiB |
-| wdl `bits=2` (forward and queue) | 36.9 s | 31.9 s | 35 MiB |
+| wdl `bits=2` (forward and queue; 2-bit cells) | 40.2 s | 37.4 s | 34 MiB |
 
 Before: cell8 dtm 257 / 290 MiB, rtb dtm 184 / 196 MiB, wdl3 20.4 / 27.0 s and 86 MiB. On these small tables the
 narrow cells cost time and save nothing: the output and the inputs are the peak, the largest group's table is 2.6 MB
 (19 MB for dtm and dtc, whole material). Finer groups are identical in value (dtc, dtm, dtz on tempi and configuration
 groups to 6 pieces) and slower here (thousands of tiny groups); both are for tables that do not fit. Open: the
-set-bits encoding, true 2-bit packing, retiring the older loops, the -K variants, paging.
+set-bits encoding, retiring the older loops, the -K variants, paging.
 
 ## 8. Best of breed for draughts
 

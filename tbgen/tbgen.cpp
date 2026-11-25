@@ -481,6 +481,8 @@ std::uint8_t wdl_bits(std::uint8_t const* w, std::uint64_t i) { return std::uint
 // bits, at its slot of the material; a lookup into an earlier group decodes it again. 2.5 bytes per slot for both sides
 // to move, and no conversion pass at the end. Concurrent writers: the depth bytes are distinct per position; four slots
 // share a wdl byte, so the wdl bits are set with an atomic or; the rare extra bytes go into a map under a mutex.
+bool g_wdl_only = false;                                        // the wdl target: no depth files (0.5 byte per slot in all)
+
 class ByteSink final : public DepthSink<std::uint16_t>
 {
         MatIndex const& mi_;
@@ -493,8 +495,12 @@ class ByteSink final : public DepthSink<std::uint16_t>
 
         std::uint16_t value(int side, std::uint64_t i) const
         {
-                std::uint8_t const b = std::atomic_ref<std::uint8_t>(map_[side][i]).load(std::memory_order_relaxed);
                 std::uint8_t const w = std::atomic_ref<std::uint8_t>(map_[WDL + side][i >> 2]).load(std::memory_order_relaxed);
+                if (g_wdl_only) {                                               // a value with that outcome (no depth is kept)
+                        std::uint8_t const r = std::uint8_t(w >> (2 * (i & 3)) & 3);
+                        return r == WDL_WIN ? win(1) : r == WDL_LOSS ? loss(2) : std::uint16_t(0);
+                }
+                std::uint8_t const b = std::atomic_ref<std::uint8_t>(map_[side][i]).load(std::memory_order_relaxed);
                 int d = b;
                 if (b >= g_esc) {
                         std::lock_guard lock(mx_);
@@ -509,6 +515,7 @@ public:
                 for (int kind = 0; kind < 4; ++kind) {
                         path_[kind] = mat_path(dir, c, kind);
                         size_[kind] = file_size(c, kind);
+                        if (g_wdl_only && kind < WDL) continue;
                         void* const p = ::mmap(nullptr, size_[kind], PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
                         if (p == MAP_FAILED) { std::cerr << "bytes sink: cannot allocate " << size_[kind] << " bytes" << std::endl; std::exit(1); }
                         map_[kind] = static_cast<std::uint8_t*>(p);
@@ -524,6 +531,10 @@ public:
         void put(int side, std::uint64_t, Pos const& p, std::uint16_t v) override
         {
                 std::uint64_t const i = mi_.index(p);
+                if (g_wdl_only) {
+                        std::atomic_ref<std::uint8_t>(map_[WDL + side][i >> 2]).fetch_or(std::uint8_t(wdl_of(v) << (2 * (i & 3))), std::memory_order_relaxed);
+                        return;
+                }
                 int const d = to_depth(g_metric, v);
                 std::uint8_t b = std::uint8_t(d);
                 if (d >= g_esc) {                                               // an escape token and its extra byte
@@ -543,6 +554,7 @@ public:
         void finish(ExecutionPolicy const& policy)      // the four files, each written once, sequentially
         {
                 for (int kind = 0; kind < 4; ++kind) {
+                        if (!map_[kind]) continue;
                         if (kind >= WDL && wdl_exists(path_[kind])) {          // built by another metric: compare, keep
                                 if (load_input(path_[kind], size_[kind]) != std::vector<std::uint8_t>(map_[kind], map_[kind] + size_[kind])) {
                                         std::cerr << "wdl differs from the existing " << path_[kind] << std::endl; std::exit(1);
@@ -3350,7 +3362,7 @@ int main(int argc, char* argv[])
                         else if (a[i] == "wdlz") { g_wdl = 4; g_cell8 = true; g_frontier = false; }
                         else if (a[i] == "eng") { g_engine = g_cell8 = true; g_frontier = false; }
                         else if (a[i].starts_with("bits=")) g_eng.bits = std::stoi(a[i].substr(5));
-                        else if (a[i] == "wdl") { g_eng.ordered = false; g_wdl = 1; }
+                        else if (a[i] == "wdl") { g_eng.ordered = false; g_wdl = 1; g_wdl_only = true; }
                         else if (a[i] == "raw" || a[i] == "compressed") g_compressed = a[i] == "compressed";
                         else if (a[i] == "stats") g_write_stats = true;
                         else if (a[i].starts_with("mem=")) g_mem_mb = std::stoull(a[i].substr(4));

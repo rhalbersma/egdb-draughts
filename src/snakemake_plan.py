@@ -68,6 +68,28 @@ def priorities(plan, deps):
     return {m: int(1000 * rank(m) / top) for m in plan}
 
 
+def criticality(plan, deps):
+    """per material, the longest chain of work that passes through it (the materials it needs, itself, the materials
+    that need it) as a fraction of the longest chain of the run: 1 on the critical path. With unlimited cores the run
+    still takes as long as its longest chain, so the jobs on it are the ones worth running on many cores."""
+    users = {m: [] for m in plan}
+    for m, ds in deps.items():
+        for d in ds:
+            if d in users and m in plan:
+                users[d].append(m)
+
+    @functools.lru_cache(maxsize=None)
+    def after(m):
+        return plan[m]['positions'] + max((after(u) for u in users[m]), default=0)
+
+    @functools.lru_cache(maxsize=None)
+    def before(m):
+        return plan[m]['positions'] + max((before(d) for d in deps.get(m, []) if d in plan), default=0)
+
+    longest = max((after(m) for m in plan), default=1) or 1
+    return {m: (before(m) + after(m) - plan[m]['positions']) / longest for m in plan}, longest
+
+
 def check_budget(plan, budget, config):
     """raise if any material needs more than the budget at its lowest rung (rung 1), unless config mem_check=0"""
     over = sorted((min(p['rung0'], p['rung1']), m) for m, p in plan.items() if min(p['rung0'], p['rung1']) > budget)

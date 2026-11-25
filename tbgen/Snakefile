@@ -30,7 +30,9 @@
 # policy=share (default): memory first, then cores. Every build claims its memory need; Snakemake runs as many side by
 # side as the budget and --cores allow. A build that claims the fraction f of the budget can have at most 1 / f builds
 # of its size beside it, so it gets f of the cores as threads inside the job (at least 1): small materials run one per
-# core, a material that needs half the memory runs on half the cores, one that needs all of it on all of them.
+# core, a material that needs half the memory runs on half the cores, one that needs all of it on all of them. And the
+# critical path first: a material on the longest chain of the DAG (crit, crit_min below) runs on all cores whatever
+# its memory, since the run cannot finish before that chain does.
 # policy=auto: the largest materials (at least par_min positions; default 1 / (4 x
 # cores) of all the positions of the run, so only those at the end of the critical path) with std::execution::par on all
 # cores, alone; the rest seq on one core, as many side by side as --cores and the memory claims (--resources mem_mb=N)
@@ -156,12 +158,23 @@ def inputs(m):
 import os
 import sys
 sys.path.insert(0, os.path.join(workflow.basedir, '..', 'src'))
-from snakemake_plan import memory_budget_mb, load_plan, claim_mb, priorities, report, check_budget  # noqa: E402
+from snakemake_plan import memory_budget_mb, load_plan, claim_mb, priorities, criticality, report, check_budget  # noqa: E402
 
 MEM = memory_budget_mb(workflow, config)
 PLAN = {k: v for k, v in load_plan([ENGINE, 'plan', str(N), METRIC, GRANULARITY] + ENGINE_OPTS.split() + (['old'] if ROUNDS else [])).items()
         if k in {name(m) for m in MATERIALS}}
-PRIO = priorities(PLAN, {name(m): [name(d) for d in deps(m)] for m in MATERIALS})
+DEPS = {name(m): [name(d) for d in deps(m)] for m in MATERIALS}
+PRIO = priorities(PLAN, DEPS)
+# the critical path (policy=share): a material through which a chain of at least crit (default 0.9) of the longest
+# chain passes, and of at least crit_min positions (default 1 / (100 cores) of the run: a smaller job is over before
+# its threads pay), runs on all cores. Snakemake has no notion of a critical path, only priorities: this is ours
+CRIT, LONGEST = criticality(PLAN, DEPS)
+CRIT_AT = float(config.get('crit', 0.9))
+_total = sum(p['positions'] for p in PLAN.values())
+CRIT_MIN = float(config.get('crit_min', _total / (100 * workflow.cores)))
+CRITICAL = {n for n in PLAN if CRIT[n] >= CRIT_AT and PLAN[n]['positions'] >= CRIT_MIN}
+print(f'critical path: {LONGEST / max(_total, 1):.0%} of the work is one chain; {len(CRITICAL)} materials on it run on all cores '
+      f'({sum(PLAN[n]["positions"] for n in CRITICAL) / max(_total, 1):.0%} of the work)', file=sys.stderr)
 print(report(PLAN, MEM, lambda p: claim_mb(p, MEM)), file=sys.stderr)
 check_budget(PLAN, MEM, config)    # fail now if a material cannot fit the budget at any rung
 
@@ -186,7 +199,7 @@ def sched(n):
     # many run and the operating system shares the cores (measured no faster than auto on the 8-piece subset; it
     # oversubscribes the small jobs). par: every job par and alone; seq: every job on one core
     if POLICY == 'share':
-        t = max(1, min(workflow.cores, workflow.cores * claim_mb(PLAN[n], MEM) // MEM))
+        t = workflow.cores if n in CRITICAL else max(1, min(workflow.cores, workflow.cores * claim_mb(PLAN[n], MEM) // MEM))
         return t, (f'threads={t}' if t > 1 else 'seq')
     if POLICY == 'fill':
         return 1, 'par'

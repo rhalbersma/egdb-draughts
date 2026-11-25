@@ -3401,11 +3401,21 @@ bool pending_capture(MoveList const& ml)
 bool dont_care(MoveList const& ml) { return !ml.empty() && (is_capture(*ml.begin()) || pending_capture(ml)); }
 
 // win, draw or loss for the side to move, from the probe files only
+// Which positions the wdl probe files leave out (EGDB_WDL_DC; the converter and the prober must agree):
+//   pending  (default) the side to move must capture, or every move leaves the opponent a capture
+//   capture  only: the side to move must capture. Stored = one capture test; non-side captures and pending captures kept
+//   either   either side could capture (Chinook's rule); resolving the others has no bound: for size comparisons
+int const g_wdl_dc = [] { std::string const e = std::getenv("EGDB_WDL_DC") ? std::getenv("EGDB_WDL_DC") : "pending";
+                          return e == "capture" ? 1 : e == "either" ? 2 : 0; }();
+
 // is the value of p0 stored in the wdl probe files? Not for a position without moves, one that must capture, or a
 // pending capture (every move leaves the opponent a capture)
 bool wdl_stored(Pos const& p0)
 {
+        if ((p0.m[p0.stm] | p0.k[p0.stm]).empty()) return false;        // no pieces: a loss, in no file
         if (has_capture(p0)) return false;
+        if (g_wdl_dc == 1) return true;
+        if (g_wdl_dc == 2) { Pos o = p0; o.stm = 1 - p0.stm; return !has_capture(o); }
         bool quiet = false;
         for_each_move(pad_pos(p0), [&](MoveRef const& m) { if (has_capture(to_move(p0, m).next)) return true; quiet = true; return false; });
         return quiet;
@@ -3426,7 +3436,14 @@ std::uint8_t pwdl(Pos const& p0)
 {
         // the common case first, without a move list: no capture, and some move leaves the opponent no capture (so not
         // a pending capture): the stored value. The moves are generated one at a time and only until such a move is met
-        if (!has_capture(p0)) {
+        if ((p0.m[p0.stm] | p0.k[p0.stm]).empty()) return WDL_LOSS;     // no pieces: no move (and no file)
+        if (g_wdl_dc == 1 && !has_capture(p0)) {                        // stored: no move is generated at all
+                Pos const p = stored_pos(p0);
+                Material const m = material_of(p);
+                std::uint64_t const i = mat_index(m).index(p);
+                return std::uint8_t(zbyte(probe_files(m).wdl[p.stm], i >> 2) >> (2 * (i & 3)) & 3);
+        }
+        if (g_wdl_dc == 0 && !has_capture(p0)) {
                 bool any = false, quiet = false;
                 for_each_move(pad_pos(p0), [&](MoveRef const& m) {
                         any = true;
@@ -3444,7 +3461,7 @@ std::uint8_t pwdl(Pos const& p0)
         }
         auto const ml = moves(p0);
         if (ml.empty()) return WDL_LOSS;
-        if (dont_care(ml)) {                                            // a one-ply search
+        if (g_wdl_dc == 0 ? dont_care(ml) : !wdl_stored(p0)) {         // a one-ply search
                 std::uint8_t b = WDL_LOSS;
                 for (auto const& mv : ml) {
                         std::uint8_t const r = mover_wdl(pwdl(mv.next));
@@ -3530,8 +3547,9 @@ bool convert_material(std::string const& dir, Material c, int stride, ExecutionP
                                 else {
                                         auto const ml = moves(p);
                                         if (!ml.empty() && is_capture(*ml.begin())) { f = 3; ++nc; }
-                                        else if (pending_capture(ml)) { f = 3; ++np; }
+                                        else if (pending_capture(ml)) { f = g_wdl_dc == 0 ? 3 : 2; ++np; }      // the depth always leaves it out
                                         else if (value(s, i) == 0) { f = 2; ++nd; }
+                                        if (g_wdl_dc == 2 && !(f & 1)) { Pos o = p; o.stm = 1 - p.stm; if (has_capture(o)) f |= 1; }
                                 }
                                 dc[std::size_t(s)][i] = f;
                         }

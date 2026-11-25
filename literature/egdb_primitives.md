@@ -1104,6 +1104,60 @@ The design:
   by leading rank give neither (the distance to leaving the slice). In-place (Gauss–Seidel) sweeps give only lower
   bounds (Lake et al. 1992); the log needs the ply discipline. DTM does not fit: there an exit carries a depth.
 
+### 7.9 Plan: one generic builder on the rtb engine
+
+One builder for every target, in the spirit of chesstb (one generator, five metrics), on the rtb infrastructure:
+rtbgen's sweeps (one colour per ply, the dispatch table, the fused check), the sliding window with reductions, the
+adaptive forward/retrograde choice, and the cell stores. Four independent choices:
+
+| choice | values | constraint |
+|---|---|---|
+| target | wdl, dtz, dtc, dtm (later the -K variants) | |
+| primary | depth (byte codes; wdl derived at the output, as now) or wdl (rule tables; dtz or dtc derived from per-ply logs, as `wdlz`) | wdl-primary depth needs every exit at depth 1: dtz always, dtc only on whole-material groups, never dtm |
+| cell | 8 bits (depth codes, window and reductions), 4 (wdlz's 10 states, wdl3 in nibbles), 3 (wdl3, 21 per 64-bit word), 2 (wdl2: no fresh state, so forward passes and a queue) | depth-primary needs 8 |
+| slicing | material, tempi, configuration | chosen per target (below) |
+
+**The engine.** One loop over (ply, colour). Before each sweep the rule set fills small tables indexed by the cell
+code (256 entries for bytes, 2^w for w bits), as rtbgen updates `tbl`, `win_loss`, `loss_win` every ply:
+`dispatch[c]` (none, mark wins, mark candidates, check, finalise a `PAWN_WIN`), `after[c]` (the owner's code after
+handling), `on_loss[c]` (a predecessor of a fresh loss: rtbgen's `SET_WIN_VALUE`), `on_win[c]` (a predecessor of a
+fresh win: `SET_CHANGED`), `win_rank[c]` (the check's fold: not counted, or the depth it contributes) and
+`loss_rank[c]` (a forward evaluation's). Hooks: the exits (the `PAWN_WIN` snapshot, a loss's exit depths when exits
+carry depths), the log (wdl-primary depth), the reduction (byte window). The direction choice (forward when
+c_f U < α F) and the word-wise scan apply to every rule set. The rule sets:
+
+| rule set | tables | cell |
+|---|---|---|
+| rtb dtm, dtz, dtc | per ply (the window moves) | 8 |
+| wdlz (dtz or dtc by logs) | by ply parity (two generations of fresh codes) | 4 |
+| wdl3 | fixed (the ply order is not needed, and costs nothing) | 3 or 4 |
+| wdl2 | fixed; its own driver (forward passes, then a queue) | 2 |
+
+**Slicing per target.** A finer slice means smaller tables and fewer plies per group, at the price of more exits
+(lookups into finished groups) and, where exits carry depths, `PAWN_WIN` snapshots:
+- wdl: the finest (configuration): WDL does not depend on the slicing (wdl3 on the dtz groups: identical files,
+  rounds 20.4 → 14.4 s on 6×6 international to 7 pieces);
+- dtz: configuration (every man move zeroes: exits at depth 1);
+- dtc: whole material for wdl-primary (only captures and promotions leave); configuration for depth-primary, the man
+  moves as exits with their DTC depth (the `PAWN_WIN` path in the DTZ layout: to build and verify);
+- dtm: configuration with exit depths (the `PAWN_WIN` path, as now): to verify against whole-material groups.
+
+**Memory.** The decompression cache of the inputs is per thread (8,192 blocks of 4 KB each): with dtm's depth
+files it dominates the peak (6×6 international 03-04-02-02: 186 MB, against 94 MB with 512 blocks, 7 % slower;
+the table is 19 MB). A cache shared by the threads, sized from the memory budget, comes first among the memory
+steps; then the packed cells.
+
+**Stages**, each checked byte for byte against the current modes:
+1. the engine: rtb's sweep as an engine over a cell store and a rule set; rtb as the depth rule set (bytes);
+   identical to cell8 for dtm, dtz and dtc, and no slower;
+2. wdl3 and wdlz as rule sets of the engine: the adaptive direction (rtb dtz: 9.6 → 6.4 s from it), nibble cells,
+   wdlz's log as a hook;
+3. slicing per target, exits with depths in the DTZ layout (dtc on configuration groups), dtm on configuration groups;
+4. packed cells: 3 bits (21 per word), the set-bits encoding (a predecessor's write one atomic or, the owner's an xor);
+5. the shared decompression cache, sized by the budget;
+6. one command line (`target`, `primary`, `bits`, `slice`, with automatic defaults); the old modes retired once
+   matched. Later: the -K variants and paging (chesstb's in-RAM compression of idle groups).
+
 ## 8. Best of breed for draughts
 
 Take from syzygy: the metric split (WDL + DTZ), one value cell with codes, the fused round, level synchrony.

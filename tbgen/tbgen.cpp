@@ -102,6 +102,7 @@
 #include <filesystem>
 #include <cassert>
 #include <fstream>
+#include <functional>
 #include <random>
 #include "../src/block_cache.hpp"
 #include <optional>
@@ -3698,6 +3699,54 @@ bool probe_bench(std::string const& dir, int n, int threads, std::uint64_t probe
                         return std::uint64_t(zbyte(probe_files(m).wdl[p.stm], i >> 2) & 1);
                 });
                 time("whole probe (pwdl)", [](Pos const& p) { return std::uint64_t(pwdl(p)); });
+                {       // quiet as "neither side could capture" against what the files store
+                        std::uint64_t q2 = 0, threat = 0, q2_not_stored = 0, stored_not_q2 = 0;
+                        for (Pos const& p : w) {
+                                if (has_capture(p)) continue;
+                                Pos o = p; o.stm = 1 - p.stm;
+                                bool const thr = has_capture(o), st = wdl_stored(p);
+                                threat += thr; q2 += !thr;
+                                q2_not_stored += !thr && !st && !moves(p).empty();
+                                stored_not_q2 += thr && st;
+                        }
+                        std::cout << "  no capture for either side: " << 100.0 * double(q2) / double(w.size()) << " %; only the other side could capture: "
+                                  << 100.0 * double(threat) / double(w.size()) << " % (of which stored now: " << 100.0 * double(stored_not_q2) / double(w.size())
+                                  << " %); quiet for both but a pending capture (not stored now): " << 100.0 * double(q2_not_stored) / double(w.size()) << " %" << std::endl;
+                        time("two capture tests (both sides)", [](Pos const& p) { Pos o = p; o.stm = 1 - p.stm; return std::uint64_t(has_capture(p) || has_capture(o)); });
+                }
+                {       // if the files stored exactly the positions where neither side could capture: how far does a probe of
+                        // another position have to search? (pwdl stands in for the stored value; capped at 30 plies)
+                        std::uint64_t nodes = 0, maxdepth = 0, capped = 0, wrong = 0, others = 0, total_nodes = 0, worst_nodes = 0;
+                        auto const either = [](Pos const& p) { Pos o = p; o.stm = 1 - p.stm; return has_capture(p) || has_capture(o); };
+                        std::function<int(Pos const&, int)> solve = [&](Pos const& p, int depth) -> int {   // -1: gave up
+                                ++nodes;
+                                maxdepth = std::max<std::uint64_t>(maxdepth, std::uint64_t(depth));
+                                auto const ml = moves(p);
+                                if (ml.empty()) return WDL_LOSS;
+                                if (!either(p)) return pwdl(p);
+                                if (depth >= 30 || nodes > 200000) return -1;
+                                int best = WDL_LOSS; bool unknown = false;
+                                for (auto const& mv : ml) {
+                                        int const r = solve(mv.next, depth + 1);
+                                        if (r < 0) { unknown = true; continue; }
+                                        int const v = mover_wdl(std::uint8_t(r));
+                                        if (v == WDL_WIN) return WDL_WIN;
+                                        if (v == WDL_DRAW) best = WDL_DRAW;
+                                }
+                                return unknown ? -1 : best;
+                        };
+                        for (Pos const& p : w) {
+                                if (!either(p)) continue;
+                                ++others;
+                                nodes = 0;
+                                int const r = solve(p, 0);
+                                total_nodes += nodes; worst_nodes = std::max(worst_nodes, nodes);
+                                if (r < 0) ++capped; else wrong += std::uint8_t(r) != pwdl(p);
+                        }
+                        std::cout << "  resolving the " << others << " positions where a side could capture, by search down to positions where neither can: "
+                                  << double(total_nodes) / double(std::max<std::uint64_t>(1, others)) << " nodes on average, " << worst_nodes << " at most, deepest "
+                                  << maxdepth << " plies, " << capped << " gave up (30 plies or 200000 nodes), " << wrong << " wrong" << std::endl;
+                }
                 std::vector<Pos> quiet;
                 for (Pos const& p : w) if (wdl_stored(p)) quiet.push_back(p);
                 std::uint64_t acc = 0, bad = 0;

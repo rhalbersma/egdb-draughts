@@ -101,6 +101,7 @@
 #include <execution>
 #include <filesystem>
 #include <fstream>
+#include <thread>
 #include <tuple>
 
 namespace {
@@ -154,7 +155,7 @@ DepthSink<std::uint16_t>* g_sink = nullptr;             // the material being bu
 
 // Compressed build-format files (the default; the build option `raw` keeps plain files): a material's four files are
 // written as <name>.z, the same bytes in zstd blocks of 4 KiB, and every lookup into a finished material goes through a
-// per-thread direct-mapped cache of decompressed blocks (EGDB_CACHE_BLOCKS per thread, default 16384: 64 MiB). Only
+// cache of decompressed blocks (shared by the threads; see ZFile). Only
 // pass 0 looks into other materials. Format: "EGDBZ1\0\0", the raw size, the block size, the number of blocks n, n + 1
 // offsets of the blocks from the start of the data, the blocks.
 bool g_compressed = true;
@@ -170,7 +171,17 @@ constexpr int ZRANGE = 240;
 int const g_esc = std::getenv("EGDB_DIRECT") ? std::clamp(std::atoi(std::getenv("EGDB_DIRECT")), 1, 255) : 241;
 int max_depth_index(int esc) { return esc + ZRANGE * (255 - esc) + ZRANGE - 1; }
 
-struct ZFile { std::uint64_t size = 0, nblocks = 0; int esc = 256; std::uint64_t const* off = nullptr; std::uint8_t const* data = nullptr; };
+struct ZFile {
+        std::uint64_t size = 0, nblocks = 0; int esc = 256; std::uint64_t const* off = nullptr; std::uint8_t const* data = nullptr;
+        std::uint8_t* shared = nullptr;                         // the shared cache: 2 * ZBLOCK of address space per block
+        std::atomic<std::uint8_t>* state = nullptr;             // per block: 0 not decompressed, 1 being decompressed, 2 ready
+};
+// The cache of decompressed blocks. Shared (the default): each file has address space for all its blocks (anonymous
+// memory, pages touched only when a block is first read), a block is decompressed once, by the first thread that
+// needs it, and stays; every thread reads the same copy, so the resident set is at most the raw size of the blocks
+// read. EGDB_CACHE_BLOCKS=n instead gives every thread its own direct-mapped cache of n blocks (bounded, with
+// eviction: for inputs larger than the memory).
+bool const g_shared_cache = std::getenv("EGDB_CACHE_BLOCKS") == nullptr;
 
 std::string zpath(std::string const& path) { return path + ".z"; }
 std::string xpath(std::string const& path) { return path + ".x"; }
@@ -189,6 +200,12 @@ ZFile open_zfile(std::string const& path, std::uint64_t size)
         z.esc = int(h[4]);
         z.off = reinterpret_cast<std::uint64_t const*>(p + 40);
         z.data = p + 40 + 8 * (z.nblocks + 1);
+        if (g_shared_cache && z.nblocks != 0) {
+                void* const m = ::mmap(nullptr, z.nblocks * 2 * ZBLOCK, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+                if (m == MAP_FAILED) { std::cerr << "cache: cannot reserve " << z.nblocks * 2 * ZBLOCK << " bytes" << std::endl; std::exit(1); }
+                z.shared = static_cast<std::uint8_t*>(m);
+                z.state = new std::atomic<std::uint8_t>[z.nblocks]();
+        }
         return z;
 }
 
@@ -247,6 +264,22 @@ void compress_file(std::string const& path, std::uint64_t size, ExecutionPolicy 
 // one decompressed block (its position bytes, then the extra bytes of its tokens), through the calling thread's cache
 std::uint8_t const* zblock(ZFile const& z, std::uint64_t b)
 {
+        if (z.shared) {
+                std::uint8_t* const data = z.shared + b * 2 * ZBLOCK;
+                std::atomic<std::uint8_t>& st = z.state[b];
+                std::uint8_t s = st.load(std::memory_order_acquire);
+                if (s == 2) return data;
+                std::uint8_t expected = 0;
+                if (st.compare_exchange_strong(expected, 1, std::memory_order_acquire)) {
+                        thread_local std::unique_ptr<ZSTD_DCtx, std::size_t (*)(ZSTD_DCtx*)> dxs(ZSTD_createDCtx(), ZSTD_freeDCtx);
+                        std::size_t const r = ZSTD_decompressDCtx(dxs.get(), data, 2 * ZBLOCK, z.data + z.off[b], z.off[b + 1] - z.off[b]);
+                        if (ZSTD_isError(r)) { std::cerr << "zstd: bad block " << b << std::endl; std::exit(1); }
+                        st.store(2, std::memory_order_release);
+                        return data;
+                }
+                while (st.load(std::memory_order_acquire) != 2) std::this_thread::yield();
+                return data;
+        }
         struct Tag { ZFile const* f = nullptr; std::uint64_t block = ~std::uint64_t(0); };
         static std::size_t const nslots = std::getenv("EGDB_CACHE_BLOCKS") ? std::size_t(std::atoll(std::getenv("EGDB_CACHE_BLOCKS"))) : 8192;
         thread_local std::vector<Tag> tags(nslots);                                    // the data uninitialised: pages are

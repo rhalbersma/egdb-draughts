@@ -2468,14 +2468,22 @@ void solve_group_wdl4s(Group const& g, DepthSink<std::uint16_t>& sink, Execution
         // candidates); the sets are then merged in pairs, in parallel (linear merges of sorted unique ranges), into the
         // level's set. EGDB_WDL2_UNIQ=vector: one vector of all candidates, sorted and uniqued
         static bool const as_vector = uniq && std::string(std::getenv("EGDB_WDL2_UNIQ")) == "vector";
+        // the queue's own chunks (entries per unit of work; EGDB_WDL2_CHUNK, default the table's block): a larger chunk
+        // removes more duplicates before the merges and leaves fewer sets to merge
+        static std::uint64_t const chunk = std::getenv("EGDB_WDL2_CHUNK") ? std::uint64_t(std::atoll(std::getenv("EGDB_WDL2_CHUNK"))) : block_size;
+        auto const for_chunks = [&](std::uint64_t n, auto&& fn) {
+                std::vector<std::uint64_t> starts;
+                for (std::uint64_t lo = 0; lo < n; lo += chunk) starts.push_back(lo);
+                std::for_each(policy, starts.begin(), starts.end(), [&](std::uint64_t lo) { fn(lo, std::min(n, lo + chunk)); });
+        };
         while (uniq && !queue.empty()) {
                 ++levels;
                 queued += queue.size();
-                std::uint64_t const nq = num_blocks(queue.size());
+                std::uint64_t const nq = (queue.size() + chunk - 1) / chunk;
                 std::vector<FlatSet<std::uint64_t>> sets(nq);
                 std::vector<std::vector<std::uint64_t>> part(as_vector ? nq : 0);
                 std::atomic<std::uint64_t> raw{ 0 };
-                for_blocks(policy, queue.size(), [&](std::uint64_t lo, std::uint64_t hi) {
+                for_chunks(queue.size(), [&](std::uint64_t lo, std::uint64_t hi) {
                         std::vector<std::uint64_t> out;
                         for (std::uint64_t j = lo; j < hi; ++j) {
                                 std::uint64_t const q = queue[j], other = (1 - q / P) * P;
@@ -2484,8 +2492,8 @@ void solve_group_wdl4s(Group const& g, DepthSink<std::uint16_t>& sink, Execution
                                 });
                         }
                         raw.fetch_add(out.size(), std::memory_order_relaxed);
-                        if (as_vector) part[lo / block_size] = std::move(out);
-                        else sets[lo / block_size].insert(out.begin(), out.end());
+                        if (as_vector) part[lo / chunk] = std::move(out);
+                        else sets[lo / chunk].insert(out.begin(), out.end());
                 });
                 cand_raw += raw.load();
                 FlatSet<std::uint64_t> level;

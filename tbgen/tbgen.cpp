@@ -101,6 +101,8 @@
 #include <execution>
 #include <filesystem>
 #include <fstream>
+#include <optional>
+#include <oneapi/tbb/global_control.h>
 #if __has_include(<flat_set>)
 #include <flat_set>
 template<class T> using FlatSet = std::flat_set<T>;
@@ -2981,7 +2983,10 @@ MemoryNeed memory_need(Material c)
         // 10 bit planes (has a move inside, every exit loses, exits lost by now, won, lost, four frontiers, candidates); the level
         // lists with pass 0's per-block entries while they are merged (8 + 4 bytes per entry, at most one per position
         // and side to move counted); the scan mode's value array; the groups' own memory (MemoryNeed::meta)
-        std::uint64_t const transient = g_cell8 ? T + 12 * T : 10 * ((T + 63) / 64) * 8 + 12 * T + (g_frontier ? 0 : 2 * T);
+        // the engine: the table (bits per cell) and its snapshots (compressed; an eighth of a byte per cell allowed), and
+        // for 2 bits the queue of wins (it starts below 1 change in 8 cells, 8 bytes each)
+        std::uint64_t const engine = (T * std::uint64_t(g_eng.bits) + 7) / 8 + T / 8 + (g_eng.bits == 2 ? T : 0);
+        std::uint64_t const transient = g_engine ? engine : g_cell8 ? T + 12 * T : 10 * ((T + 63) / 64) * 8 + 12 * T + (g_frontier ? 0 : 2 * T);
         std::uint64_t const writing = std::uint64_t(5) << 18;                          // the final pass's chunk buffers
         // the memory-mapped files count in the resident set as their pages are touched: the inputs (the materials the
         // moves lead into: the bytes and wdl files for dtm, the wdl files for dtc and dtz) and, at rung 1, the
@@ -2989,9 +2994,10 @@ MemoryNeed memory_need(Material c)
         std::uint64_t inputs = 0;
         for (Material const s : successors_of(c)) {
                 std::uint64_t const n = mat_index(s).size;
-                inputs += 2 * ((n + 3) / 4) + (g_metric == Metric::dtm ? 2 * n : 0);
+                inputs += g_engine ? (g_metric == Metric::dtm && !g_wdl_only ? 2 * n : 2 * ((n + 3) / 4))       // what it opens
+                                   : 2 * ((n + 3) / 4) + (g_metric == Metric::dtm ? 2 * n : 0);
         }
-        std::uint64_t const sink_bytes = g_byte_sink ? 2 * mi.size + 2 * ((mi.size + 3) / 4) : 4 * mi.size;   // both sides
+        std::uint64_t const sink_bytes = g_wdl_only ? 2 * ((mi.size + 3) / 4) : g_byte_sink ? 2 * mi.size + 2 * ((mi.size + 3) / 4) : 4 * mi.size;   // both sides
         m.rung0 = FIXED_BYTES + m.meta(false) + inputs + sink_bytes + std::max(transient, writing);
         m.rung1 = FIXED_BYTES + m.meta(true) + inputs + 2 * T + 2 * m.positions + std::max(transient, writing);
         return m;
@@ -3628,7 +3634,7 @@ int main(int argc, char* argv[])
                 a[6] = "dtz";
                 g_eng.ordered = false; g_wdl = 1; g_wdl_only = true;
         }
-        if (a.size() >= 3 && a[0] == "plan" && a[2] == "wdl") a[2] = "dtz";
+        if (a.size() >= 3 && a[0] == "plan" && a[2] == "wdl") { a[2] = "dtz"; g_wdl = 1; g_wdl_only = true; }
         auto mat_at = [&](std::size_t i) {                             // wp bp wm bm
                 int const wp = std::stoi(a[i]), bp = std::stoi(a[i + 1]), wm = std::stoi(a[i + 2]), bm = std::stoi(a[i + 3]);
                 if (wm < 0 || bm < 0 || wm > wp || bm > bp) { std::cerr << "not a material: wp bp wm bm" << std::endl; std::exit(2); }
@@ -3642,8 +3648,17 @@ int main(int argc, char* argv[])
                 run_bench(std::stoi(a[1]), a.size() == 3 ? std::stoi(a[2]) : 2000);
                 return 0;
         }
-        if ((a.size() == 3 || a.size() == 4) && a[0] == "plan" && parse_metric(a[2])) {
-                if (a.size() == 4 && !parse_granularity(a[3])) { std::cerr << "granularity: material, tempi or configuration" << std::endl; return 2; }
+        if (a.size() >= 3 && a[0] == "plan" && parse_metric(a[2])) {
+                // the needs are the engine's (bits=, primary=wdl as for build); `old` gives those of the older loops
+                g_engine = g_cell8 = true;
+                for (std::size_t i = 3; i < a.size(); ++i) {
+                        if (parse_granularity(a[i])) {}
+                        else if (a[i].starts_with("bits=")) g_eng.bits = std::stoi(a[i].substr(5));
+                        else if (a[i] == "primary=wdl") g_eng.bits = 4;
+                        else if (a[i] == "primary=depth") {}
+                        else if (a[i] == "old") g_engine = false;
+                        else { std::cerr << "plan n wdl|dtz|dtc|dtm [material|tempi|configuration] [bits=N] [primary=wdl] [old]" << std::endl; return 2; }
+                }
                 print_plan_header();
                 for (Material const c : stored_materials_up_to(std::stoi(a[1]))) print_plan_row(c, memory_need(c));
                 return 0;
@@ -3651,6 +3666,7 @@ int main(int argc, char* argv[])
         if (a.size() >= 7 && a.size() <= 18 && a[0] == "build" && parse_metric(a[6])) {
                 bool par = false;                                       // the execution policy: par or seq
                 bool primary_wdl = false, bits_given = false;
+                std::optional<oneapi::tbb::global_control> limit;       // threads=N: at most N threads for par
                 g_engine = g_cell8 = true; g_frontier = false;          // the generic engine, unless an older loop is named
                 if (char const* e = std::getenv("EGDB_WDL_NIBBLES"); e && *e == '1') g_wdl_nibbles = true;
                 for (std::size_t i = 7; i < a.size(); ++i) {
@@ -3663,6 +3679,7 @@ int main(int argc, char* argv[])
                         else if (a[i] == "eng") {}
                         else if (a[i].starts_with("bits=")) { g_eng.bits = std::stoi(a[i].substr(5)); bits_given = true; }
                         else if (a[i] == "primary=wdl" || a[i] == "primary=depth") primary_wdl = a[i] == "primary=wdl";
+                        else if (a[i].starts_with("threads=")) { limit.emplace(oneapi::tbb::global_control::max_allowed_parallelism, std::max(1, std::stoi(a[i].substr(8)))); par = true; }
                         else if (a[i] == "wdl") { g_eng.ordered = false; g_wdl = 1; g_wdl_only = true; }
                         else if (a[i] == "raw" || a[i] == "compressed") g_compressed = a[i] == "compressed";
                         else if (a[i] == "stats") g_write_stats = true;
@@ -3687,8 +3704,10 @@ int main(int argc, char* argv[])
                 bool const ok = par ? build_material(a[1], mat_at(2), std::execution::par) : build_material(a[1], mat_at(2), std::execution::seq);
                 return ok ? 0 : 1;
         }
-        if ((a.size() == 7 || a.size() == 8) && a[0] == "verify" && parse_metric(a[6])) {     // verify <dir> wp bp wm bm <metric> [seq|par]
+        if ((a.size() == 7 || a.size() == 8) && a[0] == "verify" && parse_metric(a[6])) {     // verify <dir> wp bp wm bm <metric> [seq|par|threads=N]
                 Material const c = mat_at(2);
+                std::optional<oneapi::tbb::global_control> limit;
+                if (a.size() == 8 && a[7].starts_with("threads=")) { limit.emplace(oneapi::tbb::global_control::max_allowed_parallelism, std::max(1, std::stoi(a[7].substr(8)))); a[7] = "par"; }
                 if (a.size() == 8 && a[7] == "par") return verify_material(a[1], c, std::execution::par) ? 0 : 1;
                 return verify_material(a[1], c, std::execution::seq) ? 0 : 1;
         }

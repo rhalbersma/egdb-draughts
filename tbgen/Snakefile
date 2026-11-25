@@ -25,7 +25,13 @@
 # usage (from the root of the repo):
 #   snakemake -s tbgen/Snakefile --cores 10 --config engine=build/itbgen dir=data/itbgen pieces=12 metric=dtm rounds=cell8
 #   snakemake -s tbgen/Snakefile --cores 10 --config engine=build/ctbgen dir=data/ctbgen pieces=12 metric=dtm rounds=cell8
-# metric: dtm, dtc or dtz. policy=auto (default): the largest materials (at least par_min positions; default 1 / (4 x
+# metric: wdl, dtz, dtc or dtm (wdl: wdl files only, no probe conversion). bits=8|4|3|2 and primary=wdl as for
+# `tbgen build` (the generic engine, the default; rounds=cell8|scan|frontier|rtb name an older loop).
+# policy=share (default): memory first, then cores. Every build claims its memory need; Snakemake runs as many side by
+# side as the budget and --cores allow. A build that claims the fraction f of the budget can have at most 1 / f builds
+# of its size beside it, so it gets f of the cores as threads inside the job (at least 1): small materials run one per
+# core, a material that needs half the memory runs on half the cores, one that needs all of it on all of them.
+# policy=auto: the largest materials (at least par_min positions; default 1 / (4 x
 # cores) of all the positions of the run, so only those at the end of the critical path) with std::execution::par on all
 # cores, alone; the rest seq on one core, as many side by side as --cores and the memory claims (--resources mem_mb=N)
 # allow. policy=fill: every job par, counted as one thread; policy=par or seq for all.
@@ -43,8 +49,12 @@ BASE = config.get('dir', 'data/itbgen')
 N = int(config.get('pieces', 6))
 METRIC = config.get('metric', 'dtm')
 D = BASE                                   # depth files in <dir>/<metric>/..., wdl files in <dir>/wdl/... (shared)
-POLICY = config.get('policy', 'auto')   # auto: the largest materials par on all cores, the rest seq side by side (see sched)
-ROUNDS = config.get('rounds', 'frontier')
+POLICY = config.get('policy', 'share')  # share: threads by the share of the memory budget (see sched)
+ROUNDS = config.get('rounds', '')       # '' : the generic engine; cell8, scan, frontier, rtb: an older loop
+BITS = str(config.get('bits', ''))      # the engine's cell: 8 (default), 4, 3 or 2
+PRIMARY = config.get('primary', '')     # wdl: dtz or dtc as a by-product of a 4-bit table
+ENGINE_OPTS = ' '.join(x for x in (f'bits={BITS}' if BITS else '', f'primary={PRIMARY}' if PRIMARY else '') if x)
+WDL = METRIC == 'wdl' 
 SINK = config.get('sink', 'auto')          # the depth sink: auto (by the claim), groups (group files), bytes (8-bit, RAM), array (16-bit, RAM)
 GRANULARITY = config.get('granularity', 'material')  # material, tempi or configuration (below material: man moves exit)
 import os
@@ -52,8 +62,8 @@ import subprocess
 THREADS = int(config.get('threads', 4))
 PAR_MIN = config.get('par_min')                # materials with at least this many positions build with policy=par on all cores
 STATS = 'stats' if str(config.get('stats', 0)) not in ('0', 'false', 'False') else ''   # stats=1: a .stats file per material
-PROBE = str(config.get('probe', 1)) not in ('0', 'false', 'False')    # convert every material into the probe format
-CHECK = str(config.get('check', 0)) not in ('0', 'false', 'False')    # checkall against egdb_6x6 at the end (keeps the build files)
+PROBE = str(config.get('probe', 1)) not in ('0', 'false', 'False') and not WDL   # convert every material into the probe format
+CHECK = str(config.get('check', 0)) not in ('0', 'false', 'False') and not WDL   # checkall against egdb_6x6 at the end (keeps the build files)
 KEEP = str(config.get('keep', 0)) not in ('0', 'false', 'False')      # keep the depth build files after the conversion
 SELFCHECK = str(config.get('selfcheck', 0)) not in ('0', 'false', 'False')  # verify every material once built (tbgen verify)
 VERIFY = int(config.get('verify', 16))                                # the conversion checks every VERIFY-th slot through the prober
@@ -128,6 +138,8 @@ def files(m):
     # by-product, unless they exist from another metric (then it compares), but no rule needs them as its inputs
     # by-product, unless they exist from another metric (then it compares), but no rule needs them as its inputs. A wdl
     # file that exists when the workflow starts is no output at all: Snakemake would delete it before the job runs
+    if WDL:
+        return [f'{D}/wdl/{sub(m)}-wdl-{s}{SUF}' for s in ('wtm', 'btm')]
     out = [f'{D}/{METRIC}/{sub(m)}-{METRIC}-{s}{SUF}' for s in ('wtm', 'btm')]
     if METRIC != 'dtm':
         out += [f for f in (f'{D}/wdl/{sub(m)}-wdl-{s}{SUF}' for s in ('wtm', 'btm')) if not os.path.exists(f)]
@@ -147,7 +159,8 @@ sys.path.insert(0, os.path.join(workflow.basedir, '..', 'src'))
 from snakemake_plan import memory_budget_mb, load_plan, claim_mb, priorities, report, check_budget  # noqa: E402
 
 MEM = memory_budget_mb(workflow, config)
-PLAN = {k: v for k, v in load_plan([ENGINE, 'plan', str(N), METRIC, GRANULARITY]).items() if k in {name(m) for m in MATERIALS}}
+PLAN = {k: v for k, v in load_plan([ENGINE, 'plan', str(N), METRIC, GRANULARITY] + ENGINE_OPTS.split() + (['old'] if ROUNDS else [])).items()
+        if k in {name(m) for m in MATERIALS}}
 PRIO = priorities(PLAN, {name(m): [name(d) for d in deps(m)] for m in MATERIALS})
 print(report(PLAN, MEM, lambda p: claim_mb(p, MEM)), file=sys.stderr)
 check_budget(PLAN, MEM, config)    # fail now if a material cannot fit the budget at any rung
@@ -172,6 +185,9 @@ def sched(n):
     # memory claims (mem_mb) allow. fill: every job par but counted as one thread, so that memory and --cores decide how
     # many run and the operating system shares the cores (measured no faster than auto on the 8-piece subset; it
     # oversubscribes the small jobs). par: every job par and alone; seq: every job on one core
+    if POLICY == 'share':
+        t = max(1, min(workflow.cores, workflow.cores * claim_mb(PLAN[n], MEM) // MEM))
+        return t, (f'threads={t}' if t > 1 else 'seq')
     if POLICY == 'fill':
         return 1, 'par'
     if POLICY == 'par' or (POLICY == 'auto' and PLAN[n]['positions'] >= par_min()):
@@ -190,12 +206,13 @@ def outputs(m):
 
 
 def verified(m):
-    return f'{D}/{METRIC}/{sub(m)}-{METRIC}.verified'
+    return f'{D}/{"wdl" if WDL else METRIC}/{sub(m)}-{METRIC}.verified'
 
 
 rule all:
     input: ([probe_done(name(m)) for m in MATERIALS] if PROBE else []) + ([verified(name(m)) for m in MATERIALS] if SELFCHECK else []) \
-           + ([f'{D}/{METRIC}/check-{N}.{METRIC}.ok'] if CHECK or not (PROBE or SELFCHECK) else [])
+           + ([f for m in MATERIALS for f in files(name(m))] if WDL else []) \
+           + ([f'{D}/{METRIC}/check-{N}.{METRIC}.ok'] if CHECK or not (PROBE or SELFCHECK or WDL) else [])
 
 
 # one build rule per material: Snakemake (8.30) accepts only constant priorities, so each material gets its own rule
@@ -229,12 +246,12 @@ for _m in MATERIALS:
         name: f'build_{_n}'
         input: inputs(_m)
         output: outputs(_n)
-        log: f'{D}/{METRIC}/{sub(_n)}-{METRIC}.log'
+        log: f'{D}/{"wdl" if WDL else METRIC}/{sub(_n)}-{METRIC}.log'
         resources: mem_mb=claim_mb(PLAN[_n], MEM)
         priority: PRIO[_n]
         threads: sched(_n)[0]
         params: m=_n.replace('-', ' '), policy=sched(_n)[1]
-        shell: '{ENGINE} build {D} {params.m} {METRIC} {params.policy} {ROUNDS} {SINK} {STORE} {STATS} {GRANULARITY} mem={resources.mem_mb} > {log} 2>&1'
+        shell: '{ENGINE} build {D} {params.m} {METRIC} {params.policy} {ROUNDS} {ENGINE_OPTS} {SINK} {STORE} {STATS} {GRANULARITY} mem={resources.mem_mb} > {log} 2>&1'
 
 
 # the probe format (synthesis 10): one side, capture positions and draws as don't-cares, written once the materials the
@@ -249,7 +266,7 @@ if PROBE:
             log: f'{D}/probe/{METRIC}/{sub(_n)}-{METRIC}.log'
             priority: PRIO[_n]
             threads: sched(_n)[0]
-            params: m=_n.replace('-', ' '), policy=sched(_n)[1],
+            params: m=_n.replace('-', ' '), policy=('seq' if sched(_n)[1] == 'seq' else 'par'),
                     drop=(f'rm -f {D}/wdl/{sub(_n)}-wdl-wtm{SUF} {D}/wdl/{sub(_n)}-wdl-btm{SUF}' if DROP_WDL and METRIC == 'dtm' else 'true')
             shell: '{ENGINE} convert {D} {params.m} {METRIC} {params.policy} verify={VERIFY} > {log} 2>&1 && touch {output} && {params.drop}'
 
@@ -263,7 +280,7 @@ if SELFCHECK:
             name: f'verify_{_n}'
             input: files(_n), inputs(_m)
             output: verified(_n)
-            log: f'{D}/{METRIC}/{sub(_n)}-{METRIC}.verify.log'
+            log: f'{D}/{"wdl" if WDL else METRIC}/{sub(_n)}-{METRIC}.verify.log'
             priority: PRIO[_n]
             threads: sched(_n)[0]
             params: m=_n.replace('-', ' '), policy=sched(_n)[1]

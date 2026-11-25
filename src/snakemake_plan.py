@@ -24,7 +24,8 @@ import subprocess
 
 def memory_budget_mb(workflow, config):
     if 'mem_mb' in workflow.global_resources:
-        return int(workflow.global_resources['mem_mb'])
+        v = workflow.global_resources['mem_mb']
+        return int(getattr(v, 'value', v))                 # Snakemake 9 wraps a resource in an object
     if 'mem_mb' in config:
         return int(config['mem_mb'])
     with open('/proc/meminfo') as f:
@@ -69,7 +70,7 @@ def priorities(plan, deps):
 
 def check_budget(plan, budget, config):
     """raise if any material needs more than the budget at its lowest rung (rung 1), unless config mem_check=0"""
-    over = sorted((p['rung1'], m) for m, p in plan.items() if p['rung1'] > budget)
+    over = sorted((min(p['rung0'], p['rung1']), m) for m, p in plan.items() if min(p['rung0'], p['rung1']) > budget)
     if over and str(config.get('mem_check', '1')) != '0':
         worst = ', '.join(f'{m} ({mb} MB)' for mb, m in reversed(over[-5:]))
         raise ValueError(f'{len(over)} materials need more than the memory budget of {budget} MB even at rung 1: '
@@ -81,7 +82,7 @@ def report(plan, budget, claim):
     """one line for the log: how many materials fit at rung 0, how many need a lower rung, the largest needs"""
     fit = sum(p['rung0'] <= budget for p in plan.values())
     lower = sum(p['rung0'] > budget >= p['rung1'] for p in plan.values())
-    over = sum(p['rung1'] > budget for p in plan.values())
+    over = sum(min(p['rung0'], p['rung1']) > budget for p in plan.values())
     big = max(plan, key=lambda m: plan[m]['rung0'])
     return (f'plan: {len(plan)} materials, budget {budget} MB: {fit} at rung 0, {lower} at rung 1, {over} over the budget '
             f'even at rung 1; largest {big} (rung 0 {plan[big]["rung0"]} MB, rung 1 {plan[big]["rung1"]} MB, claim '

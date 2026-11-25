@@ -100,6 +100,7 @@
 #include <atomic>
 #include <execution>
 #include <filesystem>
+#include <cassert>
 #include <fstream>
 #include <random>
 #include "../src/block_cache.hpp"
@@ -3399,6 +3400,27 @@ bool pending_capture(MoveList const& ml)
 bool dont_care(MoveList const& ml) { return !ml.empty() && (is_capture(*ml.begin()) || pending_capture(ml)); }
 
 // win, draw or loss for the side to move, from the probe files only
+// is the value of p0 stored in the wdl probe files? Not for a position without moves, one that must capture, or a
+// pending capture (every move leaves the opponent a capture)
+bool wdl_stored(Pos const& p0)
+{
+        if (has_capture(p0)) return false;
+        bool quiet = false;
+        for_each_move(pad_pos(p0), [&](MoveRef const& m) { if (has_capture(to_move(p0, m).next)) return true; quiet = true; return false; });
+        return quiet;
+}
+
+// win, draw or loss of a quiet position: the index and one read. Precondition: wdl_stored(p0) (checked in debug
+// builds only). For a search that resolves captures itself; pwdl below takes any position
+std::uint8_t pwdl_quiet(Pos const& p0)
+{
+        assert(wdl_stored(p0));
+        Pos const p = stored_pos(p0);
+        Material const m = material_of(p);
+        std::uint64_t const i = mat_index(m).index(p);
+        return std::uint8_t(zbyte(probe_files(m).wdl[p.stm], i >> 2) >> (2 * (i & 3)) & 3);
+}
+
 std::uint8_t pwdl(Pos const& p0)
 {
         // the common case first, without a move list: no capture, and some move leaves the opponent no capture (so not
@@ -3676,6 +3698,15 @@ bool probe_bench(std::string const& dir, int n, int threads, std::uint64_t probe
                         return std::uint64_t(zbyte(probe_files(m).wdl[p.stm], i >> 2) & 1);
                 });
                 time("whole probe (pwdl)", [](Pos const& p) { return std::uint64_t(pwdl(p)); });
+                std::vector<Pos> quiet;
+                for (Pos const& p : w) if (wdl_stored(p)) quiet.push_back(p);
+                std::uint64_t acc = 0, bad = 0;
+                auto const tq = std::chrono::steady_clock::now();
+                for (Pos const& p : quiet) acc += pwdl_quiet(p);
+                double const nsq = seconds_since(tq) * 1e9 / double(std::max<std::size_t>(1, quiet.size()));
+                for (Pos const& p : quiet) bad += pwdl_quiet(p) != pwdl(p);
+                std::cout << "  quiet probe (pwdl_quiet) on the " << quiet.size() << " stored positions: " << nsq << " ns per probe; " << bad
+                          << " differ from pwdl (sum " << acc << ")" << std::endl;
         }
         for (int kind = 0; kind < 2; ++kind)
                 for (int pass = 0; pass < 2; ++pass) {

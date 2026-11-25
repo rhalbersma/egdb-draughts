@@ -3401,6 +3401,24 @@ bool dont_care(MoveList const& ml) { return !ml.empty() && (is_capture(*ml.begin
 // win, draw or loss for the side to move, from the probe files only
 std::uint8_t pwdl(Pos const& p0)
 {
+        // the common case first, without a move list: no capture, and some move leaves the opponent no capture (so not
+        // a pending capture): the stored value. The moves are generated one at a time and only until such a move is met
+        if (!has_capture(p0)) {
+                bool any = false, quiet = false;
+                for_each_move(pad_pos(p0), [&](MoveRef const& m) {
+                        any = true;
+                        if (has_capture(to_move(p0, m).next)) return true;
+                        quiet = true;
+                        return false;
+                });
+                if (!any) return WDL_LOSS;
+                if (quiet) {
+                        Pos const p = stored_pos(p0);
+                        Material const m = material_of(p);
+                        std::uint64_t const i = mat_index(m).index(p);
+                        return std::uint8_t(zbyte(probe_files(m).wdl[p.stm], i >> 2) >> (2 * (i & 3)) & 3);
+                }
+        }
         auto const ml = moves(p0);
         if (ml.empty()) return WDL_LOSS;
         if (dont_care(ml)) {                                            // a one-ply search
@@ -3625,6 +3643,40 @@ bool probe_bench(std::string const& dir, int n, int threads, std::uint64_t probe
         }
         std::cout << "probebench " << metric_name() << " " << (walk ? "walk" : "uniform") << ": " << mats.size() << " materials, " << total
                   << " slots, " << threads << " threads, " << probes << " probes each, cache " << zcache().slots() << " blocks (" << (g_cache_bytes >> 20) << " MB)" << std::endl;
+        {       // where a wdl probe's time goes, on thread 0's probes (one thread, warm): each part timed over the whole list
+                auto const& w = work[0];
+                for (Pos const& p : w) (void)pwdl(p);
+                auto const time = [&](char const* what, auto&& f) {
+                        std::uint64_t acc = 0;
+                        auto const a = std::chrono::steady_clock::now();
+                        for (Pos const& p : w) acc += f(p);
+                        std::cout << "  " << what << ": " << seconds_since(a) * 1e9 / double(w.size()) << " ns per probe (sum " << acc << ")" << std::endl;
+                };
+                std::uint64_t cap = 0, pend = 0, none = 0;
+                for (Pos const& p : w) {
+                        auto const ml = moves(p);
+                        if (ml.empty()) ++none; else if (is_capture(*ml.begin())) ++cap; else if (pending_capture(ml)) ++pend;
+                }
+                std::cout << "parts (" << w.size() << " probes: " << 100.0 * double(cap) / double(w.size()) << " % captures, " << 100.0 * double(pend) / double(w.size())
+                          << " % pending captures, " << 100.0 * double(none) / double(w.size()) << " % without moves):" << std::endl;
+                time("capture test", [](Pos const& p) { return std::uint64_t(has_capture(p)); });
+                time("capture test + quiet-move test", [](Pos const& p) {
+                        if (has_capture(p)) return std::uint64_t(1);
+                        bool quiet = false;
+                        for_each_move(pad_pos(p), [&](MoveRef const& m) { if (has_capture(to_move(p, m).next)) return true; quiet = true; return false; });
+                        return std::uint64_t(quiet);
+                });
+                time("full move list", [](Pos const& p) { return std::uint64_t(moves(p).size()); });
+                time("index (mirror, material, rank)", [](Pos const& p0) {
+                        if ((p0.m[0] | p0.k[0]).empty() || (p0.m[1] | p0.k[1]).empty()) return std::uint64_t(0);
+                        Pos const p = stored_pos(p0); return mat_index(material_of(p)).index(p) & 1; });
+                time("index + read", [](Pos const& p0) {
+                        if ((p0.m[0] | p0.k[0]).empty() || (p0.m[1] | p0.k[1]).empty()) return std::uint64_t(0);     // no file: a side without pieces
+                        Pos const p = stored_pos(p0); Material const m = material_of(p); std::uint64_t const i = mat_index(m).index(p);
+                        return std::uint64_t(zbyte(probe_files(m).wdl[p.stm], i >> 2) & 1);
+                });
+                time("whole probe (pwdl)", [](Pos const& p) { return std::uint64_t(pwdl(p)); });
+        }
         for (int kind = 0; kind < 2; ++kind)
                 for (int pass = 0; pass < 2; ++pass) {
                         auto ns = std::vector<std::vector<std::uint32_t>>(std::size_t(threads));

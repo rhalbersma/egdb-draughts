@@ -1610,6 +1610,35 @@ exactly from one ply of search, cheap with compulsory capture: an exit counts 1 
 move one more than the stored value; unlike syzygy, depths stay in plies, never in moves), and a search for the man/king order that compresses best (syzygy's
 `permute_piece_wdl`); Zakharov adds bounded fills (≥ n, ≤ n) for DTM.
 
+### 10.x Sketch: the escape bytes in frames of their own (not built)
+
+Today a block's extra bytes follow its 4,096 position bytes in the same zstd frame, so a decompressed block is up to
+8 KiB and a token's extra byte is found by counting the tokens before it in the block. A container that keeps every
+frame at 4 KiB and stays sound for files of any size:
+
+- **position frames**: 4,096 position bytes each (a depth below E, or an escape token E + k), zstd, variable length;
+- **extra frames**, after them: the extra bytes of all escape tokens of the file in position order, cut into runs of
+  4,096, zstd; they are further entries of the same offset table;
+- **the token table**: per position frame, the number of escape tokens before it. Since the extra bytes are in
+  position order, that number is also the index of the frame's first extra byte. Stored as 4 bytes counting from the
+  start of a group of 2²⁰ frames (at most (2²⁰ − 1) · 4,096 < 2³²: the largest group that cannot overflow), with an
+  8-byte total per group; a file below 4.3 G positions has one group and no totals. The entries, 1,024 per 4 KiB,
+  are frames too: across frames without tokens the value repeats, so they compress to almost nothing;
+- **the offset table**: per frame, its start among the compressed bytes; 8 bytes now, or 4 bytes within groups (of
+  2¹⁹ frames, or a new group whenever 4 bytes would overflow) with an 8-byte base per group.
+
+A lookup of position p: frame b = p / 4,096, offset j; the byte c at j; if c < E it is the depth. Else the rank
+r = tokens before frame b (the table) + the escape codes among the first j bytes of the frame (a count on the cached
+block), the extra byte x = byte r mod 4,096 of extra frame r / 4,096, and d = E + 240 (c − E) + x. No location is
+stored: the escape codes mark their own places. A file without tokens (every file of 6×6 international draughts: the
+longest win of the 12-piece set is 111 plies) has neither extra frames nor a token table. If most positions carry
+tokens the file is two byte streams of similar length: no separate wide layout is needed.
+
+Sizes: 1 G positions is 262,144 position frames (offsets 2 MiB at 8 bytes, token entries 1 MiB); 1 T positions is
+2²⁸ frames, 1–2 GiB of offsets, which against data compressed 50-fold is 5–10 % of the file. Beyond that scale the
+remedies are sizes instead of offsets, larger frames, or the reverse layout of Chinook and Gilbert: compressed blocks
+of a fixed size with an index of each block's first position.
+
 ## 11. Verification
 
 | check | source | status |

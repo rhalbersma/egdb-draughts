@@ -1378,6 +1378,513 @@ void solve_group_rtb(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPo
                   << " reductions " << t_reduce << " s), output " << seconds_since(t3) << " s, snapshot " << snap_bytes.load() << " bytes" << std::endl;
 }
 
+// ---------------------------------------------------------------- one group: the generic engine (synthesis 7.9)
+//
+// rtbgen's sweeps (solve_group_rtb above is its first form, kept as the reference) over a cell store of any width,
+// with the codes laid out by a codec, for every target:
+//   ordered, depths    dtm, dtz, dtc: a sweep per ply and colour, the depths as offsets in a sliding window, the
+//                      reductions moving the depths below the window into snapshots. A narrow cell is a short window:
+//                      with 4 bits (5 win and 5 loss codes) a reduction every other ply, the snapshots being the log
+//                      of the plies (wdlz's per-ply logs are this, with a window of two generations)
+//   unordered, wdl     no ply order: one fresh win code and one fresh loss code, handled whenever met and then WON or
+//                      LOST; a check counts every win. 8 codes: 3 bits (wdl3's states)
+// Exits with depths (parity or not: dtm, and dtc or dtm on groups finer than the material) add PAWN_WIN (a provisional
+// win through an exit, its depth in a 16-bit snapshot), WIN_LATER and LOSS_LATER (beyond the window). Every sweep
+// chooses its direction (retrograde: only candidates are checked; forward: every undecided cell).
+namespace eng {
+constexpr std::uint8_t NONE = 0xff;                             // a code this layout does not have (wider than any cell)
+struct Codec {
+        int bits;
+        bool parity;
+        std::uint8_t WIN_LATER = NONE, WON, PAWN_WIN = NONE, WIN1, MATE, CAPT_DRAW, PAWN_DRAW, LOST, CHANGED, UNKNOWN, LOSS_LATER = NONE;
+        int nwin, nloss, max_win, max_loss;                     // codes; plies (offsets from the base)
+        // 8 bits, or exits with depths: rtbgenp's layout (ILLEGAL, CAPT_WIN, PAWN_WIN, WIN_IN_ONE .., .. MATE, CAPT_DRAW,
+        // PAWN_DRAW, CAPT_CLOSS, CHANGED, UNKNOWN, BROKEN); else compact (WON, wins, losses, CAPT_DRAW, PAWN_DRAW, LOST,
+        // CHANGED, UNKNOWN)
+        Codec(int b, bool par, bool exit_depths) : bits(b), parity(par)
+        {
+                int const N = 1 << b;
+                bool const full = exit_depths || b == 8;
+                int lo = 0, hi = N - 1;
+                if (full) { WIN_LATER = std::uint8_t(lo++); }
+                WON = std::uint8_t(lo++);
+                if (full) { PAWN_WIN = std::uint8_t(lo++); LOSS_LATER = std::uint8_t(hi--); }
+                UNKNOWN = std::uint8_t(hi--); CHANGED = std::uint8_t(hi--); LOST = std::uint8_t(hi--);
+                PAWN_DRAW = std::uint8_t(hi--); CAPT_DRAW = std::uint8_t(hi--);
+                WIN1 = std::uint8_t(lo); MATE = std::uint8_t(hi);
+                int const free = hi - lo + 1;
+                nwin = free / 2; nloss = free - nwin;
+                max_win = par ? 2 * nwin - 1 : nwin;
+                max_loss = par ? 2 * (nloss - 1) : nloss - 1;
+        }
+        bool won(std::uint8_t c) const { return c >= WIN1 && c < WIN1 + nwin; }
+        bool lost(std::uint8_t c) const { return c <= MATE && c > MATE - nloss; }
+        int win_depth(std::uint8_t c) const { return parity ? 2 * (c - WIN1) + 1 : c - WIN1 + 1; }
+        int loss_depth(std::uint8_t c) const { return parity ? 2 * (MATE - c) : MATE - c; }
+        std::uint8_t win_code(int d) const { return std::uint8_t(parity ? WIN1 + (d - 1) / 2 : WIN1 + d - 1); }
+        std::uint8_t loss_code(int d) const { return std::uint8_t(parity ? MATE - d / 2 : MATE - d); }
+};
+
+// The cell stores: get (any thread), put (the block's owner: no other thread writes its colour in that phase), cas (a
+// predecessor's write), scan (the cells of a colour's block holding one of 8 codes: handle(id); und: its UNKNOWN and
+// CHANGED cells counted)
+struct Bytes {
+        static constexpr int bits = 8;
+        std::uint64_t P;
+        std::vector<std::uint8_t> t;
+        Bytes(std::uint64_t p, std::uint8_t init) : P(p), t(2 * p, init) {}
+        std::size_t bytes() const { return t.size(); }
+        std::uint8_t get(std::uint64_t id) const { return std::atomic_ref<std::uint8_t>(const_cast<std::uint8_t&>(t[id])).load(std::memory_order_relaxed); }
+        void put(std::uint64_t id, std::uint8_t c) { t[id] = c; }
+        bool cas(std::uint64_t id, std::uint8_t& from, std::uint8_t to) { return std::atomic_ref<std::uint8_t>(t[id]).compare_exchange_weak(from, to, std::memory_order_relaxed); }
+        template<class F> void scan(int col, std::uint64_t lo, std::uint64_t hi, std::array<std::uint8_t, 8> const& codes, std::uint8_t cu, std::uint8_t cc, std::uint64_t& und, F&& handle)
+        {
+                constexpr std::uint64_t ones = 0x0101010101010101ull, low7 = 0x7f7f7f7f7f7f7f7full;
+                auto const zero = [](std::uint64_t x) { return ~(((x & low7) + low7) | x | low7); };
+                std::uint64_t pat[8];
+                for (std::size_t k = 0; k < 8; ++k) pat[k] = ones * codes[k];
+                std::uint64_t const pu = ones * cu, pc = ones * cc;
+                std::uint8_t const* const cells = t.data();
+                auto const one = [&](std::uint64_t q) {
+                        std::uint8_t const c = cells[q];
+                        und += c == cu || c == cc;
+                        for (std::uint8_t k : codes) if (c == k) { handle(q); return; }
+                };
+                std::uint64_t q = std::uint64_t(col) * P + lo, end = std::uint64_t(col) * P + hi;
+                for (; q < end && q % 8 != 0; ++q) one(q);
+                for (; q + 8 <= end; q += 8) {
+                        std::uint64_t w;
+                        std::memcpy(&w, cells + q, 8);
+                        und += std::uint64_t(std::popcount(zero(w ^ pu) | zero(w ^ pc)));
+                        std::uint64_t m = 0;
+                        for (std::size_t k = 0; k < 8; ++k) m |= zero(w ^ pat[k]);
+                        for (; m != 0; m &= m - 1) handle(q + std::uint64_t(std::countr_zero(m)) / 8);
+                }
+                for (; q < end; ++q) one(q);
+        }
+};
+
+// two cells per byte, the colours apart (cell i of colour c in byte c * Pb + i / 2): a block of a sweep owns its
+// bytes (block bounds are multiples of 16 cells), so put is a plain write; cas swaps the byte
+struct Nibbles {
+        static constexpr int bits = 4;
+        std::uint64_t P, Pb;
+        std::vector<std::uint8_t> t;
+        Nibbles(std::uint64_t p, std::uint8_t init) : P(p), Pb((p + 1) / 2), t(2 * ((p + 1) / 2) + 8, std::uint8_t(init * 0x11)) {}
+        std::size_t bytes() const { return t.size(); }
+        std::uint64_t at(std::uint64_t id) const { return (id / P) * Pb + (id % P) / 2; }
+        int shift(std::uint64_t id) const { return int(4 * ((id % P) & 1)); }
+        std::uint8_t get(std::uint64_t id) const
+        {
+                return std::uint8_t(std::atomic_ref<std::uint8_t>(const_cast<std::uint8_t&>(t[at(id)])).load(std::memory_order_relaxed) >> shift(id) & 15);
+        }
+        void put(std::uint64_t id, std::uint8_t c)
+        {
+                std::uint8_t& b = t[at(id)];
+                int const sh = shift(id);
+                b = std::uint8_t((b & ~(15 << sh)) | c << sh);
+        }
+        bool cas(std::uint64_t id, std::uint8_t& from, std::uint8_t to)
+        {
+                std::atomic_ref<std::uint8_t> a(t[at(id)]);
+                int const sh = shift(id);
+                std::uint8_t b = a.load(std::memory_order_relaxed);
+                for (;;) {
+                        std::uint8_t const n = std::uint8_t(b >> sh & 15);
+                        if (n != from) { from = n; return false; }
+                        if (a.compare_exchange_weak(b, std::uint8_t((b & ~(15 << sh)) | to << sh), std::memory_order_relaxed)) return true;
+                }
+        }
+        template<class F> void scan(int col, std::uint64_t lo, std::uint64_t hi, std::array<std::uint8_t, 8> const& codes, std::uint8_t cu, std::uint8_t cc, std::uint64_t& und, F&& handle)
+        {
+                constexpr std::uint64_t ones = 0x1111111111111111ull, low3 = 0x7777777777777777ull;
+                auto const zero = [](std::uint64_t x) { return ~(((x & low3) + low3) | x | low3); };
+                std::uint64_t pat[8];
+                for (std::size_t k = 0; k < 8; ++k) pat[k] = ones * codes[k];
+                std::uint64_t const pu = ones * cu, pc = ones * cc, b0 = std::uint64_t(col) * P;
+                std::uint8_t const* const base = t.data() + std::uint64_t(col) * Pb;
+                auto const one = [&](std::uint64_t q) {
+                        std::uint8_t const c = get(q);
+                        und += c == cu || c == cc;
+                        for (std::uint8_t k : codes) if (c == k) { handle(q); return; }
+                };
+                std::uint64_t i = lo;
+                for (; i < hi && i % 16 != 0; ++i) one(b0 + i);
+                for (; i + 16 <= hi; i += 16) {
+                        std::uint64_t w;
+                        std::memcpy(&w, base + i / 2, 8);
+                        und += std::uint64_t(std::popcount(zero(w ^ pu) | zero(w ^ pc)));
+                        std::uint64_t m = 0;
+                        for (std::size_t k = 0; k < 8; ++k) m |= zero(w ^ pat[k]);
+                        for (; m != 0; m &= m - 1) handle(b0 + i + std::uint64_t(std::countr_zero(m)) / 4);
+                }
+                for (; i < hi; ++i) one(b0 + i);
+        }
+};
+
+struct Mode {
+        int bits = 8;
+        bool parity = false;            // dtm: wins odd, losses even (one code per two plies)
+        bool exit_depths = false;       // an exit carries a depth (else every exit is a win, draw or loss in 1)
+        bool ordered = true;            // the ply order (false: wdl only)
+};
+}
+eng::Mode g_eng;                                                // the engine's mode, from the command line
+bool g_engine = false;
+
+template<class Cells, class ExecutionPolicy>
+void solve_group_engine(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPolicy const& policy, eng::Mode const M)
+{
+        using rtb::Dir;
+        using rtb::wins_written;
+        bool const par = M.parity, X = M.exit_depths, ord = M.ordered;
+        eng::Codec Z(Cells::bits, par, X);
+        if (ord && Z.nwin < (par ? 3 : 5)) { std::cerr << "engine: " << Cells::bits << " bits are too few for this target" << std::endl; std::abort(); }
+        if (char const* e = std::getenv("EGDB_RTB_WINDOW"); e && *e) {   // a smaller window (plies), to test the reductions
+                int const k = std::max(6, std::atoi(e));
+                Z.max_win = std::min(Z.max_win, k - (par ? 1 - k % 2 : 0));
+                Z.max_loss = std::min(Z.max_loss, k - (par ? k % 2 : 0));
+        }
+        std::uint8_t const WON = Z.WON, LOST = Z.LOST, WIN_LATER = Z.WIN_LATER, LOSS_LATER = Z.LOSS_LATER, PAWN_WIN = Z.PAWN_WIN,
+                           PAWN_DRAW = Z.PAWN_DRAW, CAPT_DRAW = Z.CAPT_DRAW, CHANGED = Z.CHANGED, UNKNOWN = Z.UNKNOWN,
+                           FRESH_WIN = Z.WIN1, FRESH_LOSS = Z.MATE;     // unordered: the two fresh codes
+        int base = 0;
+        auto const in_win = [&](int d) { return d - base >= 1 && d - base <= Z.max_win; };
+        auto const in_loss = [&](int d) { return d >= base && d - base <= Z.max_loss; };
+        auto const won = [&](std::uint8_t c) { return c == WON || Z.won(c); };
+        auto const win_depth = [&](std::uint8_t c) { return c == WON ? 0 : Z.win_depth(c) + base; };
+        auto const loss_depth = [&](std::uint8_t c) { return Z.loss_depth(c) + base; };
+        auto const win_code = [&](int d) { return !ord ? FRESH_WIN : in_win(d) ? Z.win_code(d - base) : WIN_LATER; };
+        auto const loss_code = [&](int d) { return !ord ? FRESH_LOSS : in_loss(d) ? Z.loss_code(d - base) : LOSS_LATER; };
+        std::uint64_t const P = g.P, NB = num_blocks(P);
+        auto const pos = [&](std::uint64_t id) { return g.pos(id % P, int(id / P)); };
+        Cells cells(P, UNKNOWN);
+        std::vector<std::vector<char>> snapz[2];                // per colour and block: the PAWN_WIN depths (16 bits), zstd
+        std::vector<std::array<std::uint64_t, 4>> snap_mask[2]; // per colour and block: their depths mod 256
+        std::vector<std::uint8_t> snap_has[2];                  // per colour: the depths mod 256 that occur
+        std::atomic<std::uint64_t> snap_bytes{ 0 };
+        constexpr int HMAX = 4096;
+        std::vector<std::uint64_t> hist[2] = { std::vector<std::uint64_t>(HMAX), std::vector<std::uint64_t>(HMAX) };   // pass 0's wins by depth
+        std::atomic<int> max_depth{ 0 };
+        auto const note_depth = [&](int d) {
+                int cur = max_depth.load(std::memory_order_relaxed);
+                while (d > cur && !max_depth.compare_exchange_weak(cur, d, std::memory_order_relaxed)) {}
+        };
+        std::array<bool, 256> weaker{};                         // the codes any win replaces
+        for (std::uint8_t c : { UNKNOWN, CHANGED, PAWN_DRAW, PAWN_WIN }) if (c != eng::NONE) weaker[c] = true;
+        bool const faster = ord && !par;        // no parity: a sweep marks wins of two depths, the faster replaces the slower
+        auto const set_win_value = [&](std::uint64_t id, std::uint8_t v) {
+                std::uint8_t c = cells.get(id);
+                while (weaker[c] || (faster && c > v && Z.won(c)))
+                        if (cells.cas(id, c, v)) { ++wins_written; return; }
+        };
+        auto const set_changed = [&](std::uint64_t id) {
+                std::uint8_t c = cells.get(id);
+                while (c == UNKNOWN) if (cells.cas(id, c, CHANGED)) return;
+        };
+        auto const retro = [&](std::uint64_t id, Pos const& p, auto&& f) {
+                std::uint64_t const other = (1 - id / P) * P;
+                for_each_inside_predecessor(g, p, id % P, [&](std::uint64_t i) { f(other + i); });
+        };
+        auto const mark_wins = [&](std::uint64_t id, Pos const& p, int e) {    // a loss in e: its predecessors won in e + 1
+                std::uint8_t v = FRESH_WIN;
+                if (ord) {
+                        note_depth(e + 1);
+                        v = win_code(e + 1);
+                        if (v == WIN_LATER) { std::cerr << "engine: a win in " << e + 1 << " beyond the window" << std::endl; std::abort(); }
+                }
+                retro(id, p, [&](std::uint64_t u) { set_win_value(u, v); });
+        };
+        // an exit's value for the side moving: unordered as wdl only (win, draw or loss in 1)
+        auto const exit_value = [&](Pos const& p, MoveRef const& m) -> std::uint16_t {
+                if (ord) return move_value(p, to_move(p, m));
+                std::uint8_t const r = probe_wdl(to_move(p, m).next);
+                return r == WDL_LOSS ? win(1) : r == WDL_DRAW ? std::uint16_t(0) : loss(1);
+        };
+        auto const exits_value = [&](Pos const& p) -> std::uint16_t {
+                int wn = INF, l = 0;
+                bool drawn = false;
+                for_each_move(pad_pos(p), [&](MoveRef const& m) {
+                        if (inside_ref(m)) return true;
+                        std::uint16_t const x = exit_value(p, m);
+                        if (is_win(x)) wn = std::min(wn, plies(x));
+                        else if (is_loss(x)) l = std::max(l, plies(x));
+                        else drawn = true;
+                        return true;
+                });
+                return wn < INF ? win_value(wn) : drawn ? std::uint16_t(0) : loss(l);
+        };
+
+        // pass 0, colour by colour (its blocks are the blocks of the sweeps, for the snapshot)
+        auto const t0 = std::chrono::steady_clock::now();
+        for (int col = 0; col < 2; ++col) {
+                snapz[col].resize(NB);
+                snap_mask[col].assign(NB, {});
+                snap_has[col].assign(256, 0);
+                for_blocks(policy, P, [&](std::uint64_t lo0, std::uint64_t hi0) {
+                        int md = 0;
+                        std::uint64_t const lo = std::uint64_t(col) * P + lo0, hi = std::uint64_t(col) * P + hi0;
+                        std::vector<std::uint16_t> sdepth;
+                        std::array<std::uint64_t, 8> wins_at{};         // this block's wins of depths below 8, the rest singly
+                        for (std::uint64_t id = lo; id < hi; ++id) {
+                                Pos const p = pos(id);
+                                bool any = false, in = false, drawn = false;
+                                int wn = INF, l = 0;
+                                for_each_move(pad_pos(p), [&](MoveRef const& m) {
+                                        any = true;
+                                        if (inside_ref(m)) { in = true; return true; }
+                                        std::uint16_t const x = exit_value(p, m);
+                                        if (is_win(x)) wn = std::min(wn, plies(x));
+                                        else if (is_loss(x)) l = std::max(l, plies(x));
+                                        else drawn = true;
+                                        return true;
+                                });
+                                if (!any) { cells.put(id, loss_code(0)); continue; }
+                                if (wn < INF) {
+                                        md = std::max(md, wn);
+                                        if (wn < 8) ++wins_at[std::size_t(wn)];
+                                        else if (wn < HMAX) std::atomic_ref<std::uint64_t>(hist[col][std::size_t(wn)]).fetch_add(1, std::memory_order_relaxed);
+                                        if (!in || !X) { cells.put(id, win_code(wn)); continue; }      // decided
+                                        cells.put(id, PAWN_WIN);                                     // provisional
+                                        if (sdepth.empty()) sdepth.assign(hi - lo, 0);
+                                        sdepth[id - lo] = std::uint16_t(wn);
+                                        snap_mask[col][lo0 / block_size][std::size_t(wn % 256) / 64] |= std::uint64_t(1) << (wn % 64);
+                                        std::atomic_ref<std::uint8_t>(snap_has[col][std::size_t(wn % 256)]).store(1, std::memory_order_relaxed);
+                                        continue;
+                                }
+                                if (!in) {
+                                        if (drawn) cells.put(id, CAPT_DRAW);
+                                        else { cells.put(id, loss_code(l)); md = std::max(md, l + 1); }
+                                        continue;
+                                }
+                                if (drawn) cells.put(id, PAWN_DRAW);     // else UNKNOWN: its exits (if any) all lose
+                        }
+                        note_depth(md);
+                        for (std::size_t d = 0; d < 8; ++d)
+                                if (wins_at[d] != 0) std::atomic_ref<std::uint64_t>(hist[col][d]).fetch_add(wins_at[d], std::memory_order_relaxed);
+                        if (!sdepth.empty()) {
+                                auto& z = snapz[col][lo0 / block_size];
+                                char buf[ZSTD_COMPRESSBOUND(2 * block_size)];           // exact size: no spare capacity kept
+                                z.assign(buf, buf + ZSTD_compress(buf, sizeof buf, sdepth.data(), sdepth.size() * 2, 1));
+                                snap_bytes.fetch_add(z.size(), std::memory_order_relaxed);
+                        }
+                });
+        }
+        g_stats.pass0 += seconds_since(t0);
+        auto const t1 = std::chrono::steady_clock::now();
+
+        // rtbgen's check_loss: every move inside to an opened win. Ordered: the depth from the slowest of them and of the
+        // exits; in time (e <= ply) it marks its wins at once, a deeper loss waits for its ply. Unordered: LOST at once
+        auto const check_loss = [&](std::uint64_t q, int ply) -> bool {
+                Pos const p = pos(q);
+                std::uint64_t const gp = q % P, other = (1 - q / P) * P;
+                int worst = 0;
+                bool const all = for_each_move(pad_pos(p), [&](MoveRef const& m) {
+                        if (!inside_ref(m)) return true;
+                        std::uint8_t const c = cells.get(other + successor_index(g, p, gp, m));
+                        if (!ord) return c == WON || c == FRESH_WIN;
+                        if (!won(c) || win_depth(c) > ply - 1) return false;
+                        worst = std::max(worst, win_depth(c));
+                        return true;
+                });
+                if (!all) { cells.put(q, UNKNOWN); return false; }
+                if (!ord) { cells.put(q, LOST); mark_wins(q, p, 0); return true; }
+                int e = worst + 1;
+                if (X)
+                        for_each_move(pad_pos(p), [&](MoveRef const& m) {      // the exits all lose (else pass 0 wrote a win or PAWN_DRAW)
+                                if (!inside_ref(m)) e = std::max(e, plies(move_value(p, to_move(p, m))));
+                                return true;
+                        });
+                cells.put(q, loss_code(e));
+                if (e <= ply) mark_wins(q, p, e);
+                else note_depth(e + 1);
+                return true;
+        };
+
+        // the reductions: a new base behind the ply; the depths below it go to a snapshot (their codes, zstd per block)
+        // and become WON or LOST; the others are re-encoded; the LATER ones are re-evaluated from their exits
+        struct Snapshot { int base; std::vector<std::vector<char>> chunk; };
+        std::vector<Snapshot> snaps;
+        double t_reduce = 0;
+        auto const reduce = [&](int nb) {
+                auto const tr = std::chrono::steady_clock::now();
+                Snapshot sn{ base, std::vector<std::vector<char>>(2 * NB) };
+                int const old = base;
+                eng::Codec const Zc = Z;
+                for (int col = 0; col < 2; ++col)
+                        for_blocks(policy, P, [&](std::uint64_t lo, std::uint64_t hi) {
+                                std::uint64_t const b0 = std::uint64_t(col) * P;
+                                std::array<std::uint8_t, block_size> stage{};
+                                bool any = false;
+                                for (std::uint64_t q = b0 + lo; q < b0 + hi; ++q) {
+                                        std::uint8_t const c = cells.get(q);
+                                        if (Zc.won(c)) {
+                                                int const d = Zc.win_depth(c) + old;
+                                                if (d <= nb) { stage[q - b0 - lo] = std::uint8_t(c + 1); any = true; cells.put(q, WON); }
+                                                else if (nb != old) cells.put(q, Zc.win_code(d - nb));
+                                        } else if (Zc.lost(c)) {
+                                                int const d = Zc.loss_depth(c) + old;
+                                                if (d < nb) { stage[q - b0 - lo] = std::uint8_t(c + 1); any = true; cells.put(q, LOST); }
+                                                else if (nb != old) cells.put(q, Zc.loss_code(d - nb));
+                                        } else if (X && (c == WIN_LATER || c == LOSS_LATER)) {
+                                                std::uint16_t const v = exits_value(pos(q));
+                                                int const d = plies(v);
+                                                bool const fits = is_win(v) ? d - nb >= 1 && d - nb <= Zc.max_win : d >= nb && d - nb <= Zc.max_loss;
+                                                if (fits) cells.put(q, is_win(v) ? Zc.win_code(d - nb) : Zc.loss_code(d - nb));
+                                        }
+                                }
+                                if (!any) return;
+                                auto& z = sn.chunk[std::size_t(col) * NB + lo / block_size];
+                                char buf[ZSTD_COMPRESSBOUND(block_size)];
+                                z.assign(buf, buf + ZSTD_compress(buf, sizeof buf, stage.data(), hi - lo, 1));
+                                snap_bytes.fetch_add(z.size(), std::memory_order_relaxed);
+                        });
+                base = nb;
+                snaps.push_back(std::move(sn));
+                t_reduce += seconds_since(tr);
+        };
+
+        // the sweeps (the direction choice as solve_group_rtb's)
+        static int const dir_mode = [] {
+                std::string const e = std::getenv("EGDB_RTB_DIR") ? std::getenv("EGDB_RTB_DIR") : "auto";
+                return e == "retro" ? 0 : e == "forward" ? 1 : 2;
+        }();
+        static double const alpha = std::getenv("EGDB_RTB_ALPHA") ? std::atof(std::getenv("EGDB_RTB_ALPHA")) : 2.0;
+        Dir dir_next[2] = { dir_mode == 1 ? Dir::forward : Dir::retro, dir_mode == 1 ? Dir::forward : Dir::retro };
+        std::uint64_t undecided[2] = { P, P };
+        std::uint64_t wins_into[2] = { 0, 0 };
+        int forward_sweeps = 0, ply = 0, idle = 0;
+        for (;; ++ply) {
+                if (ord ? ply > max_depth.load() + 2 : idle == 2) break;
+                if (ord && (!in_win(ply + 1) || !in_loss(ply))) reduce(std::max(base, par ? (ply - 2) & ~1 : ply - 3));
+                int const col = ply % 2, opp = 1 - col;
+                std::uint64_t const base0 = std::uint64_t(col) * P;
+                // this sweep's own losses and wins: parity one depth each, else both p - 1 and p; unordered the fresh codes
+                int const de = col ? ply - 1 : ply, dw = col ? ply : ply - 1;
+                int const de1 = par ? de : ply - 1, de2 = par ? de : ply, dw1 = par ? dw : ply - 1, dw2 = par ? dw : ply;
+                auto const lcode = [&](int d) { return d >= 0 && in_loss(d) ? loss_code(d) : UNKNOWN; };
+                auto const wcode = [&](int d) { return d >= 1 && in_win(d) ? win_code(d) : UNKNOWN; };
+                std::uint8_t const cl = ord ? lcode(de1) : FRESH_LOSS, cl2 = ord ? lcode(de2) : FRESH_LOSS,
+                                   cw = ord ? wcode(dw1) : FRESH_WIN, cw2 = ord ? wcode(dw2) : FRESH_WIN;
+                bool const has_w = cw != UNKNOWN, has_w2 = cw2 != UNKNOWN;
+                bool const read_snap = X && ((has_w && snap_has[col][std::size_t(dw1 % 256)] != 0) || (has_w2 && snap_has[col][std::size_t(dw2 % 256)] != 0));
+                Dir const dir = dir_next[col];
+                std::uint64_t F = wins_into[col];
+                if (!ord) F += ply < 2 ? hist[col][1] : 0;
+                else F += (has_w && dw1 < HMAX ? hist[col][std::size_t(dw1)] : 0) + (!par && has_w2 && dw2 < HMAX ? hist[col][std::size_t(dw2)] : 0);
+                if (dir_mode == 2) dir_next[opp] = double(undecided[opp]) < alpha * double(F) ? Dir::forward : Dir::retro;
+                bool const mark = dir_next[opp] == Dir::retro;
+                bool const fwd = dir == Dir::forward;
+                forward_sweeps += fwd;
+                std::atomic<std::uint64_t> undecided_now{ 0 }, wins_now{ 0 };
+                std::atomic<bool> work{ false };
+                for_blocks(policy, P, [&](std::uint64_t lo, std::uint64_t hi) {
+                        std::uint16_t sbuf[block_size];
+                        bool sb = false;
+                        if (read_snap) {
+                                auto const& mk = snap_mask[col][lo / block_size];
+                                auto const has = [&](int d) { return d >= 1 && (mk[std::size_t(d % 256) / 64] >> (d % 64) & 1) != 0; };
+                                if (has(dw1) || has(dw2)) {
+                                        auto const& z = snapz[col][lo / block_size];
+                                        std::size_t const r = ZSTD_decompress(sbuf, (hi - lo) * 2, z.data(), z.size());
+                                        if (ZSTD_isError(r)) { std::cerr << "zstd: " << ZSTD_getErrorName(r) << std::endl; std::abort(); }
+                                        sb = true;
+                                }
+                        }
+                        // the fresh wins are met when they mark candidates, turn WON (unordered) or may need a correction
+                        // (exits with depths, no parity: an inside win in p written over a PAWN_WIN in p - 1)
+                        bool const wins_met = mark || !ord || (sb && !par);
+                        std::uint8_t const k_un = fwd ? UNKNOWN : CHANGED, k_pw = sb ? PAWN_WIN : CHANGED,
+                                           k_cw = wins_met ? cw : CHANGED, k_cw2 = wins_met ? cw2 : CHANGED;
+                        std::array<std::uint8_t, 8> const codes{ CHANGED, k_un, cl, cl2, k_cw, k_cw2, k_pw, CHANGED };
+                        bool any = false;
+                        auto const handle = [&](std::uint64_t q) {
+                                std::uint8_t c = cells.get(q);
+                                if (c == CHANGED) { any = true; check_loss(q, ply); }
+                                else if (c == UNKNOWN) { if (fwd && check_loss(q, ply)) any = true; }
+                                else if (c == cl || c == cl2) {
+                                        any = true;
+                                        if (!ord) cells.put(q, LOST);
+                                        mark_wins(q, pos(q), ord ? loss_depth(c) : 0);
+                                } else if (c == cw || c == cw2) {
+                                        any = true;
+                                        if (!ord) cells.put(q, WON);
+                                        else if (sb && !par && c == cw2 && sbuf[q - base0 - lo] == dw1) cells.put(q, cw);
+                                        if (mark) retro(q, pos(q), set_changed);
+                                } else if (sb && c == PAWN_WIN) {
+                                        int const d = sbuf[q - base0 - lo];
+                                        if (d != dw1 && d != dw2) return;
+                                        any = true;
+                                        cells.put(q, d == dw1 ? cw : cw2);                      // final now
+                                        if (mark) retro(q, pos(q), set_changed);
+                                }
+                        };
+                        wins_written = 0;
+                        std::uint64_t und = 0;
+                        cells.scan(col, lo, hi, codes, UNKNOWN, CHANGED, und, handle);
+                        undecided_now.fetch_add(und, std::memory_order_relaxed);
+                        wins_now.fetch_add(wins_written, std::memory_order_relaxed);
+                        if (any) work.store(true, std::memory_order_relaxed);
+                });
+                undecided[col] = undecided_now.load();
+                wins_into[opp] = wins_now.load();
+                idle = work.load() ? 0 : idle + 1;
+        }
+        double const t_sweeps = seconds_since(t1);
+
+        // the output: a cell's value from the cells (the last window), or for WON and LOST from the one snapshot that
+        // has it. Unordered: no depths (placeholders until the wdl target writes wdl files only)
+        auto const t3 = std::chrono::steady_clock::now();
+        std::atomic<std::uint64_t> left{ 0 };
+        for (int col = 0; col < 2; ++col)
+                for_blocks(policy, P, [&](std::uint64_t lo, std::uint64_t hi) {
+                        std::uint64_t const b0 = std::uint64_t(col) * P;
+                        std::array<std::uint16_t, block_size> old{};
+                        bool any_old = false;
+                        for (auto const& sn : snaps) {
+                                auto const& z = sn.chunk[std::size_t(col) * NB + lo / block_size];
+                                if (z.empty()) continue;
+                                std::array<std::uint8_t, block_size> stage{};
+                                std::size_t const r = ZSTD_decompress(stage.data(), hi - lo, z.data(), z.size());
+                                if (ZSTD_isError(r)) { std::cerr << "zstd: " << ZSTD_getErrorName(r) << std::endl; std::abort(); }
+                                for (std::uint64_t j = 0; j < hi - lo; ++j) {
+                                        if (stage[j] == 0) continue;
+                                        std::uint8_t const c = std::uint8_t(stage[j] - 1);
+                                        if (Z.won(c)) old[j] = win(Z.win_depth(c) + sn.base);
+                                        else if (Z.lost(c)) old[j] = loss(Z.loss_depth(c) + sn.base);
+                                }
+                                any_old = true;
+                        }
+                        for (std::uint64_t q = b0 + lo; q < b0 + hi; ++q) {
+                                std::uint8_t const c = cells.get(q);
+                                std::uint16_t v = 0;
+                                if (!ord) {
+                                        if (c == WON) v = win(1);
+                                        else if (c == LOST) v = loss(2);
+                                        else if (c == FRESH_WIN || c == FRESH_LOSS || c == CHANGED) left.fetch_add(1, std::memory_order_relaxed);
+                                } else if (c == WON || c == LOST) {
+                                        v = any_old ? old[q - b0 - lo] : 0;
+                                        if (v == 0) left.fetch_add(1, std::memory_order_relaxed);
+                                } else if (c == PAWN_WIN || c == WIN_LATER || c == LOSS_LATER || c == CHANGED) left.fetch_add(1, std::memory_order_relaxed);
+                                else if (Z.won(c)) v = win(Z.win_depth(c) + base);
+                                else if (Z.lost(c)) v = loss(Z.loss_depth(c) + base);
+                                if (v != 0) sink.put(col, q % P, pos(q), v);
+                        }
+                });
+        if (left.load() != 0) { std::cerr << "engine: " << left.load() << " positions left undecided or without a value" << std::endl; std::abort(); }
+        g_stats.rounds += seconds_since(t1);
+        std::cout << "engine steps (" << Cells::bits << " bits, table " << cells.bytes() << " bytes): sweeps " << t_sweeps << " s (" << ply << " plies, "
+                  << forward_sweeps << " forward, " << snaps.size() << " reductions " << t_reduce << " s), output " << seconds_since(t3)
+                  << " s, snapshot " << snap_bytes.load() << " bytes" << std::endl;
+}
+
+template<class ExecutionPolicy>
+void solve_group_eng(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPolicy const& policy)
+{
+        if (g_eng.bits == 4) solve_group_engine<eng::Nibbles>(g, sink, policy, g_eng);
+        else solve_group_engine<eng::Bytes>(g, sink, policy, g_eng);
+}
+
 // ---------------------------------------------------------------- one group, WDL only: rule tables and one loop
 //
 // Win, draw or loss without depths, so without a ply order: a value may be used as soon as it is written. A WDL loop
@@ -1926,6 +2433,7 @@ void solve_group_wdlz(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionP
 template<class ExecutionPolicy>
 void solve_group(Group const& g, DepthSink<std::uint16_t>& sink, ExecutionPolicy const& policy)
 {
+        if (g_engine) { solve_group_eng(g, sink, policy); return; }
         if (g_wdl == 4) { solve_group_wdlz(g, sink, policy); return; }
         if (g_wdl != 0) { solve_group_wdl(g, sink, policy); return; }
         if (g_cell8 && g_rtb) { solve_group_rtb(g, sink, policy); return; }
@@ -2770,7 +3278,7 @@ int main(int argc, char* argv[])
                 for (Material const c : stored_materials_up_to(std::stoi(a[1]))) print_plan_row(c, memory_need(c));
                 return 0;
         }
-        if (a.size() >= 7 && a.size() <= 14 && a[0] == "build" && parse_metric(a[6])) {
+        if (a.size() >= 7 && a.size() <= 18 && a[0] == "build" && parse_metric(a[6])) {
                 bool par = false;                                       // the execution policy: par or seq
                 if (char const* e = std::getenv("EGDB_WDL_NIBBLES"); e && *e == '1') g_wdl_nibbles = true;
                 for (std::size_t i = 7; i < a.size(); ++i) {
@@ -2780,6 +3288,9 @@ int main(int argc, char* argv[])
                         else if (a[i] == "rtb") { g_cell8 = g_rtb = true; g_frontier = false; }
                         else if (a[i] == "wdl3" || a[i] == "wdl2") { g_wdl = a[i] == "wdl3" ? 3 : 2; g_cell8 = true; g_frontier = false; }
                         else if (a[i] == "wdlz") { g_wdl = 4; g_cell8 = true; g_frontier = false; }
+                        else if (a[i] == "eng") { g_engine = g_cell8 = true; g_frontier = false; }
+                        else if (a[i].starts_with("bits=")) g_eng.bits = std::stoi(a[i].substr(5));
+                        else if (a[i] == "wdl") { g_eng.ordered = false; g_wdl = 1; }
                         else if (a[i] == "raw" || a[i] == "compressed") g_compressed = a[i] == "compressed";
                         else if (a[i] == "stats") g_write_stats = true;
                         else if (a[i].starts_with("mem=")) g_mem_mb = std::stoull(a[i].substr(4));
@@ -2787,6 +3298,10 @@ int main(int argc, char* argv[])
                         else if (a[i] == "auto") g_sink_auto = true;
                         else if (parse_granularity(a[i])) {}
                         else { std::cerr << "unknown option " << a[i] << std::endl; return 2; }
+                }
+                if (g_engine) {
+                        g_eng.parity = g_eng.ordered && g_metric == Metric::dtm;
+                        g_eng.exit_depths = g_eng.ordered && (g_metric == Metric::dtm || (g_metric == Metric::dtc && g_granularity != Granularity::material));
                 }
                 bool const ok = par ? build_material(a[1], mat_at(2), std::execution::par) : build_material(a[1], mat_at(2), std::execution::seq);
                 return ok ? 0 : 1;

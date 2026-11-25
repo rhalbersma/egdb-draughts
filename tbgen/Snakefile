@@ -20,7 +20,9 @@
 # Memory (synthesis 7.3): the engine's `plan` gives every material's need; each build claims its rung-0 need, or the
 # whole budget if that does not fit (the build then writes its depths to group files, rung 1, with sink=auto). Pass the
 # budget as --resources mem_mb=N (else config mem_mb, else 75 % of physical memory). Priorities follow the critical
-# path. granularity=material|tempi|configuration sets the groups (tempi: the smallest largest group).
+# path. granularity=auto (default): a material is cut into finer groups only if it does not fit the budget whole (then
+# by tempi, then by configuration); granularity=material|tempi|configuration sets one for the run. The decompressed
+# inputs take at most the cache allowance (EGDB_CACHE_MB, default 256).
 #
 # usage (from the root of the repo):
 #   snakemake -s tbgen/Snakefile --cores 10 --config engine=build/itbgen dir=data/itbgen pieces=12 metric=dtm rounds=cell8
@@ -58,7 +60,7 @@ PRIMARY = config.get('primary', '')     # wdl: dtz or dtc as a by-product of a 4
 ENGINE_OPTS = ' '.join(x for x in (f'bits={BITS}' if BITS else '', f'primary={PRIMARY}' if PRIMARY else '') if x)
 WDL = METRIC == 'wdl' 
 SINK = config.get('sink', 'auto')          # the depth sink: auto (by the claim), groups (group files), bytes (8-bit, RAM), array (16-bit, RAM)
-GRANULARITY = config.get('granularity', 'material')  # material, tempi or configuration (below material: man moves exit)
+GRANULARITY = config.get('granularity', 'auto')  # auto: per material the coarsest of material, tempi, configuration that fits the budget
 import os
 import subprocess
 THREADS = int(config.get('threads', 4))
@@ -161,8 +163,29 @@ sys.path.insert(0, os.path.join(workflow.basedir, '..', 'src'))
 from snakemake_plan import memory_budget_mb, load_plan, claim_mb, priorities, criticality, report, check_budget  # noqa: E402
 
 MEM = memory_budget_mb(workflow, config)
-PLAN = {k: v for k, v in load_plan([ENGINE, 'plan', str(N), METRIC, GRANULARITY] + ENGINE_OPTS.split() + (['old'] if ROUNDS else [])).items()
-        if k in {name(m) for m in MATERIALS}}
+# granularity=auto: a material is cut finer only if it has to be. Per material the coarsest granularity whose need fits
+# the budget (the values do not depend on the grouping; finer groups are slower: more exits, more groups); if none
+# fits, the finest, and check_budget reports it
+def _plan(g):
+    return {k: v for k, v in load_plan([ENGINE, 'plan', str(N), METRIC, g] + ENGINE_OPTS.split() + (['old'] if ROUNDS else [])).items()
+            if k in {name(m) for m in MATERIALS}}
+
+if GRANULARITY == 'auto':
+    _order = ('material', 'tempi', 'configuration')
+    _plans = {'material': _plan('material')}
+    PLAN, GRAN = {}, {}
+    for _k, _v in _plans['material'].items():
+        for _g in _order:
+            if _g not in _plans:
+                _plans[_g] = _plan(_g)                      # only asked for when some material needs it
+            _p = _plans[_g][_k]
+            if min(_p['rung0'], _p['rung1']) <= MEM or _g == _order[-1]:
+                PLAN[_k], GRAN[_k] = _p, _g
+                break
+    print('granularity: ' + ', '.join(f'{sum(g == x for g in GRAN.values())} {x}' for x in _order), file=sys.stderr)
+else:
+    PLAN = _plan(GRANULARITY)
+    GRAN = {k: GRANULARITY for k in PLAN}
 DEPS = {name(m): [name(d) for d in deps(m)] for m in MATERIALS}
 PRIO = priorities(PLAN, DEPS)
 # the critical path (policy=share): a material through which a chain of at least crit (default 0.9) of the longest
@@ -263,8 +286,8 @@ for _m in MATERIALS:
         resources: mem_mb=claim_mb(PLAN[_n], MEM)
         priority: PRIO[_n]
         threads: sched(_n)[0]
-        params: m=_n.replace('-', ' '), policy=sched(_n)[1]
-        shell: '{ENGINE} build {D} {params.m} {METRIC} {params.policy} {ROUNDS} {ENGINE_OPTS} {SINK} {STORE} {STATS} {GRANULARITY} mem={resources.mem_mb} > {log} 2>&1'
+        params: m=_n.replace('-', ' '), policy=sched(_n)[1], gran=GRAN[_n]
+        shell: '{ENGINE} build {D} {params.m} {METRIC} {params.policy} {ROUNDS} {ENGINE_OPTS} {SINK} {STORE} {STATS} {params.gran} mem={resources.mem_mb} > {log} 2>&1'
 
 
 # the probe format (synthesis 10): one side, capture positions and draws as don't-cares, written once the materials the

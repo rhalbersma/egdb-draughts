@@ -101,6 +101,7 @@
 #include <execution>
 #include <filesystem>
 #include <fstream>
+#include "../src/block_cache.hpp"
 #include <optional>
 #include <oneapi/tbb/global_control.h>
 #if __has_include(<flat_set>)
@@ -184,15 +185,16 @@ int max_depth_index(int esc) { return esc + ZRANGE * (255 - esc) + ZRANGE - 1; }
 
 struct ZFile {
         std::uint64_t size = 0, nblocks = 0; int esc = 256; std::uint64_t const* off = nullptr; std::uint8_t const* data = nullptr;
-        std::uint8_t* shared = nullptr;                         // the shared cache: 2 * ZBLOCK of address space per block
-        std::atomic<std::uint8_t>* state = nullptr;             // per block: 0 not decompressed, 1 being decompressed, 2 ready
+        std::uint64_t base = 0;                                 // the number of its first block among all open files
 };
-// The cache of decompressed blocks. Shared (the default): each file has address space for all its blocks (anonymous
-// memory, pages touched only when a block is first read), a block is decompressed once, by the first thread that
-// needs it, and stays; every thread reads the same copy, so the resident set is at most the raw size of the blocks
-// read. EGDB_CACHE_BLOCKS=n instead gives every thread its own direct-mapped cache of n blocks (bounded, with
-// eviction: for inputs larger than the memory).
-bool const g_shared_cache = std::getenv("EGDB_CACHE_BLOCKS") == nullptr;
+// The cache of decompressed blocks (src/block_cache.hpp): one for all files and all threads, of a fixed size
+// (EGDB_CACHE_MB, default 256), a block of 2 * ZBLOCK bytes per slot (position bytes, then the extra bytes of its
+// tokens). The open files number their blocks consecutively, so inputs smaller than the cache are decompressed once
+// and never evicted; larger inputs evict by slot.
+std::uint64_t const g_cache_bytes = (std::getenv("EGDB_CACHE_MB") ? std::uint64_t(std::atoll(std::getenv("EGDB_CACHE_MB"))) : 256) << 20;
+int g_threads = 1;                                              // the threads of this run
+inline std::atomic<std::uint64_t> g_next_block{ 0 };
+inline SharedBlockCache<2 * 4096>& zcache() { static SharedBlockCache<2 * 4096> c(g_cache_bytes); return c; }
 
 std::string zpath(std::string const& path) { return path + ".z"; }
 std::string xpath(std::string const& path) { return path + ".x"; }
@@ -211,12 +213,7 @@ ZFile open_zfile(std::string const& path, std::uint64_t size)
         z.esc = int(h[4]);
         z.off = reinterpret_cast<std::uint64_t const*>(p + 40);
         z.data = p + 40 + 8 * (z.nblocks + 1);
-        if (g_shared_cache && z.nblocks != 0) {
-                void* const m = ::mmap(nullptr, z.nblocks * 2 * ZBLOCK, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
-                if (m == MAP_FAILED) { std::cerr << "cache: cannot reserve " << z.nblocks * 2 * ZBLOCK << " bytes" << std::endl; std::exit(1); }
-                z.shared = static_cast<std::uint8_t*>(m);
-                z.state = new std::atomic<std::uint8_t>[z.nblocks]();
-        }
+        z.base = g_next_block.fetch_add(z.nblocks, std::memory_order_relaxed);
         return z;
 }
 
@@ -272,43 +269,18 @@ void compress_file(std::string const& path, std::uint64_t size, ExecutionPolicy 
         std::filesystem::remove(path);
 }
 
-// one decompressed block (its position bytes, then the extra bytes of its tokens), through the calling thread's cache
-std::uint8_t const* zblock(ZFile const& z, std::uint64_t b)
+// a value from block b of a compressed file, through the cache: use(block) -> the value
+template<class Use>
+auto zread(ZFile const& z, std::uint64_t b, Use&& use)
 {
-        if (z.shared) {
-                std::uint8_t* const data = z.shared + b * 2 * ZBLOCK;
-                std::atomic<std::uint8_t>& st = z.state[b];
-                std::uint8_t s = st.load(std::memory_order_acquire);
-                if (s == 2) return data;
-                std::uint8_t expected = 0;
-                if (st.compare_exchange_strong(expected, 1, std::memory_order_acquire)) {
-                        thread_local std::unique_ptr<ZSTD_DCtx, std::size_t (*)(ZSTD_DCtx*)> dxs(ZSTD_createDCtx(), ZSTD_freeDCtx);
-                        std::size_t const r = ZSTD_decompressDCtx(dxs.get(), data, 2 * ZBLOCK, z.data + z.off[b], z.off[b + 1] - z.off[b]);
-                        if (ZSTD_isError(r)) { std::cerr << "zstd: bad block " << b << std::endl; std::exit(1); }
-                        st.store(2, std::memory_order_release);
-                        return data;
-                }
-                while (st.load(std::memory_order_acquire) != 2) std::this_thread::yield();
-                return data;
-        }
-        struct Tag { ZFile const* f = nullptr; std::uint64_t block = ~std::uint64_t(0); };
-        static std::size_t const nslots = std::getenv("EGDB_CACHE_BLOCKS") ? std::size_t(std::atoll(std::getenv("EGDB_CACHE_BLOCKS"))) : 8192;
-        thread_local std::vector<Tag> tags(nslots);                                    // the data uninitialised: pages are
-        thread_local std::unique_ptr<std::uint8_t[]> blocks(new std::uint8_t[nslots * 2 * ZBLOCK]);   // touched only when used
-        thread_local std::unique_ptr<ZSTD_DCtx, std::size_t (*)(ZSTD_DCtx*)> dx(ZSTD_createDCtx(), ZSTD_freeDCtx);
-        std::size_t const h = std::size_t((std::uintptr_t(&z) >> 4) * 0x9E3779B97F4A7C15ull ^ b * 0xC2B2AE3D27D4EB4Full) % nslots;
-        Tag& t = tags[h];
-        std::uint8_t* const data = blocks.get() + h * 2 * ZBLOCK;
-        if (t.f != &z || t.block != b) {
-                std::size_t const r = ZSTD_decompressDCtx(dx.get(), data, 2 * ZBLOCK, z.data + z.off[b], z.off[b + 1] - z.off[b]);
+        return zcache().read(z.base + b, [&](std::uint8_t* dst) {
+                thread_local std::unique_ptr<ZSTD_DCtx, std::size_t (*)(ZSTD_DCtx*)> dx(ZSTD_createDCtx(), ZSTD_freeDCtx);
+                std::size_t const r = ZSTD_decompressDCtx(dx.get(), dst, 2 * ZBLOCK, z.data + z.off[b], z.off[b + 1] - z.off[b]);
                 if (ZSTD_isError(r)) { std::cerr << "zstd: bad block " << b << std::endl; std::exit(1); }
-                t.f = &z;
-                t.block = b;
-        }
-        return data;
+        }, use);
 }
 
-std::uint8_t zbyte(ZFile const& z, std::uint64_t pos) { return zblock(z, pos / ZBLOCK)[pos % ZBLOCK]; }
+std::uint8_t zbyte(ZFile const& z, std::uint64_t pos) { return zread(z, pos / ZBLOCK, [&](std::uint8_t const* blk) { return blk[pos % ZBLOCK]; }); }
 
 // the depth index of a position in a decompressed block of n positions: a token's extra byte follows the block's
 // position bytes, as many places in as there are tokens before it
@@ -324,7 +296,7 @@ int block_depth(std::uint8_t const* blk, std::uint64_t n, std::uint64_t j, int e
 int zdepth(ZFile const& z, std::uint64_t pos)
 {
         std::uint64_t const b = pos / ZBLOCK, lo = b * ZBLOCK;
-        return block_depth(zblock(z, b), std::min(ZBLOCK, z.size - lo), pos - lo, z.esc);
+        return zread(z, b, [&](std::uint8_t const* blk) { return block_depth(blk, std::min(ZBLOCK, z.size - lo), pos - lo, z.esc); });
 }
 
 bool g_frozen = false;                                  // during the passes of a build: the maps are only read
@@ -2972,6 +2944,18 @@ bool g_sink_auto = true;                                        // choose the si
 // the memory a build of c needs. Rung 0 keeps the material's 16-bit values in RAM (the array sink, both sides to
 // move), rung 1 only the current group's (the group sink); both hold the largest group's bit planes and level lists,
 // and in scan mode also its value array
+// the decompressed bytes of the files a build of c opens (the engine: depth files for dtm, else wdl files)
+std::uint64_t input_bytes(Material c)
+{
+        std::uint64_t inputs = 0;
+        for (Material const s : successors_of(c)) {
+                std::uint64_t const n = mat_index(s).size;
+                inputs += g_engine ? (g_metric == Metric::dtm && !g_wdl_only ? 2 * n : 2 * ((n + 3) / 4))
+                                   : 2 * ((n + 3) / 4) + (g_metric == Metric::dtm ? 2 * n : 0);
+        }
+        return inputs;
+}
+
 MemoryNeed memory_need(Material c)
 {
         MemoryNeed m;
@@ -2991,12 +2975,7 @@ MemoryNeed memory_need(Material c)
         // the memory-mapped files count in the resident set as their pages are touched: the inputs (the materials the
         // moves lead into: the bytes and wdl files for dtm, the wdl files for dtc and dtz) and, at rung 1, the
         // group-order files of the material itself (read by the lookups into earlier groups and by the final pass)
-        std::uint64_t inputs = 0;
-        for (Material const s : successors_of(c)) {
-                std::uint64_t const n = mat_index(s).size;
-                inputs += g_engine ? (g_metric == Metric::dtm && !g_wdl_only ? 2 * n : 2 * ((n + 3) / 4))       // what it opens
-                                   : 2 * ((n + 3) / 4) + (g_metric == Metric::dtm ? 2 * n : 0);
-        }
+        std::uint64_t const inputs = g_engine ? std::min(input_bytes(c), g_cache_bytes) : input_bytes(c);      // the cache allowance
         std::uint64_t const sink_bytes = g_wdl_only ? 2 * ((mi.size + 3) / 4) : g_byte_sink ? 2 * mi.size + 2 * ((mi.size + 3) / 4) : 4 * mi.size;   // both sides
         m.rung0 = FIXED_BYTES + m.meta(false) + inputs + sink_bytes + std::max(transient, writing);
         m.rung1 = FIXED_BYTES + m.meta(true) + inputs + 2 * T + 2 * m.positions + std::max(transient, writing);
@@ -3679,7 +3658,7 @@ int main(int argc, char* argv[])
                         else if (a[i] == "eng") {}
                         else if (a[i].starts_with("bits=")) { g_eng.bits = std::stoi(a[i].substr(5)); bits_given = true; }
                         else if (a[i] == "primary=wdl" || a[i] == "primary=depth") primary_wdl = a[i] == "primary=wdl";
-                        else if (a[i].starts_with("threads=")) { limit.emplace(oneapi::tbb::global_control::max_allowed_parallelism, std::max(1, std::stoi(a[i].substr(8)))); par = true; }
+                        else if (a[i].starts_with("threads=")) { g_threads = std::max(1, std::stoi(a[i].substr(8))); limit.emplace(oneapi::tbb::global_control::max_allowed_parallelism, g_threads); par = true; }
                         else if (a[i] == "wdl") { g_eng.ordered = false; g_wdl = 1; g_wdl_only = true; }
                         else if (a[i] == "raw" || a[i] == "compressed") g_compressed = a[i] == "compressed";
                         else if (a[i] == "stats") g_write_stats = true;
@@ -3701,13 +3680,15 @@ int main(int argc, char* argv[])
                         }
                 }
                 if (g_wdl_only) { g_group_files = false; g_byte_sink = true; g_sink_auto = false; }
+                if (par && !limit) g_threads = int(std::thread::hardware_concurrency());
                 bool const ok = par ? build_material(a[1], mat_at(2), std::execution::par) : build_material(a[1], mat_at(2), std::execution::seq);
                 return ok ? 0 : 1;
         }
         if ((a.size() == 7 || a.size() == 8) && a[0] == "verify" && parse_metric(a[6])) {     // verify <dir> wp bp wm bm <metric> [seq|par|threads=N]
                 Material const c = mat_at(2);
                 std::optional<oneapi::tbb::global_control> limit;
-                if (a.size() == 8 && a[7].starts_with("threads=")) { limit.emplace(oneapi::tbb::global_control::max_allowed_parallelism, std::max(1, std::stoi(a[7].substr(8)))); a[7] = "par"; }
+                if (a.size() == 8 && a[7] == "par") g_threads = int(std::thread::hardware_concurrency());
+                if (a.size() == 8 && a[7].starts_with("threads=")) { g_threads = std::max(1, std::stoi(a[7].substr(8))); limit.emplace(oneapi::tbb::global_control::max_allowed_parallelism, g_threads); a[7] = "par"; }
                 if (a.size() == 8 && a[7] == "par") return verify_material(a[1], c, std::execution::par) ? 0 : 1;
                 return verify_material(a[1], c, std::execution::seq) ? 0 : 1;
         }

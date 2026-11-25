@@ -110,8 +110,11 @@ window with reductions, a direction (forward or retrograde) chosen per sweep, ov
 * `tempi` and `configuration` cut a material into finer groups (man moves become exits with their depths).
 * `verify` for `wdl` checks outcomes against the moves; a depth build into the same directory completes the check.
 * The older loops stay available by name as references: `cell8`, `rtb`, `wdl3`, `wdl2`, `wdlz`, `frontier`, `scan`.
-* `EGDB_RTB_WINDOW=k` forces a small window, `EGDB_RTB_DIR=retro|forward|auto` the direction, `EGDB_CACHE_BLOCKS=n` a
-  bounded per-thread cache of the inputs instead of the shared one.
+* `EGDB_RTB_WINDOW=k` forces a small window, `EGDB_RTB_DIR=retro|forward|auto` the direction, `EGDB_CACHE_MB=n` the size
+  of the cache of decompressed input blocks (default 256; `src/block_cache.hpp`: one cache for all threads, bounded,
+  lock-free for readers; stress test `src/block_cache_test.cpp`).
+* `tbgen/Snakefile` drives a whole run: memory first, then cores (`policy=share`), the critical path on all cores,
+  and `granularity=auto`: a material is cut into finer groups only if it does not fit the budget whole.
 
 ## rtbgen's sweeps (`rtb`) and the WDL loops (`wdl3`, `wdl2`)
 

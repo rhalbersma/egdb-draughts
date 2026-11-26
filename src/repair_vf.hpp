@@ -25,6 +25,8 @@
 #if defined(__AVX2__)
 #include <immintrin.h>
 #endif
+#include <fcntl.h>
+#include <unistd.h>
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -178,7 +180,8 @@ inline std::uint16_t lookup(File const& f, std::uint64_t p)
 //   on disk    while the sequence is longer than `ram_symbols`, a round is one sequential read and one sequential
 //              write: the round's new rules (a batch of the most frequent pairs with no symbol in common, so that
 //              they cannot overlap) are applied and the pairs of the result counted on the way. Only the pair counts
-//              (256 KB) are in memory. The first round reads the source, the later ones the previous round's file.
+//              (256 KB) are in memory. The first round reads the source and writes a temporary file; the later ones
+//              rewrite that file in place.
 //   in memory  once it fits: the exact method, the most frequent pair, one at a time.
 using Feed = std::function<void(std::uint8_t const*, std::size_t)>;
 using Source = std::function<void(Feed const&)>;
@@ -226,14 +229,19 @@ inline std::vector<std::uint8_t> compress(Source const& source, std::uint64_t po
         Stats st;
         PairCounter pc;
         source([&](std::uint8_t const* d, std::size_t n) { for (std::size_t i = 0; i < n; ++i) pc.put(d[i]); });
-        std::string files[2] = { tmp + ".0", tmp + ".1" };
-        int cur = -1;                                           // -1: the sequence is the source; else files[cur]
+        // One temporary file. The first round writes it from the source; every later round rewrites it in place: a
+        // round never lengthens the sequence, so the write position never passes the read position
+        int fd = -1;
+        std::uint64_t flen = 0;                                 // symbols in the file
         auto const read_current = [&](Feed const& feed) {
-                if (cur < 0) { source(feed); return; }
-                std::FILE* f = std::fopen(files[cur].c_str(), "rb");
+                if (fd < 0) { source(feed); return; }
                 std::vector<std::uint8_t> buf(1 << 20);
-                for (std::size_t n; (n = std::fread(buf.data(), 1, buf.size(), f)) != 0;) feed(buf.data(), n);
-                std::fclose(f);
+                for (std::uint64_t r = 0; r < flen;) {
+                        ssize_t const n = ::pread(fd, buf.data(), std::size_t(std::min<std::uint64_t>(buf.size(), flen - r)), off_t(r));
+                        if (n <= 0) break;
+                        r += std::uint64_t(n);
+                        feed(buf.data(), std::size_t(n));
+                }
         };
         while (pc.n > ram_symbols && G.nsym < 256) {            // a round on disk
                 // the batch: by count, pairs of symbols no chosen pair has used yet (at most 8)
@@ -253,14 +261,19 @@ inline std::vector<std::uint8_t> compress(Source const& source, std::uint64_t po
                         ++chosen;
                 }
                 if (chosen == 0) break;
-                int const nxt = cur < 0 ? 0 : 1 - cur;
-                std::FILE* out = std::fopen(files[nxt].c_str(), "wb");
+                bool const first = fd < 0;
+                int const out = first ? ::open(tmp.c_str(), O_RDWR | O_CREAT | O_TRUNC, 0644) : fd;
+                std::uint64_t woff = 0;
                 std::vector<std::uint8_t> obuf; obuf.reserve(1 << 20);
                 PairCounter next;
-                auto const emit = [&](std::uint8_t x) {
+                auto const flush = [&] {
+                        if (::pwrite(out, obuf.data(), obuf.size(), off_t(woff)) != ssize_t(obuf.size())) { std::perror("repair: write"); std::exit(1); }
+                        woff += obuf.size(); st.disk_bytes += obuf.size(); obuf.clear();
+                };
+                auto const emit = [&](std::uint8_t x) {         // everything emitted so far was read before: woff stays behind the reader
                         next.put(x);
                         obuf.push_back(x);
-                        if (obuf.size() == (1 << 20)) { std::fwrite(obuf.data(), 1, obuf.size(), out); st.disk_bytes += obuf.size(); obuf.clear(); }
+                        if (obuf.size() == (1 << 20)) flush();
                 };
                 int held = -1;                                  // one symbol of look-ahead across the chunks
                 read_current([&](std::uint8_t const* d, std::size_t n) {
@@ -272,10 +285,10 @@ inline std::vector<std::uint8_t> compress(Source const& source, std::uint64_t po
                         }
                 });
                 if (held >= 0) emit(std::uint8_t(held));
-                std::fwrite(obuf.data(), 1, obuf.size(), out); st.disk_bytes += obuf.size();
-                std::fclose(out);
-                if (cur >= 0) std::remove(files[cur].c_str());
-                cur = nxt;
+                flush();
+                fd = out;
+                flen = woff;
+                if (::ftruncate(fd, off_t(flen)) != 0) { std::perror("repair: truncate"); std::exit(1); }
                 pc = std::move(next);
                 ++st.disk_rounds;
         }
@@ -283,7 +296,7 @@ inline std::vector<std::uint8_t> compress(Source const& source, std::uint64_t po
         std::vector<std::uint8_t> seq;
         seq.reserve(pc.n);
         read_current([&](std::uint8_t const* d, std::size_t n) { seq.insert(seq.end(), d, d + n); });
-        if (cur >= 0) std::remove(files[cur].c_str());
+        if (fd >= 0) { ::close(fd); std::remove(tmp.c_str()); }
         st.ram_symbols_at_switch = seq.size();
         std::vector<std::uint32_t> count(65536);
         while (G.nsym < 256) {

@@ -3383,10 +3383,12 @@ std::string probe_path(std::string const& dir, Material m, std::string const& ki
         return m.path(dir + "/probe/" + kind) + "-" + kind + (side == 0 ? "-wtm" : "-btm");
 }
 
-struct ProbeFiles { ZFile wdl[2]; int side = -1; ZFile depth; rpvf::File rp[2], rpd; };     // side: the depth file's side to move (-1: none)
+struct ProbeFiles { ZFile wdl[2]; int side = -1; ZFile depth; rpvf::File rp[2], rpd; rpvf::Flat rf[2], rfd; };     // side: the depth file's side to move (-1: none)
 // EGDB_WDL_RP=1: the prober reads the wdl values from the Re-Pair files (<wdl probe file>.rp, src/repair_vf.hpp;
 // written by `tbgen rpconvert`) straight from the mapping, instead of the zstd frames through the cache
 bool const g_wdl_rp = std::getenv("EGDB_WDL_RP") != nullptr;
+// EGDB_WDL_RP=flat: the flat files instead (<probe file>.rpf: 64-byte blocks and an Elias-Fano index)
+bool const g_rp_flat = g_wdl_rp && std::string(std::getenv("EGDB_WDL_RP")) == "flat";
 std::map<Material, ProbeFiles> g_probe;                 // opened before any parallel use, then only read
 
 // open the probe files of the given stored materials, those that have both wdl files (once; then only read)
@@ -3399,12 +3401,17 @@ void open_probe(std::string const& dir, std::vector<Material> const& ms)
                 ProbeFiles& f = g_probe[m];
                 for (int side : { 0, 1 }) {
                         f.wdl[side] = open_zfile(probe_path(dir, m, "wdl", side), (size + 3) / 4);
-                        if (std::string const rp = probe_path(dir, m, "wdl", side) + ".rp"; g_wdl_rp && std::filesystem::exists(rp))
-                                f.rp[side] = rpvf::open(map_file(rp, std::size_t(std::filesystem::file_size(rp))));
+                        if (std::string const rp = probe_path(dir, m, "wdl", side) + (g_rp_flat ? ".rpf" : ".rp"); g_wdl_rp && std::filesystem::exists(rp)) {
+                                std::uint8_t const* const mp = map_file(rp, std::size_t(std::filesystem::file_size(rp)));
+                                if (g_rp_flat) f.rf[side] = rpvf::open_flat(mp); else f.rp[side] = rpvf::open(mp);
+                        }
                         std::string const d = probe_path(dir, m, metric_name(), side);
                         if (std::filesystem::exists(zpath(d))) {
                                 f.depth = open_zfile(d, size); f.side = side;
-                                if (g_wdl_rp && std::filesystem::exists(d + ".rp")) f.rpd = rpvf::open(map_file(d + ".rp", std::size_t(std::filesystem::file_size(d + ".rp"))));
+                                if (std::string const rp = d + (g_rp_flat ? ".rpf" : ".rp"); g_wdl_rp && std::filesystem::exists(rp)) {
+                                        std::uint8_t const* const mp = map_file(rp, std::size_t(std::filesystem::file_size(rp)));
+                                        if (g_rp_flat) f.rfd = rpvf::open_flat(mp); else f.rpd = rpvf::open(mp);
+                                }
                         }
                 }
         }
@@ -3424,6 +3431,7 @@ ProbeFiles const& probe_files(Material m)
 inline std::uint8_t wdl_read(Material m, int stm, std::uint64_t i)
 {
         ProbeFiles const& f = probe_files(m);
+        if (f.rf[stm]) return std::uint8_t(rpvf::lookup(f.rf[stm], i));
         if (f.rp[stm]) return std::uint8_t(rpvf::lookup(f.rp[stm], i));
         return std::uint8_t(zbyte(f.wdl[stm], i >> 2) >> (2 * (i & 3)) & 3);
 }
@@ -3572,7 +3580,7 @@ std::uint16_t pvalue(Pos const& p0)
         if (r == WDL_DRAW) return 0;
         if (f.side < 0) { std::cerr << "no " << metric_name() << " probe file for " << m.name() << std::endl; std::exit(1); }
         if (p.stm != f.side) return search();                           // the side without a depth file
-        int const c = f.rpd ? int(rpvf::lookup(f.rpd, i)) : zdepth(f.depth, i);
+        int const c = f.rfd ? int(rpvf::lookup(f.rfd, i)) : f.rpd ? int(rpvf::lookup(f.rpd, i)) : zdepth(f.depth, i);
         bool const dtm = g_metric == Metric::dtm;
         return r == WDL_WIN ? win(dtm ? 2 * c + 1 : c) : loss(dtm ? 2 * c : c);
 }

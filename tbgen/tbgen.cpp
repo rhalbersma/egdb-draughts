@@ -105,6 +105,7 @@
 #include <functional>
 #include <random>
 #include "../src/block_cache.hpp"
+#include "../src/repair_vf.hpp"
 #include <optional>
 #include <oneapi/tbb/global_control.h>
 #if __has_include(<flat_set>)
@@ -3358,7 +3359,10 @@ std::string probe_path(std::string const& dir, Material m, std::string const& ki
         return m.path(dir + "/probe/" + kind) + "-" + kind + (side == 0 ? "-wtm" : "-btm");
 }
 
-struct ProbeFiles { ZFile wdl[2]; int side = -1; ZFile depth; };    // side: the depth file's side to move (-1: none)
+struct ProbeFiles { ZFile wdl[2]; int side = -1; ZFile depth; rpvf::File rp[2]; };     // side: the depth file's side to move (-1: none)
+// EGDB_WDL_RP=1: the prober reads the wdl values from the Re-Pair files (<wdl probe file>.rp, src/repair_vf.hpp;
+// written by `tbgen rpconvert`) straight from the mapping, instead of the zstd frames through the cache
+bool const g_wdl_rp = std::getenv("EGDB_WDL_RP") != nullptr;
 std::map<Material, ProbeFiles> g_probe;                 // opened before any parallel use, then only read
 
 // open the probe files of the given stored materials, those that have both wdl files (once; then only read)
@@ -3371,6 +3375,8 @@ void open_probe(std::string const& dir, std::vector<Material> const& ms)
                 ProbeFiles& f = g_probe[m];
                 for (int side : { 0, 1 }) {
                         f.wdl[side] = open_zfile(probe_path(dir, m, "wdl", side), (size + 3) / 4);
+                        if (std::string const rp = probe_path(dir, m, "wdl", side) + ".rp"; g_wdl_rp && std::filesystem::exists(rp))
+                                f.rp[side] = rpvf::open(map_file(rp, std::size_t(std::filesystem::file_size(rp))));
                         std::string const d = probe_path(dir, m, metric_name(), side);
                         if (std::filesystem::exists(zpath(d))) { f.depth = open_zfile(d, size); f.side = side; }
                 }
@@ -3385,6 +3391,14 @@ ProbeFiles const& probe_files(Material m)
         auto it = g_probe.find(m);
         if (it == g_probe.end()) { std::cerr << "no probe files for " << m.name() << std::endl; std::exit(1); }
         return it->second;
+}
+
+// the stored wdl value of slot i of material m for side stm
+inline std::uint8_t wdl_read(Material m, int stm, std::uint64_t i)
+{
+        ProbeFiles const& f = probe_files(m);
+        if (f.rp[stm]) return rpvf::lookup(f.rp[stm], i);
+        return std::uint8_t(zbyte(f.wdl[stm], i >> 2) >> (2 * (i & 3)) & 3);
 }
 
 std::uint8_t mover_wdl(std::uint8_t child) { return child == WDL_LOSS ? WDL_WIN : child == WDL_WIN ? WDL_LOSS : WDL_DRAW; }
@@ -3429,7 +3443,7 @@ std::uint8_t pwdl_quiet(Pos const& p0)
         Pos const p = stored_pos(p0);
         Material const m = material_of(p);
         std::uint64_t const i = mat_index(m).index(p);
-        return std::uint8_t(zbyte(probe_files(m).wdl[p.stm], i >> 2) >> (2 * (i & 3)) & 3);
+        return wdl_read(m, p.stm, i);
 }
 
 std::uint8_t pwdl(Pos const& p0)
@@ -3441,7 +3455,7 @@ std::uint8_t pwdl(Pos const& p0)
                 Pos const p = stored_pos(p0);
                 Material const m = material_of(p);
                 std::uint64_t const i = mat_index(m).index(p);
-                return std::uint8_t(zbyte(probe_files(m).wdl[p.stm], i >> 2) >> (2 * (i & 3)) & 3);
+                return wdl_read(m, p.stm, i);
         }
         if (g_wdl_dc == 0 && !has_capture(p0)) {
                 bool any = false, quiet = false;
@@ -3456,7 +3470,7 @@ std::uint8_t pwdl(Pos const& p0)
                         Pos const p = stored_pos(p0);
                         Material const m = material_of(p);
                         std::uint64_t const i = mat_index(m).index(p);
-                        return std::uint8_t(zbyte(probe_files(m).wdl[p.stm], i >> 2) >> (2 * (i & 3)) & 3);
+                        return wdl_read(m, p.stm, i);
                 }
         }
         auto const ml = moves(p0);
@@ -3473,7 +3487,7 @@ std::uint8_t pwdl(Pos const& p0)
         Pos const p = stored_pos(p0);
         Material const m = material_of(p);
         std::uint64_t const i = mat_index(m).index(p);
-        return std::uint8_t(zbyte(probe_files(m).wdl[p.stm], i >> 2) >> (2 * (i & 3)) & 3);
+        return wdl_read(m, p.stm, i);
 }
 
 std::uint16_t pvalue(Pos const& p0);
@@ -3645,6 +3659,39 @@ bool convert_material(std::string const& dir, Material c, int stride, ExecutionP
 // passes over the same probes: the first with an empty cache of decompressed blocks, the second with what the first
 // left in it. Reported per pass and kind (wdl: pwdl; depth: pvalue): probes per second over all threads, the mean
 // and the percentiles of one probe, and the blocks decompressed.
+// rpconvert: every wdl probe file of the store as a Re-Pair file beside it (<name>.rp), each checked position by
+// position against the values it was made from
+template<class ExecutionPolicy>
+bool rp_convert(std::string const& dir, int n, ExecutionPolicy const& policy)
+{
+        g_dir = dir;
+        struct Job { Material m; int side; };
+        std::vector<Job> jobs;
+        for (Material const m : stored_materials_up_to(n))
+                for (int side : { 0, 1 })
+                        if (std::filesystem::exists(zpath(probe_path(dir, m, "wdl", side)))) jobs.push_back({ m, side });
+        for (auto const& j : jobs) mat_index(j.m);
+        std::atomic<std::uint64_t> zbytes{ 0 }, rbytes{ 0 }, positions{ 0 }, bad{ 0 };
+        auto const t0 = std::chrono::steady_clock::now();
+        std::for_each(policy, jobs.begin(), jobs.end(), [&](Job const& j) {
+                std::uint64_t const size = mat_index(j.m).size;
+                std::string const path = probe_path(dir, j.m, "wdl", j.side);
+                std::vector<std::uint8_t> const raw = load_input(path, (size + 3) / 4);
+                std::vector<std::uint8_t> values(size);
+                for (std::uint64_t i = 0; i < size; ++i) values[i] = std::uint8_t(raw[i >> 2] >> (2 * (i & 3)) & 3);
+                std::vector<std::uint8_t> const out = rpvf::compress(values);
+                rpvf::File const f = rpvf::open(out.data());
+                std::uint64_t wrong = 0;
+                for (std::uint64_t i = 0; i < size; ++i) wrong += rpvf::lookup(f, i) != values[i];
+                std::ofstream(path + ".rp", std::ios::binary | std::ios::trunc).write(reinterpret_cast<char const*>(out.data()), std::streamsize(out.size()));
+                zbytes += std::filesystem::file_size(zpath(path)); rbytes += out.size(); positions += size; bad += wrong;
+        });
+        std::cout << "rpconvert: " << jobs.size() << " files, " << positions.load() << " positions; zstd frames " << zbytes.load() << " bytes, Re-Pair files "
+                  << rbytes.load() << " bytes (" << 100.0 * double(rbytes.load()) / double(zbytes.load()) << " %), " << bad.load()
+                  << " lookups differ, " << seconds_since(t0) << " s" << std::endl;
+        return bad.load() == 0;
+}
+
 bool probe_bench(std::string const& dir, int n, int threads, std::uint64_t probes, bool walk)
 {
         g_dir = dir;
@@ -3714,7 +3761,7 @@ bool probe_bench(std::string const& dir, int n, int threads, std::uint64_t probe
                 time("index + read", [](Pos const& p0) {
                         if ((p0.m[0] | p0.k[0]).empty() || (p0.m[1] | p0.k[1]).empty()) return std::uint64_t(0);     // no file: a side without pieces
                         Pos const p = stored_pos(p0); Material const m = material_of(p); std::uint64_t const i = mat_index(m).index(p);
-                        return std::uint64_t(zbyte(probe_files(m).wdl[p.stm], i >> 2) & 1);
+                        return std::uint64_t(wdl_read(m, p.stm, i) & 1);
                 });
                 time("whole probe (pwdl)", [](Pos const& p) { return std::uint64_t(pwdl(p)); });
                 {       // quiet as "neither side could capture" against what the files store
@@ -3931,6 +3978,7 @@ int main(int argc, char* argv[])
                 return check_all(a[1], std::stoi(a[2]), a.size() == 5 ? std::stoi(a[4]) : 4) ? 0 : 1;
         if (a.size() == 5 && a[0] == "cmp86" && parse_metric(a[4])) return compare_thompson86(a[1], a[2], std::stoi(a[3])) ? 0 : 1;
         if (a.size() == 3 && a[0] == "order") return check_order(a[1], std::stoi(a[2])) ? 0 : 1;
+        if (a.size() == 3 && a[0] == "rpconvert") return rp_convert(a[1], std::stoi(a[2]), std::execution::par) ? 0 : 1;
         // probebench <dir> n <metric> [threads] [probes per thread] [uniform|walk]
         if (a.size() >= 4 && a.size() <= 7 && a[0] == "probebench" && parse_metric(a[3]))
                 return probe_bench(a[1], std::stoi(a[2]), a.size() > 4 ? std::stoi(a[4]) : 1, a.size() > 5 ? std::stoull(a[5]) : 1000000,

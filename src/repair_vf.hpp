@@ -10,7 +10,7 @@
 //
 // The grammar: starting from the values themselves (symbols 0..3), the most frequent pair of adjacent symbols becomes
 // a new symbol, again and again, until there are 256 symbols (or no pair occurs twice). A symbol stands for at most
-// 65,535 positions. There is one grammar per file, built by this one procedure: no catalogue, no permutations, no
+// 524,288 positions. There is one grammar per file, built by this one procedure: no catalogue, no permutations, no
 // search. The file is then a sequence of one-byte codewords.
 //
 // The layout, for lookups straight from the mapped file (no decompression, no cache):
@@ -36,14 +36,17 @@ namespace rpvf {
 
 constexpr std::uint64_t BLOCK = 4096, MINI = 64, HEAD = 256, MINIS = (BLOCK - HEAD) / MINI, CODES = MINIS * MINI;
 constexpr char MAGIC[8] = { 'E', 'G', 'D', 'B', 'R', 'P', '1', 0 };
-constexpr std::uint64_t OFF_LEFT = 32, OFF_RIGHT = OFF_LEFT + 256, OFF_LEN = OFF_RIGHT + 256, OFF_UNI = OFF_LEN + 512, OFF_START = OFF_UNI + 256;
+constexpr std::uint64_t OFF_LEFT = 32, OFF_RIGHT = OFF_LEFT + 256, OFF_LEN = OFF_RIGHT + 256, OFF_UNI = OFF_LEN + 1024, OFF_START = OFF_UNI + 256;
+// a symbol stands for at most MAXLEN positions: 2^19, so that a block of 3,840 codewords stays below 2^31 positions
+// (the counts in a block are compared as signed 32-bit numbers)
+constexpr std::uint32_t MAXLEN = std::uint32_t(1) << 19;
 constexpr std::uint8_t MIXED = 0xff;                            // uniform[s]: the symbol is not a run of one value
 
 struct File {
         std::uint64_t positions = 0, blocks = 0;
         std::uint8_t const* left = nullptr;
         std::uint8_t const* right = nullptr;
-        std::uint16_t const* length = nullptr;
+        std::uint32_t const* length = nullptr;
         std::uint8_t const* uniform = nullptr;                  // the value of a symbol that is a run of one value, else MIXED
         std::uint64_t const* start = nullptr;
         std::uint8_t const* data = nullptr;
@@ -58,7 +61,7 @@ inline File open(std::uint8_t const* p)
         std::memcpy(&f.blocks, p + 16, 8);
         f.left = p + OFF_LEFT;
         f.right = p + OFF_RIGHT;
-        f.length = reinterpret_cast<std::uint16_t const*>(p + OFF_LEN);
+        f.length = reinterpret_cast<std::uint32_t const*>(p + OFF_LEN);
         f.uniform = p + OFF_UNI;
         f.start = reinterpret_cast<std::uint64_t const*>(p + OFF_START);
         f.data = p + (OFF_START + 8 * (f.blocks + 1) + BLOCK - 1) / BLOCK * BLOCK;
@@ -119,7 +122,7 @@ inline std::uint8_t lookup(File const& f, std::uint64_t p)
         std::uint8_t const* const c = blk + HEAD + MINI * m;
         for (unsigned g = 0;; g += 8) {
                 __m256i const idx = _mm256_cvtepu8_epi32(_mm_loadl_epi64(reinterpret_cast<__m128i const*>(c + g)));
-                __m256i sum = _mm256_and_si256(_mm256_i32gather_epi32(reinterpret_cast<int const*>(f.length), idx, 2), _mm256_set1_epi32(0xffff));
+                __m256i sum = _mm256_i32gather_epi32(reinterpret_cast<int const*>(f.length), idx, 4);
                 sum = _mm256_add_epi32(sum, _mm256_slli_si256(sum, 4));          // running sums inside each half
                 sum = _mm256_add_epi32(sum, _mm256_slli_si256(sum, 8));
                 __m128i const low_total = _mm_shuffle_epi32(_mm256_castsi256_si128(sum), 0xff);
@@ -162,7 +165,7 @@ inline std::vector<std::uint8_t> compress(std::vector<std::uint8_t> seq)
 {
         std::uint64_t const positions = seq.size();
         std::array<std::uint8_t, 256> left{}, right{};
-        std::array<std::uint16_t, 256> length{};
+        std::array<std::uint32_t, 256> length{};
         std::array<std::uint8_t, 256> uniform;
         uniform.fill(MIXED);
         for (unsigned s = 0; s < 4; ++s) { left[s] = right[s] = std::uint8_t(s); length[s] = 1; uniform[s] = std::uint8_t(s); }
@@ -178,10 +181,10 @@ inline std::vector<std::uint8_t> compress(std::vector<std::uint8_t> seq)
                 std::uint32_t best = 1; unsigned key = 0;
                 for (unsigned a = 0; a < nsym; ++a)
                         for (unsigned c = 0; c < nsym; ++c)
-                                if (count[a << 8 | c] > best && unsigned(length[a]) + length[c] <= 65535) { best = count[a << 8 | c]; key = a << 8 | c; }
+                                if (count[a << 8 | c] > best && length[a] + length[c] <= MAXLEN) { best = count[a << 8 | c]; key = a << 8 | c; }
                 if (best < 2) break;
                 std::uint8_t const a = std::uint8_t(key >> 8), c = std::uint8_t(key & 255);
-                left[nsym] = a; right[nsym] = c; length[nsym] = std::uint16_t(length[a] + length[c]);
+                left[nsym] = a; right[nsym] = c; length[nsym] = length[a] + length[c];
                 uniform[nsym] = uniform[a] == uniform[c] ? uniform[a] : MIXED;
                 std::size_t o = 0;
                 for (std::size_t i = 0; i < seq.size(); ++i) {
@@ -198,7 +201,7 @@ inline std::vector<std::uint8_t> compress(std::vector<std::uint8_t> seq)
         std::memcpy(out.data() + 16, &blocks, 8);
         std::memcpy(out.data() + OFF_LEFT, left.data(), 256);
         std::memcpy(out.data() + OFF_RIGHT, right.data(), 256);
-        std::memcpy(out.data() + OFF_LEN, length.data(), 512);
+        std::memcpy(out.data() + OFF_LEN, length.data(), 1024);
         std::memcpy(out.data() + OFF_UNI, uniform.data(), 256);
         std::uint64_t pos = 0;
         for (std::uint64_t b = 0; b < blocks; ++b) {

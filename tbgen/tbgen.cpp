@@ -3682,10 +3682,37 @@ bool rp_convert(std::string const& dir, int n, ExecutionPolicy const& policy)
                 std::vector<std::uint8_t> const out = rpvf::compress(values);
                 rpvf::File const f = rpvf::open(out.data());
                 std::uint64_t wrong = 0;
-                for (std::uint64_t i = 0; i < size; ++i) wrong += rpvf::lookup(f, i) != values[i];
+                for (std::uint64_t i = 0; i < size; ++i) wrong += rpvf::lookup(f, i) != values[i] || rpvf::lookup_plain(f, i) != values[i];
                 std::ofstream(path + ".rp", std::ios::binary | std::ios::trunc).write(reinterpret_cast<char const*>(out.data()), std::streamsize(out.size()));
                 zbytes += std::filesystem::file_size(zpath(path)); rbytes += out.size(); positions += size; bad += wrong;
         });
+        {       // one thread, random positions over all files (by size): the plain lookup against the tuned one
+                open_probe(dir, stored_materials_up_to(n));
+                std::vector<std::pair<rpvf::File, std::uint64_t>> fs;
+                std::vector<std::uint64_t> cum; std::uint64_t tot = 0;
+                for (auto const& j : jobs) {
+                        std::string const rp = probe_path(dir, j.m, "wdl", j.side) + ".rp";
+                        fs.push_back({ rpvf::open(map_file(rp, std::size_t(std::filesystem::file_size(rp)))), mat_index(j.m).size });
+                        tot += fs.back().second; cum.push_back(tot);
+                }
+                std::mt19937_64 rng(5);
+                std::vector<std::pair<std::uint32_t, std::uint64_t>> q(4000000);
+                for (auto& x : q) { std::uint64_t const r = rng() % tot; x.first = std::uint32_t(std::ranges::upper_bound(cum, r) - cum.begin()); x.second = rng() % fs[x.first].second; }
+                for (int which = 0; which < 2; ++which)
+                        for (int pass = 0; pass < 2; ++pass) {
+                                std::uint64_t acc = 0;
+                                auto const a = std::chrono::steady_clock::now();
+                                for (auto const& x : q) acc += which ? rpvf::lookup(fs[x.first].first, x.second) : rpvf::lookup_plain(fs[x.first].first, x.second);
+                                if (pass) std::cout << (which ? "tuned" : "plain") << " lookup, random positions: " << seconds_since(a) * 1e9 / double(q.size()) << " ns (sum " << acc << ")" << std::endl;
+                        }
+                std::ranges::sort(q);
+                for (int which = 0; which < 2; ++which) {
+                        std::uint64_t acc = 0;
+                        auto const a = std::chrono::steady_clock::now();
+                        for (auto const& x : q) acc += which ? rpvf::lookup(fs[x.first].first, x.second) : rpvf::lookup_plain(fs[x.first].first, x.second);
+                        std::cout << (which ? "tuned" : "plain") << " lookup, the same positions in index order: " << seconds_since(a) * 1e9 / double(q.size()) << " ns (sum " << acc << ")" << std::endl;
+                }
+        }
         std::cout << "rpconvert: " << jobs.size() << " files, " << positions.load() << " positions; zstd frames " << zbytes.load() << " bytes, Re-Pair files "
                   << rbytes.load() << " bytes (" << 100.0 * double(rbytes.load()) / double(zbytes.load()) << " %), " << bad.load()
                   << " lookups differ, " << seconds_since(t0) << " s" << std::endl;

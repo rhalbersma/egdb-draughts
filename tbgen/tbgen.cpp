@@ -3425,6 +3425,20 @@ bool dont_care(MoveList const& ml) { return !ml.empty() && (is_capture(*ml.begin
 int const g_wdl_dc = [] { std::string const e = std::getenv("EGDB_WDL_DC") ? std::getenv("EGDB_WDL_DC") : "pending";
                           return e == "capture" ? 1 : e == "either" ? 2 : 0; }();
 
+// A budget for the prober's own search (the conversion check under the rule `either`, where resolving a position that
+// is not stored has no bound: an engine resolves those in its own search and probes quiet positions only). Per thread:
+// the nodes left (pb_limit 0: no budget), the depth, and whether the last probe gave up.
+inline thread_local std::int64_t pb_nodes = 0;
+inline thread_local int pb_limit = 0, pb_depth = 0;
+inline thread_local bool pb_gave_up = false;
+struct ProbeDepth { ProbeDepth() { ++pb_depth; } ~ProbeDepth() { --pb_depth; } };
+inline bool probe_within_budget()
+{
+        if (pb_limit == 0) return true;
+        if (--pb_nodes < 0 || pb_depth > 48) { pb_gave_up = true; return false; }
+        return true;
+}
+
 // is the value of p0 stored in the wdl probe files? Not for a position without moves, one that must capture, or a
 // pending capture (every move leaves the opponent a capture)
 bool wdl_stored(Pos const& p0)
@@ -3451,6 +3465,8 @@ std::uint8_t pwdl_quiet(Pos const& p0)
 
 std::uint8_t pwdl(Pos const& p0)
 {
+        ProbeDepth const depth_guard;
+        if (!probe_within_budget()) return WDL_DRAW;
         // the common case first, without a move list: no capture, and some move leaves the opponent no capture (so not
         // a pending capture): the stored value. The moves are generated one at a time and only until such a move is met
         if ((p0.m[p0.stm] | p0.k[p0.stm]).empty()) return WDL_LOSS;     // no pieces: no move (and no file)
@@ -3509,6 +3525,8 @@ std::uint16_t pmove_value(Pos const& p, Move const& mv)
 // the value of a position for the side to move, from the probe files only
 std::uint16_t pvalue(Pos const& p0)
 {
+        ProbeDepth const depth_guard;
+        if (!probe_within_budget()) return 0;
         auto const ml = moves(p0);
         if (ml.empty()) return loss(0);
         auto const search = [&] {
@@ -3521,7 +3539,7 @@ std::uint16_t pvalue(Pos const& p0)
                 }
                 return best;
         };
-        if (dont_care(ml)) return search();
+        if (g_wdl_dc == 2 ? !wdl_stored(p0) : dont_care(ml)) return search();          // either: any capture, for either side
         Pos const p = stored_pos(p0);
         Material const m = material_of(p);
         ProbeFiles const& f = probe_files(m);
@@ -3564,9 +3582,13 @@ bool convert_material(std::string const& dir, Material c, int stride, ExecutionP
                                 else {
                                         auto const ml = moves(p);
                                         if (!ml.empty() && is_capture(*ml.begin())) { f = 3; ++nc; }
+                                        else if (g_wdl_dc == 2) {       // either: also where only the other side could capture; the rest is stored
+                                                Pos o = p; o.stm = 1 - p.stm;
+                                                if (has_capture(o)) { f = 3; ++np; }           // counted with the pending captures
+                                                else if (value(s, i) == 0) { f = 2; ++nd; }
+                                        }
                                         else if (pending_capture(ml)) { f = g_wdl_dc == 0 ? 3 : 2; ++np; }      // the depth always leaves it out
                                         else if (value(s, i) == 0) { f = 2; ++nd; }
-                                        if (g_wdl_dc == 2 && !(f & 1)) { Pos o = p; o.stm = 1 - p.stm; if (has_capture(o)) f |= 1; }
                                 }
                                 dc[std::size_t(s)][i] = f;
                         }
@@ -3623,17 +3645,21 @@ bool convert_material(std::string const& dir, Material c, int stride, ExecutionP
                         if (std::ranges::find(need, m) == need.end()) need.push_back(m);
         open_probe(dir, need);
         auto const t1 = std::chrono::steady_clock::now();
-        std::atomic<std::uint64_t> checked{ 0 }, bad{ 0 };
+        std::atomic<std::uint64_t> checked{ 0 }, bad{ 0 }, gave_up{ 0 }, quiet{ 0 };
         std::uint64_t const n = (size + std::uint64_t(stride) - 1) / std::uint64_t(stride);
         for (int s : { 0, 1 })
                 for_blocks(policy, n, [&](std::uint64_t a, std::uint64_t b) {
-                        std::uint64_t k = 0, e = 0;
+                        std::uint64_t k = 0, e = 0, g = 0, q = 0;
+                        pb_limit = g_wdl_dc == 2 ? 20000 : 0;           // either: the prober's search gets a budget of nodes
                         for (std::uint64_t j = a; j < b; ++j) {
                                 std::uint64_t const i = j * std::uint64_t(stride);
                                 Pos p;
                                 if (!mi.pos(i, s, p)) continue;
+                                pb_nodes = 2 * pb_limit; pb_gave_up = false;
                                 std::uint16_t const want = value(s, i), got = pvalue(p);
                                 std::uint8_t const gw = pwdl(p);
+                                if (g_wdl_dc == 2 && wdl_stored(p)) { ++q; if (pwdl_quiet(p) != wdl_of(want)) ++e; }     // stored: read directly
+                                if (pb_gave_up) { ++g; continue; }
                                 ++k;
                                 if (got != want || gw != wdl_of(want)) {
                                         if (bad.load() + e < 3) std::cerr << "probe " << fen_of(p) << " build " << show_value(want) << " probe " << show_value(got) << std::endl;
@@ -3641,13 +3667,14 @@ bool convert_material(std::string const& dir, Material c, int stride, ExecutionP
                                 }
                         }
                         checked += k;
-                        bad += e;
+                        bad += e; gave_up += g; quiet += q;
+                        pb_limit = 0;
                 });
         std::cout << "convert " << c.name() << " " << metric_name() << ": wdl both sides " << zw << " bytes, " << metric_name()
                   << " side " << (side == 0 ? "wtm" : "btm") << " " << zd[side] << " bytes (" << size << " slots; don't-cares: "
                   << n_capture.load() << " captures, " << n_pending.load() << " pending captures, " << n_draw.load() << " draws), "
                   << t_write << " s; checked " << checked.load() << " positions (every " << stride << "th slot), " << bad.load()
-                  << " differences, " << seconds_since(t1) << " s" << std::endl;
+                  << " differences, " << gave_up.load() << " gave up, " << quiet.load() << " quiet read directly, " << seconds_since(t1) << " s" << std::endl;
         return bad.load() == 0;
 }
 

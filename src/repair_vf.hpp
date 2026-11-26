@@ -5,18 +5,18 @@
 
 #pragma once
 
-// A variable-to-fixed code for value files with a small alphabet (the 2-bit values of a wdl file): Re-Pair with
-// byte codewords.
+// A variable-to-fixed code for value files: Re-Pair with byte codewords. For wdl files (4 values) and for depth files
+// (the depths in use, each a 16-bit value in a table: no escape codes).
 //
-// The grammar: starting from the values themselves (symbols 0..3), the most frequent pair of adjacent symbols becomes
-// a new symbol, again and again, until there are 256 symbols (or no pair occurs twice). A symbol stands for at most
-// 524,288 positions. There is one grammar per file, built by this one procedure: no catalogue, no permutations, no
-// search. The file is then a sequence of one-byte codewords.
+// The grammar: starting from the values in use (the terminals: symbols 0 .. T - 1), the most frequent pair of adjacent
+// symbols becomes a new symbol, again and again, until there are 256 symbols (or no pair occurs twice). A symbol stands
+// for at most 524,288 positions. There is one grammar per file, built by this one procedure: no catalogue, no
+// permutations, no search. The file is then a sequence of one-byte codewords.
 //
 // The layout, for lookups straight from the mapped file (no decompression, no cache):
-//   header    magic, positions, blocks, symbols; left[256], right[256] (a rule: symbol = left right), length[256]
-//             (positions a symbol stands for), uniform[256] (its value if it is a run of one value); start[blocks + 1]
-//             (the first position of each block)
+//   header    magic, positions, blocks, terminals; left[256], right[256] (a rule: symbol = left right), length[256]
+//             (positions a symbol stands for), uniform[256] (the terminal it repeats if it is a run of one value),
+//             value[256] (the value of each terminal); start[blocks + 1] (the first position of each block)
 //   blocks    4 KiB each: 256 bytes of counts (for each of the 60 mini-blocks, the positions of the block before it,
 //             32 bits; the 4 unused counts are 2^31 - 1), then 60 mini-blocks of 64 codewords: one cache line each
 // A lookup: the block by a binary search over start; the mini-block by comparing the counts; the codeword by adding
@@ -28,6 +28,9 @@
 #include <algorithm>
 #include <array>
 #include <bit>
+#include <cstdio>
+#include <functional>
+#include <string>
 #include <cstdint>
 #include <cstring>
 #include <vector>
@@ -35,19 +38,22 @@
 namespace rpvf {
 
 constexpr std::uint64_t BLOCK = 4096, MINI = 64, HEAD = 256, MINIS = (BLOCK - HEAD) / MINI, CODES = MINIS * MINI;
-constexpr char MAGIC[8] = { 'E', 'G', 'D', 'B', 'R', 'P', '1', 0 };
-constexpr std::uint64_t OFF_LEFT = 32, OFF_RIGHT = OFF_LEFT + 256, OFF_LEN = OFF_RIGHT + 256, OFF_UNI = OFF_LEN + 1024, OFF_START = OFF_UNI + 256;
+constexpr char MAGIC[8] = { 'E', 'G', 'D', 'B', 'R', 'P', '2', 0 };
+constexpr std::uint64_t OFF_LEFT = 40, OFF_RIGHT = OFF_LEFT + 256, OFF_LEN = OFF_RIGHT + 256, OFF_UNI = OFF_LEN + 1024, OFF_VALUE = OFF_UNI + 256,
+                        OFF_START = OFF_VALUE + 512;
+constexpr std::uint8_t MIXED = 0xff;                            // uniform[s]: the symbol is not a run of one value
 // a symbol stands for at most MAXLEN positions: 2^19, so that a block of 3,840 codewords stays below 2^31 positions
 // (the counts in a block are compared as signed 32-bit numbers)
 constexpr std::uint32_t MAXLEN = std::uint32_t(1) << 19;
-constexpr std::uint8_t MIXED = 0xff;                            // uniform[s]: the symbol is not a run of one value
 
 struct File {
         std::uint64_t positions = 0, blocks = 0;
+        unsigned terminals = 0;                                 // the symbols below it are the values themselves
         std::uint8_t const* left = nullptr;
         std::uint8_t const* right = nullptr;
         std::uint32_t const* length = nullptr;
-        std::uint8_t const* uniform = nullptr;                  // the value of a symbol that is a run of one value, else MIXED
+        std::uint8_t const* uniform = nullptr;                  // the terminal a symbol repeats if it is a run of one value, else MIXED
+        std::uint16_t const* value = nullptr;                   // the value of each terminal (a wdl value, or a depth: no escape codes)
         std::uint64_t const* start = nullptr;
         std::uint8_t const* data = nullptr;
         explicit operator bool() const { return data != nullptr; }
@@ -57,19 +63,23 @@ inline File open(std::uint8_t const* p)
 {
         File f;
         if (std::memcmp(p, MAGIC, 8) != 0) return f;
+        std::uint64_t t;
         std::memcpy(&f.positions, p + 8, 8);
         std::memcpy(&f.blocks, p + 16, 8);
+        std::memcpy(&t, p + 24, 8);
+        f.terminals = unsigned(t);
         f.left = p + OFF_LEFT;
         f.right = p + OFF_RIGHT;
         f.length = reinterpret_cast<std::uint32_t const*>(p + OFF_LEN);
         f.uniform = p + OFF_UNI;
+        f.value = reinterpret_cast<std::uint16_t const*>(p + OFF_VALUE);
         f.start = reinterpret_cast<std::uint64_t const*>(p + OFF_START);
         f.data = p + (OFF_START + 8 * (f.blocks + 1) + BLOCK - 1) / BLOCK * BLOCK;
         return f;
 }
 
 // the value of position p (p < positions): the plain version, as a reference for the tuned one below
-inline std::uint8_t lookup_plain(File const& f, std::uint64_t p)
+inline std::uint16_t lookup_plain(File const& f, std::uint64_t p)
 {
         std::uint64_t const b = std::uint64_t(std::upper_bound(f.start, f.start + f.blocks, p) - f.start) - 1;
         std::uint32_t rel = std::uint32_t(p - f.start[b]);
@@ -83,12 +93,12 @@ inline std::uint8_t lookup_plain(File const& f, std::uint64_t p)
         unsigned i = 0;
         for (std::uint32_t l; rel >= (l = f.length[c[i]]); ++i) rel -= l;
         unsigned s = c[i];
-        while (s >= 4) {
+        while (s >= f.terminals) {
                 unsigned const L = f.left[s];
                 std::uint32_t const ll = f.length[L];
                 if (rel < ll) s = L; else { rel -= ll; s = f.right[s]; }
         }
-        return std::uint8_t(s);
+        return f.value[s];
 }
 
 // The tuned lookup:
@@ -97,7 +107,7 @@ inline std::uint8_t lookup_plain(File const& f, std::uint64_t p)
 //   codeword    the lengths of 8 codewords gathered at a time, their running sums compared with rel
 //   value       a symbol that is a run of one value answers at once (most positions lie in runs); else down the rules
 // With AVX2; without it the same steps one element at a time.
-inline std::uint8_t lookup(File const& f, std::uint64_t p)
+inline std::uint16_t lookup(File const& f, std::uint64_t p)
 {
         std::uint64_t const* base = f.start;
         for (std::uint64_t n = f.blocks; n > 1;) {
@@ -151,7 +161,7 @@ inline std::uint8_t lookup(File const& f, std::uint64_t p)
 #endif
         for (;;) {
                 std::uint8_t const u = f.uniform[s];
-                if (u != MIXED) return u;
+                if (u != MIXED) return f.value[u];
                 unsigned const L = f.left[s];
                 std::uint32_t const ll = f.length[L];
                 bool const in_left = rel < ll;
@@ -160,49 +170,157 @@ inline std::uint8_t lookup(File const& f, std::uint64_t p)
         }
 }
 
-// values: one 2-bit value per element (0..3). Returns the file's bytes.
-inline std::vector<std::uint8_t> compress(std::vector<std::uint8_t> seq)
-{
-        std::uint64_t const positions = seq.size();
-        std::array<std::uint8_t, 256> left{}, right{};
+// ---- the compressor
+//
+// The input is a sequence of terminals (0 .. terminals - 1: the ranks of the values in use; at most 255 of them, in
+// practice a few dozen). It arrives through a Source, a function that feeds the sequence front to back in chunks and
+// can be called again.
+//   on disk    while the sequence is longer than `ram_symbols`, a round is one sequential read and one sequential
+//              write: the round's new rules (a batch of the most frequent pairs with no symbol in common, so that
+//              they cannot overlap) are applied and the pairs of the result counted on the way. Only the pair counts
+//              (256 KB) are in memory. The first round reads the source, the later ones the previous round's file.
+//   in memory  once it fits: the exact method, the most frequent pair, one at a time.
+using Feed = std::function<void(std::uint8_t const*, std::size_t)>;
+using Source = std::function<void(Feed const&)>;
+
+struct Grammar {
+        unsigned terminals = 0, nsym = 0;
+        std::array<std::uint8_t, 256> left{}, right{}, uniform{};
         std::array<std::uint32_t, 256> length{};
-        std::array<std::uint8_t, 256> uniform;
-        uniform.fill(MIXED);
-        for (unsigned s = 0; s < 4; ++s) { left[s] = right[s] = std::uint8_t(s); length[s] = 1; uniform[s] = std::uint8_t(s); }
+        explicit Grammar(unsigned t) : terminals(t), nsym(t)
+        {
+                uniform.fill(MIXED);
+                for (unsigned s = 0; s < t; ++s) { left[s] = right[s] = std::uint8_t(s); length[s] = 1; uniform[s] = std::uint8_t(s); }
+        }
+        std::uint8_t add(unsigned a, unsigned c)
+        {
+                left[nsym] = std::uint8_t(a); right[nsym] = std::uint8_t(c); length[nsym] = length[a] + length[c];
+                uniform[nsym] = uniform[a] == uniform[c] ? uniform[a] : MIXED;
+                return std::uint8_t(nsym++);
+        }
+};
+
+// counts the pairs of a sequence as it passes by (aaa holds one pair aa, not two)
+struct PairCounter {
+        std::vector<std::uint32_t> count = std::vector<std::uint32_t>(65536, 0);
+        std::uint64_t n = 0;
+        int prev = -1, prev2 = -1;
+        bool skip = false;
+        void put(std::uint8_t x)
+        {
+                if (prev >= 0) {
+                        bool counted = true;
+                        if (skip) { skip = false; if (prev == x && prev2 == prev) counted = false; }
+                        if (counted) { ++count[std::size_t(prev) << 8 | x]; skip = prev == x; }
+                }
+                prev2 = prev; prev = x; ++n;
+        }
+};
+
+struct Stats { int disk_rounds = 0; std::uint64_t disk_bytes = 0, ram_symbols_at_switch = 0; };
+
+inline std::vector<std::uint8_t> compress(Source const& source, std::uint64_t positions, unsigned terminals, std::array<std::uint16_t, 256> const& value,
+                                          std::uint64_t ram_symbols, std::string const& tmp, Stats* stats = nullptr)
+{
+        Grammar G(terminals);
+        Stats st;
+        PairCounter pc;
+        source([&](std::uint8_t const* d, std::size_t n) { for (std::size_t i = 0; i < n; ++i) pc.put(d[i]); });
+        std::string files[2] = { tmp + ".0", tmp + ".1" };
+        int cur = -1;                                           // -1: the sequence is the source; else files[cur]
+        auto const read_current = [&](Feed const& feed) {
+                if (cur < 0) { source(feed); return; }
+                std::FILE* f = std::fopen(files[cur].c_str(), "rb");
+                std::vector<std::uint8_t> buf(1 << 20);
+                for (std::size_t n; (n = std::fread(buf.data(), 1, buf.size(), f)) != 0;) feed(buf.data(), n);
+                std::fclose(f);
+        };
+        while (pc.n > ram_symbols && G.nsym < 256) {            // a round on disk
+                // the batch: by count, pairs of symbols no chosen pair has used yet (at most 8)
+                std::vector<std::pair<std::uint32_t, unsigned>> cand;
+                for (unsigned a = 0; a < G.nsym; ++a)
+                        for (unsigned c = 0; c < G.nsym; ++c)
+                                if (pc.count[a << 8 | c] >= 2 && G.length[a] + G.length[c] <= MAXLEN) cand.push_back({ pc.count[a << 8 | c], a << 8 | c });
+                std::sort(cand.begin(), cand.end(), std::greater<>());
+                std::vector<std::uint16_t> repl(65536, 0);
+                std::array<bool, 256> used{};
+                int chosen = 0;
+                for (auto const& [cnt, key] : cand) {
+                        unsigned const a = key >> 8, c = key & 255;
+                        if (used[a] || used[c] || G.nsym >= 256 || chosen >= 8) continue;
+                        used[a] = used[c] = true;
+                        repl[key] = G.add(a, c);
+                        ++chosen;
+                }
+                if (chosen == 0) break;
+                int const nxt = cur < 0 ? 0 : 1 - cur;
+                std::FILE* out = std::fopen(files[nxt].c_str(), "wb");
+                std::vector<std::uint8_t> obuf; obuf.reserve(1 << 20);
+                PairCounter next;
+                auto const emit = [&](std::uint8_t x) {
+                        next.put(x);
+                        obuf.push_back(x);
+                        if (obuf.size() == (1 << 20)) { std::fwrite(obuf.data(), 1, obuf.size(), out); st.disk_bytes += obuf.size(); obuf.clear(); }
+                };
+                int held = -1;                                  // one symbol of look-ahead across the chunks
+                read_current([&](std::uint8_t const* d, std::size_t n) {
+                        for (std::size_t i = 0; i < n; ++i) {
+                                if (held < 0) { held = d[i]; continue; }
+                                std::uint16_t const r = repl[std::size_t(held) << 8 | d[i]];
+                                if (r != 0) { emit(std::uint8_t(r)); held = -1; }
+                                else { emit(std::uint8_t(held)); held = d[i]; }
+                        }
+                });
+                if (held >= 0) emit(std::uint8_t(held));
+                std::fwrite(obuf.data(), 1, obuf.size(), out); st.disk_bytes += obuf.size();
+                std::fclose(out);
+                if (cur >= 0) std::remove(files[cur].c_str());
+                cur = nxt;
+                pc = std::move(next);
+                ++st.disk_rounds;
+        }
+        // in memory: the rest, one pair at a time
+        std::vector<std::uint8_t> seq;
+        seq.reserve(pc.n);
+        read_current([&](std::uint8_t const* d, std::size_t n) { seq.insert(seq.end(), d, d + n); });
+        if (cur >= 0) std::remove(files[cur].c_str());
+        st.ram_symbols_at_switch = seq.size();
         std::vector<std::uint32_t> count(65536);
-        for (unsigned nsym = 4; nsym < 256; ++nsym) {
+        while (G.nsym < 256) {
                 std::fill(count.begin(), count.end(), 0);
-                bool skip = false;                                      // aaa holds one pair aa, not two
+                bool skip = false;
                 for (std::size_t i = 0; i + 1 < seq.size(); ++i) {
                         if (skip) { skip = false; if (seq[i] == seq[i + 1] && seq[i - 1] == seq[i]) continue; }
                         ++count[std::size_t(seq[i]) << 8 | seq[i + 1]];
                         skip = seq[i] == seq[i + 1];
                 }
                 std::uint32_t best = 1; unsigned key = 0;
-                for (unsigned a = 0; a < nsym; ++a)
-                        for (unsigned c = 0; c < nsym; ++c)
-                                if (count[a << 8 | c] > best && length[a] + length[c] <= MAXLEN) { best = count[a << 8 | c]; key = a << 8 | c; }
+                for (unsigned a = 0; a < G.nsym; ++a)
+                        for (unsigned c = 0; c < G.nsym; ++c)
+                                if (count[a << 8 | c] > best && G.length[a] + G.length[c] <= MAXLEN) { best = count[a << 8 | c]; key = a << 8 | c; }
                 if (best < 2) break;
-                std::uint8_t const a = std::uint8_t(key >> 8), c = std::uint8_t(key & 255);
-                left[nsym] = a; right[nsym] = c; length[nsym] = length[a] + length[c];
-                uniform[nsym] = uniform[a] == uniform[c] ? uniform[a] : MIXED;
+                std::uint8_t const a = std::uint8_t(key >> 8), c = std::uint8_t(key & 255), n = G.add(a, c);
                 std::size_t o = 0;
                 for (std::size_t i = 0; i < seq.size(); ++i) {
-                        if (i + 1 < seq.size() && seq[i] == a && seq[i + 1] == c) { seq[o++] = std::uint8_t(nsym); ++i; }
+                        if (i + 1 < seq.size() && seq[i] == a && seq[i + 1] == c) { seq[o++] = n; ++i; }
                         else seq[o++] = seq[i];
                 }
                 seq.resize(o);
         }
+        // the file
         std::uint64_t const blocks = (seq.size() + CODES - 1) / CODES;
         std::uint64_t const data_at = (OFF_START + 8 * (blocks + 1) + BLOCK - 1) / BLOCK * BLOCK;
         std::vector<std::uint8_t> out(data_at + blocks * BLOCK, 0);
+        std::uint64_t const t64 = terminals;
         std::memcpy(out.data(), MAGIC, 8);
         std::memcpy(out.data() + 8, &positions, 8);
         std::memcpy(out.data() + 16, &blocks, 8);
-        std::memcpy(out.data() + OFF_LEFT, left.data(), 256);
-        std::memcpy(out.data() + OFF_RIGHT, right.data(), 256);
-        std::memcpy(out.data() + OFF_LEN, length.data(), 1024);
-        std::memcpy(out.data() + OFF_UNI, uniform.data(), 256);
+        std::memcpy(out.data() + 24, &t64, 8);
+        std::memcpy(out.data() + OFF_LEFT, G.left.data(), 256);
+        std::memcpy(out.data() + OFF_RIGHT, G.right.data(), 256);
+        std::memcpy(out.data() + OFF_LEN, G.length.data(), 1024);
+        std::memcpy(out.data() + OFF_UNI, G.uniform.data(), 256);
+        std::memcpy(out.data() + OFF_VALUE, value.data(), 512);
         std::uint64_t pos = 0;
         for (std::uint64_t b = 0; b < blocks; ++b) {
                 std::memcpy(out.data() + OFF_START + 8 * b, &pos, 8);
@@ -216,12 +334,13 @@ inline std::vector<std::uint8_t> compress(std::vector<std::uint8_t> seq)
                                 std::uint64_t const i = b * CODES + m * MINI + k;
                                 if (i >= seq.size()) continue;         // the unused tail stays 0 and is never reached
                                 blk[HEAD + m * MINI + k] = seq[i];
-                                in_block += length[seq[i]];
+                                in_block += G.length[seq[i]];
                         }
                 }
                 pos += in_block;
         }
         std::memcpy(out.data() + OFF_START + 8 * blocks, &pos, 8);
+        if (stats) *stats = st;
         return out;
 }
 

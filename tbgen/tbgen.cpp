@@ -3359,7 +3359,7 @@ std::string probe_path(std::string const& dir, Material m, std::string const& ki
         return m.path(dir + "/probe/" + kind) + "-" + kind + (side == 0 ? "-wtm" : "-btm");
 }
 
-struct ProbeFiles { ZFile wdl[2]; int side = -1; ZFile depth; rpvf::File rp[2]; };     // side: the depth file's side to move (-1: none)
+struct ProbeFiles { ZFile wdl[2]; int side = -1; ZFile depth; rpvf::File rp[2], rpd; };     // side: the depth file's side to move (-1: none)
 // EGDB_WDL_RP=1: the prober reads the wdl values from the Re-Pair files (<wdl probe file>.rp, src/repair_vf.hpp;
 // written by `tbgen rpconvert`) straight from the mapping, instead of the zstd frames through the cache
 bool const g_wdl_rp = std::getenv("EGDB_WDL_RP") != nullptr;
@@ -3378,7 +3378,10 @@ void open_probe(std::string const& dir, std::vector<Material> const& ms)
                         if (std::string const rp = probe_path(dir, m, "wdl", side) + ".rp"; g_wdl_rp && std::filesystem::exists(rp))
                                 f.rp[side] = rpvf::open(map_file(rp, std::size_t(std::filesystem::file_size(rp))));
                         std::string const d = probe_path(dir, m, metric_name(), side);
-                        if (std::filesystem::exists(zpath(d))) { f.depth = open_zfile(d, size); f.side = side; }
+                        if (std::filesystem::exists(zpath(d))) {
+                                f.depth = open_zfile(d, size); f.side = side;
+                                if (g_wdl_rp && std::filesystem::exists(d + ".rp")) f.rpd = rpvf::open(map_file(d + ".rp", std::size_t(std::filesystem::file_size(d + ".rp"))));
+                        }
                 }
         }
 }
@@ -3397,7 +3400,7 @@ ProbeFiles const& probe_files(Material m)
 inline std::uint8_t wdl_read(Material m, int stm, std::uint64_t i)
 {
         ProbeFiles const& f = probe_files(m);
-        if (f.rp[stm]) return rpvf::lookup(f.rp[stm], i);
+        if (f.rp[stm]) return std::uint8_t(rpvf::lookup(f.rp[stm], i));
         return std::uint8_t(zbyte(f.wdl[stm], i >> 2) >> (2 * (i & 3)) & 3);
 }
 
@@ -3523,11 +3526,11 @@ std::uint16_t pvalue(Pos const& p0)
         Material const m = material_of(p);
         ProbeFiles const& f = probe_files(m);
         std::uint64_t const i = mat_index(m).index(p);
-        std::uint8_t const r = std::uint8_t(zbyte(f.wdl[p.stm], i >> 2) >> (2 * (i & 3)) & 3);
+        std::uint8_t const r = wdl_read(m, p.stm, i);
         if (r == WDL_DRAW) return 0;
         if (f.side < 0) { std::cerr << "no " << metric_name() << " probe file for " << m.name() << std::endl; std::exit(1); }
         if (p.stm != f.side) return search();                           // the side without a depth file
-        int const c = zdepth(f.depth, i);
+        int const c = f.rpd ? int(rpvf::lookup(f.rpd, i)) : zdepth(f.depth, i);
         bool const dtm = g_metric == Metric::dtm;
         return r == WDL_WIN ? win(dtm ? 2 * c + 1 : c) : loss(dtm ? 2 * c : c);
 }
@@ -3659,38 +3662,72 @@ bool convert_material(std::string const& dir, Material c, int stride, ExecutionP
 // passes over the same probes: the first with an empty cache of decompressed blocks, the second with what the first
 // left in it. Reported per pass and kind (wdl: pwdl; depth: pvalue): probes per second over all threads, the mean
 // and the percentiles of one probe, and the blocks decompressed.
-// rpconvert: every wdl probe file of the store as a Re-Pair file beside it (<name>.rp), each checked position by
-// position against the values it was made from
+// rpconvert: every probe file of the store (wdl, both sides; the depth file) as a Re-Pair file beside it (<name>.rp),
+// each checked position by position against the values it was made from. The input is read frame by frame; the
+// pairing works on disk while the sequence is longer than EGDB_RP_RAM_MB megabytes (default 1024), then in memory.
 template<class ExecutionPolicy>
 bool rp_convert(std::string const& dir, int n, ExecutionPolicy const& policy)
 {
         g_dir = dir;
-        struct Job { Material m; int side; };
+        struct Job { Material m; int side; bool depth; };
         std::vector<Job> jobs;
         for (Material const m : stored_materials_up_to(n))
-                for (int side : { 0, 1 })
-                        if (std::filesystem::exists(zpath(probe_path(dir, m, "wdl", side)))) jobs.push_back({ m, side });
+                for (int side : { 0, 1 }) {
+                        if (std::filesystem::exists(zpath(probe_path(dir, m, "wdl", side)))) jobs.push_back({ m, side, false });
+                        if (std::filesystem::exists(zpath(probe_path(dir, m, metric_name(), side)))) jobs.push_back({ m, side, true });
+                }
         for (auto const& j : jobs) mat_index(j.m);
-        std::atomic<std::uint64_t> zbytes{ 0 }, rbytes{ 0 }, positions{ 0 }, bad{ 0 };
+        std::uint64_t const ram_symbols = (std::getenv("EGDB_RP_RAM_MB") ? std::uint64_t(std::atoll(std::getenv("EGDB_RP_RAM_MB"))) : 1024) << 20;
+        std::atomic<std::uint64_t> zbytes[2]{}, rbytes[2]{}, positions{ 0 }, bad{ 0 }, escapes{ 0 }, rounds{ 0 }, disk{ 0 }, on_disk{ 0 };
         auto const t0 = std::chrono::steady_clock::now();
         std::for_each(policy, jobs.begin(), jobs.end(), [&](Job const& j) {
-                std::uint64_t const size = mat_index(j.m).size;
-                std::string const path = probe_path(dir, j.m, "wdl", j.side);
-                std::vector<std::uint8_t> const raw = load_input(path, (size + 3) / 4);
-                std::vector<std::uint8_t> values(size);
-                for (std::uint64_t i = 0; i < size; ++i) values[i] = std::uint8_t(raw[i >> 2] >> (2 * (i & 3)) & 3);
-                std::vector<std::uint8_t> const out = rpvf::compress(values);
+                std::uint64_t const size = mat_index(j.m).size;                 // slots
+                std::string const path = probe_path(dir, j.m, j.depth ? metric_name() : "wdl", j.side);
+                ZFile const z = open_zfile(path, j.depth ? size : (size + 3) / 4);
+                // the file's values, front to back, a frame at a time: f(value of slot, in order)
+                auto const each_value = [&](auto&& f) {
+                        std::vector<std::uint8_t> buf(2 * ZBLOCK);
+                        std::uint64_t slot = 0;
+                        for (std::uint64_t b = 0; b < z.nblocks; ++b) {
+                                std::size_t const r = ZSTD_decompress(buf.data(), buf.size(), z.data + z.off[b], z.off[b + 1] - z.off[b]);
+                                if (ZSTD_isError(r)) { std::cerr << "zstd: bad block" << std::endl; std::exit(1); }
+                                std::uint64_t const bytes = std::min(ZBLOCK, z.size - b * ZBLOCK);
+                                for (std::uint64_t k = 0; k < bytes; ++k) {
+                                        if (j.depth) { f(buf[k]); ++slot; }
+                                        else for (int q = 0; q < 4 && slot < size; ++q, ++slot) f(std::uint8_t(buf[k] >> (2 * q) & 3));
+                                }
+                        }
+                };
+                std::array<int, 256> rank; rank.fill(-1);
+                std::array<std::uint16_t, 256> value{};
+                unsigned terminals = 0;
+                if (j.depth) {
+                        std::array<bool, 256> seen{};
+                        each_value([&](std::uint8_t v) { seen[v] = true; });
+                        for (int v = PESC; v < 256; ++v) if (seen[std::size_t(v)]) { ++escapes; return; }      // escape codes: not converted yet
+                        for (int v = 0; v < 256; ++v) if (seen[std::size_t(v)]) { rank[std::size_t(v)] = int(terminals); value[terminals++] = std::uint16_t(v); }
+                } else
+                        for (terminals = 0; terminals < 4; ++terminals) { rank[terminals] = int(terminals); value[terminals] = std::uint16_t(terminals); }
+                if (terminals == 0) { rank[0] = 0; terminals = 1; }
+                rpvf::Source const source = [&](rpvf::Feed const& feed) {
+                        std::vector<std::uint8_t> chunk; chunk.reserve(1 << 16);
+                        each_value([&](std::uint8_t v) { chunk.push_back(std::uint8_t(rank[v])); if (chunk.size() == (1 << 16)) { feed(chunk.data(), chunk.size()); chunk.clear(); } });
+                        feed(chunk.data(), chunk.size());
+                };
+                rpvf::Stats st;
+                std::vector<std::uint8_t> const out = rpvf::compress(source, size, terminals, value, ram_symbols, path + ".rp.tmp", &st);
                 rpvf::File const f = rpvf::open(out.data());
-                std::uint64_t wrong = 0;
-                for (std::uint64_t i = 0; i < size; ++i) wrong += rpvf::lookup(f, i) != values[i] || rpvf::lookup_plain(f, i) != values[i];
+                std::uint64_t wrong = 0, slot = 0;
+                each_value([&](std::uint8_t v) { wrong += rpvf::lookup(f, slot) != v || rpvf::lookup_plain(f, slot) != v; ++slot; });
                 std::ofstream(path + ".rp", std::ios::binary | std::ios::trunc).write(reinterpret_cast<char const*>(out.data()), std::streamsize(out.size()));
-                zbytes += std::filesystem::file_size(zpath(path)); rbytes += out.size(); positions += size; bad += wrong;
+                zbytes[j.depth] += std::filesystem::file_size(zpath(path)); rbytes[j.depth] += out.size(); positions += size; bad += wrong;
+                rounds += std::uint64_t(st.disk_rounds); disk += st.disk_bytes; on_disk += st.disk_rounds > 0;
         });
-        {       // one thread, random positions over all files (by size): the plain lookup against the tuned one
-                open_probe(dir, stored_materials_up_to(n));
+        if (std::getenv("EGDB_RP_TIME")) {      // one thread, random positions over the wdl files (by size): the plain lookup against the tuned one
                 std::vector<std::pair<rpvf::File, std::uint64_t>> fs;
                 std::vector<std::uint64_t> cum; std::uint64_t tot = 0;
                 for (auto const& j : jobs) {
+                        if (j.depth) continue;
                         std::string const rp = probe_path(dir, j.m, "wdl", j.side) + ".rp";
                         fs.push_back({ rpvf::open(map_file(rp, std::size_t(std::filesystem::file_size(rp)))), mat_index(j.m).size });
                         tot += fs.back().second; cum.push_back(tot);
@@ -3705,17 +3742,12 @@ bool rp_convert(std::string const& dir, int n, ExecutionPolicy const& policy)
                                 for (auto const& x : q) acc += which ? rpvf::lookup(fs[x.first].first, x.second) : rpvf::lookup_plain(fs[x.first].first, x.second);
                                 if (pass) std::cout << (which ? "tuned" : "plain") << " lookup, random positions: " << seconds_since(a) * 1e9 / double(q.size()) << " ns (sum " << acc << ")" << std::endl;
                         }
-                std::ranges::sort(q);
-                for (int which = 0; which < 2; ++which) {
-                        std::uint64_t acc = 0;
-                        auto const a = std::chrono::steady_clock::now();
-                        for (auto const& x : q) acc += which ? rpvf::lookup(fs[x.first].first, x.second) : rpvf::lookup_plain(fs[x.first].first, x.second);
-                        std::cout << (which ? "tuned" : "plain") << " lookup, the same positions in index order: " << seconds_since(a) * 1e9 / double(q.size()) << " ns (sum " << acc << ")" << std::endl;
-                }
         }
-        std::cout << "rpconvert: " << jobs.size() << " files, " << positions.load() << " positions; zstd frames " << zbytes.load() << " bytes, Re-Pair files "
-                  << rbytes.load() << " bytes (" << 100.0 * double(rbytes.load()) / double(zbytes.load()) << " %), " << bad.load()
-                  << " lookups differ, " << seconds_since(t0) << " s" << std::endl;
+        std::cout << "rpconvert: " << jobs.size() << " files, " << positions.load() << " positions, " << bad.load() << " lookups differ, " << escapes.load()
+                  << " depth files skipped (escape codes), " << seconds_since(t0) << " s\n  wdl: zstd " << zbytes[0].load() << " bytes, Re-Pair " << rbytes[0].load()
+                  << " (" << 100.0 * double(rbytes[0].load()) / double(std::max<std::uint64_t>(1, zbytes[0].load())) << " %)\n  depth: zstd " << zbytes[1].load() << " bytes, Re-Pair "
+                  << rbytes[1].load() << " (" << 100.0 * double(rbytes[1].load()) / double(std::max<std::uint64_t>(1, zbytes[1].load())) << " %)\n  pairing on disk for " << on_disk.load()
+                  << " files: " << rounds.load() << " rounds, " << disk.load() << " bytes written to temporary files (memory limit " << (ram_symbols >> 20) << " MB per file)" << std::endl;
         return bad.load() == 0;
 }
 

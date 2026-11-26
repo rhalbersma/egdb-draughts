@@ -223,7 +223,7 @@ struct PairCounter {
 struct Stats { int disk_rounds = 0; std::uint64_t disk_bytes = 0, ram_symbols_at_switch = 0; };
 
 inline std::vector<std::uint8_t> compress(Source const& source, std::uint64_t positions, unsigned terminals, std::array<std::uint16_t, 256> const& value,
-                                          std::uint64_t ram_symbols, std::string const& tmp, Stats* stats = nullptr)
+                                          std::uint64_t ram_symbols, std::string const& tmp, Stats* stats = nullptr, std::uint32_t maxlen = MAXLEN)
 {
         Grammar G(terminals);
         Stats st;
@@ -248,7 +248,7 @@ inline std::vector<std::uint8_t> compress(Source const& source, std::uint64_t po
                 std::vector<std::pair<std::uint32_t, unsigned>> cand;
                 for (unsigned a = 0; a < G.nsym; ++a)
                         for (unsigned c = 0; c < G.nsym; ++c)
-                                if (pc.count[a << 8 | c] >= 2 && G.length[a] + G.length[c] <= MAXLEN) cand.push_back({ pc.count[a << 8 | c], a << 8 | c });
+                                if (pc.count[a << 8 | c] >= 2 && G.length[a] + G.length[c] <= maxlen) cand.push_back({ pc.count[a << 8 | c], a << 8 | c });
                 std::sort(cand.begin(), cand.end(), std::greater<>());
                 std::vector<std::uint16_t> repl(65536, 0);
                 std::array<bool, 256> used{};
@@ -310,7 +310,7 @@ inline std::vector<std::uint8_t> compress(Source const& source, std::uint64_t po
                 std::uint32_t best = 1; unsigned key = 0;
                 for (unsigned a = 0; a < G.nsym; ++a)
                         for (unsigned c = 0; c < G.nsym; ++c)
-                                if (count[a << 8 | c] > best && G.length[a] + G.length[c] <= MAXLEN) { best = count[a << 8 | c]; key = a << 8 | c; }
+                                if (count[a << 8 | c] > best && G.length[a] + G.length[c] <= maxlen) { best = count[a << 8 | c]; key = a << 8 | c; }
                 if (best < 2) break;
                 std::uint8_t const a = std::uint8_t(key >> 8), c = std::uint8_t(key & 255), n = G.add(a, c);
                 std::size_t o = 0;
@@ -355,6 +355,188 @@ inline std::vector<std::uint8_t> compress(Source const& source, std::uint64_t po
         std::memcpy(out.data() + OFF_START + 8 * blocks, &pos, 8);
         if (stats) *stats = st;
         return out;
+}
+
+// ---- the flat layout: 64-byte blocks of codewords and an Elias-Fano index of their first positions
+//
+// The same grammar and the same codeword sequence, cut into blocks of 64 codewords (one cache line) with nothing in
+// between. Which block holds a position is answered by an index beside the blocks: the first position of every block,
+// a rising sequence, stored after Elias and Fano:
+//   low      the low L bits of each first position, L bits each (L = log2 of the average positions per block)
+//   upper    the high parts in unary: for block i with high part h, bit h + i is set. Bucket h (the blocks with high
+//            part h) is the run of ones before zero number h
+//   sample   for every 128th bucket, the bit at which it starts
+// About L + 2 bits per block (2 to 2.5 % of the data) and no limit on the positions of a block. A lookup: the bucket
+// of the position's high part (sample, then a count of zeros over a few words); among its blocks the last whose low
+// part is not above the position's; if there is none, the last block before the bucket (a scan back over the zeros:
+// short unless blocks stand for very many positions, so a cap on the symbols' length keeps it short).
+constexpr char MAGIC_FLAT[8] = { 'E', 'G', 'D', 'B', 'R', 'F', '1', 0 };
+constexpr std::uint64_t SAMPLE = 128;
+
+struct Flat {
+        std::uint64_t positions = 0, blocks = 0, low_bits = 0;
+        unsigned terminals = 0;
+        std::uint8_t const* left = nullptr;
+        std::uint8_t const* right = nullptr;
+        std::uint32_t const* length = nullptr;
+        std::uint8_t const* uniform = nullptr;
+        std::uint16_t const* value = nullptr;
+        std::uint64_t const* sample = nullptr;
+        std::uint64_t const* upper = nullptr;
+        std::uint8_t const* low = nullptr;
+        std::uint8_t const* data = nullptr;
+        std::uint64_t index_bytes = 0;
+        explicit operator bool() const { return data != nullptr; }
+};
+
+struct FlatLayout {
+        std::uint64_t L, buckets, samples, upper_words, low_bytes, off_sample, off_upper, off_low, off_data;
+        FlatLayout(std::uint64_t positions, std::uint64_t blocks)
+        {
+                std::uint64_t const avg = blocks ? positions / blocks : 1;
+                L = avg > 1 ? std::uint64_t(std::bit_width(avg) - 1) : 0;
+                buckets = (positions >> L) + 1;
+                samples = (buckets + SAMPLE - 1) / SAMPLE;
+                upper_words = (blocks + buckets + 63) / 64 + 1;               // a spare word of zeros ends every scan
+                low_bytes = (blocks * L + 7) / 8 + 8;                         // 8 spare bytes: a low part is read as one word
+                off_sample = (OFF_START + 7) / 8 * 8;
+                off_upper = off_sample + 8 * samples;
+                off_low = off_upper + 8 * upper_words;
+                off_data = (off_low + low_bytes + 63) / 64 * 64;
+        }
+};
+
+inline Flat open_flat(std::uint8_t const* p)
+{
+        Flat f;
+        if (std::memcmp(p, MAGIC_FLAT, 8) != 0) return f;
+        std::uint64_t t;
+        std::memcpy(&f.positions, p + 8, 8);
+        std::memcpy(&f.blocks, p + 16, 8);
+        std::memcpy(&t, p + 24, 8);
+        std::memcpy(&f.low_bits, p + 32, 8);
+        f.terminals = unsigned(t);
+        FlatLayout const y(f.positions, f.blocks);
+        f.left = p + OFF_LEFT; f.right = p + OFF_RIGHT;
+        f.length = reinterpret_cast<std::uint32_t const*>(p + OFF_LEN);
+        f.uniform = p + OFF_UNI;
+        f.value = reinterpret_cast<std::uint16_t const*>(p + OFF_VALUE);
+        f.sample = reinterpret_cast<std::uint64_t const*>(p + y.off_sample);
+        f.upper = reinterpret_cast<std::uint64_t const*>(p + y.off_upper);
+        f.low = p + y.off_low;
+        f.data = p + y.off_data;
+        f.index_bytes = y.off_data - y.off_sample;
+        return f;
+}
+
+// the blocked file's codewords as a flat file
+inline std::vector<std::uint8_t> to_flat(File const& f, std::uint8_t const* header)
+{
+        std::vector<std::uint8_t> seq;
+        std::uint64_t done = 0;
+        for (std::uint64_t b = 0; b < f.blocks && done < f.positions; ++b)
+                for (std::uint64_t k = 0; k < CODES && done < f.positions; ++k) {
+                        std::uint8_t const c = f.data[b * BLOCK + HEAD + k];
+                        seq.push_back(c); done += f.length[c];
+                }
+        std::uint64_t const blocks = (seq.size() + MINI - 1) / MINI;
+        FlatLayout const y(f.positions, blocks);
+        std::vector<std::uint8_t> out(y.off_data + blocks * MINI, 0);
+        std::memcpy(out.data(), header, OFF_START);                     // the counts and the grammar's tables as they are
+        std::memcpy(out.data(), MAGIC_FLAT, 8);
+        std::memcpy(out.data() + 16, &blocks, 8);
+        std::memcpy(out.data() + 32, &y.L, 8);
+        std::memcpy(out.data() + y.off_data, seq.data(), seq.size());
+        std::uint64_t* const upper = reinterpret_cast<std::uint64_t*>(out.data() + y.off_upper);
+        std::uint64_t* const sample = reinterpret_cast<std::uint64_t*>(out.data() + y.off_sample);
+        std::uint8_t* const low = out.data() + y.off_low;
+        std::uint64_t pos = 0;
+        for (std::uint64_t i = 0; i < blocks; ++i) {
+                std::uint64_t const h = pos >> y.L, bit = h + i, lo = pos & ((std::uint64_t(1) << y.L) - 1);
+                upper[bit / 64] |= std::uint64_t(1) << (bit % 64);
+                std::uint64_t w;
+                std::memcpy(&w, low + i * y.L / 8, 8);
+                w |= lo << (i * y.L % 8);
+                std::memcpy(low + i * y.L / 8, &w, 8);
+                for (std::uint64_t k = 0; k < MINI && i * MINI + k < seq.size(); ++k) pos += f.length[seq[i * MINI + k]];
+        }
+        // bucket j * SAMPLE starts after zero number j * SAMPLE - 1
+        std::uint64_t zeros = 0, next = 0;
+        for (std::uint64_t bit = 0; next < y.samples; ++bit) {
+                if (zeros == next * SAMPLE) sample[next++] = bit;
+                if (!(upper[bit / 64] >> (bit % 64) & 1)) ++zeros;
+        }
+        return out;
+}
+
+inline std::uint16_t lookup(Flat const& f, std::uint64_t p)
+{
+        std::uint64_t const L = f.low_bits, h = p >> L, mask = (std::uint64_t(1) << L) - 1, lo = p & mask;
+        // the start of bucket h: its sample, then r zeros further
+        std::uint64_t start = f.sample[h / SAMPLE];
+        std::uint64_t r = h % SAMPLE;
+        if (r != 0) {
+                std::uint64_t w = start / 64;
+                std::uint64_t z = ~f.upper[w] & (~std::uint64_t(0) << (start % 64));
+                for (std::uint64_t c; (c = std::uint64_t(std::popcount(z))) < r; z = ~f.upper[++w]) r -= c;
+#if defined(__BMI2__)
+                start = w * 64 + std::uint64_t(_tzcnt_u64(_pdep_u64(std::uint64_t(1) << (r - 1), z))) + 1;
+#else
+                for (; r > 1; --r) z &= z - 1;
+                start = w * 64 + std::uint64_t(std::countr_zero(z)) + 1;
+#endif
+        }
+        std::uint64_t i = start - h;                                    // the blocks before bucket h
+        auto const low_of = [&](std::uint64_t k) { std::uint64_t w; std::memcpy(&w, f.low + k * L / 8, 8); return w >> (k * L % 8) & mask; };
+        // the bucket's blocks (the ones from `start`) whose low part is not above lo
+        std::uint64_t bit = start, high = h;
+        bool found = false;
+        while ((f.upper[bit / 64] >> (bit % 64) & 1) && low_of(i) <= lo) { found = true; ++i; ++bit; }
+        if (!found) {                                                   // the last block before the bucket: back over the zeros
+                std::uint64_t e = start - 1;                            // the zero that ends bucket h - 1 (block 0 starts at 0: never for h = 0)
+                std::uint64_t w = e / 64;
+                std::uint64_t ones = f.upper[w] & ((std::uint64_t(1) << (e % 64)) - 1);
+                while (ones == 0) ones = f.upper[--w];
+                std::uint64_t const at = w * 64 + 63 - std::uint64_t(std::countl_zero(ones));
+                high = at - (i - 1);
+        }
+        --i;
+        std::uint32_t rel = std::uint32_t(p - (high << L | low_of(i)));
+        std::uint8_t const* const c = f.data + i * MINI;
+        unsigned s;
+#if defined(__AVX2__)
+        for (unsigned g = 0;; g += 8) {
+                __m256i const idx = _mm256_cvtepu8_epi32(_mm_loadl_epi64(reinterpret_cast<__m128i const*>(c + g)));
+                __m256i sum = _mm256_i32gather_epi32(reinterpret_cast<int const*>(f.length), idx, 4);
+                sum = _mm256_add_epi32(sum, _mm256_slli_si256(sum, 4));
+                sum = _mm256_add_epi32(sum, _mm256_slli_si256(sum, 8));
+                __m128i const low_total = _mm_shuffle_epi32(_mm256_castsi256_si128(sum), 0xff);
+                sum = _mm256_add_epi32(sum, _mm256_inserti128_si256(_mm256_setzero_si256(), low_total, 1));
+                unsigned const above = unsigned(_mm256_movemask_ps(_mm256_castsi256_ps(_mm256_cmpgt_epi32(sum, _mm256_set1_epi32(int(rel))))));
+                alignas(32) std::uint32_t t[8];
+                _mm256_store_si256(reinterpret_cast<__m256i*>(t), sum);
+                if (above != 0) {
+                        unsigned const k = unsigned(std::countr_zero(above));
+                        rel -= k ? t[k - 1] : 0;
+                        s = c[g + k];
+                        break;
+                }
+                rel -= t[7];
+        }
+#else
+        unsigned k = 0;
+        for (std::uint32_t l; rel >= (l = f.length[c[k]]); ++k) rel -= l;
+        s = c[k];
+#endif
+        for (;;) {
+                std::uint8_t const u = f.uniform[s];
+                if (u != MIXED) return f.value[u];
+                unsigned const Lf = f.left[s];
+                std::uint32_t const ll = f.length[Lf];
+                bool const in_left = rel < ll;
+                s = in_left ? Lf : f.right[s];
+                rel -= in_left ? 0 : ll;
+        }
 }
 
 }       // namespace rpvf

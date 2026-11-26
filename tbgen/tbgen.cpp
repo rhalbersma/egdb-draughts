@@ -3729,6 +3729,8 @@ bool rp_convert(std::string const& dir, int n, ExecutionPolicy const& policy)
                 }
         for (auto const& j : jobs) mat_index(j.m);
         std::uint64_t const ram_symbols = (std::getenv("EGDB_RP_RAM_MB") ? std::uint64_t(std::atoll(std::getenv("EGDB_RP_RAM_MB"))) : 1024) << 20;
+        std::uint32_t const maxlen = std::getenv("EGDB_RP_MAXLEN") ? std::uint32_t(std::atoll(std::getenv("EGDB_RP_MAXLEN"))) : rpvf::MAXLEN;
+        std::atomic<std::uint64_t> fbytes[2]{}, fidx[2]{}, fdata[2]{};
         std::atomic<std::uint64_t> zbytes[2]{}, rbytes[2]{}, positions{ 0 }, bad{ 0 }, escapes{ 0 }, rounds{ 0 }, disk{ 0 }, on_disk{ 0 };
         auto const t0 = std::chrono::steady_clock::now();
         std::for_each(policy, jobs.begin(), jobs.end(), [&](Job const& j) {
@@ -3766,39 +3768,59 @@ bool rp_convert(std::string const& dir, int n, ExecutionPolicy const& policy)
                         feed(chunk.data(), chunk.size());
                 };
                 rpvf::Stats st;
-                std::vector<std::uint8_t> const out = rpvf::compress(source, size, terminals, value, ram_symbols, path + ".rp.tmp", &st);
+                std::vector<std::uint8_t> const out = rpvf::compress(source, size, terminals, value, ram_symbols, path + ".rp.tmp", &st, maxlen);
                 rpvf::File const f = rpvf::open(out.data());
                 std::uint64_t wrong = 0, slot = 0;
                 each_value([&](std::uint8_t v) { wrong += rpvf::lookup(f, slot) != v || rpvf::lookup_plain(f, slot) != v; ++slot; });
+                // the same codewords in the flat layout (64-byte blocks, Elias-Fano index): <name>.rpf
+                std::vector<std::uint8_t> const flat = rpvf::to_flat(f, out.data());
+                rpvf::Flat const ff = rpvf::open_flat(flat.data());
+                slot = 0;
+                each_value([&](std::uint8_t v) { wrong += rpvf::lookup(ff, slot) != v; ++slot; });
+                std::ofstream(path + ".rpf", std::ios::binary | std::ios::trunc).write(reinterpret_cast<char const*>(flat.data()), std::streamsize(flat.size()));
+                fbytes[j.depth] += flat.size(); fidx[j.depth] += ff.index_bytes; fdata[j.depth] += ff.blocks * rpvf::MINI;
                 std::ofstream(path + ".rp", std::ios::binary | std::ios::trunc).write(reinterpret_cast<char const*>(out.data()), std::streamsize(out.size()));
                 zbytes[j.depth] += std::filesystem::file_size(zpath(path)); rbytes[j.depth] += out.size(); positions += size; bad += wrong;
                 rounds += std::uint64_t(st.disk_rounds); disk += st.disk_bytes; on_disk += st.disk_rounds > 0;
         });
-        if (std::getenv("EGDB_RP_TIME")) {      // one thread, random positions over the wdl files (by size): the plain lookup against the tuned one
-                std::vector<std::pair<rpvf::File, std::uint64_t>> fs;
-                std::vector<std::uint64_t> cum; std::uint64_t tot = 0;
-                for (auto const& j : jobs) {
-                        if (j.depth) continue;
-                        std::string const rp = probe_path(dir, j.m, "wdl", j.side) + ".rp";
-                        fs.push_back({ rpvf::open(map_file(rp, std::size_t(std::filesystem::file_size(rp)))), mat_index(j.m).size });
-                        tot += fs.back().second; cum.push_back(tot);
-                }
-                std::mt19937_64 rng(5);
-                std::vector<std::pair<std::uint32_t, std::uint64_t>> q(4000000);
-                for (auto& x : q) { std::uint64_t const r = rng() % tot; x.first = std::uint32_t(std::ranges::upper_bound(cum, r) - cum.begin()); x.second = rng() % fs[x.first].second; }
-                for (int which = 0; which < 2; ++which)
-                        for (int pass = 0; pass < 2; ++pass) {
-                                std::uint64_t acc = 0;
-                                auto const a = std::chrono::steady_clock::now();
-                                for (auto const& x : q) acc += which ? rpvf::lookup(fs[x.first].first, x.second) : rpvf::lookup_plain(fs[x.first].first, x.second);
-                                if (pass) std::cout << (which ? "tuned" : "plain") << " lookup, random positions: " << seconds_since(a) * 1e9 / double(q.size()) << " ns (sum " << acc << ")" << std::endl;
+        if (std::getenv("EGDB_RP_TIME"))        // one thread, random positions (files by size): the blocked layout, plain and tuned, and the flat one
+                for (int depth : { 0, 1 }) {
+                        struct F { rpvf::File blocked; rpvf::Flat flat; std::uint64_t size; };
+                        std::vector<F> fs;
+                        std::vector<std::uint64_t> cum; std::uint64_t tot = 0;
+                        for (auto const& j : jobs) {
+                                if (int(j.depth) != depth) continue;
+                                std::string const base = probe_path(dir, j.m, j.depth ? metric_name() : "wdl", j.side);
+                                if (!std::filesystem::exists(base + ".rpf")) continue;
+                                fs.push_back({ rpvf::open(map_file(base + ".rp", std::size_t(std::filesystem::file_size(base + ".rp")))),
+                                               rpvf::open_flat(map_file(base + ".rpf", std::size_t(std::filesystem::file_size(base + ".rpf")))), mat_index(j.m).size });
+                                tot += fs.back().size; cum.push_back(tot);
                         }
-        }
+                        if (fs.empty()) continue;
+                        std::mt19937_64 rng(5);
+                        std::vector<std::pair<std::uint32_t, std::uint64_t>> q(4000000);
+                        for (auto& x : q) { std::uint64_t const r = rng() % tot; x.first = std::uint32_t(std::ranges::upper_bound(cum, r) - cum.begin()); x.second = rng() % fs[x.first].size; }
+                        static char const* const name[3] = { "blocked, plain", "blocked, tuned", "flat, Elias-Fano" };
+                        for (int which = 0; which < 3; ++which)
+                                for (int pass = 0; pass < 3; ++pass) {
+                                        std::uint64_t acc = 0;
+                                        auto const a = std::chrono::steady_clock::now();
+                                        for (auto const& x : q) {
+                                                F const& f = fs[x.first];
+                                                acc += which == 0 ? rpvf::lookup_plain(f.blocked, x.second) : which == 1 ? rpvf::lookup(f.blocked, x.second) : rpvf::lookup(f.flat, x.second);
+                                        }
+                                        if (pass == 2) std::cout << (depth ? "depth" : "wdl") << ", " << name[which] << ", random positions: " << seconds_since(a) * 1e9 / double(q.size()) << " ns (sum " << acc << ")" << std::endl;
+                                }
+                }
         std::cout << "rpconvert: " << jobs.size() << " files, " << positions.load() << " positions, " << bad.load() << " lookups differ, " << escapes.load()
                   << " depth files skipped (escape codes), " << seconds_since(t0) << " s\n  wdl: zstd " << zbytes[0].load() << " bytes, Re-Pair " << rbytes[0].load()
                   << " (" << 100.0 * double(rbytes[0].load()) / double(std::max<std::uint64_t>(1, zbytes[0].load())) << " %)\n  depth: zstd " << zbytes[1].load() << " bytes, Re-Pair "
                   << rbytes[1].load() << " (" << 100.0 * double(rbytes[1].load()) / double(std::max<std::uint64_t>(1, zbytes[1].load())) << " %)\n  pairing on disk for " << on_disk.load()
                   << " files: " << rounds.load() << " rounds, " << disk.load() << " bytes written to temporary files (memory limit " << (ram_symbols >> 20) << " MB per file)" << std::endl;
+        for (int d : { 0, 1 })
+                std::cout << "  flat " << (d ? "depth" : "wdl") << " (symbols of at most " << maxlen << " positions): " << fbytes[d].load() << " bytes ("
+                          << 100.0 * double(fbytes[d].load()) / double(std::max<std::uint64_t>(1, zbytes[d].load())) << " % of zstd), codewords " << fdata[d].load()
+                          << ", Elias-Fano index " << fidx[d].load() << " (" << 100.0 * double(fidx[d].load()) / double(std::max<std::uint64_t>(1, fdata[d].load())) << " % of the codewords)" << std::endl;
         return bad.load() == 0;
 }
 

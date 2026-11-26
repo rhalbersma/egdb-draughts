@@ -97,6 +97,8 @@
 
 #include "../src/materials_6x6.hpp"
 
+#include <fcntl.h>
+#include <unistd.h>
 #include <atomic>
 #include <execution>
 #include <filesystem>
@@ -281,8 +283,12 @@ auto zread(ZFile const& z, std::uint64_t b, Use&& use)
 {
         return zcache().read(z.base + b, [&](std::uint8_t* dst) {
                 thread_local std::unique_ptr<ZSTD_DCtx, std::size_t (*)(ZSTD_DCtx*)> dx(ZSTD_createDCtx(), ZSTD_freeDCtx);
-                std::size_t const r = ZSTD_decompressDCtx(dx.get(), dst, 2 * ZBLOCK, z.data + z.off[b], z.off[b + 1] - z.off[b]);
+                // through a buffer: zstd's copy loops write a few bytes past the end of a block when the destination has room,
+                // which would touch the slot's second page for every full block of ZBLOCK bytes
+                thread_local std::array<std::uint8_t, 2 * ZBLOCK> buf;
+                std::size_t const r = ZSTD_decompressDCtx(dx.get(), buf.data(), buf.size(), z.data + z.off[b], z.off[b + 1] - z.off[b]);
                 if (ZSTD_isError(r)) { std::cerr << "zstd: bad block " << b << std::endl; std::exit(1); }
+                std::memcpy(dst, buf.data(), r);
         }, use);
 }
 
@@ -1763,12 +1769,26 @@ void solve_group_engine(Group const& g, DepthSink<std::uint16_t>& sink, Executio
 
         // the reductions: a new base behind the ply; the depths below it go to a snapshot (their codes, zstd per block)
         // and become WON or LOST; the others are re-encoded; the LATER ones are re-evaluated from their exits
-        struct Snapshot { int base; std::vector<std::vector<char>> chunk; };
+        // A snapshot's chunks go to a scratch file (in EGDB_SCRATCH, else the store; unlinked at once, so it disappears
+        // with the process), only their places stay in memory: the memory does not grow with the number of reductions
+        struct Chunk { std::uint64_t off = 0; std::uint32_t len = 0; };
+        struct Snapshot { int base; std::vector<Chunk> chunk; };
         std::vector<Snapshot> snaps;
+        int snap_fd = -1;
+        std::atomic<std::uint64_t> snap_end{ 0 };
+        struct CloseFd { int& fd; ~CloseFd() { if (fd >= 0) ::close(fd); } } const close_snap{ snap_fd };
         double t_reduce = 0;
         auto const reduce = [&](int nb) {
                 auto const tr = std::chrono::steady_clock::now();
-                Snapshot sn{ base, std::vector<std::vector<char>>(2 * NB) };
+                Snapshot sn{ base, std::vector<Chunk>(2 * NB) };
+                if (snap_fd < 0) {
+                        static std::atomic<int> serial{ 0 };
+                        std::string const path = (std::getenv("EGDB_SCRATCH") ? std::string(std::getenv("EGDB_SCRATCH")) : g_dir) + "/snapshots-"
+                                               + std::to_string(::getpid()) + "-" + std::to_string(serial.fetch_add(1)) + ".tmp";
+                        snap_fd = ::open(path.c_str(), O_RDWR | O_CREAT | O_EXCL, 0600);
+                        if (snap_fd < 0) { std::cerr << "cannot create " << path << std::endl; std::exit(1); }
+                        ::unlink(path.c_str());
+                }
                 int const old = base;
                 eng::Codec const Zc = Z;
                 for (int col = 0; col < 2; ++col)
@@ -1796,8 +1816,10 @@ void solve_group_engine(Group const& g, DepthSink<std::uint16_t>& sink, Executio
                                 if (!any) return;
                                 auto& z = sn.chunk[std::size_t(col) * NB + lo / block_size];
                                 char buf[ZSTD_COMPRESSBOUND(block_size)];
-                                z.assign(buf, buf + ZSTD_compress(buf, sizeof buf, stage.data(), hi - lo, 1));
-                                snap_bytes.fetch_add(z.size(), std::memory_order_relaxed);
+                                z.len = std::uint32_t(ZSTD_compress(buf, sizeof buf, stage.data(), hi - lo, 1));
+                                z.off = snap_end.fetch_add(z.len, std::memory_order_relaxed);
+                                if (::pwrite(snap_fd, buf, z.len, off_t(z.off)) != ssize_t(z.len)) { std::cerr << "snapshot: write failed (scratch space?)" << std::endl; std::exit(1); }
+                                snap_bytes.fetch_add(z.len, std::memory_order_relaxed);
                         });
                 base = nb;
                 snaps.push_back(std::move(sn));
@@ -1903,9 +1925,11 @@ void solve_group_engine(Group const& g, DepthSink<std::uint16_t>& sink, Executio
                         bool any_old = false;
                         for (auto const& sn : snaps) {
                                 auto const& z = sn.chunk[std::size_t(col) * NB + lo / block_size];
-                                if (z.empty()) continue;
+                                if (z.len == 0) continue;
                                 std::array<std::uint8_t, block_size> stage{};
-                                std::size_t const r = ZSTD_decompress(stage.data(), hi - lo, z.data(), z.size());
+                                char buf[ZSTD_COMPRESSBOUND(block_size)];
+                                if (::pread(snap_fd, buf, z.len, off_t(z.off)) != ssize_t(z.len)) { std::cerr << "snapshot: read failed" << std::endl; std::exit(1); }
+                                std::size_t const r = ZSTD_decompress(stage.data(), hi - lo, buf, z.len);
                                 if (ZSTD_isError(r)) { std::cerr << "zstd: " << ZSTD_getErrorName(r) << std::endl; std::abort(); }
                                 for (std::uint64_t j = 0; j < hi - lo; ++j) {
                                         if (stage[j] == 0) continue;

@@ -78,29 +78,92 @@ std::vector<std::uint8_t> values_of(Source const& S)
         return v;
 }
 
-// d: a grammar for fixed-width codes on the sub-table's values: symbols of up to 2^16 positions, a rule only while it
-// saves more than its 3 bytes; at most `max_symbols`
-Source rebuilt(Source const& S, std::vector<std::uint8_t> const& values, unsigned max_symbols, unsigned code_bits)
+// d: a grammar for fixed-width codes on the sub-table's values: symbols of up to `maxlen` positions, a rule only
+// while it saves more than its 3 bytes; at most `max_symbols`.
+// The values are never all in memory: they are produced in chunks from his symbols. The grammar is built on a sample
+// (every step-th chunk, at most about 2^29 positions; all of a smaller sub-table) and then applied to every chunk in the
+// order its rules were made, which is what the builder itself does. A pair across two chunks stays unpaired.
+Source rebuilt(Source const& S, unsigned max_symbols, unsigned code_bits, std::uint32_t maxlen)
 {
         Source D = S;
         if (S.is_const) return D;
+        constexpr std::size_t CHUNK = std::size_t(1) << 22, SAMPLE = std::size_t(1) << 29;
         std::array<int, 256> rank; rank.fill(-1);
         std::array<std::uint16_t, 256> value{};
         unsigned terminals = 0;
-        { std::array<bool, 256> seen{}; for (std::uint8_t v : values) seen[v] = true; for (unsigned v = 0; v < 256; ++v) if (seen[v]) { rank[v] = int(terminals); value[terminals++] = std::uint16_t(v); } }
-        std::vector<std::uint16_t> terms(values.size());
-        for (std::size_t i = 0; i < values.size(); ++i) terms[i] = std::uint16_t(rank[values[i]]);
+        { std::array<bool, 256> seen{}; for (unsigned y = 0; y < S.g.nsym; ++y) if (S.g.len[y] == 1) seen[S.g.val[y]] = true;
+          for (unsigned v = 0; v < 256; ++v) if (seen[v]) { rank[v] = int(terminals); value[terminals++] = std::uint16_t(v); } }
+        // the values as terminals, chunk by chunk
+        auto const each_chunk = [&](auto&& f) {
+                std::vector<std::uint16_t> buf;
+                std::vector<unsigned> stack;
+                std::uint64_t done = 0;
+                std::size_t c = 0;
+                auto const flush = [&] { if (!buf.empty()) { f(c++, buf); buf.clear(); } };
+                for (std::uint16_t s0 : S.seq) {
+                        stack.push_back(s0);
+                        while (!stack.empty()) {
+                                unsigned const y = stack.back();
+                                stack.pop_back();
+                                if (S.g.len[y] != 1) { stack.push_back(S.g.right[y]); stack.push_back(S.g.left[y]); continue; }
+                                if (done == S.tb_size) continue;                        // his padding after the last position
+                                buf.push_back(std::uint16_t(rank[S.g.val[y]]));
+                                ++done;
+                                if (buf.size() == CHUNK) flush();
+                        }
+                }
+                flush();
+        };
+        std::size_t const step = std::max<std::size_t>(1, (S.tb_size + SAMPLE - 1) / SAMPLE);
+        std::vector<std::uint16_t> sample;
+        sample.reserve(std::min<std::size_t>(S.tb_size, SAMPLE + CHUNK));
+        each_chunk([&](std::size_t c, std::vector<std::uint16_t> const& buf) { if (c % step == 0) sample.insert(sample.end(), buf.begin(), buf.end()); });
         // a rule costs 3 bytes; replacing one pair saves code_bits / 8 bytes
         std::uint32_t const min_count = std::uint32_t(3 * 8 / code_bits + 1);
-        std::vector<std::uint16_t> fin;
-        std::vector<std::uint8_t> const file = rpvf::compress_wide(std::move(terms), values.size(), terminals, value, 65536, min_count, max_symbols, &fin);
+        std::size_t const sample_positions = sample.size();
+        std::vector<std::uint8_t> const file = rpvf::compress_wide(std::move(sample), sample_positions, terminals, value, maxlen, min_count, max_symbols);
         rpvf::Wide const w = rpvf::open_wide(file.data());
         std::vector<std::uint16_t> left(w.nsym), right(w.nsym);
         std::vector<std::uint8_t> val(w.nsym, 0xff);
         for (unsigned s = 0; s < w.nsym; ++s) { left[s] = w.left[s]; right[s] = w.right[s]; if (w.length[s] == 1) val[s] = std::uint8_t(w.value[w.uniform[s]]); }
         std::vector<std::uint8_t> const pat = sympat_of(left, right, val);
         D.g = grammar_from_sympat(pat.data(), w.nsym);
-        D.seq = std::move(fin);
+        // the rules in batches that can be applied in one pass: no symbol in two pairs, none made in the same batch
+        std::vector<std::pair<unsigned, unsigned>> batches;             // [first, last) rule
+        {
+                std::vector<bool> used(w.nsym, false);
+                unsigned first = terminals;
+                for (unsigned s = terminals; s <= w.nsym; ++s) {
+                        if (s == w.nsym || left[s] >= first || right[s] >= first || used[left[s]] || used[right[s]]) {
+                                if (s > first) batches.push_back({ first, s });
+                                for (unsigned y = first; y < s; ++y) used[left[y]] = used[right[y]] = false;
+                                first = s;
+                                if (s == w.nsym) break;
+                        }
+                        used[left[s]] = used[right[s]] = true;
+                }
+        }
+        constexpr std::size_t W = 4096;
+        std::vector<std::uint16_t> repl(W * W, 0);
+        std::vector<bool> is_left(W, false);
+        D.seq.clear();
+        each_chunk([&](std::size_t, std::vector<std::uint16_t> const& buf) {
+                std::vector<std::uint16_t> seq = buf;
+                for (auto const& [first, last] : batches) {
+                        for (unsigned y = first; y < last; ++y) { repl[left[y] * W + right[y]] = std::uint16_t(y); is_left[left[y]] = true; }
+                        std::size_t o = 0;
+                        for (std::size_t i = 0; i < seq.size(); ++i) {
+                                if (i + 1 < seq.size() && is_left[seq[i]]) {
+                                        std::uint16_t const r = repl[std::size_t(seq[i]) * W + seq[i + 1]];
+                                        if (r != 0) { seq[o++] = r; ++i; continue; }
+                                }
+                                seq[o++] = seq[i];
+                        }
+                        seq.resize(o);
+                        for (unsigned y = first; y < last; ++y) { repl[left[y] * W + right[y]] = 0; is_left[left[y]] = false; }
+                }
+                D.seq.insert(D.seq.end(), seq.begin(), seq.end());
+        });
         return D;
 }
 
@@ -113,13 +176,15 @@ Variant parse_variant(std::string const& v)
         std::exit(2);
 }
 
-Stats convert_one(Source const& S, Variant const& V, std::string const& prefix, std::vector<std::uint8_t> const* values)
+Stats convert_one(Source const& S, Variant const& V, std::string const& prefix)
 {
         if (V.kind == 'b') return S.block_bytes == 64 ? convert<LB64>(S, prefix, V.name) : S.block_bytes == 32 ? convert<LB32>(S, prefix, V.name) : convert<LB16>(S, prefix, V.name);
         if (V.kind == 'c') return V.header == 0 ? convert<LC0>(S, prefix, V.name) : V.header == 1 ? convert<LC1>(S, prefix, V.name) : convert<LC2>(S, prefix, V.name);
         // d: 12-bit codes with up to 4,095 symbols, or 10-bit codes with up to 1,024; the smaller total
         if (S.is_const) return convert<LC0>(S, prefix, V.name);
-        Source const D12 = rebuilt(S, *values, 4095, 12), D10 = rebuilt(S, *values, 1024, 10);
+        // u16 line counts: a symbol of at most 65,536 / 42 positions, so that a full line of codes always fits
+        std::uint32_t const maxlen = V.header == 0 ? 1560 : 65536;
+        Source const D12 = rebuilt(S, 4095, 12, maxlen), D10 = rebuilt(S, 1024, 10, maxlen);
         auto const run = [&](Source const& D, bool ten, std::string const& p) {
                 return V.header == 0 ? (ten ? convert<LC0_10>(D, p, V.name) : convert<LC0>(D, p, V.name))
                      : V.header == 1 ? (ten ? convert<LC1_10>(D, p, V.name) : convert<LC1>(D, p, V.name))
@@ -189,9 +254,7 @@ int convert_all(char const* tbdir, std::string const& outdir, std::string const&
                 int const i = order[std::size_t(j)];
                 SlSub const& s = *sl_sub(i);
                 Source const S = source_of(i);
-                std::vector<std::uint8_t> values;
-                if (V.kind == 'd' && !S.is_const) { values = values_of(S); values.resize(S.tb_size); }
-                Stats const st = convert_one(S, V, prefix_of(outdir, vname, i), &values);
+                Stats const st = convert_one(S, V, prefix_of(outdir, vname, i));
                 Manifest const man = read_manifest(prefix_of(outdir, vname, i) + ".man");
                 auto const get = [&](char const* k) { auto it = man.find(k); return it == man.end() ? std::string("0") : it->second; };
                 std::ostringstream o;

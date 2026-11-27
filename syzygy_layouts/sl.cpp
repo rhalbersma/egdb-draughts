@@ -243,6 +243,7 @@ Stats convert_one(Source const& S, Variant const& V, std::string const& prefix)
 
 int open_tables(char const* tbdir)
 {
+        if (std::getenv("SL_DTZ")) sl_set_dtz(1);              // the DTZ tables of the directory (info, zstd, bench a with index traces)
         int const n = sl_open_all(tbdir);
         if (n <= 0) { std::cerr << "no tables in " << tbdir << std::endl; std::exit(1); }
         return n;
@@ -424,7 +425,6 @@ int check_all(char const* tbdir, std::string const& outdir, std::string const& v
 
 int zstd_sizes(char const* tbdir, std::size_t block, int level)
 {
-        if (std::getenv("SL_DTZ")) sl_set_dtz(1);
         int const n = open_tables(tbdir);
         struct Row { std::uint64_t positions = 0, his = 0, z = 0, blocks = 0, ns = 0, timed = 0; int wide = 0, subs = 0; };
         std::map<std::string, Row> rows;

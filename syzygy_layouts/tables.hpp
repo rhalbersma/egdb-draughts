@@ -92,6 +92,15 @@ struct Huffman {
         std::uint16_t offset[40] = {};                          // by length: the first symbol of that length
         std::uint64_t base[40] = {};                            // by length: the first code of that length, left-aligned
         int length(unsigned s) const { for (int l = min_len; l < max_len; ++l) if (s >= offset[l]) return l; return max_len; }
+        // a symbol that occurs only inside other symbols has no code: its number does not come back from decoding
+        bool has_code(unsigned s) const
+        {
+                int const n = length(s);
+                std::uint64_t const left = code(s, n) << (64 - n);
+                int l = min_len;
+                while (l < max_len && left < base[l]) ++l;
+                return l == n && left >= base[l] && unsigned(offset[l]) + unsigned((left - base[l]) >> (64 - l)) == s;
+        }
         std::uint64_t code(unsigned s, int l) const { return (base[l] >> (64 - l)) + (s - offset[l]); }    // right-aligned
 };
 
@@ -129,7 +138,8 @@ inline void write_file(std::string const& path, void const* p, std::size_t n)
 }
 
 // a file mapped read-only, followed by one page of zeros (a line is read in pieces that may run past its end)
-inline std::uint8_t const* map_file(std::string const& path, std::size_t& size)
+// random: no read-ahead, as Fathom asks for its files (a fault reads the one page)
+inline std::uint8_t const* map_file(std::string const& path, std::size_t& size, bool random = false)
 {
         int const fd = ::open(path.c_str(), O_RDONLY);
         if (fd < 0) { std::fprintf(stderr, "cannot open %s\n", path.c_str()); std::exit(1); }
@@ -140,6 +150,7 @@ inline std::uint8_t const* map_file(std::string const& path, std::size_t& size)
         void* const m = ::mmap(nullptr, span, PROT_READ, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
         if (m == MAP_FAILED) { std::fprintf(stderr, "mmap failed\n"); std::exit(1); }
         if (size && ::mmap(m, size, PROT_READ, MAP_PRIVATE | MAP_FIXED, fd, 0) == MAP_FAILED) { std::fprintf(stderr, "mmap failed %s\n", path.c_str()); std::exit(1); }
+        if (size && random) ::madvise(m, size, MADV_RANDOM);
         ::close(fd);
         return static_cast<std::uint8_t const*>(m);
 }
@@ -453,12 +464,14 @@ Stats convert(Source const& S, std::string const& prefix, std::string const& var
                 while (!stack.empty()) {
                         unsigned const s = stack.back();
                         stack.pop_back();
-                        if (g.len[s] <= L::SUB - pos_in_sub) {
+                        bool const coded = L::W != 0 || S.h.has_code(s);       // b: a piece of a cut symbol may have no Huffman code
+                        if (!coded && g.len[s] == 1) { std::fprintf(stderr, "%s: a value without a Huffman code\n", S.id().c_str()); std::exit(1); }
+                        if (coded && g.len[s] <= L::SUB - pos_in_sub) {
                                 put(s);
                                 pos_in_sub += g.len[s];
                                 st.positions += g.len[s];
                                 if (pos_in_sub == L::SUB) { close(true); pos_in_sub = 0; }
-                        } else {                                // straddles the subdivision's end: its children instead
+                        } else {                                // straddles the subdivision's end, or has no code: its children instead
                                 ++st.split_symbols;
                                 stack.push_back(g.right[s]);
                                 stack.push_back(g.left[s]);
@@ -575,7 +588,7 @@ inline bool open_table(std::string const& prefix, Table& T, std::string* why = n
         if (std::stoul(T.man["sub_bits"]) != SUB_BITS) return fail("made with another subdivision size");
         T.positions = std::stoull(T.man["positions"]);
         std::size_t n_dat, n_pri, n_top, n_sub, n_gra;
-        T.dat = map_file(prefix + ".dat", n_dat);
+        T.dat = map_file(prefix + ".dat", n_dat, true);
         T.pri = reinterpret_cast<std::uint32_t const*>(map_file(prefix + ".pri", n_pri));
         T.top = reinterpret_cast<std::uint32_t const*>(map_file(prefix + ".top", n_top));
         T.sub = reinterpret_cast<std::uint32_t const*>(map_file(prefix + ".sub", n_sub));

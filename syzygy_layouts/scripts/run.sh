@@ -4,7 +4,7 @@
 set -e
 HERE=$(cd "$(dirname "$0")/.." && pwd)
 WORK=${WORK:-$HERE/work}; TB=${TB:-$WORK/tables}; OUT=$WORK/out; RES=$WORK/results; SL=$WORK/sl
-VARIANTS=${VARIANTS:-"b c0 c1 c2"}; PROBES=${PROBES:-2000000}; COLD_PROBES=${COLD_PROBES:-200000}; STEPS=${STEPS:-"convert check positions bench"}
+VARIANTS=${VARIANTS:-"b c0 c1 c2"}; PROBES=${PROBES:-2000000}; COLD_PROBES=${COLD_PROBES:-200000}; STEPS=${STEPS:-"convert check positions bench"}; CACHES=${CACHES:-"warm cold"}
 mkdir -p "$OUT" "$RES"
 has() { [[ " $STEPS " == *" $1 "* ]]; }
 if has convert; then
@@ -12,7 +12,7 @@ if has convert; then
   for v in $VARIANTS; do $SL convert $TB $OUT $v; cp $OUT/$v/sizes.csv $RES/sizes_$v.csv; done
 fi
 if has check; then
-  for v in $VARIANTS; do $SL check $TB $OUT $v | tee -a $RES/check.txt; $WORK/sl_sub17 convert $TB $OUT.sub17 $v 2>/dev/null; echo "subdivisions of 2^17: $($WORK/sl_sub17 check $TB $OUT.sub17 $v 100000)" | tee -a $RES/check.txt; rm -rf "${OUT:?}.sub17"; done
+  for v in $VARIANTS; do $SL check $TB $OUT $v | tee -a $RES/check.txt; $WORK/sl_sub17 convert $TB $OUT.sub17 $v 2>/dev/null || true; echo "subdivisions of 2^17: $($WORK/sl_sub17 check $TB $OUT.sub17 $v 100000)" | tee -a $RES/check.txt; rm -rf "${OUT:?}.sub17"; done
 fi
 if has positions; then
   for s in 1 2 3 4; do python3 $HERE/scripts/positions.py $WORK/pos.$s ${POSITIONS:-1000000} 5 $s $MATERIALS $REACHED & done; wait
@@ -24,9 +24,9 @@ if has bench; then
   for v in a $VARIANTS; do
     for m in seq uniform trace:$WORK/trace.bin pos:$WORK/positions.bin; do
       for t in 1 4; do
-        $SL bench $TB $OUT $v $m $t $PROBES >> $RES/bench.csv
-        sync; echo 3 > /proc/sys/vm/drop_caches
-        $SL bench $TB $OUT $v $m $t $COLD_PROBES cold >> $RES/bench.csv
+        [[ " $CACHES " == *" warm "* ]] && $SL bench $TB $OUT $v $m $t $PROBES >> $RES/bench.csv
+        [[ " $CACHES " == *" cold "* ]] && { sync; echo 3 > /proc/sys/vm/drop_caches; $SL bench $TB $OUT $v $m $t $COLD_PROBES cold >> $RES/bench.csv; }
+        true
       done
     done
   done

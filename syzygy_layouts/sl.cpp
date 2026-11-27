@@ -15,6 +15,7 @@
 
 #include "tables.hpp"
 #include "fathom_ext.h"
+#include "grammar.hpp"
 #include "../src/repair_vf.hpp"
 #include <atomic>
 #include <chrono>
@@ -167,14 +168,42 @@ Source rebuilt(Source const& S, unsigned max_symbols, unsigned code_bits, std::u
         return D;
 }
 
-struct Variant { std::string name; char kind; int header; };    // kind: b, c, d
+struct Variant { std::string name; char kind; int header; };    // kind: b, c, d, e
 Variant parse_variant(std::string const& v)
 {
         if (v == "b") return { v, 'b', 0 };
-        if (v.size() == 2 && (v[0] == 'c' || v[0] == 'd') && v[1] >= '0' && v[1] <= '2') return { v, v[0], v[1] - '0' };
+        if (v.size() == 2 && (v[0] == 'c' || v[0] == 'd' || v[0] == 'e') && v[1] >= '0' && v[1] <= '2') return { v, v[0], v[1] - '0' };
         std::cerr << "unknown variant " << v << std::endl;
         std::exit(2);
 }
+
+// e: the sub-table as the generator's compression step received it (scripts/patch_tb.py), from $SL_DC
+std::vector<std::uint8_t> read_open(Source const& S)
+{
+        char const* const dir = std::getenv("SL_DC");
+        if (!dir) { std::cerr << "SL_DC is not set" << std::endl; std::exit(1); }
+        std::string const cmd = "gzip -dc '" + std::string(dir) + "/" + S.name + "." + std::to_string(S.k) + ".dc.gz'";
+        std::vector<std::uint8_t> v(S.tb_size + 1);
+        FILE* const f = ::popen(cmd.c_str(), "r");
+        std::size_t const n = f ? std::fread(v.data(), 1, v.size(), f) : 0;
+        if (!f || ::pclose(f) != 0 || n != S.tb_size) { std::cerr << S.id() << ": no table of " << S.tb_size << " values in $SL_DC (" << n << " read)" << std::endl; std::exit(1); }
+        v.resize(S.tb_size);
+        return v;
+}
+
+// e: as d, but the grammar is built with the don't-care positions open
+Source rebuilt_open(Source const& S, std::vector<std::uint8_t> const& filled, unsigned max_symbols, unsigned code_bits, std::uint32_t maxlen, std::uint64_t* open3 = nullptr)
+{
+        Source D = S;
+        Built B = build_open(filled, maxlen, std::uint32_t(3 * 8 / code_bits + 1), max_symbols);
+        std::vector<std::uint8_t> const pat = sympat_of(B.left, B.right, B.val);
+        D.g = grammar_from_sympat(pat.data(), unsigned(B.left.size()));
+        D.seq = std::move(B.seq);
+        if (open3) { open3[0] = B.open_before; open3[1] = B.open_paired; open3[2] = B.open_left; }
+        return D;
+}
+
+std::atomic<std::uint64_t> g_open_all{ 0 }, g_open_after_prefill{ 0 }, g_open_paired{ 0 }, g_open_default{ 0 };
 
 Stats convert_one(Source const& S, Variant const& V, std::string const& prefix)
 {
@@ -184,7 +213,15 @@ Stats convert_one(Source const& S, Variant const& V, std::string const& prefix)
         if (S.is_const) return convert<LC0>(S, prefix, V.name);
         // u16 line counts: a symbol of at most 65,536 / 42 positions, so that a full line of codes always fits
         std::uint32_t const maxlen = V.header == 0 ? 1560 : 65536;
-        Source const D12 = rebuilt(S, 4095, 12, maxlen), D10 = rebuilt(S, 1024, 10, maxlen);
+        Source D12, D10;
+        if (V.kind == 'e') {
+                std::vector<std::uint8_t> v = read_open(S);
+                std::uint64_t all = 0, open3[3];
+                for (std::uint8_t x : v) all += x >= 5;
+                prefill(v);
+                D12 = rebuilt_open(S, v, 4095, 12, maxlen, open3); D10 = rebuilt_open(S, v, 1024, 10, maxlen);
+                g_open_all += all; g_open_after_prefill += open3[0]; g_open_paired += open3[1]; g_open_default += open3[2];
+        } else { D12 = rebuilt(S, 4095, 12, maxlen); D10 = rebuilt(S, 1024, 10, maxlen); }
         auto const run = [&](Source const& D, bool ten, std::string const& p) {
                 return V.header == 0 ? (ten ? convert<LC0_10>(D, p, V.name) : convert<LC0>(D, p, V.name))
                      : V.header == 1 ? (ten ? convert<LC1_10>(D, p, V.name) : convert<LC1>(D, p, V.name))
@@ -267,6 +304,9 @@ int convert_all(char const* tbdir, std::string const& outdir, std::string const&
         csv << "variant,table,subtable,pieces,tb_size,const,line_bytes,code_bits,symbols,codes,coded_bytes,padding_bytes,index_bytes,grammar_bytes,total_bytes,pages,header3,header4,split_symbols\n";
         for (auto const& r : rows) csv << r;
         std::cerr << "convert " << vname << ": " << n << " sub-tables, " << seconds_since(t0) << " s" << std::endl;
+        if (V.kind == 'e')
+                std::cout << "don't-care positions: " << g_open_all.load() << "; still open after the neighbour fill: " << g_open_after_prefill.load() << "; of those settled by a pair (12-bit build): "
+                          << g_open_paired.load() << ", by default: " << g_open_default.load() << std::endl;
         return 0;
 }
 
@@ -275,7 +315,7 @@ int convert_all(char const* tbdir, std::string const& outdir, std::string const&
 int check_all(char const* tbdir, std::string const& outdir, std::string const& vname, std::uint64_t random_per_sub)
 {
         int const n = open_tables(tbdir);
-        std::atomic<std::uint64_t> seq_checked{ 0 }, rnd_checked{ 0 }, exh_checked{ 0 }, bad{ 0 }, ref_checked{ 0 };
+        std::atomic<std::uint64_t> seq_checked{ 0 }, rnd_checked{ 0 }, exh_checked{ 0 }, bad{ 0 }, ref_checked{ 0 }, dc_differ{ 0 };
         std::mutex mx;
         auto const t0 = Clock::now();
         std::vector<int> order(static_cast<std::size_t>(n));
@@ -295,6 +335,30 @@ int check_all(char const* tbdir, std::string const& outdir, std::string const& v
                         return;
                 }
                 Source const S = source_of(i);
+                if (vname[0] == 'e') {
+                        // e may differ from Fathom where the value does not matter. The generator's table says where: his
+                        // values must fit it everywhere (which also shows the two are aligned), ours must fit it everywhere,
+                        // and the lookups must agree with the sequential decode
+                        std::vector<std::uint8_t> const open = read_open(S), his = values_of(S);
+                        std::vector<std::uint8_t> got;
+                        if (!decode_all(T, got, &why)) { report(why); return; }
+                        if (got.size() < s.tb_size || his.size() < s.tb_size) { report("too few values"); return; }
+                        std::uint64_t differ = 0;
+                        for (std::uint64_t x = 0; x < s.tb_size; ++x) {
+                                if (!dc_allows(his[x], open[x])) { report("his value does not fit the generator's table at " + std::to_string(x)); return; }
+                                if (!dc_allows(got[x], open[x])) { report("value not allowed at " + std::to_string(x)); return; }
+                                differ += got[x] != his[x];
+                        }
+                        for (int k = 0; k < 100000; ++k) { std::uint64_t const x = rng() % s.tb_size; if (his[x] != sl_ref(i, x)) { report("the expanded symbols differ from Fathom's lookup"); return; } }
+                        ref_checked += 100000; seq_checked += s.tb_size; dc_differ += differ;
+                        bool const exhaustive = pieces_of(s.name) <= 4 || s.tb_size <= random_per_sub;
+                        for (std::uint64_t k = 0, m = exhaustive ? s.tb_size : random_per_sub; k < m; ++k) {
+                                std::uint64_t const x = exhaustive ? k : rng() % s.tb_size;
+                                if (T.fn(T, x) != got[x]) { report("lookup differs at " + std::to_string(x)); return; }
+                        }
+                        (exhaustive ? exh_checked : rnd_checked) += exhaustive ? s.tb_size : random_per_sub;
+                        return;
+                }
                 if (pieces_of(s.name) > 4 && s.tb_size > random_per_sub) {
                         // large: his symbols are expanded alongside the pages (no table of all values in memory), the first
                         // value of every page is also asked of Fathom, and the lookups are compared with Fathom's directly
@@ -345,6 +409,7 @@ int check_all(char const* tbdir, std::string const& outdir, std::string const& v
         });
         std::cout << "check " << vname << ": " << n << " sub-tables; " << seq_checked.load() << " positions decoded in order, " << exh_checked.load() << " looked up exhaustively, "
                   << rnd_checked.load() << " at random; " << ref_checked.load() << " reference values confirmed by Fathom's lookup; " << bad.load() << " failures; " << seconds_since(t0) << " s" << std::endl;
+        if (vname[0] == 'e') std::cout << "check " << vname << ": " << dc_differ.load() << " don't-care positions hold another value than his" << std::endl;
         return bad.load() == 0 ? 0 : 1;
 }
 

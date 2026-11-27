@@ -5,9 +5,10 @@ import csv, glob, os, sys
 from collections import defaultdict
 
 res = sys.argv[1]
-ORDER = ['a', 'b', 'c0', 'c1', 'c2', 'd0', 'd1', 'd2']
+ORDER = ['a', 'b', 'c0', 'c1', 'c2', 'd0', 'd1', 'd2', 'e0', 'e1', 'e2']
 NAME = {'a': 'a: Syzygy as is', 'b': 'b: Huffman, u16 pages', 'c0': 'c0: 12-bit, u16 pages', 'c1': 'c1: 12-bit, u32 pages', 'c2': 'c2: 12-bit, Elias-Fano pages',
-        'd0': 'd0: rebuilt grammar, u16 pages', 'd1': 'd1: rebuilt grammar, u32 pages', 'd2': 'd2: rebuilt grammar, Elias-Fano pages'}
+        'd0': 'd0: rebuilt grammar, u16 pages', 'd1': 'd1: rebuilt grammar, u32 pages', 'd2': 'd2: rebuilt grammar, Elias-Fano pages',
+        'e0': 'e0: grammar built with open don\'t-cares, u16 pages', 'e1': 'e1: same, u32 pages', 'e2': 'e2: same, Elias-Fano pages'}
 
 def mb(x): return '%.2f' % (x / 1e6)
 

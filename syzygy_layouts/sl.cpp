@@ -24,6 +24,7 @@
 #include <mutex>
 #include <random>
 #include <thread>
+#include <zstd.h>
 
 extern "C" unsigned tb_probe_wdl_impl(std::uint64_t white, std::uint64_t black, std::uint64_t kings, std::uint64_t queens, std::uint64_t rooks,
                                       std::uint64_t bishops, std::uint64_t knights, std::uint64_t pawns, unsigned ep, bool turn);
@@ -416,6 +417,40 @@ int check_all(char const* tbdir, std::string const& outdir, std::string const& v
         return bad.load() == 0 ? 0 : 1;
 }
 
+// ---- zstd on the values, for comparison: blocks of `block` positions, one byte each, his finished values in his order
+
+int zstd_sizes(char const* tbdir, std::size_t block, int level)
+{
+        int const n = open_tables(tbdir);
+        std::atomic<std::uint64_t> bytes{ 0 }, blocks{ 0 }, positions{ 0 }, ns{ 0 }, timed{ 0 };
+        parallel(n, [&](int i) {
+                SlSub const& s = *sl_sub(i);
+                if (s.is_const) return;
+                std::vector<std::uint8_t> v = values_of(source_of(i));
+                v.resize(s.tb_size);
+                std::vector<char> z(ZSTD_compressBound(block)), back(block);
+                ZSTD_DCtx* const dx = ZSTD_createDCtx();
+                std::uint64_t b = 0, t = 0, k = 0, nb = 0;
+                for (std::size_t at = 0; at < v.size(); at += block, ++nb) {
+                        std::size_t const len = std::min(block, v.size() - at);
+                        std::size_t const c = ZSTD_compress(z.data(), z.size(), v.data() + at, len, level);
+                        b += c;
+                        if (nb % 64 == 0) {                     // decompression of one block, timed on every 64th
+                                auto const t0 = Clock::now();
+                                ZSTD_decompressDCtx(dx, back.data(), back.size(), z.data(), c);
+                                t += std::uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - t0).count());
+                                ++k;
+                        }
+                }
+                ZSTD_freeDCtx(dx);
+                bytes += b; blocks += nb; positions += s.tb_size; ns += t; timed += k;
+        });
+        std::cout << "zstd level " << level << ", blocks of " << block << " positions: " << positions.load() << " positions, " << blocks.load() << " blocks, "
+                  << bytes.load() << " bytes of blocks + " << 8 * blocks.load() << " of offsets = " << double(bytes.load() + 8 * blocks.load()) / 1e6 << " MB; one block decompresses in "
+                  << double(ns.load()) / double(std::max<std::uint64_t>(1, timed.load())) << " ns" << std::endl;
+        return 0;
+}
+
 // ---- positions, traces and timing
 
 struct Rec { std::uint64_t w, b, k, q, r, bi, n, p; std::uint8_t turn, cap; std::uint8_t pad[6]; };
@@ -560,6 +595,7 @@ int main(int argc, char** argv)
         std::vector<std::string> a(argv + 1, argv + argc);
         if (char const* t = std::getenv("SL_THREADS")) g_threads = std::max(1, std::atoi(t));
         if (a.size() == 2 && a[0] == "info") return info(a[1].c_str());
+        if (a.size() == 4 && a[0] == "zstd") return zstd_sizes(a[1].c_str(), std::stoull(a[2]), std::stoi(a[3]));
         if (a.size() == 4 && a[0] == "convert") return convert_all(a[1].c_str(), a[2], a[3]);
         if ((a.size() == 4 || a.size() == 5) && a[0] == "check") return check_all(a[1].c_str(), a[2], a[3], a.size() == 5 ? std::stoull(a[4]) : 10000000);
         if (a.size() == 4 && a[0] == "trace") return trace(a[1].c_str(), a[2], a[3]);

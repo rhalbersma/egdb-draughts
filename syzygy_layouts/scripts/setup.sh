@@ -13,8 +13,8 @@ mkdir -p "$WORK" && cd "$WORK"
 (cd fathom && git checkout -q $FATHOM_COMMIT)
 python3 "$HERE/scripts/patch_fathom.py" fathom/src/tbprobe.c tbprobe_sl.c
 gcc -O3 -march=native -DNDEBUG -std=gnu11 -Ifathom/src -I"$HERE" -c tbprobe_sl.c -o tbprobe_sl.o
-g++ -O3 -DNDEBUG -std=gnu++23 -march=native -Wall -Wextra -I"$HERE" -Ifathom/src "$HERE/sl.cpp" tbprobe_sl.o -o sl -lpthread
-g++ -O3 -DNDEBUG -DSL_SUB_BITS=17 -std=gnu++23 -march=native -I"$HERE" -Ifathom/src "$HERE/sl.cpp" tbprobe_sl.o -o sl_sub17 -lpthread
+g++ -O3 -DNDEBUG -std=gnu++23 -march=native -Wall -Wextra -I"$HERE" -Ifathom/src "$HERE/sl.cpp" tbprobe_sl.o -o sl -lpthread -lzstd
+g++ -O3 -DNDEBUG -DSL_SUB_BITS=17 -std=gnu++23 -march=native -I"$HERE" -Ifathom/src "$HERE/sl.cpp" tbprobe_sl.o -o sl_sub17 -lpthread -lzstd
 echo "syzygy1/tb $TB_COMMIT (flags: $(grep -h '^CFLAGS\|^FLAGS' tb/src/Makefile | tr '\n' ' '))" > versions.txt
 echo "jdart1/Fathom $FATHOM_COMMIT" >> versions.txt
 echo "built in $WORK"

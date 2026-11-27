@@ -214,7 +214,8 @@ Stats convert_one(Source const& S, Variant const& V, std::string const& prefix)
         // d: 12-bit codes with up to 4,095 symbols, or 10-bit codes with up to 1,024; the smaller total
         if (S.is_const) return convert<LC0>(S, prefix, V.name);
         // u16 line counts: a symbol of at most 65,536 / 42 positions, so that a full line of codes always fits
-        std::uint32_t const maxlen = V.header == 0 ? 1560 : 65536;
+        // SL_MAXLEN overrides (with u16 counts a line then closes early once it would pass 65,536 positions)
+        std::uint32_t const maxlen = std::getenv("SL_MAXLEN") ? std::uint32_t(std::atoi(std::getenv("SL_MAXLEN"))) : V.header == 0 ? 1560 : 65536;
         Source D12, D10;
         if (V.kind == 'e') {
                 std::vector<std::uint8_t> v = read_open(S);

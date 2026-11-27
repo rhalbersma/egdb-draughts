@@ -610,6 +610,45 @@ inline Wide open_wide(std::uint8_t const* p)
         return f;
 }
 
+// a grammar and its sequence as a file of 12-bit codewords (uniform[s]: the index into value of the one value symbol
+// s repeats, else MIXED)
+inline std::vector<std::uint8_t> write_wide(std::vector<std::uint16_t> const& seq, std::uint64_t positions, unsigned terminals, std::array<std::uint16_t, 256> const& value,
+                                            std::vector<std::uint16_t> const& left, std::vector<std::uint16_t> const& right, std::vector<std::uint32_t> const& length,
+                                            std::vector<std::uint8_t> const& uniform)
+{
+        std::uint64_t const n = left.size(), blocks = (seq.size() + WCODES - 1) / WCODES;
+        FlatLayout const y(positions, blocks, wide_base(n));
+        std::vector<std::uint8_t> out(y.off_data + blocks * MINI + 32, 0);      // 32 spare bytes: the last block is read in 16-byte pieces
+        std::uint64_t const t64 = terminals;
+        std::memcpy(out.data(), MAGIC_WIDE, 8);
+        std::memcpy(out.data() + 8, &positions, 8);
+        std::memcpy(out.data() + 16, &blocks, 8);
+        std::memcpy(out.data() + 24, &t64, 8);
+        std::memcpy(out.data() + 32, &y.L, 8);
+        std::memcpy(out.data() + 40, &n, 8);
+        std::memcpy(out.data() + WOFF_VALUE, value.data(), 512);
+        std::memcpy(out.data() + WOFF_LEN, length.data(), 4 * n);
+        std::memcpy(out.data() + WOFF_LEN + 4 * n, left.data(), 2 * n);
+        std::memcpy(out.data() + WOFF_LEN + 6 * n, right.data(), 2 * n);
+        std::memcpy(out.data() + WOFF_LEN + 8 * n, uniform.data(), n);
+        std::vector<std::uint64_t> starts(blocks);
+        std::uint64_t pos = 0;
+        for (std::uint64_t i = 0; i < blocks; ++i) {
+                starts[i] = pos;
+                std::uint8_t* const blk = out.data() + y.off_data + i * MINI;
+                for (std::uint64_t k = 0; k < WCODES && i * WCODES + k < seq.size(); ++k) {
+                        std::uint16_t const c = seq[i * WCODES + k];
+                        pos += length[c];
+                        std::uint16_t w;
+                        std::memcpy(&w, blk + 12 * k / 8, 2);
+                        w = std::uint16_t(w | c << (12 * k % 8));
+                        std::memcpy(blk + 12 * k / 8, &w, 2);
+                }
+        }
+        write_index(out.data(), y, starts);
+        return out;
+}
+
 // seq: the terminals (0 .. terminals - 1), in memory. Pairing in passes: the most frequent pair, or a batch of
 // frequent pairs with no symbol in common
 inline std::vector<std::uint8_t> compress_wide(std::vector<std::uint16_t> seq, std::uint64_t positions, unsigned terminals, std::array<std::uint16_t, 256> const& value,
@@ -663,36 +702,7 @@ inline std::vector<std::uint8_t> compress_wide(std::vector<std::uint16_t> seq, s
                 seq.resize(o);
                 for (std::uint32_t key : chosen) repl[key] = 0;
         }
-        std::uint64_t const n = left.size(), blocks = (seq.size() + WCODES - 1) / WCODES;
-        FlatLayout const y(positions, blocks, wide_base(n));
-        std::vector<std::uint8_t> out(y.off_data + blocks * MINI + 32, 0);      // 32 spare bytes: the last block is read in 16-byte pieces
-        std::uint64_t const t64 = terminals;
-        std::memcpy(out.data(), MAGIC_WIDE, 8);
-        std::memcpy(out.data() + 8, &positions, 8);
-        std::memcpy(out.data() + 16, &blocks, 8);
-        std::memcpy(out.data() + 24, &t64, 8);
-        std::memcpy(out.data() + 32, &y.L, 8);
-        std::memcpy(out.data() + 40, &n, 8);
-        std::memcpy(out.data() + WOFF_VALUE, value.data(), 512);
-        std::memcpy(out.data() + WOFF_LEN, length.data(), 4 * n);
-        std::memcpy(out.data() + WOFF_LEN + 4 * n, left.data(), 2 * n);
-        std::memcpy(out.data() + WOFF_LEN + 6 * n, right.data(), 2 * n);
-        std::memcpy(out.data() + WOFF_LEN + 8 * n, uniform.data(), n);
-        std::vector<std::uint64_t> starts(blocks);
-        std::uint64_t pos = 0;
-        for (std::uint64_t i = 0; i < blocks; ++i) {
-                starts[i] = pos;
-                std::uint8_t* const blk = out.data() + y.off_data + i * MINI;
-                for (std::uint64_t k = 0; k < WCODES && i * WCODES + k < seq.size(); ++k) {
-                        std::uint16_t const c = seq[i * WCODES + k];
-                        pos += length[c];
-                        std::uint16_t w;
-                        std::memcpy(&w, blk + 12 * k / 8, 2);
-                        w = std::uint16_t(w | c << (12 * k % 8));
-                        std::memcpy(blk + 12 * k / 8, &w, 2);
-                }
-        }
-        write_index(out.data(), y, starts);
+        std::vector<std::uint8_t> out = write_wide(seq, positions, terminals, value, left, right, length, uniform);
         if (final_seq) *final_seq = std::move(seq);
         return out;
 }

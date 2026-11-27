@@ -3383,12 +3383,16 @@ std::string probe_path(std::string const& dir, Material m, std::string const& ki
         return m.path(dir + "/probe/" + kind) + "-" + kind + (side == 0 ? "-wtm" : "-btm");
 }
 
-struct ProbeFiles { ZFile wdl[2]; int side = -1; ZFile depth; rpvf::File rp[2], rpd; rpvf::Flat rf[2], rfd; };     // side: the depth file's side to move (-1: none)
+struct ProbeFiles { ZFile wdl[2]; int side = -1; ZFile depth; rpvf::File rp[2], rpd; rpvf::Flat rf[2], rfd; rpvf::Wide rw[2], rwd; rpvf::Syz rs[2], rsd; rpvf::Huff rh[2], rhd; };     // side: the depth file's side to move (-1: none)
 // EGDB_WDL_RP=1: the prober reads the wdl values from the Re-Pair files (<wdl probe file>.rp, src/repair_vf.hpp;
 // written by `tbgen rpconvert`) straight from the mapping, instead of the zstd frames through the cache
 bool const g_wdl_rp = std::getenv("EGDB_WDL_RP") != nullptr;
 // EGDB_WDL_RP=flat: the flat files instead (<probe file>.rpf: 64-byte blocks and an Elias-Fano index)
-bool const g_rp_flat = g_wdl_rp && std::string(std::getenv("EGDB_WDL_RP")) == "flat";
+bool const g_rp_wide = g_wdl_rp && std::string(std::getenv("EGDB_WDL_RP")) == "wide";  // =wide: <probe file>.rpw, 12-bit codewords
+bool const g_rp_syz = g_wdl_rp && std::string(std::getenv("EGDB_WDL_RP")) == "syzygy";  // =syzygy: <probe file>.rps, the layout of the Syzygy tables
+// =huff8, =huff12: <probe file>.rph8 or .rph12, Huffman codes on 256 or 4,096 symbols in 64-byte blocks
+std::string const g_rp_huff = g_wdl_rp && std::string(std::getenv("EGDB_WDL_RP")).starts_with("huff") ? ".rph" + std::string(std::getenv("EGDB_WDL_RP")).substr(4) : "";
+bool const g_rp_flat = g_wdl_rp && (g_rp_wide || std::string(std::getenv("EGDB_WDL_RP")) == "flat");
 std::map<Material, ProbeFiles> g_probe;                 // opened before any parallel use, then only read
 
 // open the probe files of the given stored materials, those that have both wdl files (once; then only read)
@@ -3401,16 +3405,16 @@ void open_probe(std::string const& dir, std::vector<Material> const& ms)
                 ProbeFiles& f = g_probe[m];
                 for (int side : { 0, 1 }) {
                         f.wdl[side] = open_zfile(probe_path(dir, m, "wdl", side), (size + 3) / 4);
-                        if (std::string const rp = probe_path(dir, m, "wdl", side) + (g_rp_flat ? ".rpf" : ".rp"); g_wdl_rp && std::filesystem::exists(rp)) {
+                        if (std::string const rp = probe_path(dir, m, "wdl", side) + (!g_rp_huff.empty() ? g_rp_huff : g_rp_syz ? ".rps" : g_rp_wide ? ".rpw" : g_rp_flat ? ".rpf" : ".rp"); g_wdl_rp && std::filesystem::exists(rp)) {
                                 std::uint8_t const* const mp = map_file(rp, std::size_t(std::filesystem::file_size(rp)));
-                                if (g_rp_flat) f.rf[side] = rpvf::open_flat(mp); else f.rp[side] = rpvf::open(mp);
+                                if (!g_rp_huff.empty()) f.rh[side] = rpvf::open_huff(mp); else if (g_rp_syz) f.rs[side] = rpvf::open_syz(mp); else if (g_rp_wide) f.rw[side] = rpvf::open_wide(mp); else if (g_rp_flat) f.rf[side] = rpvf::open_flat(mp); else f.rp[side] = rpvf::open(mp);
                         }
                         std::string const d = probe_path(dir, m, metric_name(), side);
                         if (std::filesystem::exists(zpath(d))) {
                                 f.depth = open_zfile(d, size); f.side = side;
-                                if (std::string const rp = d + (g_rp_flat ? ".rpf" : ".rp"); g_wdl_rp && std::filesystem::exists(rp)) {
+                                if (std::string const rp = d + (!g_rp_huff.empty() ? g_rp_huff : g_rp_syz ? ".rps" : g_rp_wide ? ".rpw" : g_rp_flat ? ".rpf" : ".rp"); g_wdl_rp && std::filesystem::exists(rp)) {
                                         std::uint8_t const* const mp = map_file(rp, std::size_t(std::filesystem::file_size(rp)));
-                                        if (g_rp_flat) f.rfd = rpvf::open_flat(mp); else f.rpd = rpvf::open(mp);
+                                        if (!g_rp_huff.empty()) f.rhd = rpvf::open_huff(mp); else if (g_rp_syz) f.rsd = rpvf::open_syz(mp); else if (g_rp_wide) f.rwd = rpvf::open_wide(mp); else if (g_rp_flat) f.rfd = rpvf::open_flat(mp); else f.rpd = rpvf::open(mp);
                                 }
                         }
                 }
@@ -3431,6 +3435,9 @@ ProbeFiles const& probe_files(Material m)
 inline std::uint8_t wdl_read(Material m, int stm, std::uint64_t i)
 {
         ProbeFiles const& f = probe_files(m);
+        if (f.rh[stm]) return std::uint8_t(rpvf::lookup(f.rh[stm], i));
+        if (f.rs[stm]) return std::uint8_t(rpvf::lookup(f.rs[stm], i));
+        if (f.rw[stm]) return std::uint8_t(rpvf::lookup(f.rw[stm], i));
         if (f.rf[stm]) return std::uint8_t(rpvf::lookup(f.rf[stm], i));
         if (f.rp[stm]) return std::uint8_t(rpvf::lookup(f.rp[stm], i));
         return std::uint8_t(zbyte(f.wdl[stm], i >> 2) >> (2 * (i & 3)) & 3);
@@ -3580,7 +3587,7 @@ std::uint16_t pvalue(Pos const& p0)
         if (r == WDL_DRAW) return 0;
         if (f.side < 0) { std::cerr << "no " << metric_name() << " probe file for " << m.name() << std::endl; std::exit(1); }
         if (p.stm != f.side) return search();                           // the side without a depth file
-        int const c = f.rfd ? int(rpvf::lookup(f.rfd, i)) : f.rpd ? int(rpvf::lookup(f.rpd, i)) : zdepth(f.depth, i);
+        int const c = f.rhd ? int(rpvf::lookup(f.rhd, i)) : f.rsd ? int(rpvf::lookup(f.rsd, i)) : f.rwd ? int(rpvf::lookup(f.rwd, i)) : f.rfd ? int(rpvf::lookup(f.rfd, i)) : f.rpd ? int(rpvf::lookup(f.rpd, i)) : zdepth(f.depth, i);
         bool const dtm = g_metric == Metric::dtm;
         return r == WDL_WIN ? win(dtm ? 2 * c + 1 : c) : loss(dtm ? 2 * c : c);
 }
@@ -3738,7 +3745,9 @@ bool rp_convert(std::string const& dir, int n, ExecutionPolicy const& policy)
         for (auto const& j : jobs) mat_index(j.m);
         std::uint64_t const ram_symbols = (std::getenv("EGDB_RP_RAM_MB") ? std::uint64_t(std::atoll(std::getenv("EGDB_RP_RAM_MB"))) : 1024) << 20;
         std::uint32_t const maxlen = std::getenv("EGDB_RP_MAXLEN") ? std::uint32_t(std::atoll(std::getenv("EGDB_RP_MAXLEN"))) : rpvf::MAXLEN;
+        int const syz_maxb = std::getenv("EGDB_SYZ_MAXB") ? std::atoi(std::getenv("EGDB_SYZ_MAXB")) : 0;      // the Syzygy layout's largest block, as a power of two (default: 6 wdl, 10 depth)
         std::atomic<std::uint64_t> fbytes[2]{}, fidx[2]{}, fdata[2]{};
+        std::atomic<std::uint64_t> wbytes[2]{}, widx[2]{}, wdict[2]{}, wdata[2]{}, wsyms[2]{}, sbytes[2]{}, sdata[2]{}, stab[2]{}, sdict[2]{}, sblock[2][16]{}, hbytes[2][2]{}, hidx[2][2]{}, hdict[2][2]{}, hdata[2][2]{};
         std::atomic<std::uint64_t> zbytes[2]{}, rbytes[2]{}, positions{ 0 }, bad{ 0 }, escapes{ 0 }, rounds{ 0 }, disk{ 0 }, on_disk{ 0 };
         auto const t0 = std::chrono::steady_clock::now();
         std::for_each(policy, jobs.begin(), jobs.end(), [&](Job const& j) {
@@ -3787,13 +3796,45 @@ bool rp_convert(std::string const& dir, int n, ExecutionPolicy const& policy)
                 each_value([&](std::uint8_t v) { wrong += rpvf::lookup(ff, slot) != v; ++slot; });
                 std::ofstream(path + ".rpf", std::ios::binary | std::ios::trunc).write(reinterpret_cast<char const*>(flat.data()), std::streamsize(flat.size()));
                 fbytes[j.depth] += flat.size(); fidx[j.depth] += ff.index_bytes; fdata[j.depth] += ff.blocks * rpvf::MINI;
+                // 12-bit codewords in the flat layout: <name>.rpw
+                std::vector<std::uint16_t> terms; terms.reserve(size);
+                each_value([&](std::uint8_t v) { terms.push_back(std::uint16_t(rank[v])); });
+                {
+                        std::vector<std::uint8_t> const wide = rpvf::compress_wide(terms, size, terminals, value, maxlen);
+                        rpvf::Wide const wf = rpvf::open_wide(wide.data());
+                        slot = 0;
+                        each_value([&](std::uint8_t v) { wrong += rpvf::lookup(wf, slot) != v; ++slot; });
+                        std::ofstream(path + ".rpw", std::ios::binary | std::ios::trunc).write(reinterpret_cast<char const*>(wide.data()), std::streamsize(wide.size()));
+                        wbytes[j.depth] += wide.size(); widx[j.depth] += wf.index_bytes; wdict[j.depth] += wf.dict_bytes; wdata[j.depth] += wf.blocks * rpvf::MINI; wsyms[j.depth] += wf.nsym;
+                }
+                {       // the size in the layout of the Syzygy tables: symbols of at most 256 positions, at most 4,095 of them
+                        std::vector<std::uint16_t> fin;
+                        std::vector<std::uint8_t> const g = rpvf::compress_wide(terms, size, terminals, value, 256, 4, 4095, &fin);
+                        std::vector<std::uint8_t> const sz = rpvf::syzygy_build(rpvf::open_wide(g.data()), fin, syz_maxb ? syz_maxb : j.depth ? 10 : 6);
+                        rpvf::Syz const sf = rpvf::open_syz(sz.data());
+                        slot = 0;
+                        each_value([&](std::uint8_t v) { wrong += rpvf::lookup(sf, slot) != v; ++slot; });
+                        std::ofstream(path + ".rps", std::ios::binary | std::ios::trunc).write(reinterpret_cast<char const*>(sz.data()), std::streamsize(sz.size()));
+                        sbytes[j.depth] += sz.size(); sdata[j.depth] += sz.size() - sf.dict_bytes - sf.table_bytes; stab[j.depth] += sf.table_bytes; sdict[j.depth] += sf.dict_bytes;
+                        ++sblock[j.depth][sf.block_bits];
+                }
+                for (int w = 0; w < 2; ++w) {    // Huffman codes on the symbols, 64-byte blocks, the Elias-Fano index: 256 symbols (.rph8), 4,096 (.rph12)
+                        std::vector<std::uint16_t> fin;
+                        std::vector<std::uint8_t> const g = rpvf::compress_wide(terms, size, terminals, value, maxlen, w ? 4 : 2, w ? 4096 : 256, &fin);
+                        std::vector<std::uint8_t> const hz = rpvf::huff_build(rpvf::open_wide(g.data()), fin);
+                        rpvf::Huff const hf = rpvf::open_huff(hz.data());
+                        slot = 0;
+                        each_value([&](std::uint8_t v) { wrong += rpvf::lookup(hf, slot) != v; ++slot; });
+                        std::ofstream(path + (w ? ".rph12" : ".rph8"), std::ios::binary | std::ios::trunc).write(reinterpret_cast<char const*>(hz.data()), std::streamsize(hz.size()));
+                        hbytes[w][j.depth] += hz.size(); hidx[w][j.depth] += hf.index_bytes; hdict[w][j.depth] += hf.dict_bytes; hdata[w][j.depth] += hf.blocks * rpvf::MINI;
+                }
                 std::ofstream(path + ".rp", std::ios::binary | std::ios::trunc).write(reinterpret_cast<char const*>(out.data()), std::streamsize(out.size()));
                 zbytes[j.depth] += std::filesystem::file_size(zpath(path)); rbytes[j.depth] += out.size(); positions += size; bad += wrong;
                 rounds += std::uint64_t(st.disk_rounds); disk += st.disk_bytes; on_disk += st.disk_rounds > 0;
         });
         if (std::getenv("EGDB_RP_TIME"))        // one thread, random positions (files by size): the blocked layout, plain and tuned, and the flat one
                 for (int depth : { 0, 1 }) {
-                        struct F { rpvf::File blocked; rpvf::Flat flat; std::uint64_t size; };
+                        struct F { rpvf::File blocked; rpvf::Flat flat; rpvf::Wide wide; rpvf::Syz syz; rpvf::Huff h8, h12; std::uint64_t size; };
                         std::vector<F> fs;
                         std::vector<std::uint64_t> cum; std::uint64_t tot = 0;
                         for (auto const& j : jobs) {
@@ -3801,21 +3842,25 @@ bool rp_convert(std::string const& dir, int n, ExecutionPolicy const& policy)
                                 std::string const base = probe_path(dir, j.m, j.depth ? metric_name() : "wdl", j.side);
                                 if (!std::filesystem::exists(base + ".rpf")) continue;
                                 fs.push_back({ rpvf::open(map_file(base + ".rp", std::size_t(std::filesystem::file_size(base + ".rp")))),
-                                               rpvf::open_flat(map_file(base + ".rpf", std::size_t(std::filesystem::file_size(base + ".rpf")))), mat_index(j.m).size });
+                                               rpvf::open_flat(map_file(base + ".rpf", std::size_t(std::filesystem::file_size(base + ".rpf")))),
+                                               rpvf::open_wide(map_file(base + ".rpw", std::size_t(std::filesystem::file_size(base + ".rpw")))),
+                                               rpvf::open_syz(map_file(base + ".rps", std::size_t(std::filesystem::file_size(base + ".rps")))),
+                                               rpvf::open_huff(map_file(base + ".rph8", std::size_t(std::filesystem::file_size(base + ".rph8")))),
+                                               rpvf::open_huff(map_file(base + ".rph12", std::size_t(std::filesystem::file_size(base + ".rph12")))), mat_index(j.m).size });
                                 tot += fs.back().size; cum.push_back(tot);
                         }
                         if (fs.empty()) continue;
                         std::mt19937_64 rng(5);
                         std::vector<std::pair<std::uint32_t, std::uint64_t>> q(4000000);
                         for (auto& x : q) { std::uint64_t const r = rng() % tot; x.first = std::uint32_t(std::ranges::upper_bound(cum, r) - cum.begin()); x.second = rng() % fs[x.first].size; }
-                        static char const* const name[3] = { "blocked, plain", "blocked, tuned", "flat, Elias-Fano" };
-                        for (int which = 0; which < 3; ++which)
+                        static char const* const name[7] = { "blocked, plain", "blocked, tuned", "flat, Elias-Fano", "flat, 12-bit codewords", "Syzygy layout", "Huffman on 256 symbols", "Huffman on 4,096 symbols" };
+                        for (int which = 0; which < 7; ++which)
                                 for (int pass = 0; pass < 3; ++pass) {
                                         std::uint64_t acc = 0;
                                         auto const a = std::chrono::steady_clock::now();
                                         for (auto const& x : q) {
                                                 F const& f = fs[x.first];
-                                                acc += which == 0 ? rpvf::lookup_plain(f.blocked, x.second) : which == 1 ? rpvf::lookup(f.blocked, x.second) : rpvf::lookup(f.flat, x.second);
+                                                acc += which == 0 ? rpvf::lookup_plain(f.blocked, x.second) : which == 1 ? rpvf::lookup(f.blocked, x.second) : which == 2 ? rpvf::lookup(f.flat, x.second) : which == 3 ? rpvf::lookup(f.wide, x.second) : which == 4 ? rpvf::lookup(f.syz, x.second) : which == 5 ? rpvf::lookup(f.h8, x.second) : rpvf::lookup(f.h12, x.second);
                                         }
                                         if (pass == 2) std::cout << (depth ? "depth" : "wdl") << ", " << name[which] << ", random positions: " << seconds_since(a) * 1e9 / double(q.size()) << " ns (sum " << acc << ")" << std::endl;
                                 }
@@ -3829,6 +3874,19 @@ bool rp_convert(std::string const& dir, int n, ExecutionPolicy const& policy)
                 std::cout << "  flat " << (d ? "depth" : "wdl") << " (symbols of at most " << maxlen << " positions): " << fbytes[d].load() << " bytes ("
                           << 100.0 * double(fbytes[d].load()) / double(std::max<std::uint64_t>(1, zbytes[d].load())) << " % of zstd), codewords " << fdata[d].load()
                           << ", Elias-Fano index " << fidx[d].load() << " (" << 100.0 * double(fidx[d].load()) / double(std::max<std::uint64_t>(1, fdata[d].load())) << " % of the codewords)" << std::endl;
+        for (int d : { 0, 1 }) {
+                double const z = double(std::max<std::uint64_t>(1, zbytes[d].load()));
+                std::cout << "  flat 12-bit " << (d ? "depth" : "wdl") << ": " << wbytes[d].load() << " bytes (" << 100.0 * double(wbytes[d].load()) / z << " % of zstd): codewords "
+                          << wdata[d].load() << ", index " << widx[d].load() << ", dictionaries " << wdict[d].load() << " (" << wsyms[d].load() << " symbols in all)" << std::endl;
+                std::cout << "  Syzygy layout " << (d ? "depth" : "wdl") << ": " << sbytes[d].load() << " bytes (" << 100.0 * double(sbytes[d].load()) / z
+                          << " % of zstd): blocks " << sdata[d].load() << ", size table and index " << stab[d].load() << ", dictionaries and code tables " << sdict[d].load() << "; files by block size:";
+                for (int b = 4; b <= 10; ++b) if (sblock[d][b].load()) std::cout << " " << (1 << b) << " bytes: " << sblock[d][b].load();
+                std::cout << std::endl;
+                for (int w = 0; w < 2; ++w)
+                        std::cout << "  Huffman on " << (w ? "4,096" : "256") << " symbols, 64-byte blocks, Elias-Fano " << (d ? "depth" : "wdl") << ": " << hbytes[w][d].load() << " bytes ("
+                                  << 100.0 * double(hbytes[w][d].load()) / z << " % of zstd): blocks " << hdata[w][d].load() << ", index " << hidx[w][d].load()
+                                  << ", dictionaries and code tables " << hdict[w][d].load() << std::endl;
+        }
         return bad.load() == 0;
 }
 

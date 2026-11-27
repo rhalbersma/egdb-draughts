@@ -563,7 +563,8 @@ Stats convert(Source const& S, std::string const& prefix, std::string const& var
 
 template<class L> int (*probe_fn())(Table const&, std::uint64_t) { return &probe<L>; }
 
-inline bool open_table(std::string const& prefix, Table& T, std::string* why = nullptr)
+// validate = false skips the checks that read all of pri (a cold-cache timing run must not warm the index by opening)
+inline bool open_table(std::string const& prefix, Table& T, std::string* why = nullptr, bool validate = true)
 {
         auto const fail = [&](char const* m) { if (why) *why = prefix + ": " + m; return false; };
         T.man = read_manifest(prefix + ".man");
@@ -584,11 +585,11 @@ inline bool open_table(std::string const& prefix, Table& T, std::string* why = n
         if (n_dat % 4096 || n_pri != 4 * std::size_t(T.num_pages) || n_top != 4 * ((std::size_t(T.num_pages) + TOP - 1) / TOP)) return fail("file sizes disagree");
         if (T.num_sub != (T.positions + SUB - 1) / SUB) return fail("subdivision count");
         if (T.sub[0] != 0 || T.sub[T.num_sub] != T.num_pages) return fail("sub does not span the pages");
-        for (std::uint32_t q = 0; q < T.num_sub; ++q) {
+        for (std::uint32_t q = 0; validate && q < T.num_sub; ++q) {
                 if (T.sub[q] >= T.sub[q + 1] || T.pri[T.sub[q]] != 0) return fail("a subdivision does not start at 0");
                 for (std::uint32_t b = T.sub[q] + 1; b < T.sub[q + 1]; ++b) if (T.pri[b] <= T.pri[b - 1] || T.pri[b] >= (std::uint32_t(1) << 31)) return fail("pri not increasing");
         }
-        for (std::size_t k = 0; k < n_top / 4; ++k) if (T.top[k] != T.pri[k * TOP]) return fail("top disagrees with pri");
+        for (std::size_t k = 0; validate && k < n_top / 4; ++k) if (T.top[k] != T.pri[k * TOP]) return fail("top disagrees with pri");
         std::uint32_t nsym;
         std::memcpy(&nsym, gra, 4);
         if (n_gra != 4 + 3 * std::size_t(nsym)) return fail("grammar size");

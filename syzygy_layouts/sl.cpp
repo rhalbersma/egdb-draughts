@@ -299,7 +299,7 @@ int bench(char const* tbdir, std::string const& outdir, std::string const& vname
         if (!ref)
                 for (int i = 0; i < n; ++i) {
                         std::string why;
-                        if (!open_table(prefix_of(outdir, vname, i), tables[std::size_t(i)], &why)) { std::cerr << why << std::endl; return 1; }
+                        if (!open_table(prefix_of(outdir, vname, i), tables[std::size_t(i)], &why, !cold)) { std::cerr << why << std::endl; return 1; }
                 }
         auto const lookup = [&](std::uint32_t s, std::uint64_t x) { return ref ? sl_ref(int(s), x) : tables[s].fn(tables[s], x); };
         // the probes

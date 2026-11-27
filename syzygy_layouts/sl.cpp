@@ -21,6 +21,7 @@
 #include <chrono>
 #include <filesystem>
 #include <iostream>
+#include <map>
 #include <mutex>
 #include <random>
 #include <thread>
@@ -417,37 +418,77 @@ int check_all(char const* tbdir, std::string const& outdir, std::string const& v
         return bad.load() == 0 ? 0 : 1;
 }
 
-// ---- zstd on the values, for comparison: blocks of `block` positions, one byte each, his finished values in his order
+// ---- zstd on the values, for comparison: blocks of `block` positions of his stored values in his order, one byte
+// each (two where a sub-table has values above 255, as DTZ tables can). SL_DTZ=1: the DTZ tables of the directory.
+// The values are expanded from his symbols block by block; no sub-table is held in memory.
 
 int zstd_sizes(char const* tbdir, std::size_t block, int level)
 {
+        if (std::getenv("SL_DTZ")) sl_set_dtz(1);
         int const n = open_tables(tbdir);
-        std::atomic<std::uint64_t> bytes{ 0 }, blocks{ 0 }, positions{ 0 }, ns{ 0 }, timed{ 0 };
+        struct Row { std::uint64_t positions = 0, his = 0, z = 0, blocks = 0, ns = 0, timed = 0; int wide = 0, subs = 0; };
+        std::map<std::string, Row> rows;
+        std::mutex mx;
         parallel(n, [&](int i) {
                 SlSub const& s = *sl_sub(i);
                 if (s.is_const) return;
-                std::vector<std::uint8_t> v = values_of(source_of(i));
-                v.resize(s.tb_size);
-                std::vector<char> z(ZSTD_compressBound(block)), back(block);
+                Source const S = source_of(i);
+                std::vector<std::uint16_t> value(S.g.nsym, 0);
+                bool wide = false;
+                for (unsigned y = 0; y < S.g.nsym; ++y)
+                        if (S.g.len[y] == 1) { value[y] = std::uint16_t(s.sympat[3 * y] | (s.sympat[3 * y + 1] & 0x0f) << 8); wide |= value[y] > 255; }
+                std::size_t const w = wide ? 2 : 1;
+                std::vector<char> buf, z(ZSTD_compressBound(block * w)), back(block * w);
+                buf.reserve(block * w);
                 ZSTD_DCtx* const dx = ZSTD_createDCtx();
-                std::uint64_t b = 0, t = 0, k = 0, nb = 0;
-                for (std::size_t at = 0; at < v.size(); at += block, ++nb) {
-                        std::size_t const len = std::min(block, v.size() - at);
-                        std::size_t const c = ZSTD_compress(z.data(), z.size(), v.data() + at, len, level);
-                        b += c;
-                        if (nb % 64 == 0) {                     // decompression of one block, timed on every 64th
+                Row r;
+                r.wide = wide; r.subs = 1; r.positions = s.tb_size;
+                std::uint64_t d, ix, sz, gr;
+                sl_sizes(i, &d, &ix, &sz, &gr);
+                r.his = d + ix + sz + gr;
+                auto const flush = [&] {
+                        if (buf.empty()) return;
+                        std::size_t const c = ZSTD_compress(z.data(), z.size(), buf.data(), buf.size(), level);
+                        r.z += c + 8;                           // and an 8-byte offset
+                        if (r.blocks++ % 64 == 0) {             // decompression of one block, timed on every 64th
                                 auto const t0 = Clock::now();
                                 ZSTD_decompressDCtx(dx, back.data(), back.size(), z.data(), c);
-                                t += std::uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - t0).count());
-                                ++k;
+                                r.ns += std::uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - t0).count());
+                                ++r.timed;
+                        }
+                        buf.clear();
+                };
+                std::vector<unsigned> stack;
+                std::uint64_t done = 0;
+                for (std::uint16_t s0 : S.seq) {
+                        stack.push_back(s0);
+                        while (!stack.empty()) {
+                                unsigned const y = stack.back();
+                                stack.pop_back();
+                                if (S.g.len[y] != 1) { stack.push_back(S.g.right[y]); stack.push_back(S.g.left[y]); continue; }
+                                if (done == s.tb_size) continue;
+                                buf.push_back(char(value[y]));
+                                if (wide) buf.push_back(char(value[y] >> 8));
+                                if (++done % block == 0) flush();
                         }
                 }
+                flush();
                 ZSTD_freeDCtx(dx);
-                bytes += b; blocks += nb; positions += s.tb_size; ns += t; timed += k;
+                std::lock_guard const lk(mx);
+                Row& t = rows[s.name];
+                t.positions += r.positions; t.his += r.his; t.z += r.z; t.blocks += r.blocks; t.ns += r.ns; t.timed += r.timed; t.wide += r.wide; t.subs += r.subs;
         });
-        std::cout << "zstd level " << level << ", blocks of " << block << " positions: " << positions.load() << " positions, " << blocks.load() << " blocks, "
-                  << bytes.load() << " bytes of blocks + " << 8 * blocks.load() << " of offsets = " << double(bytes.load() + 8 * blocks.load()) / 1e6 << " MB; one block decompresses in "
-                  << double(ns.load()) / double(std::max<std::uint64_t>(1, timed.load())) << " ns" << std::endl;
+        std::cout << "table,sub_tables,with_2_byte_values,positions,his_bytes,zstd_bytes,zstd_against_his,blocks,block_decompress_ns  (zstd level " << level << ", blocks of " << block << " positions)\n";
+        Row all;
+        auto const line = [&](std::string const& name, Row const& t) {
+                std::cout << name << ',' << t.subs << ',' << t.wide << ',' << t.positions << ',' << t.his << ',' << t.z << ',' << double(t.z) / double(std::max<std::uint64_t>(1, t.his)) << ','
+                          << t.blocks << ',' << double(t.ns) / double(std::max<std::uint64_t>(1, t.timed)) << "\n";
+        };
+        for (auto const& [name, t] : rows) {
+                if (rows.size() <= 12) line(name, t);
+                all.positions += t.positions; all.his += t.his; all.z += t.z; all.blocks += t.blocks; all.ns += t.ns; all.timed += t.timed; all.wide += t.wide; all.subs += t.subs;
+        }
+        line("all", all);
         return 0;
 }
 

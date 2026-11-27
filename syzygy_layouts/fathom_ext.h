@@ -22,6 +22,7 @@ typedef struct {
 } SlSub;
 typedef int (*sl_hook_fn)(void *ext, uint64_t idx);     // a replacement lookup: the stored value of index idx
 int sl_open_all(const char *dir);                       // opens every WDL table of dir; the number of sub-tables or -1
+void sl_set_dtz(int on);                                // before sl_open_all: the DTZ tables instead
 const SlSub *sl_sub(int i);
 int sl_ref(int i, uint64_t idx);                        // Fathom's own lookup
 void sl_set_ext(int i, void *ext);                      // probes of sub-table i go to the hook with this pointer

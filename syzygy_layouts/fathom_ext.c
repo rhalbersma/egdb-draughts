@@ -38,6 +38,9 @@ static void sl_finish(int i)
   for (int l = s->min_len; l <= s->max_len; l++) { s->offset[l] = from_le_u16(d->offset[l]); s->base[l] = d->base[l - s->min_len]; }
 }
 
+static int sl_dtz;
+void sl_set_dtz(int on) { sl_dtz = on; }       // open the DTZ tables (.rtbz) of the directory instead; their WDL files must be there too
+
 int sl_open_all(const char *dir)
 {
   if (!tb_init(dir)) return -1;
@@ -45,7 +48,7 @@ int sl_open_all(const char *dir)
   char names[1024][16]; int n = 0;
   DIR *D = opendir(dir); struct dirent *e;
   while ((e = readdir(D))) {
-    char *dot = strstr(e->d_name, ".rtbw");
+    char *dot = strstr(e->d_name, sl_dtz ? ".rtbz" : ".rtbw");
     if (!dot || dot[5] != 0 || dot - e->d_name > 12) continue;
     memcpy(names[n], e->d_name, (size_t)(dot - e->d_name)); names[n][dot - e->d_name] = 0; ++n;
   }
@@ -61,8 +64,8 @@ int sl_open_all(const char *dir)
     if (!be) { fprintf(stderr, "no entry for %s\n", names[t]); return -1; }
     strcpy(sl_cur_name, names[t]); sl_cur_k = 0;
     int first = sl_nsubs;
-    if (!init_table(be, names[t], WDL)) { fprintf(stderr, "cannot open %s\n", names[t]); return -1; }
-    atomic_store_explicit(&be->ready[WDL], true, memory_order_release);
+    if (!init_table(be, names[t], sl_dtz ? DTZ : WDL)) { fprintf(stderr, "cannot open %s\n", names[t]); return -1; }
+    atomic_store_explicit(&be->ready[sl_dtz ? DTZ : WDL], true, memory_order_release);
     for (int i = first; i < sl_nsubs; i++) sl_finish(i);
   }
   return sl_nsubs;

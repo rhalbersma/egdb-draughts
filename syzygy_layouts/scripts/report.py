@@ -42,7 +42,7 @@ if sizes:
     small = {(r['table'], r['subtable']) for r in a if r['const'] == '0' and int(r['total_bytes']) < 4096}
     size_table('Only the %d sub-tables below 4 KiB in the Syzygy file (each takes at least one page here)' % len(small), lambda r: (r['table'], r['subtable']) in small)
     print('### Details\n')
-    print('| Variant | Codes | Pages | Lines of 64 / 32 / 16 bytes (sub-tables) | Pages with 3 / 4 header lines | Symbols split at subdivisions |')
+    print('| Variant | Codes | Pages | Lines of 64 / 32 / 16 bytes (sub-tables) | Pages with 3 / 4 header lines | Subdivisions |')
     print('|---|---|---|---|---|---|')
     for v in variants:
         r = sizes[v]
@@ -50,7 +50,7 @@ if sizes:
         for x in r:
             if x['const'] == '0': lb[x['line_bytes']] += 1
         print('| %s | %s | %s | %d / %d / %d | %s / %s | %s |' % (NAME[v], format(total(r, 'codes'), ','), format(total(r, 'pages'), ','), lb['64'], lb['32'], lb['16'],
-                                                                 total(r, 'header3'), total(r, 'header4'), total(r, 'split_symbols')))
+                                                                 total(r, 'header3'), total(r, 'header4'), format(total(r, 'subdivisions'), ',')))
     print()
     with open(os.path.join(res, 'sizes_all.csv'), 'w', newline='') as f:
         w = None

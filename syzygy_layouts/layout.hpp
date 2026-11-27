@@ -16,8 +16,9 @@
 //               or 4 when a page covers too many positions for that
 // Every header ends with the CRC32C of the page (computed with those 4 bytes zero).
 //
-// Positions are cut into subdivisions of 2^SUB_BITS; a page lies within one, and every stored 32-bit number is below
-// 2^31.
+// Positions are cut into subdivisions of 2^SUB_BITS for the index (tables.hpp), so that a page's start is a 16-bit
+// number within its subdivision. A page may cover many subdivisions. Every stored 16-bit number is below 2^15 and
+// every stored 32-bit number below 2^31.
 
 #include <cstddef>
 #include <cstdint>
@@ -29,7 +30,7 @@ static_assert(sizeof(std::size_t) == 8, "the arithmetic is in size_t and needs 6
 enum class Header { counts16, totals32, eliasfano };
 
 #ifndef SL_SUB_BITS
-#define SL_SUB_BITS 31
+#define SL_SUB_BITS 15
 #endif
 
 // the header lines of a page with `lines` lines of c bytes and slots of `slot` bytes: one slot per data line and
@@ -61,7 +62,7 @@ struct Layout {
 
         static_assert(B % C == 0 && C % 16 == 0 && C <= 64);
         static_assert(W == 0 || W == 10 || W == 12);
-        static_assert(SUB_BITS >= 12 && SUB_BITS <= 31, "positions relative to a subdivision are stored in 32 bits, below 2^31");
+        static_assert(SUB_BITS >= 8 && SUB_BITS <= 15, "positions relative to a subdivision are stored in 16 bits, below 2^15");
         static_assert(HDR_LINES < LINES);
 };
 

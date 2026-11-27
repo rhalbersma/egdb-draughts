@@ -8,15 +8,16 @@
 // The study's table files and their lookups. A sub-table of a Syzygy WDL table (one side to move of one pawn file)
 // is stored as
 //   <p>.dat   pages of 4,096 bytes (layout.hpp)
-//   <p>.pri   u32 per page: its first position, relative to its subdivision
-//   <p>.top   u32 per 1,024 pages: top[k] = pri[1024 k]
-//   <p>.sub   u32 per subdivision: its first page; then the number of pages
+//   <p>.sub   u32 per subdivision of 2^SUB_BITS positions: the page holding its first position; then the last page
+//   <p>.pri   u16 per page: its first position, relative to the subdivision it starts in
+//   <p>.org   u32 per page: the subdivision it starts in
 //   <p>.gra   u32 symbols, then 3 bytes per symbol (two 12-bit children; a terminal: its value and 0xfff), as in the
 //             Syzygy files
 //   <p>.huf   Huffman codes only: shortest and longest code, then per length the first symbol and the first code
 //   <p>.man   the manifest, "key value" lines
-// A lookup of index x: its subdivision q = x >> SUB_BITS and r = x mod 2^SUB_BITS; the page by a search over top and
-// then pri within q's pages; the line from the page header; the symbol by adding symbol lengths along the line; the
+// A page may cover many subdivisions. A lookup of index x: its subdivision q = x >> SUB_BITS and r = x mod 2^SUB_BITS;
+// the page is sub[q], or one of the few after it that start within q, found by comparing their pri with r; org gives
+// x's position within the page; the line from the page header; the symbol by adding symbol lengths along the line; the
 // value by walking down the symbol's rules.
 
 #include "layout.hpp"
@@ -159,8 +160,8 @@ struct Table {
         std::uint64_t positions = 0;
         std::uint32_t num_pages = 0, num_sub = 0;
         std::uint32_t const* sub = nullptr;
-        std::uint32_t const* pri = nullptr;
-        std::uint32_t const* top = nullptr;
+        std::uint16_t const* pri = nullptr;
+        std::uint32_t const* org = nullptr;
         std::uint8_t const* dat = nullptr;
         std::uint32_t const* len = nullptr;
         std::uint16_t const* left = nullptr;
@@ -178,22 +179,18 @@ struct Table {
         Manifest man;
 };
 
-constexpr std::size_t SUB_BITS = SL_SUB_BITS, SUB = std::size_t(1) << SUB_BITS, TOP = 1024;
+constexpr std::size_t SUB_BITS = SL_SUB_BITS, SUB = std::size_t(1) << SUB_BITS;
 
 // the page of index x; t: x's position within the page
 inline std::uint8_t const* find_page(Table const& T, std::size_t x, std::uint32_t& t)
 {
         std::size_t const q = x >> SUB_BITS;
-        std::uint32_t const r = std::uint32_t(x & (SUB - 1));
-        std::size_t lo = T.sub[q], hi = T.sub[q + 1];
-        std::size_t const k0 = (lo + TOP - 1) / TOP, k1 = (hi - 1) / TOP;                // the top entries of pages in [lo, hi)
-        if (k0 <= k1) {
-                std::size_t const g = std::size_t(std::upper_bound(T.top + k0, T.top + k1 + 1, r) - T.top);
-                if (g == k0) hi = k0 * TOP;
-                else { lo = (g - 1) * TOP; hi = std::min(hi, g * TOP); }
-        }
-        std::size_t const b = std::size_t(std::upper_bound(T.pri + lo, T.pri + hi, r) - T.pri) - 1;
-        t = r - T.pri[b];
+        std::uint16_t const r = std::uint16_t(x & (SUB - 1));
+        // the pages after sub[q] up to sub[q + 1] start after q's first position; the last may start at q + 1's first
+        // position (pri = 0), which the subtraction turns into "never"
+        std::size_t b = T.sub[q];
+        for (std::size_t const hi = T.sub[q + 1]; b < hi && std::uint16_t(T.pri[b + 1] - 1) < r; ++b) {}
+        t = std::uint32_t(x - (std::size_t(T.org[b]) << SUB_BITS | T.pri[b]));
         return T.dat + b * 4096;
 }
 
@@ -359,14 +356,14 @@ inline int probe_const(Table const& T, std::uint64_t) { return T.const_value; }
 // ---- the converter
 
 struct Stats {
-        std::uint64_t code_bits = 0, symbols = 0, lines = 0, pages = 0, subdivisions = 0, split_symbols = 0;
-        std::uint64_t dat = 0, header = 0, pri = 0, top = 0, sub = 0, grammar = 0, hdr3 = 0, hdr4 = 0, positions = 0;
-        std::uint64_t total() const { return dat + pri + top + sub + grammar; }
-        std::uint64_t index() const { return header + pri + top + sub; }
+        std::uint64_t code_bits = 0, symbols = 0, lines = 0, pages = 0, subdivisions = 0;
+        std::uint64_t dat = 0, header = 0, pri = 0, org = 0, sub = 0, grammar = 0, hdr3 = 0, hdr4 = 0, positions = 0;
+        std::uint64_t total() const { return dat + pri + org + sub + grammar; }
+        std::uint64_t index() const { return header + pri + org + sub; }
         std::uint64_t padding() const { return dat - header - (code_bits + 7) / 8; }
 };
 
-struct Line { std::array<std::uint8_t, 64> b{}; std::uint32_t pos = 0, n = 0, bits = 0; bool end_sub = false; };
+struct Line { std::array<std::uint8_t, 64> b{}; std::uint32_t pos = 0, n = 0, bits = 0; };
 
 // The Elias-Fano header of n lines with the given starts, into `out` (hdr_lines * 64 bytes); false if it does not fit.
 // The upper bits have a bucket for every high part up to that of the page's last position (not only of the last
@@ -416,14 +413,12 @@ Stats convert(Source const& S, std::string const& prefix, std::string const& var
                 return st;
         }
         Grammar const& g = S.g;
-        // 1. lines, cut at the subdivisions
+        // 1. lines
         std::vector<Line> lines;
         Line cur;
-        std::size_t pos_in_sub = 0;
-        auto const close = [&](bool end_sub) {
-                if (cur.n == 0) { if (end_sub && !lines.empty()) lines.back().end_sub = true; return; }
+        auto const close = [&] {
+                if (cur.n == 0) return;
                 if (L::W) cur.b[L::C - 1] = std::uint8_t(cur.n);
-                cur.end_sub = end_sub;
                 st.code_bits += cur.bits;
                 lines.push_back(cur);
                 cur = Line{};
@@ -431,7 +426,7 @@ Stats convert(Source const& S, std::string const& prefix, std::string const& var
         auto const put = [&](unsigned s) {
                 std::uint32_t const bits = L::W ? std::uint32_t(L::W) : std::uint32_t(S.h.length(s));
                 bool const full = L::W ? cur.n == L::CODES : cur.bits + bits > 8 * L::C;
-                if (cur.n != 0 && (full || std::size_t(cur.pos) + g.len[s] > L::LINE_CAP)) close(false);
+                if (cur.n != 0 && (full || std::size_t(cur.pos) + g.len[s] > L::LINE_CAP)) close();
                 if (g.len[s] > L::LINE_CAP) { std::fprintf(stderr, "a symbol of %u positions does not fit a line\n", g.len[s]); std::exit(1); }
                 if (L::W) {
                         std::size_t const at = std::size_t(L::W) * cur.n;
@@ -447,36 +442,17 @@ Stats convert(Source const& S, std::string const& prefix, std::string const& var
                 cur.bits += bits; cur.pos += g.len[s]; ++cur.n;
                 ++st.symbols;
         };
-        std::vector<unsigned> stack;
-        for (std::uint16_t s0 : S.seq) {
-                stack.push_back(s0);
-                while (!stack.empty()) {
-                        unsigned const s = stack.back();
-                        stack.pop_back();
-                        if (g.len[s] <= L::SUB - pos_in_sub) {
-                                put(s);
-                                pos_in_sub += g.len[s];
-                                st.positions += g.len[s];
-                                if (pos_in_sub == L::SUB) { close(true); pos_in_sub = 0; }
-                        } else {                                // straddles the subdivision's end: its children instead
-                                ++st.split_symbols;
-                                stack.push_back(g.right[s]);
-                                stack.push_back(g.left[s]);
-                        }
-                }
-        }
-        close(true);
+        for (std::uint16_t s : S.seq) { put(s); st.positions += g.len[s]; }
+        close();
         if (st.positions < S.tb_size) { std::fprintf(stderr, "%s: the symbols cover %llu of %llu positions\n", S.id().c_str(), (unsigned long long)st.positions, (unsigned long long)S.tb_size); std::exit(1); }
         st.lines = lines.size();
         // 2. pages
         std::vector<std::uint8_t> dat;
-        std::vector<std::uint32_t> pri, sub;
-        std::size_t page_start = 0;                             // position within the subdivision
-        bool new_sub = true;
+        std::vector<std::uint16_t> pri;
+        std::vector<std::uint32_t> org, sub;
+        std::size_t page_start = 0;
         for (std::size_t i = 0; i < lines.size();) {
-                if (new_sub) { sub.push_back(std::uint32_t(pri.size())); page_start = 0; new_sub = false; }
-                std::size_t avail = 0;                          // lines up to the subdivision's end
-                while (i + avail < lines.size() && (avail == 0 || !lines[i + avail - 1].end_sub)) ++avail;
+                std::size_t const avail = lines.size() - i;
                 std::array<std::uint8_t, 4096> page{};
                 std::size_t n = 0, hdr = L::HDR_LINES;
                 if (L::H == Header::eliasfano) {
@@ -509,24 +485,25 @@ Stats convert(Source const& S, std::string const& prefix, std::string const& var
                         std::memcpy(page.data() + (hdr + j) * L::C, lines[i + j].b.data(), L::C);
                         page_positions += lines[i + j].pos;
                 }
-                if (page_positions >= (std::size_t(1) << 31) || page_start >= (std::size_t(1) << 31)) { std::fprintf(stderr, "a stored number is not below 2^31\n"); std::exit(1); }
+                if (page_positions >= (std::size_t(1) << 31) || page_start >> L::SUB_BITS >= (std::size_t(1) << 31)) { std::fprintf(stderr, "a stored number is not below 2^31\n"); std::exit(1); }
                 std::uint32_t const crc = crc32c(page.data(), 4096);            // with the 4 CRC bytes zero
                 std::memcpy(page.data() + hdr * L::C - 4, &crc, 4);
                 dat.insert(dat.end(), page.begin(), page.end());
-                pri.push_back(std::uint32_t(page_start));
+                // this page holds the first position of every subdivision from the one after its start (or its own, when
+                // it starts on the boundary) up to its end
+                for (std::size_t q = (page_start + L::SUB - 1) >> L::SUB_BITS; q << L::SUB_BITS < page_start + page_positions; ++q) sub.push_back(std::uint32_t(pri.size()));
+                pri.push_back(std::uint16_t(page_start & (L::SUB - 1)));
+                org.push_back(std::uint32_t(page_start >> L::SUB_BITS));
                 st.header += hdr * L::C;
                 page_start += page_positions;
-                new_sub = lines[i + n - 1].end_sub;
                 i += n;
         }
         std::uint32_t const num_pages = std::uint32_t(pri.size());
-        sub.push_back(num_pages);
-        std::vector<std::uint32_t> top((pri.size() + TOP - 1) / TOP);
-        for (std::size_t k = 0; k < top.size(); ++k) top[k] = pri[k * TOP];
+        sub.push_back(num_pages - 1);
         // 3. files
         write_file(prefix + ".dat", dat.data(), dat.size());
-        write_file(prefix + ".pri", pri.data(), 4 * pri.size());
-        write_file(prefix + ".top", top.data(), 4 * top.size());
+        write_file(prefix + ".pri", pri.data(), 2 * pri.size());
+        write_file(prefix + ".org", org.data(), 4 * org.size());
         write_file(prefix + ".sub", sub.data(), 4 * sub.size());
         {
                 std::vector<std::uint8_t> gra(4 + g.sympat.size());
@@ -549,10 +526,10 @@ Stats convert(Source const& S, std::string const& prefix, std::string const& var
                 st.grammar += huf.size();
         }
         st.pages = num_pages; st.subdivisions = sub.size() - 1;
-        st.dat = dat.size(); st.pri = 4 * pri.size(); st.top = 4 * top.size(); st.sub = 4 * sub.size();
+        st.dat = dat.size(); st.pri = 2 * pri.size(); st.org = 4 * org.size(); st.sub = 4 * sub.size();
         man["positions"] = std::to_string(st.positions); man["pages"] = std::to_string(num_pages); man["subdivisions"] = std::to_string(sub.size() - 1);
         man["symbols"] = std::to_string(g.nsym); man["codes"] = std::to_string(st.symbols); man["code_bits_total"] = std::to_string(st.code_bits);
-        man["dat_bytes"] = std::to_string(st.dat); man["pri_bytes"] = std::to_string(st.pri); man["top_bytes"] = std::to_string(st.top);
+        man["dat_bytes"] = std::to_string(st.dat); man["pri_bytes"] = std::to_string(st.pri); man["org_bytes"] = std::to_string(st.org);
         man["sub_bytes"] = std::to_string(st.sub); man["grammar_bytes"] = std::to_string(st.grammar); man["header_bytes"] = std::to_string(st.header);
         man["dat_crc32c"] = std::to_string(crc32c(dat.data(), dat.size()));
         write_manifest();
@@ -574,22 +551,25 @@ inline bool open_table(std::string const& prefix, Table& T, std::string* why = n
         T.H = T.man["header"] == "counts16" ? Header::counts16 : T.man["header"] == "totals32" ? Header::totals32 : Header::eliasfano;
         if (std::stoul(T.man["sub_bits"]) != SUB_BITS) return fail("made with another subdivision size");
         T.positions = std::stoull(T.man["positions"]);
-        std::size_t n_dat, n_pri, n_top, n_sub, n_gra;
+        std::size_t n_dat, n_pri, n_org, n_sub, n_gra;
         T.dat = map_file(prefix + ".dat", n_dat);
-        T.pri = reinterpret_cast<std::uint32_t const*>(map_file(prefix + ".pri", n_pri));
-        T.top = reinterpret_cast<std::uint32_t const*>(map_file(prefix + ".top", n_top));
+        T.pri = reinterpret_cast<std::uint16_t const*>(map_file(prefix + ".pri", n_pri));
+        T.org = reinterpret_cast<std::uint32_t const*>(map_file(prefix + ".org", n_org));
         T.sub = reinterpret_cast<std::uint32_t const*>(map_file(prefix + ".sub", n_sub));
         std::uint8_t const* const gra = map_file(prefix + ".gra", n_gra);
         T.num_pages = std::uint32_t(n_dat / 4096);
         T.num_sub = std::uint32_t(n_sub / 4 - 1);
-        if (n_dat % 4096 || n_pri != 4 * std::size_t(T.num_pages) || n_top != 4 * ((std::size_t(T.num_pages) + TOP - 1) / TOP)) return fail("file sizes disagree");
+        if (n_dat % 4096 || T.num_pages == 0 || n_pri != 2 * std::size_t(T.num_pages) || n_org != 4 * std::size_t(T.num_pages)) return fail("file sizes disagree");
         if (T.num_sub != (T.positions + SUB - 1) / SUB) return fail("subdivision count");
-        if (T.sub[0] != 0 || T.sub[T.num_sub] != T.num_pages) return fail("sub does not span the pages");
-        for (std::uint32_t q = 0; validate && q < T.num_sub; ++q) {
-                if (T.sub[q] >= T.sub[q + 1] || T.pri[T.sub[q]] != 0) return fail("a subdivision does not start at 0");
-                for (std::uint32_t b = T.sub[q] + 1; b < T.sub[q + 1]; ++b) if (T.pri[b] <= T.pri[b - 1] || T.pri[b] >= (std::uint32_t(1) << 31)) return fail("pri not increasing");
+        if (T.sub[0] != 0 || T.sub[T.num_sub] != T.num_pages - 1 || T.pri[0] != 0 || T.org[0] != 0) return fail("the index does not span the pages");
+        auto const start = [&](std::size_t b) { return std::size_t(T.org[b]) << SUB_BITS | T.pri[b]; };
+        for (std::uint32_t b = 1; validate && b < T.num_pages; ++b)
+                if (T.pri[b] >= SUB || T.org[b] >= (std::uint32_t(1) << 31) || start(b) <= start(b - 1) || start(b) >= T.positions) return fail("page starts not increasing");
+        // sub[q] is the last page starting at or before q's first position
+        for (std::uint32_t q = 0, b = 0; validate && q < T.num_sub; ++q) {
+                while (b + 1 < T.num_pages && start(b + 1) <= std::size_t(q) << SUB_BITS) ++b;
+                if (T.sub[q] != b) return fail("sub disagrees with the page starts");
         }
-        for (std::size_t k = 0; validate && k < n_top / 4; ++k) if (T.top[k] != T.pri[k * TOP]) return fail("top disagrees with pri");
         std::uint32_t nsym;
         std::memcpy(&nsym, gra, 4);
         if (n_gra != 4 + 3 * std::size_t(nsym)) return fail("grammar size");
@@ -628,12 +608,12 @@ inline bool decode_all(Table const& T, std::vector<std::uint8_t>& out, std::stri
                         stack.push_back(T.right[s]); stack.push_back(T.left[s]);
                 }
         };
-        for (std::uint32_t q = 0; q < T.num_sub; ++q) {
-                std::size_t const sub_positions = q + 1 < T.num_sub ? SUB : T.positions - std::size_t(q) * SUB;
-                for (std::uint32_t b = T.sub[q]; b < T.sub[q + 1]; ++b) {
+        {
+                for (std::uint32_t b = 0; b < T.num_pages; ++b) {
                         std::uint8_t const* const page = T.dat + std::size_t(b) * 4096;
-                        std::size_t const total = (b + 1 < T.sub[q + 1] ? T.pri[b + 1] : sub_positions) - T.pri[b];
-                        if (out.size() != std::size_t(q) * SUB + T.pri[b]) return fail("pri disagrees with the pages before it");
+                        std::size_t const begin = std::size_t(T.org[b]) << SUB_BITS | T.pri[b];
+                        std::size_t const total = (b + 1 < T.num_pages ? std::size_t(T.org[b + 1]) << SUB_BITS | T.pri[b + 1] : T.positions) - begin;
+                        if (out.size() != begin) return fail("pri and org disagree with the pages before");
                         std::size_t hdr = fixed_hdr;
                         std::vector<std::size_t> starts;                // of each line, then the total
                         if (T.H == Header::counts16) {

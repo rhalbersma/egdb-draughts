@@ -47,6 +47,7 @@ struct Grammar {
         std::vector<std::uint16_t> left, right;
         std::vector<std::uint32_t> len;                         // positions
         std::vector<std::uint8_t> val;                          // a terminal's value, else 0xff
+        std::vector<std::uint16_t> val12;                       // a terminal's value in full (12 bits), else 0xffff
         std::vector<std::uint8_t> sympat;                       // 3 bytes per symbol
 };
 
@@ -54,7 +55,7 @@ inline Grammar grammar_from_sympat(std::uint8_t const* p, unsigned n)
 {
         Grammar g;
         g.nsym = n;
-        g.left.assign(n, 0); g.right.assign(n, 0); g.len.assign(n, 0); g.val.assign(n, 0xff);
+        g.left.assign(n, 0); g.right.assign(n, 0); g.len.assign(n, 0); g.val.assign(n, 0xff); g.val12.assign(n, 0xffff);
         g.sympat.assign(p, p + 3 * std::size_t(n));
         std::vector<unsigned> stack;
         for (unsigned s0 = 0; s0 < n; ++s0) {
@@ -64,7 +65,7 @@ inline Grammar grammar_from_sympat(std::uint8_t const* p, unsigned n)
                         if (g.len[s]) { stack.pop_back(); continue; }
                         std::uint8_t const* w = p + 3 * std::size_t(s);
                         unsigned const s1 = unsigned((w[1] & 0xf) << 8 | w[0]), s2 = unsigned(w[2] << 4 | w[1] >> 4);
-                        if (s2 == 0xfff) { g.len[s] = 1; g.val[s] = w[0]; g.left[s] = g.right[s] = std::uint16_t(s); stack.pop_back(); continue; }
+                        if (s2 == 0xfff) { g.len[s] = 1; g.val[s] = w[0]; g.val12[s] = std::uint16_t(s1); g.left[s] = g.right[s] = std::uint16_t(s); stack.pop_back(); continue; }
                         if (s1 >= n || s2 >= n) { std::fprintf(stderr, "grammar: bad symbol\n"); std::exit(1); }
                         if (!g.len[s1]) { stack.push_back(s1); continue; }
                         if (!g.len[s2]) { stack.push_back(s2); continue; }
@@ -81,6 +82,17 @@ inline std::vector<std::uint8_t> sympat_of(std::vector<std::uint16_t> const& lef
         std::vector<std::uint8_t> p(3 * left.size());
         for (std::size_t s = 0; s < left.size(); ++s) {
                 unsigned const a = val[s] != 0xff ? val[s] : left[s], b = val[s] != 0xff ? 0xfffu : right[s];
+                p[3 * s] = std::uint8_t(a); p[3 * s + 1] = std::uint8_t(a >> 8 | (b & 0xf) << 4); p[3 * s + 2] = std::uint8_t(b >> 4);
+        }
+        return p;
+}
+
+// the same with terminal values of up to 12 bits (value[s] for a terminal, 0xffff otherwise)
+inline std::vector<std::uint8_t> sympat_of12(std::vector<std::uint16_t> const& left, std::vector<std::uint16_t> const& right, std::vector<std::uint16_t> const& value)
+{
+        std::vector<std::uint8_t> p(3 * left.size());
+        for (std::size_t s = 0; s < left.size(); ++s) {
+                unsigned const a = value[s] != 0xffff ? value[s] : left[s], b = value[s] != 0xffff ? 0xfffu : right[s];
                 p[3 * s] = std::uint8_t(a); p[3 * s + 1] = std::uint8_t(a >> 8 | (b & 0xf) << 4); p[3 * s + 2] = std::uint8_t(b >> 4);
         }
         return p;
@@ -177,6 +189,7 @@ struct Table {
         std::uint16_t const* left = nullptr;
         std::uint16_t const* right = nullptr;
         std::uint8_t const* val = nullptr;
+        std::uint16_t const* val12 = nullptr;
         std::uint64_t hbase[40] = {};
         std::uint16_t hoffset[40] = {};
         unsigned min_len = 0;
@@ -350,7 +363,7 @@ inline int descend(Table const& T, unsigned s, std::uint32_t rel)
                 if (rel < n) s = a;
                 else { rel -= n; s = T.right[s]; }
         }
-        return T.val[s];
+        return T.val12[s];
 }
 
 template<class L>
@@ -607,7 +620,7 @@ inline bool open_table(std::string const& prefix, Table& T, std::string* why = n
         std::memcpy(&nsym, gra, 4);
         if (n_gra != 4 + 3 * std::size_t(nsym)) return fail("grammar size");
         T.g = grammar_from_sympat(gra + 4, nsym);
-        T.len = T.g.len.data(); T.left = T.g.left.data(); T.right = T.g.right.data(); T.val = T.g.val.data();
+        T.len = T.g.len.data(); T.left = T.g.left.data(); T.right = T.g.right.data(); T.val = T.g.val.data(); T.val12 = T.g.val12.data();
         if (T.W == 0) {
                 std::size_t n_huf;
                 std::uint8_t const* const huf = map_file(prefix + ".huf", n_huf);

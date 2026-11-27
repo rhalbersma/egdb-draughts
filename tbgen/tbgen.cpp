@@ -108,6 +108,7 @@
 #include <random>
 #include "../src/block_cache.hpp"
 #include "../src/repair_vf.hpp"
+#include "../syzygy_layouts/tables.hpp"
 #include <optional>
 #include <oneapi/tbb/global_control.h>
 #if __has_include(<flat_set>)
@@ -3383,7 +3384,7 @@ std::string probe_path(std::string const& dir, Material m, std::string const& ki
         return m.path(dir + "/probe/" + kind) + "-" + kind + (side == 0 ? "-wtm" : "-btm");
 }
 
-struct ProbeFiles { ZFile wdl[2]; int side = -1; ZFile depth; rpvf::File rp[2], rpd; rpvf::Flat rf[2], rfd; rpvf::Wide rw[2], rwd; rpvf::Syz rs[2], rsd; rpvf::Huff rh[2], rhd; };     // side: the depth file's side to move (-1: none)
+struct ProbeFiles { ZFile wdl[2]; int side = -1; ZFile depth; rpvf::File rp[2], rpd; rpvf::Flat rf[2], rfd; rpvf::Wide rw[2], rwd; rpvf::Syz rs[2], rsd; rpvf::Huff rh[2], rhd; sl::Table pg[2], pgd; };     // side: the depth file's side to move (-1: none)
 // EGDB_WDL_RP=1: the prober reads the wdl values from the Re-Pair files (<wdl probe file>.rp, src/repair_vf.hpp;
 // written by `tbgen rpconvert`) straight from the mapping, instead of the zstd frames through the cache
 bool const g_wdl_rp = std::getenv("EGDB_WDL_RP") != nullptr;
@@ -3392,6 +3393,9 @@ bool const g_rp_wide = g_wdl_rp && std::string(std::getenv("EGDB_WDL_RP")) == "w
 bool const g_rp_syz = g_wdl_rp && std::string(std::getenv("EGDB_WDL_RP")) == "syzygy";  // =syzygy: <probe file>.rps, the layout of the Syzygy tables
 // =huff8, =huff12: <probe file>.rph8 or .rph12, Huffman codes on 256 or 4,096 symbols in 64-byte blocks
 std::string const g_rp_huff = g_wdl_rp && std::string(std::getenv("EGDB_WDL_RP")).starts_with("huff") ? ".rph" + std::string(std::getenv("EGDB_WDL_RP")).substr(4) : "";
+// =page: the page layout of syzygy_layouts (written by `tbgen pgconvert`): wdl in 12-bit codes (<probe file>.pg12.*), the
+// depth in Huffman codes (.pgh.*); =page12, =pageh: both in the one coding
+std::string const g_rp_page = g_wdl_rp && std::string(std::getenv("EGDB_WDL_RP")).starts_with("page") ? std::string(std::getenv("EGDB_WDL_RP")) : "";
 bool const g_rp_flat = g_wdl_rp && (g_rp_wide || std::string(std::getenv("EGDB_WDL_RP")) == "flat");
 std::map<Material, ProbeFiles> g_probe;                 // opened before any parallel use, then only read
 
@@ -3405,6 +3409,15 @@ void open_probe(std::string const& dir, std::vector<Material> const& ms)
                 ProbeFiles& f = g_probe[m];
                 for (int side : { 0, 1 }) {
                         f.wdl[side] = open_zfile(probe_path(dir, m, "wdl", side), (size + 3) / 4);
+                        if (!g_rp_page.empty()) {
+                                std::string why;
+                                if (!sl::open_table(probe_path(dir, m, "wdl", side) + (g_rp_page == "pageh" ? ".pgh" : ".pg12"), f.pg[side], &why)) { std::cerr << why << std::endl; std::exit(1); }
+                                if (std::string const d = probe_path(dir, m, metric_name(), side); std::filesystem::exists(zpath(d))) {
+                                        f.depth = open_zfile(d, size); f.side = side;
+                                        if (!sl::open_table(d + (g_rp_page == "page12" ? ".pg12" : ".pgh"), f.pgd, &why)) { std::cerr << why << std::endl; std::exit(1); }
+                                }
+                                continue;
+                        }
                         if (std::string const rp = probe_path(dir, m, "wdl", side) + (!g_rp_huff.empty() ? g_rp_huff : g_rp_syz ? ".rps" : g_rp_wide ? ".rpw" : g_rp_flat ? ".rpf" : ".rp"); g_wdl_rp && std::filesystem::exists(rp)) {
                                 std::uint8_t const* const mp = map_file(rp, std::size_t(std::filesystem::file_size(rp)));
                                 if (!g_rp_huff.empty()) f.rh[side] = rpvf::open_huff(mp); else if (g_rp_syz) f.rs[side] = rpvf::open_syz(mp); else if (g_rp_wide) f.rw[side] = rpvf::open_wide(mp); else if (g_rp_flat) f.rf[side] = rpvf::open_flat(mp); else f.rp[side] = rpvf::open(mp);
@@ -3435,6 +3448,7 @@ ProbeFiles const& probe_files(Material m)
 inline std::uint8_t wdl_read(Material m, int stm, std::uint64_t i)
 {
         ProbeFiles const& f = probe_files(m);
+        if (f.pg[stm].fn) return std::uint8_t(f.pg[stm].fn(f.pg[stm], i));
         if (f.rh[stm]) return std::uint8_t(rpvf::lookup(f.rh[stm], i));
         if (f.rs[stm]) return std::uint8_t(rpvf::lookup(f.rs[stm], i));
         if (f.rw[stm]) return std::uint8_t(rpvf::lookup(f.rw[stm], i));
@@ -3587,7 +3601,7 @@ std::uint16_t pvalue(Pos const& p0)
         if (r == WDL_DRAW) return 0;
         if (f.side < 0) { std::cerr << "no " << metric_name() << " probe file for " << m.name() << std::endl; std::exit(1); }
         if (p.stm != f.side) return search();                           // the side without a depth file
-        int const c = f.rhd ? int(rpvf::lookup(f.rhd, i)) : f.rsd ? int(rpvf::lookup(f.rsd, i)) : f.rwd ? int(rpvf::lookup(f.rwd, i)) : f.rfd ? int(rpvf::lookup(f.rfd, i)) : f.rpd ? int(rpvf::lookup(f.rpd, i)) : zdepth(f.depth, i);
+        int const c = f.pgd.fn ? f.pgd.fn(f.pgd, i) : f.rhd ? int(rpvf::lookup(f.rhd, i)) : f.rsd ? int(rpvf::lookup(f.rsd, i)) : f.rwd ? int(rpvf::lookup(f.rwd, i)) : f.rfd ? int(rpvf::lookup(f.rfd, i)) : f.rpd ? int(rpvf::lookup(f.rpd, i)) : zdepth(f.depth, i);
         bool const dtm = g_metric == Metric::dtm;
         return r == WDL_WIN ? win(dtm ? 2 * c + 1 : c) : loss(dtm ? 2 * c : c);
 }
@@ -3720,6 +3734,119 @@ bool convert_material(std::string const& dir, Material c, int stride, ExecutionP
 
 // probe <dir> <metric> [FEN...]: the value of each position (default: the start position) and of each of its moves,
 // from the finished files under <dir>
+// pgconvert: every probe file of the store in the page layout of syzygy_layouts (4 KiB pages of 64-byte lines with a
+// 16-bit position count per line, a page index beside them), twice: in 12-bit codes (<name>.pg12.*) and in Huffman
+// codes (<name>.pgh.*), each with a grammar made for it, and every slot looked up and compared. A depth is stored as
+// its index in full (the grammar's terminals hold 12 bits), so the escape tokens are gone.
+// EGDB_PG_MAXLEN: the longest symbol (default 4096 positions).
+template<class ExecutionPolicy>
+bool pg_convert(std::string const& dir, int n, ExecutionPolicy const& policy)
+{
+        g_dir = dir;
+        struct Job { Material m; int side; bool depth; };
+        std::vector<Job> jobs;
+        for (Material const m : stored_materials_up_to(n))
+                for (int side : { 0, 1 }) {
+                        if (std::filesystem::exists(zpath(probe_path(dir, m, "wdl", side)))) jobs.push_back({ m, side, false });
+                        if (std::filesystem::exists(zpath(probe_path(dir, m, metric_name(), side)))) jobs.push_back({ m, side, true });
+                }
+        for (auto const& j : jobs) mat_index(j.m).size;
+        std::uint32_t const maxlen = std::getenv("EGDB_PG_MAXLEN") ? std::uint32_t(std::atoll(std::getenv("EGDB_PG_MAXLEN"))) : 4096;
+        // [depth][coding: 0 12-bit, 1 Huffman]; "big": the files of at least 64 KiB as zstd
+        std::atomic<std::uint64_t> zb[2]{}, zbig[2]{}, tot[2][2]{}, big[2][2]{}, coded[2][2]{}, pad[2][2]{}, idx[2][2]{}, gram[2][2]{}, syms[2][2]{}, codes[2][2]{};
+        std::atomic<std::uint64_t> positions{ 0 }, bad{ 0 }, skipped{ 0 }, files[2]{}, nbig[2]{};
+        auto const t0 = std::chrono::steady_clock::now();
+        std::for_each(policy, jobs.begin(), jobs.end(), [&](Job const& j) {
+                std::uint64_t const size = mat_index(j.m).size;                 // slots
+                std::string const path = probe_path(dir, j.m, j.depth ? metric_name() : "wdl", j.side);
+                ZFile const z = open_zfile(path, j.depth ? size : (size + 3) / 4);
+                // the file's values (a depth: its index), front to back
+                std::vector<std::uint16_t> v; v.reserve(size);
+                {
+                        std::vector<std::uint8_t> buf(2 * ZBLOCK);
+                        for (std::uint64_t b = 0; b < z.nblocks; ++b) {
+                                std::size_t const r = ZSTD_decompress(buf.data(), buf.size(), z.data + z.off[b], z.off[b + 1] - z.off[b]);
+                                if (ZSTD_isError(r)) { std::cerr << "zstd: bad block" << std::endl; std::exit(1); }
+                                std::uint64_t const bytes = std::min(ZBLOCK, z.size - b * ZBLOCK);
+                                for (std::uint64_t k = 0; k < bytes; ++k) {
+                                        if (j.depth) v.push_back(std::uint16_t(block_depth(buf.data(), bytes, k, z.esc)));
+                                        else for (int q = 0; q < 4 && v.size() < size; ++q) v.push_back(std::uint16_t(buf[k] >> (2 * q) & 3));
+                                }
+                        }
+                }
+                std::vector<int> rank(4096, -1);
+                std::vector<std::uint16_t> value;                       // of each terminal
+                for (std::uint16_t x : v) if (rank[x] < 0) rank[x] = 0;
+                for (unsigned x = 0; x < 4096; ++x) if (rank[x] == 0) { rank[x] = int(value.size()); value.push_back(std::uint16_t(x)); }
+                if (value.size() > 255) { ++skipped; return; }          // the pairing keeps a terminal in 8 bits
+                std::vector<std::uint16_t> terms(v.size());
+                for (std::size_t i = 0; i < v.size(); ++i) terms[i] = std::uint16_t(rank[v[i]]);
+                std::array<std::uint16_t, 256> const unused{};
+                std::uint64_t const zsize = std::filesystem::file_size(zpath(path));
+                bool const is_big = zsize >= 65536;
+                std::uint64_t wrong = 0;
+                for (int huff = 0; huff < 2; ++huff) {
+                        // 12-bit codes: a rule while it saves more than its 3 bytes; Huffman: a frequency threshold as for the Syzygy layout
+                        std::vector<std::uint16_t> fin;
+                        std::vector<std::uint8_t> const g = rpvf::compress_wide(terms, size, unsigned(value.size()), unused, maxlen, huff ? 4 : 3, 4095, &fin);
+                        rpvf::Wide const w = rpvf::open_wide(g.data());
+                        // the symbols as they will be numbered: as they are, or by code length, the longest first, then those without a code
+                        std::vector<unsigned> order(w.nsym);
+                        for (unsigned s = 0; s < w.nsym; ++s) order[s] = s;
+                        sl::Source S;
+                        S.name = path.substr(path.rfind('/') + 1); S.k = 0; S.tb_size = size; S.block_bytes = 64;
+                        if (huff) {
+                                rpvf::Canon const C = rpvf::canonical(w, fin);
+                                std::stable_sort(order.begin(), order.end(), [&](unsigned a, unsigned b) { return (C.len[a] ? C.len[a] : -1) > (C.len[b] ? C.len[b] : -1); });
+                                std::array<std::uint64_t, 40> count{}, first{};
+                                S.h.min_len = C.min_len; S.h.max_len = C.max_len;
+                                for (unsigned s = 0; s < w.nsym; ++s) if (C.len[s]) ++count[std::size_t(C.len[s])];
+                                std::uint16_t at = 0;
+                                for (int l = C.max_len; l >= C.min_len; --l) { S.h.offset[l] = at; at = std::uint16_t(at + count[std::size_t(l)]); }
+                                for (int l = C.max_len; l > C.min_len; --l) first[std::size_t(l - 1)] = (first[std::size_t(l)] + count[std::size_t(l)]) >> 1;
+                                for (int l = C.min_len; l <= C.max_len; ++l) S.h.base[l] = first[std::size_t(l)] << (64 - l);
+                        }
+                        std::vector<std::uint16_t> renum(w.nsym), left(w.nsym), right(w.nsym), val(w.nsym, 0xffff);
+                        for (unsigned k = 0; k < w.nsym; ++k) renum[order[k]] = std::uint16_t(k);
+                        for (unsigned s = 0; s < w.nsym; ++s) {
+                                unsigned const k = renum[s];
+                                if (w.length[s] == 1) { left[k] = right[k] = std::uint16_t(k); val[k] = value[w.uniform[s]]; }
+                                else { left[k] = renum[w.left[s]]; right[k] = renum[w.right[s]]; }
+                        }
+                        std::vector<std::uint8_t> const pat = sl::sympat_of12(left, right, val);
+                        S.g = sl::grammar_from_sympat(pat.data(), w.nsym);
+                        S.seq.resize(fin.size());
+                        for (std::size_t i = 0; i < fin.size(); ++i) S.seq[i] = renum[fin[i]];
+                        std::string const prefix = path + (huff ? ".pgh" : ".pg12");
+                        sl::Stats const st = huff ? sl::convert<sl::LB64>(S, prefix, "h") : sl::convert<sl::LC0>(S, prefix, "12");
+                        sl::Table T;
+                        std::string why;
+                        if (!sl::open_table(prefix, T, &why)) { std::cerr << why << std::endl; std::exit(1); }
+                        for (std::uint64_t i = 0; i < size; ++i) wrong += T.fn(T, i) != int(v[i]);
+                        int const d = j.depth;
+                        tot[d][huff] += st.total(); coded[d][huff] += (st.code_bits + 7) / 8; pad[d][huff] += st.padding(); idx[d][huff] += st.index(); gram[d][huff] += st.grammar;
+                        syms[d][huff] += w.nsym; codes[d][huff] += st.symbols;
+                        if (is_big) big[d][huff] += st.total();
+                }
+                zb[j.depth] += zsize; ++files[j.depth]; positions += size; bad += wrong;
+                if (is_big) { zbig[j.depth] += zsize; ++nbig[j.depth]; }
+        });
+        std::cout << "pgconvert: " << jobs.size() << " files, " << positions.load() << " positions, " << bad.load() << " lookups differ, " << skipped.load()
+                  << " files skipped (more than 255 values), " << seconds_since(t0) << " s\n";
+        for (int d : { 0, 1 }) {
+                std::cout << "  " << (d ? metric_name() : "wdl") << ": " << files[d].load() << " files, zstd " << zb[d].load() << " bytes\n";
+                for (int h : { 0, 1 })
+                        std::cout << "    pages, " << (h ? "Huffman codes" : "12-bit codes ") << ": " << tot[d][h].load() << " bytes (" << 100.0 * double(tot[d][h].load()) / double(std::max<std::uint64_t>(1, zb[d].load()))
+                                  << " % of zstd): coded " << coded[d][h].load() << ", padding " << pad[d][h].load() << ", index " << idx[d][h].load() << ", grammar " << gram[d][h].load()
+                                  << "; " << codes[d][h].load() << " codes, " << syms[d][h].load() << " symbols\n";
+                std::cout << "    the " << nbig[d].load() << " files of at least 64 KiB as zstd: zstd " << zbig[d].load() << ", 12-bit " << big[d][0].load() << " ("
+                          << 100.0 * double(big[d][0].load()) / double(std::max<std::uint64_t>(1, zbig[d].load())) << " %), Huffman " << big[d][1].load() << " ("
+                          << 100.0 * double(big[d][1].load()) / double(std::max<std::uint64_t>(1, zbig[d].load())) << " %)\n";
+        }
+        std::cout << std::flush;
+        return bad.load() == 0;
+}
+
 // probebench: throughput and latency of the prober on the probe files of a store.
 //   uniform   positions drawn uniformly over the slots of all materials (no locality: the worst case for the cache)
 //   walk      random games: from a uniform position, 12 random moves; at every node the position and each of its
@@ -4177,6 +4304,7 @@ int main(int argc, char* argv[])
         if (a.size() == 5 && a[0] == "cmp86" && parse_metric(a[4])) return compare_thompson86(a[1], a[2], std::stoi(a[3])) ? 0 : 1;
         if (a.size() == 3 && a[0] == "order") return check_order(a[1], std::stoi(a[2])) ? 0 : 1;
         if (a.size() == 3 && a[0] == "rpconvert") return rp_convert(a[1], std::stoi(a[2]), std::execution::par) ? 0 : 1;
+        if (a.size() == 3 && a[0] == "pgconvert") return pg_convert(a[1], std::stoi(a[2]), std::execution::par) ? 0 : 1;
         // probebench <dir> n <metric> [threads] [probes per thread] [uniform|walk]
         if (a.size() >= 4 && a.size() <= 7 && a[0] == "probebench" && parse_metric(a[3]))
                 return probe_bench(a[1], std::stoi(a[2]), a.size() > 4 ? std::stoi(a[4]) : 1, a.size() > 5 ? std::stoull(a[5]) : 1000000,

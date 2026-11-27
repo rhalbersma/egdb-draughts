@@ -419,25 +419,36 @@ inline bool ef_header(std::vector<std::uint32_t> const& starts, std::uint32_t to
         return true;
 }
 
-template<class L>
-Stats convert(Source const& S, std::string const& prefix, std::string const& variant)
-{
+// a converted sub-table in memory: the sections that `convert` writes as files and package.hpp puts into one file
+struct Packed {
         Stats st;
         Manifest man;
+        bool is_const = false;
+        int const_value = 0;
+        unsigned C = 64, W = 0;
+        Header H = Header::counts16;
+        std::uint64_t positions = 0;
+        std::size_t last_page_bytes = 4096;                     // the header and the lines in use of the last page
+        std::vector<std::uint8_t> dat, gra, huf;
+        std::vector<std::uint32_t> pri, top, sub;
+};
+
+template<class L>
+Packed build(Source const& S, std::string const& variant)
+{
+        Packed P;
+        Stats& st = P.st;
+        Manifest& man = P.man;
+        P.C = unsigned(L::C); P.W = unsigned(L::W); P.H = L::H;
         man["variant"] = variant; man["table"] = S.name; man["subtable"] = std::to_string(S.k); man["tb_size"] = std::to_string(S.tb_size);
         man["line_bytes"] = std::to_string(L::C); man["code_bits"] = std::to_string(L::W);
         man["header"] = L::H == Header::counts16 ? "counts16" : L::H == Header::totals32 ? "totals32" : "eliasfano";
         man["sub_bits"] = std::to_string(L::SUB_BITS);
-        auto const write_manifest = [&] {
-                std::ostringstream o;
-                for (auto const& [k, v] : man) o << k << ' ' << v << '\n';
-                write_file(prefix + ".man", o.str().data(), o.str().size());
-        };
         if (S.is_const) {
                 man["const"] = std::to_string(S.const_value);
+                P.is_const = true; P.const_value = S.const_value;
                 st.grammar = 2;
-                write_manifest();
-                return st;
+                return P;
         }
         Grammar const& g = S.g;
         // 1. lines, cut at the subdivisions
@@ -530,6 +541,7 @@ Stats convert(Source const& S, std::string const& prefix, std::string const& var
                                 if (j < n) p += lines[i + j].pos;
                         }
                 }
+                P.last_page_bytes = (hdr + n) * L::C;
                 std::size_t page_positions = 0;
                 for (std::size_t j = 0; j < n; ++j) {
                         std::memcpy(page.data() + (hdr + j) * L::C, lines[i + j].b.data(), L::C);
@@ -549,30 +561,24 @@ Stats convert(Source const& S, std::string const& prefix, std::string const& var
         sub.push_back(num_pages);
         std::vector<std::uint32_t> top((pri.size() + TOP - 1) / TOP);
         for (std::size_t k = 0; k < top.size(); ++k) top[k] = pri[k * TOP];
-        // 3. files
-        write_file(prefix + ".dat", dat.data(), dat.size());
-        write_file(prefix + ".pri", pri.data(), 4 * pri.size());
-        write_file(prefix + ".top", top.data(), 4 * top.size());
-        write_file(prefix + ".sub", sub.data(), 4 * sub.size());
+        // 3. the sections
         {
-                std::vector<std::uint8_t> gra(4 + g.sympat.size());
+                P.gra.resize(4 + g.sympat.size());
                 std::uint32_t const n = g.nsym;
-                std::memcpy(gra.data(), &n, 4);
-                std::memcpy(gra.data() + 4, g.sympat.data(), g.sympat.size());
-                write_file(prefix + ".gra", gra.data(), gra.size());
-                st.grammar = gra.size();
+                std::memcpy(P.gra.data(), &n, 4);
+                std::memcpy(P.gra.data() + 4, g.sympat.data(), g.sympat.size());
+                st.grammar = P.gra.size();
         }
         if (L::W == 0) {
-                std::vector<std::uint8_t> huf(2);
-                huf[0] = std::uint8_t(S.h.min_len); huf[1] = std::uint8_t(S.h.max_len);
+                P.huf.resize(2);
+                P.huf[0] = std::uint8_t(S.h.min_len); P.huf[1] = std::uint8_t(S.h.max_len);
                 for (int l = S.h.min_len; l <= S.h.max_len; ++l) {
-                        std::size_t const at = huf.size();
-                        huf.resize(at + 10);
-                        std::memcpy(huf.data() + at, &S.h.offset[l], 2);
-                        std::memcpy(huf.data() + at + 2, &S.h.base[l], 8);
+                        std::size_t const at = P.huf.size();
+                        P.huf.resize(at + 10);
+                        std::memcpy(P.huf.data() + at, &S.h.offset[l], 2);
+                        std::memcpy(P.huf.data() + at + 2, &S.h.base[l], 8);
                 }
-                write_file(prefix + ".huf", huf.data(), huf.size());
-                st.grammar += huf.size();
+                st.grammar += P.huf.size();
         }
         st.pages = num_pages; st.subdivisions = sub.size() - 1;
         st.dat = dat.size(); st.pri = 4 * pri.size(); st.top = 4 * top.size(); st.sub = 4 * sub.size();
@@ -581,8 +587,27 @@ Stats convert(Source const& S, std::string const& prefix, std::string const& var
         man["dat_bytes"] = std::to_string(st.dat); man["pri_bytes"] = std::to_string(st.pri); man["top_bytes"] = std::to_string(st.top);
         man["sub_bytes"] = std::to_string(st.sub); man["grammar_bytes"] = std::to_string(st.grammar); man["header_bytes"] = std::to_string(st.header);
         man["dat_crc32c"] = std::to_string(crc32c(dat.data(), dat.size()));
-        write_manifest();
-        return st;
+        P.positions = st.positions;
+        P.dat = std::move(dat); P.pri = std::move(pri); P.top = std::move(top); P.sub = std::move(sub);
+        return P;
+}
+
+// the same as files: <prefix>.dat, .pri, .top, .sub, .gra, .huf and the manifest .man
+template<class L>
+Stats convert(Source const& S, std::string const& prefix, std::string const& variant)
+{
+        Packed const P = build<L>(S, variant);
+        std::ostringstream o;
+        for (auto const& [k, v] : P.man) o << k << ' ' << v << '\n';
+        write_file(prefix + ".man", o.str().data(), o.str().size());
+        if (P.is_const) return P.st;
+        write_file(prefix + ".dat", P.dat.data(), P.dat.size());
+        write_file(prefix + ".pri", P.pri.data(), 4 * P.pri.size());
+        write_file(prefix + ".top", P.top.data(), 4 * P.top.size());
+        write_file(prefix + ".sub", P.sub.data(), 4 * P.sub.size());
+        write_file(prefix + ".gra", P.gra.data(), P.gra.size());
+        if (L::W == 0) write_file(prefix + ".huf", P.huf.data(), P.huf.size());
+        return P.st;
 }
 
 // ---- opening a table, with the checks of the prompt
@@ -590,40 +615,45 @@ Stats convert(Source const& S, std::string const& prefix, std::string const& var
 template<class L> int (*probe_fn())(Table const&, std::uint64_t) { return &probe<L>; }
 
 // validate = false skips the checks that read all of pri (a cold-cache timing run must not warm the index by opening)
-inline bool open_table(std::string const& prefix, Table& T, std::string* why = nullptr, bool validate = true)
+// the sections of a sub-table in memory (mapped files, or the parts of a package)
+struct Parts {
+        bool is_const = false;
+        int const_value = 0;
+        unsigned C = 64, W = 0;
+        Header H = Header::counts16;
+        std::uint64_t positions = 0;
+        std::uint8_t const* dat = nullptr; std::size_t n_dat = 0;              // the last page may stop after its last line
+        std::uint32_t const* pri = nullptr; std::size_t n_pri = 0;             // sizes in bytes
+        std::uint32_t const* top = nullptr; std::size_t n_top = 0;
+        std::uint32_t const* sub = nullptr; std::size_t n_sub = 0;
+        std::uint8_t const* gra = nullptr; std::size_t n_gra = 0;
+        std::uint8_t const* huf = nullptr;
+};
+
+// validate = false skips the checks that read all of pri (a cold-cache timing run must not warm the index by opening)
+inline bool open_parts(Parts const& P, Table& T, std::string const& name, std::string* why = nullptr, bool validate = true)
 {
-        auto const fail = [&](char const* m) { if (why) *why = prefix + ": " + m; return false; };
-        T.man = read_manifest(prefix + ".man");
-        if (T.man.empty()) return fail("no manifest");
-        if (T.man.count("const")) { T.is_const = true; T.const_value = std::stoi(T.man["const"]); T.fn = &probe_const; return true; }
-        T.C = unsigned(std::stoul(T.man["line_bytes"])); T.W = unsigned(std::stoul(T.man["code_bits"]));
-        T.H = T.man["header"] == "counts16" ? Header::counts16 : T.man["header"] == "totals32" ? Header::totals32 : Header::eliasfano;
-        if (std::stoul(T.man["sub_bits"]) != SUB_BITS) return fail("made with another subdivision size");
-        T.positions = std::stoull(T.man["positions"]);
-        std::size_t n_dat, n_pri, n_top, n_sub, n_gra;
-        T.dat = map_file(prefix + ".dat", n_dat, true);
-        T.pri = reinterpret_cast<std::uint32_t const*>(map_file(prefix + ".pri", n_pri));
-        T.top = reinterpret_cast<std::uint32_t const*>(map_file(prefix + ".top", n_top));
-        T.sub = reinterpret_cast<std::uint32_t const*>(map_file(prefix + ".sub", n_sub));
-        std::uint8_t const* const gra = map_file(prefix + ".gra", n_gra);
-        T.num_pages = std::uint32_t(n_dat / 4096);
-        T.num_sub = std::uint32_t(n_sub / 4 - 1);
-        if (n_dat % 4096 || n_pri != 4 * std::size_t(T.num_pages) || n_top != 4 * ((std::size_t(T.num_pages) + TOP - 1) / TOP)) return fail("file sizes disagree");
+        auto const fail = [&](char const* m) { if (why) *why = name + ": " + m; return false; };
+        if (P.is_const) { T.is_const = true; T.const_value = P.const_value; T.fn = &probe_const; return true; }
+        T.C = P.C; T.W = P.W; T.H = P.H; T.positions = P.positions;
+        T.dat = P.dat; T.pri = P.pri; T.top = P.top; T.sub = P.sub;
+        T.num_pages = std::uint32_t((P.n_dat + 4095) / 4096);
+        T.num_sub = std::uint32_t(P.n_sub / 4 - 1);
+        if (P.n_dat == 0 || P.n_pri != 4 * std::size_t(T.num_pages) || P.n_top != 4 * ((std::size_t(T.num_pages) + TOP - 1) / TOP)) return fail("section sizes disagree");
         if (T.num_sub != (T.positions + SUB - 1) / SUB) return fail("subdivision count");
         if (T.sub[0] != 0 || T.sub[T.num_sub] != T.num_pages) return fail("sub does not span the pages");
         for (std::uint32_t q = 0; validate && q < T.num_sub; ++q) {
                 if (T.sub[q] >= T.sub[q + 1] || T.pri[T.sub[q]] != 0) return fail("a subdivision does not start at 0");
                 for (std::uint32_t b = T.sub[q] + 1; b < T.sub[q + 1]; ++b) if (T.pri[b] <= T.pri[b - 1] || T.pri[b] >= (std::uint32_t(1) << 31)) return fail("pri not increasing");
         }
-        for (std::size_t k = 0; validate && k < n_top / 4; ++k) if (T.top[k] != T.pri[k * TOP]) return fail("top disagrees with pri");
+        for (std::size_t k = 0; validate && k < P.n_top / 4; ++k) if (T.top[k] != T.pri[k * TOP]) return fail("top disagrees with pri");
         std::uint32_t nsym;
-        std::memcpy(&nsym, gra, 4);
-        if (n_gra != 4 + 3 * std::size_t(nsym)) return fail("grammar size");
-        T.g = grammar_from_sympat(gra + 4, nsym);
+        std::memcpy(&nsym, P.gra, 4);
+        if (P.n_gra != 4 + 3 * std::size_t(nsym)) return fail("grammar size");
+        T.g = grammar_from_sympat(P.gra + 4, nsym);
         T.len = T.g.len.data(); T.left = T.g.left.data(); T.right = T.g.right.data(); T.val = T.g.val.data(); T.val12 = T.g.val12.data();
         if (T.W == 0) {
-                std::size_t n_huf;
-                std::uint8_t const* const huf = map_file(prefix + ".huf", n_huf);
+                std::uint8_t const* const huf = P.huf;
                 T.min_len = huf[0];
                 for (unsigned l = huf[0], at = 2; l <= huf[1]; ++l, at += 10) { std::memcpy(&T.hoffset[l], huf + at, 2); std::memcpy(&T.hbase[l], huf + at + 2, 8); }
                 T.fn = T.C == 64 ? probe_fn<LB64>() : T.C == 32 ? probe_fn<LB32>() : T.C == 16 ? probe_fn<LB16>() : nullptr;
@@ -633,6 +663,28 @@ inline bool open_table(std::string const& prefix, Table& T, std::string* why = n
                 T.fn = T.H == Header::counts16 ? probe_fn<LC0_10>() : T.H == Header::totals32 ? probe_fn<LC1_10>() : probe_fn<LC2_10>();
         if (!T.fn) return fail("no lookup for this layout");
         return true;
+}
+
+// a sub-table written as files by `convert`
+inline bool open_table(std::string const& prefix, Table& T, std::string* why = nullptr, bool validate = true)
+{
+        auto const fail = [&](char const* m) { if (why) *why = prefix + ": " + m; return false; };
+        T.man = read_manifest(prefix + ".man");
+        if (T.man.empty()) return fail("no manifest");
+        Parts P;
+        if (T.man.count("const")) { P.is_const = true; P.const_value = std::stoi(T.man["const"]); return open_parts(P, T, prefix, why, validate); }
+        P.C = unsigned(std::stoul(T.man["line_bytes"])); P.W = unsigned(std::stoul(T.man["code_bits"]));
+        P.H = T.man["header"] == "counts16" ? Header::counts16 : T.man["header"] == "totals32" ? Header::totals32 : Header::eliasfano;
+        if (std::stoul(T.man["sub_bits"]) != SUB_BITS) return fail("made with another subdivision size");
+        P.positions = std::stoull(T.man["positions"]);
+        P.dat = map_file(prefix + ".dat", P.n_dat, true);
+        P.pri = reinterpret_cast<std::uint32_t const*>(map_file(prefix + ".pri", P.n_pri));
+        P.top = reinterpret_cast<std::uint32_t const*>(map_file(prefix + ".top", P.n_top));
+        P.sub = reinterpret_cast<std::uint32_t const*>(map_file(prefix + ".sub", P.n_sub));
+        P.gra = map_file(prefix + ".gra", P.n_gra);
+        if (P.n_dat % 4096) return fail("file sizes disagree");
+        if (P.W == 0) { std::size_t n_huf; P.huf = map_file(prefix + ".huf", n_huf); }
+        return open_parts(P, T, prefix, why, validate);
 }
 
 // ---- every value in order, read through the page headers (the sequential check); false on an inconsistency

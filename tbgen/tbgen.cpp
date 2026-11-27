@@ -109,6 +109,7 @@
 #include "../src/block_cache.hpp"
 #include "../src/repair_vf.hpp"
 #include "../syzygy_layouts/tables.hpp"
+#include "../syzygy_layouts/package.hpp"
 #include <optional>
 #include <oneapi/tbb/global_control.h>
 #if __has_include(<flat_set>)
@@ -3384,7 +3385,7 @@ std::string probe_path(std::string const& dir, Material m, std::string const& ki
         return m.path(dir + "/probe/" + kind) + "-" + kind + (side == 0 ? "-wtm" : "-btm");
 }
 
-struct ProbeFiles { ZFile wdl[2]; int side = -1; ZFile depth; rpvf::File rp[2], rpd; rpvf::Flat rf[2], rfd; rpvf::Wide rw[2], rwd; rpvf::Syz rs[2], rsd; rpvf::Huff rh[2], rhd; sl::Table pg[2], pgd; };     // side: the depth file's side to move (-1: none)
+struct ProbeFiles { ZFile wdl[2]; int side = -1; ZFile depth; rpvf::File rp[2], rpd; rpvf::Flat rf[2], rfd; rpvf::Wide rw[2], rwd; rpvf::Syz rs[2], rsd; rpvf::Huff rh[2], rhd; sl::Table pg[2], pgd; sl::Package pack; };     // side: the depth file's side to move (-1: none)
 // EGDB_WDL_RP=1: the prober reads the wdl values from the Re-Pair files (<wdl probe file>.rp, src/repair_vf.hpp;
 // written by `tbgen rpconvert`) straight from the mapping, instead of the zstd frames through the cache
 bool const g_wdl_rp = std::getenv("EGDB_WDL_RP") != nullptr;
@@ -3395,6 +3396,8 @@ bool const g_rp_syz = g_wdl_rp && std::string(std::getenv("EGDB_WDL_RP")) == "sy
 std::string const g_rp_huff = g_wdl_rp && std::string(std::getenv("EGDB_WDL_RP")).starts_with("huff") ? ".rph" + std::string(std::getenv("EGDB_WDL_RP")).substr(4) : "";
 // =page: the page layout of syzygy_layouts (written by `tbgen pgconvert`): wdl in 12-bit codes (<probe file>.pg12.*), the
 // depth in Huffman codes (.pgh.*); =page12, =pageh: both in the one coding
+// =pack: the packaged file of the material (written by `tbgen pgpack`): one file with wdl for both sides and the depth
+std::string pack_path(std::string const& dir, Material m);
 std::string const g_rp_page = g_wdl_rp && std::string(std::getenv("EGDB_WDL_RP")).starts_with("page") ? std::string(std::getenv("EGDB_WDL_RP")) : "";
 bool const g_rp_flat = g_wdl_rp && (g_rp_wide || std::string(std::getenv("EGDB_WDL_RP")) == "flat");
 std::map<Material, ProbeFiles> g_probe;                 // opened before any parallel use, then only read
@@ -3405,6 +3408,20 @@ void open_probe(std::string const& dir, std::vector<Material> const& ms)
         g_probe.clear();
         for (Material const m : ms) {
                 std::uint64_t const size = mat_index(m).size;
+                if (g_rp_page == "pack") {
+                        if (!std::filesystem::exists(pack_path(dir, m))) continue;
+                        ProbeFiles& f = g_probe[m];
+                        std::string why;
+                        if (!sl::open_package(pack_path(dir, m), f.pack, &why)) { std::cerr << why << std::endl; std::exit(1); }
+                        for (std::size_t k = 0; k < f.pack.dir.size(); ++k) {
+                                sl::PackEntry const& e = f.pack.dir[k];
+                                if (e.kind == 0) f.pg[e.side] = f.pack.tables[k];
+                                else { f.pgd = f.pack.tables[k]; f.side = int(e.side); }
+                        }
+                        // a copied Table must point into its own grammar
+                        for (sl::Table* t : { &f.pg[0], &f.pg[1], &f.pgd }) { t->len = t->g.len.data(); t->left = t->g.left.data(); t->right = t->g.right.data(); t->val = t->g.val.data(); t->val12 = t->g.val12.data(); }
+                        continue;
+                }
                 if (!std::filesystem::exists(zpath(probe_path(dir, m, "wdl", 0))) || !std::filesystem::exists(zpath(probe_path(dir, m, "wdl", 1)))) continue;
                 ProbeFiles& f = g_probe[m];
                 for (int side : { 0, 1 }) {
@@ -3844,6 +3861,145 @@ bool pg_convert(std::string const& dir, int n, ExecutionPolicy const& policy)
                           << 100.0 * double(big[d][1].load()) / double(std::max<std::uint64_t>(1, zbig[d].load())) << " %)\n";
         }
         std::cout << std::flush;
+        return bad.load() == 0;
+}
+
+// ---- pgpack: one packaged file per material (syzygy_layouts/package.hpp)
+
+std::string pack_path(std::string const& dir, Material m) { return m.path(dir + "/probe/" + metric_name() + "-pack") + ".egdb"; }
+
+// the values of a probe file, front to back (a depth: its index in full)
+std::vector<std::uint16_t> pg_values(std::string const& path, std::uint64_t size, bool depth)
+{
+        ZFile const z = open_zfile(path, depth ? size : (size + 3) / 4);
+        std::vector<std::uint16_t> v; v.reserve(size);
+        std::vector<std::uint8_t> buf(2 * ZBLOCK);
+        for (std::uint64_t b = 0; b < z.nblocks; ++b) {
+                std::size_t const r = ZSTD_decompress(buf.data(), buf.size(), z.data + z.off[b], z.off[b + 1] - z.off[b]);
+                if (ZSTD_isError(r)) { std::cerr << "zstd: bad block" << std::endl; std::exit(1); }
+                std::uint64_t const bytes = std::min(ZBLOCK, z.size - b * ZBLOCK);
+                for (std::uint64_t k = 0; k < bytes; ++k) {
+                        if (depth) v.push_back(std::uint16_t(block_depth(buf.data(), bytes, k, z.esc)));
+                        else for (int q = 0; q < 4 && v.size() < size; ++q) v.push_back(std::uint16_t(buf[k] >> (2 * q) & 3));
+                }
+        }
+        return v;
+}
+
+// a sub-table of the page layout from values: its grammar (for 12-bit codes: a rule while it saves more than its 3
+// bytes; for Huffman codes: a frequency threshold) and, for Huffman, the code. A single value: no grammar.
+sl::Packed pg_build(std::vector<std::uint16_t> const& v, bool huff, std::uint32_t maxlen, std::string const& name)
+{
+        std::vector<int> rank(4096, -1);
+        std::vector<std::uint16_t> value;                       // of each terminal
+        for (std::uint16_t x : v) if (rank[x] < 0) rank[x] = 0;
+        for (unsigned x = 0; x < 4096; ++x) if (rank[x] == 0) { rank[x] = int(value.size()); value.push_back(std::uint16_t(x)); }
+        if (value.size() > 255) { std::cerr << name << ": more than 255 values" << std::endl; std::exit(1); }       // the pairing keeps a terminal in 8 bits
+        sl::Source S;
+        S.name = name; S.k = 0; S.tb_size = v.size(); S.block_bytes = 64;
+        if (value.size() <= 1) { S.is_const = true; S.const_value = value.empty() ? 0 : value[0]; return sl::build<sl::LC0>(S, "const"); }
+        std::vector<std::uint16_t> terms(v.size());
+        for (std::size_t i = 0; i < v.size(); ++i) terms[i] = std::uint16_t(rank[v[i]]);
+        std::array<std::uint16_t, 256> const unused{};
+        std::vector<std::uint16_t> fin;
+        std::vector<std::uint8_t> const g = rpvf::compress_wide(std::move(terms), v.size(), unsigned(value.size()), unused, maxlen, huff ? 4 : 3, 4095, &fin);
+        rpvf::Wide const w = rpvf::open_wide(g.data());
+        // the symbols as they will be numbered: as they are, or by code length, the longest first, then those without a code
+        std::vector<unsigned> order(w.nsym);
+        for (unsigned s = 0; s < w.nsym; ++s) order[s] = s;
+        if (huff) {
+                rpvf::Canon const C = rpvf::canonical(w, fin);
+                std::stable_sort(order.begin(), order.end(), [&](unsigned a, unsigned b) { return (C.len[a] ? C.len[a] : -1) > (C.len[b] ? C.len[b] : -1); });
+                std::array<std::uint64_t, 40> count{}, first{};
+                S.h.min_len = C.min_len; S.h.max_len = C.max_len;
+                for (unsigned s = 0; s < w.nsym; ++s) if (C.len[s]) ++count[std::size_t(C.len[s])];
+                std::uint16_t at = 0;
+                for (int l = C.max_len; l >= C.min_len; --l) { S.h.offset[l] = at; at = std::uint16_t(at + count[std::size_t(l)]); }
+                for (int l = C.max_len; l > C.min_len; --l) first[std::size_t(l - 1)] = (first[std::size_t(l)] + count[std::size_t(l)]) >> 1;
+                for (int l = C.min_len; l <= C.max_len; ++l) S.h.base[l] = first[std::size_t(l)] << (64 - l);
+        }
+        std::vector<std::uint16_t> renum(w.nsym), left(w.nsym), right(w.nsym), val(w.nsym, 0xffff);
+        for (unsigned k = 0; k < w.nsym; ++k) renum[order[k]] = std::uint16_t(k);
+        for (unsigned s = 0; s < w.nsym; ++s) {
+                unsigned const k = renum[s];
+                if (w.length[s] == 1) { left[k] = right[k] = std::uint16_t(k); val[k] = value[w.uniform[s]]; }
+                else { left[k] = renum[w.left[s]]; right[k] = renum[w.right[s]]; }
+        }
+        std::vector<std::uint8_t> const pat = sl::sympat_of12(left, right, val);
+        S.g = sl::grammar_from_sympat(pat.data(), w.nsym);
+        S.seq.resize(fin.size());
+        for (std::size_t i = 0; i < fin.size(); ++i) S.seq[i] = renum[fin[i]];
+        return huff ? sl::build<sl::LB64>(S, "h") : sl::build<sl::LC0>(S, "12");
+}
+
+// pgpack <dir> n: every material of the store with probe files as one packaged file, <dir>/probe/<metric>-pack/...:
+// wdl for white and for black to move in 12-bit codes, the depth of its one side in Huffman codes (EGDB_PG_WDL=h,
+// EGDB_PG_DEPTH=12: the other coding). Each file is written once, reopened, and every slot of its sub-tables looked up
+// and compared with the probe files' values.
+template<class ExecutionPolicy>
+bool pg_pack(std::string const& dir, int n, ExecutionPolicy const& policy)
+{
+        g_dir = dir;
+        std::vector<Material> mats;
+        for (Material const m : stored_materials_up_to(n))
+                if (std::filesystem::exists(zpath(probe_path(dir, m, "wdl", 0))) && std::filesystem::exists(zpath(probe_path(dir, m, "wdl", 1)))) mats.push_back(m);
+        for (Material const m : mats) mat_index(m).size;
+        std::uint32_t const maxlen = std::getenv("EGDB_PG_MAXLEN") ? std::uint32_t(std::atoll(std::getenv("EGDB_PG_MAXLEN"))) : 4096;
+        bool const wdl_huff = std::getenv("EGDB_PG_WDL") && std::string(std::getenv("EGDB_PG_WDL")) == "h";
+        bool const depth_huff = !(std::getenv("EGDB_PG_DEPTH") && std::string(std::getenv("EGDB_PG_DEPTH")) == "12");
+        std::atomic<std::uint64_t> zb[2]{}, coded[2]{}, positions{ 0 }, bad{ 0 }, consts{ 0 }, subs{ 0 };
+        std::atomic<std::uint64_t> file{ 0 }, directory{ 0 }, grammar{ 0 }, index{ 0 }, small{ 0 }, data{ 0 }, alignment{ 0 }, headers{ 0 }, line_padding{ 0 };
+        std::atomic<std::uint64_t> zbig{ 0 }, pbig{ 0 }, nbig{ 0 };
+        auto const t0 = std::chrono::steady_clock::now();
+        std::for_each(policy, mats.begin(), mats.end(), [&](Material const m) {
+                std::uint64_t const size = mat_index(m).size;
+                struct Sub { std::uint32_t kind, side; std::vector<std::uint16_t> v; sl::Packed p; };
+                std::vector<Sub> s;
+                std::uint64_t zsum = 0;
+                for (int side : { 0, 1 }) {
+                        std::string const path = probe_path(dir, m, "wdl", side);
+                        s.push_back({ 0, std::uint32_t(side), pg_values(path, size, false), {} });
+                        zsum += std::filesystem::file_size(zpath(path)); zb[0] += std::filesystem::file_size(zpath(path));
+                }
+                for (int side : { 0, 1 })
+                        if (std::string const path = probe_path(dir, m, metric_name(), side); std::filesystem::exists(zpath(path))) {
+                                s.push_back({ 1, std::uint32_t(side), pg_values(path, size, true), {} });
+                                zsum += std::filesystem::file_size(zpath(path)); zb[1] += std::filesystem::file_size(zpath(path));
+                        }
+                std::vector<sl::PackItem> items;
+                for (Sub& x : s) {
+                        x.p = pg_build(x.v, x.kind ? depth_huff : wdl_huff, maxlen, m.name());
+                        coded[x.kind] += (x.p.st.code_bits + 7) / 8; headers += x.p.st.header; consts += x.p.is_const; ++subs;
+                }
+                for (Sub const& x : s) items.push_back({ x.kind, x.side, &x.p });
+                sl::PackSizes z;
+                std::vector<std::uint8_t> const bytes = sl::pack(items, &z);
+                std::string const out = pack_path(dir, m);
+                std::filesystem::create_directories(std::filesystem::path(out).parent_path());
+                sl::write_file(out, bytes.data(), bytes.size());
+                sl::Package K;
+                std::string why;
+                if (!sl::open_package(out, K, &why)) { std::cerr << why << std::endl; std::exit(1); }
+                std::uint64_t wrong = 0;
+                for (std::size_t k = 0; k < s.size(); ++k) {
+                        sl::Table const& T = K.tables[k];
+                        for (std::uint64_t i = 0; i < size; ++i) wrong += T.fn(T, i) != int(s[k].v[i]);
+                }
+                bad += wrong; positions += size * s.size();
+                file += z.file; directory += z.directory; grammar += z.grammar; index += z.index; small += z.small_data; data += z.data; alignment += z.alignment;
+                if (zsum >= 65536) { zbig += zsum; pbig += z.file; ++nbig; }
+        });
+        std::uint64_t const zall = zb[0].load() + zb[1].load();
+        std::cout << "pgpack: " << mats.size() << " materials, " << subs.load() << " sub-tables (" << consts.load() << " a single value), " << positions.load() << " positions looked up, "
+                  << bad.load() << " differ, " << seconds_since(t0) << " s\n"
+                  << "  zstd probe files: wdl " << zb[0].load() << " + " << metric_name() << " " << zb[1].load() << " = " << zall << " bytes\n"
+                  << "  packaged files (wdl " << (wdl_huff ? "Huffman" : "12-bit") << ", " << metric_name() << " " << (depth_huff ? "Huffman" : "12-bit") << "): " << file.load() << " bytes ("
+                  << 100.0 * double(file.load()) / double(std::max<std::uint64_t>(1, zall)) << " % of zstd)\n"
+                  << "    headers and directories " << directory.load() << ", grammars and code tables " << grammar.load() << ", page indexes " << index.load()
+                  << ", pages of small sub-tables " << small.load() << ", pages of the others " << data.load() << ", alignment and the closing bytes " << alignment.load() + 64 * mats.size() << "\n"
+                  << "    of the pages: codes of wdl " << coded[0].load() << ", of " << metric_name() << " " << coded[1].load() << ", page headers " << headers.load() << "\n"
+                  << "  the " << nbig.load() << " materials of at least 64 KiB as zstd: zstd " << zbig.load() << ", packaged " << pbig.load() << " ("
+                  << 100.0 * double(pbig.load()) / double(std::max<std::uint64_t>(1, zbig.load())) << " %)" << std::endl;
         return bad.load() == 0;
 }
 
@@ -4305,6 +4461,7 @@ int main(int argc, char* argv[])
         if (a.size() == 3 && a[0] == "order") return check_order(a[1], std::stoi(a[2])) ? 0 : 1;
         if (a.size() == 3 && a[0] == "rpconvert") return rp_convert(a[1], std::stoi(a[2]), std::execution::par) ? 0 : 1;
         if (a.size() == 3 && a[0] == "pgconvert") return pg_convert(a[1], std::stoi(a[2]), std::execution::par) ? 0 : 1;
+        if (a.size() == 3 && a[0] == "pgpack") return pg_pack(a[1], std::stoi(a[2]), std::execution::par) ? 0 : 1;
         // probebench <dir> n <metric> [threads] [probes per thread] [uniform|walk]
         if (a.size() >= 4 && a.size() <= 7 && a[0] == "probebench" && parse_metric(a[3]))
                 return probe_bench(a[1], std::stoi(a[2]), a.size() > 4 ? std::stoi(a[4]) : 1, a.size() > 5 ? std::stoull(a[5]) : 1000000,

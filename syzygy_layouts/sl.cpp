@@ -231,8 +231,37 @@ int check_all(char const* tbdir, std::string const& outdir, std::string const& v
                         for (int k = 0; k < 1000; ++k) { std::uint64_t const x = rng() % s.tb_size; if (T.fn(T, x) != sl_ref(i, x)) { report("constant lookup"); break; } }
                         return;
                 }
-                // Fathom's values: his symbols expanded; spot-checked against his own lookup
                 Source const S = source_of(i);
+                if (pieces_of(s.name) > 4 && s.tb_size > random_per_sub) {
+                        // large: his symbols are expanded alongside the pages (no table of all values in memory), the first
+                        // value of every page is also asked of Fathom, and the lookups are compared with Fathom's directly
+                        std::vector<std::uint8_t> rb;
+                        std::vector<unsigned> stack;
+                        std::size_t si = 0;
+                        std::uint64_t asked = 0;
+                        auto const sink = [&](std::uint8_t const* v, std::size_t m, std::size_t first) {
+                                while (rb.size() < m && si < S.seq.size()) {
+                                        stack.push_back(S.seq[si++]);
+                                        while (!stack.empty()) {
+                                                unsigned const y = stack.back();
+                                                stack.pop_back();
+                                                if (S.g.len[y] == 1) { rb.push_back(S.g.val[y]); continue; }
+                                                stack.push_back(S.g.right[y]); stack.push_back(S.g.left[y]);
+                                        }
+                                }
+                                std::size_t const c = std::min<std::size_t>(m, first < s.tb_size ? s.tb_size - first : 0);
+                                if (rb.size() < c || std::memcmp(v, rb.data(), c) != 0) return false;
+                                if (c != 0) { ++asked; if (v[0] != sl_ref(i, first)) return false; }
+                                rb.erase(rb.begin(), rb.begin() + std::ptrdiff_t(std::min(m, rb.size())));
+                                return true;
+                        };
+                        if (!decode_pages(T, sink, &why)) { report(why); return; }
+                        seq_checked += s.tb_size; ref_checked += asked;
+                        for (std::uint64_t k = 0; k < random_per_sub; ++k) { std::uint64_t const x = rng() % s.tb_size; if (T.fn(T, x) != sl_ref(i, x)) { report("lookup differs at " + std::to_string(x)); return; } }
+                        rnd_checked += random_per_sub; ref_checked += random_per_sub;
+                        return;
+                }
+                // small: Fathom's values are his symbols expanded, spot-checked against his own lookup
                 std::vector<std::uint8_t> const ref = values_of(S);
                 for (int k = 0; k < 100000; ++k) { std::uint64_t const x = rng() % s.tb_size; if (ref[x] != sl_ref(i, x)) { report("the expanded symbols differ from Fathom's lookup"); return; } }
                 ref_checked += 100000;

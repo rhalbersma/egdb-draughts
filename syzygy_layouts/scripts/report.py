@@ -36,13 +36,13 @@ if sizes:
     n_sub = len(a); n_const = sum(1 for r in a if r['const'] == '1')
     print('## Sizes\n')
     print('%d sub-tables in %d tables, %d of them a single constant; %s index values in all.\n' % (n_sub, len({r['table'] for r in a}), n_const, format(total(a, 'tb_size'), ',')))
-    size_table('All tables of 3 to 5 pieces', lambda r: True)
+    size_table('All tables', lambda r: True)
     big = {(r['table'], r['subtable']) for r in a if int(r['total_bytes']) >= 1 << 20}
-    size_table('Only the %d sub-tables of at least 1 MiB in the Syzygy file (page rounding plays no part)' % len(big), lambda r: (r['table'], r['subtable']) in big)
+    if len(big) != n_sub - n_const: size_table('Only the %d sub-tables of at least 1 MiB in the Syzygy file (page rounding plays no part)' % len(big), lambda r: (r['table'], r['subtable']) in big)
     small = {(r['table'], r['subtable']) for r in a if r['const'] == '0' and int(r['total_bytes']) < 4096}
-    size_table('Only the %d sub-tables below 4 KiB in the Syzygy file (each takes at least one page here)' % len(small), lambda r: (r['table'], r['subtable']) in small)
+    if small: size_table('Only the %d sub-tables below 4 KiB in the Syzygy file (each takes at least one page here)' % len(small), lambda r: (r['table'], r['subtable']) in small)
     print('### Details\n')
-    print('| Variant | Codes | Pages | Lines of 64 / 32 / 16 bytes (sub-tables) | Pages with 3 / 4 header lines | Subdivisions |')
+    print('| Variant | Codes | Pages | Lines of 64 / 32 / 16 bytes (sub-tables) | Pages with 3 / 4 header lines | Subdivisions (a: his blocks) |')
     print('|---|---|---|---|---|---|')
     for v in variants:
         r = sizes[v]

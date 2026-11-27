@@ -591,11 +591,13 @@ inline bool open_table(std::string const& prefix, Table& T, std::string* why = n
 
 // ---- every value in order, read through the page headers (the sequential check); false on an inconsistency
 
-inline bool decode_all(Table const& T, std::vector<std::uint8_t>& out, std::string* why = nullptr)
+// sink(values, n, first index) is called per page and returns false to stop
+template<class Sink>
+bool decode_pages(Table const& T, Sink sink, std::string* why = nullptr)
 {
         auto const fail = [&](std::string const& m) { if (why) *why = m; return false; };
-        out.clear();
-        out.reserve(T.positions);
+        std::vector<std::uint8_t> out;
+        std::size_t done = 0;
         std::size_t const lines = 4096 / T.C;
         std::size_t const fixed_hdr = T.H == Header::counts16 ? header_lines(lines, T.C, 2, 2) : header_lines(lines, T.C, 4, 4);
         std::vector<unsigned> stack;
@@ -613,7 +615,7 @@ inline bool decode_all(Table const& T, std::vector<std::uint8_t>& out, std::stri
                         std::uint8_t const* const page = T.dat + std::size_t(b) * 4096;
                         std::size_t const begin = std::size_t(T.org[b]) << SUB_BITS | T.pri[b];
                         std::size_t const total = (b + 1 < T.num_pages ? std::size_t(T.org[b + 1]) << SUB_BITS | T.pri[b + 1] : T.positions) - begin;
-                        if (out.size() != begin) return fail("pri and org disagree with the pages before");
+                        if (done != begin) return fail("pri and org disagree with the pages before");
                         std::size_t hdr = fixed_hdr;
                         std::vector<std::size_t> starts;                // of each line, then the total
                         if (T.H == Header::counts16) {
@@ -662,10 +664,20 @@ inline bool decode_all(Table const& T, std::vector<std::uint8_t>& out, std::stri
                                 }
                                 if (out.size() != want) return fail("a line does not hold the positions its header says");
                         }
+                        if (!sink(out.data(), out.size(), done)) return fail("the values differ");
+                        done += out.size();
+                        out.clear();
                 }
         }
-        if (out.size() != T.positions) return fail("positions");
+        if (done != T.positions) return fail("positions");
         return true;
+}
+
+inline bool decode_all(Table const& T, std::vector<std::uint8_t>& all, std::string* why = nullptr)
+{
+        all.clear();
+        all.reserve(T.positions);
+        return decode_pages(T, [&](std::uint8_t const* v, std::size_t n, std::size_t) { all.insert(all.end(), v, v + n); return true; }, why);
 }
 
 }       // namespace sl

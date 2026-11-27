@@ -304,7 +304,12 @@ std::vector<T> read_all(std::string const& path)
 int trace(char const* tbdir, std::string const& positions, std::string const& out)
 {
         open_tables(tbdir);
-        std::vector<Rec> const recs = read_all<Rec>(positions);
+        // Fathom resolves captures by search, so a position with a capture into a table that is not present cannot be
+        // probed: such positions are dropped from the file, for every variant alike
+        std::vector<Rec> recs = read_all<Rec>(positions);
+        std::size_t const before = recs.size();
+        std::erase_if(recs, [](Rec const& x) { return tb_probe_wdl_impl(x.w, x.b, x.k, x.q, x.r, x.bi, x.n, x.p, 0, x.turn) == 0xffffffffu; });
+        if (recs.size() != before) { write_file(positions, recs.data(), recs.size() * sizeof(Rec)); std::cout << "trace: kept " << recs.size() << " of " << before << " positions" << std::endl; }
         std::vector<std::uint32_t> sub(recs.size() * 64);
         std::vector<std::uint64_t> idx(recs.size() * 64);
         sl_set_trace(sub.data(), idx.data(), sub.size());

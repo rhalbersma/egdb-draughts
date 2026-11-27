@@ -112,6 +112,16 @@ grammar. So his finished values are as good a starting point as the open table, 
 adds nothing. e0 and e2 pass their check: every value fits the generator's table, as do his, and every lookup agrees
 with the sequential decode (`results/check_e.txt`).
 
+Two further attempts to use the don't-cares inside the pairing, skipping his neighbour fill, were both worse:
+
+| Open positions may become | Tables | Size | With his neighbour fill |
+|---|---|---|---|
+| any single value a pair needs (`SL_NO_PREFILL`) | the 51 dependent | 111.59 MB (e0), 106.73 MB (e2) | 94.93 MB, 90.08 MB |
+| any whole grammar symbol a pair needs (`SL_JOKER`) | nine small ones | 325,835 bytes (e0) | 113,642 bytes |
+
+Both pass the check. A greedy joker completes whichever pair is being replaced at that moment, which cuts the long
+uniform stretches that the grammar lives on; giving a don't-care stretch to a neighbouring run keeps them whole.
+
 ## Cold lookups
 
 | Variant | Uniform: mean | p50 | p99 | Game trace: mean | p99 |

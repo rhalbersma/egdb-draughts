@@ -195,7 +195,9 @@ std::vector<std::uint8_t> read_open(Source const& S)
 Source rebuilt_open(Source const& S, std::vector<std::uint8_t> const& filled, unsigned max_symbols, unsigned code_bits, std::uint32_t maxlen, std::uint64_t* open3 = nullptr)
 {
         Source D = S;
-        Built B = build_open(filled, maxlen, std::uint32_t(3 * 8 / code_bits + 1), max_symbols);
+        // SL_JOKER: every don't-care may become part of any symbol (give the table unfilled: SL_NO_PREFILL)
+        Built B = std::getenv("SL_JOKER") ? build_joker(filled, maxlen, std::uint32_t(3 * 8 / code_bits + 1), max_symbols)
+                                          : build_open(filled, maxlen, std::uint32_t(3 * 8 / code_bits + 1), max_symbols);
         std::vector<std::uint8_t> const pat = sympat_of(B.left, B.right, B.val);
         D.g = grammar_from_sympat(pat.data(), unsigned(B.left.size()));
         D.seq = std::move(B.seq);
@@ -218,7 +220,7 @@ Stats convert_one(Source const& S, Variant const& V, std::string const& prefix)
                 std::vector<std::uint8_t> v = read_open(S);
                 std::uint64_t all = 0, open3[3];
                 for (std::uint8_t x : v) all += x >= 5;
-                prefill(v);
+                if (!std::getenv("SL_NO_PREFILL")) prefill(v);        // SL_NO_PREFILL: every don't-care stays open for the pairing
                 D12 = rebuilt_open(S, v, 4095, 12, maxlen, open3); D10 = rebuilt_open(S, v, 1024, 10, maxlen);
                 g_open_all += all; g_open_after_prefill += open3[0]; g_open_paired += open3[1]; g_open_default += open3[2];
         } else { D12 = rebuilt(S, 4095, 12, maxlen); D10 = rebuilt(S, 1024, 10, maxlen); }

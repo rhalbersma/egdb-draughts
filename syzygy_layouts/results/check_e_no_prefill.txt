@@ -1,0 +1,8 @@
+convert e0: 220 sub-tables, 178.097 s
+don't-care positions: 2954253017; still open after the neighbour fill: 2954253017; of those settled by a pair (12-bit build): 2954247452, by default: 5565
+check e0: 220 sub-tables; 6725120976 positions decoded in order, 138131136 looked up exhaustively, 920000000 at random; 19900000 reference values confirmed by Fathom's lookup; 0 failures; 92.289 s
+check e0: 317416289 don't-care positions hold another value than his
+convert e2: 220 sub-tables, 174.104 s
+don't-care positions: 2954253017; still open after the neighbour fill: 2954253017; of those settled by a pair (12-bit build): 2954247310, by default: 5707
+check e2: 220 sub-tables; 6725120976 positions decoded in order, 138131136 looked up exhaustively, 920000000 at random; 19900000 reference values confirmed by Fathom's lookup; 0 failures; 99.1681 s
+check e2: 317415905 don't-care positions hold another value than his

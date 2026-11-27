@@ -1,0 +1,18 @@
+== ctbgen
+pgpack: 134 materials, 402 sub-tables (54 a single value), 490311444 positions looked up, 0 differ, 85.7698 s
+  zstd probe files: wdl 7171887 + dtm 34793458 = 41965345 bytes
+  packaged files (wdl 12-bit, dtm Huffman): 42161984 bytes (100.469 % of zstd)
+    headers and directories 63248, grammars and code tables 1501118, page indexes 46634, pages of small sub-tables 191160, pages of the others 40351248, alignment and the closing bytes 420841
+    of the pages: codes of wdl 6396225, of dtm 31968534, page headers 1280256
+  the 69 materials of at least 64 KiB as zstd: zstd 40821139, packaged 40685376 (99.6674 %)
+134
+42161984
+== itbgen
+pgpack: 134 materials, 402 sub-tables (21 a single value), 490311444 positions looked up, 0 differ, 60.5979 s
+  zstd probe files: wdl 7349526 + dtm 15361211 = 22710737 bytes
+  packaged files (wdl 12-bit, dtm Huffman): 21745536 bytes (95.75 % of zstd)
+    headers and directories 63248, grammars and code tables 1387806, page indexes 27438, pages of small sub-tables 215612, pages of the others 20042856, alignment and the closing bytes 446063
+    of the pages: codes of wdl 6311243, of dtm 12596725, page headers 647680
+  the 57 materials of at least 64 KiB as zstd: zstd 21286448, packaged 19980032 (93.8627 %)
+134
+21745536

@@ -1,0 +1,36 @@
+== ctbgen uniform zstd
+wdl   warm: 1326046 probes/s, mean 715 ns, p50 497, p90 1060, p99 4682, p99.9 14847, max 1000831 ns; 0 blocks decompressed
+depth warm: 217181 probes/s, mean 4560 ns, p50 1363, p90 10718, p99 45409, p99.9 110207, max 4043349 ns; 0 blocks decompressed
+== ctbgen uniform pack
+wdl   warm: 1100924 probes/s, mean 867 ns, p50 565, p90 1313, p99 5859, p99.9 20111, max 2543096 ns; 0 blocks decompressed
+depth warm: 224305 probes/s, mean 4414 ns, p50 1320, p90 10351, p99 43870, p99.9 106786, max 897070 ns; 0 blocks decompressed
+== ctbgen uniform page
+wdl   warm: 889565 probes/s, mean 1083 ns, p50 741, p90 1519, p99 6681, p99.9 21691, max 4034909 ns; 0 blocks decompressed
+depth warm: 99037 probes/s, mean 10051 ns, p50 3010, p90 23945, p99 98065, p99.9 236977, max 15811966 ns; 0 blocks decompressed
+== ctbgen walk zstd
+wdl   warm: 2781914 probes/s, mean 325 ns, p50 244, p90 540, p99 1429, p99.9 5195, max 74942 ns; 0 blocks decompressed
+depth warm: 615643 probes/s, mean 1585 ns, p50 574, p90 3166, p99 16896, p99.9 51093, max 5269837 ns; 0 blocks decompressed
+== ctbgen walk pack
+wdl   warm: 2926656 probes/s, mean 309 ns, p50 232, p90 512, p99 1337, p99.9 4818, max 53963 ns; 0 blocks decompressed
+depth warm: 728226 probes/s, mean 1334 ns, p50 503, p90 2710, p99 14011, p99.9 41221, max 895185 ns; 0 blocks decompressed
+== ctbgen walk page
+wdl   warm: 2235050 probes/s, mean 411 ns, p50 314, p90 661, p99 1677, p99.9 6321, max 145686 ns; 0 blocks decompressed
+depth warm: 368538 probes/s, mean 2672 ns, p50 804, p90 5714, p99 29003, p99.9 86612, max 4020069 ns; 0 blocks decompressed
+== itbgen uniform zstd
+wdl   warm: 369797 probes/s, mean 2657 ns, p50 1100, p90 4350, p99 29541, p99.9 96835, max 2279451 ns; 0 blocks decompressed
+depth warm: 63083 probes/s, mean 15802 ns, p50 2404, p90 33300, p99 220178, p99.9 695791, max 7460095 ns; 0 blocks decompressed
+== itbgen uniform pack
+wdl   warm: 367319 probes/s, mean 2676 ns, p50 1106, p90 4379, p99 29859, p99.9 99822, max 2102616 ns; 0 blocks decompressed
+depth warm: 68051 probes/s, mean 14648 ns, p50 2280, p90 30993, p99 202746, p99.9 647202, max 5921372 ns; 0 blocks decompressed
+== itbgen uniform page
+wdl   warm: 316378 probes/s, mean 3120 ns, p50 1357, p90 5024, p99 33688, p99.9 113893, max 965514 ns; 0 blocks decompressed
+depth warm: 46311 probes/s, mean 21543 ns, p50 3661, p90 46620, p99 285266, p99.9 883305, max 31886392 ns; 0 blocks decompressed
+== itbgen walk zstd
+wdl   warm: 1499699 probes/s, mean 627 ns, p50 358, p90 995, p99 4623, p99.9 23579, max 1611178 ns; 0 blocks decompressed
+depth warm: 375297 probes/s, mean 2627 ns, p50 457, p90 3866, p99 39072, p99.9 188230, max 4069014 ns; 0 blocks decompressed
+== itbgen walk pack
+wdl   warm: 1566118 probes/s, mean 604 ns, p50 349, p90 960, p99 4403, p99.9 21659, max 435825 ns; 0 blocks decompressed
+depth warm: 379515 probes/s, mean 2597 ns, p50 454, p90 3855, p99 38952, p99.9 192247, max 2422801 ns; 0 blocks decompressed
+== itbgen walk page
+wdl   warm: 1321110 probes/s, mean 722 ns, p50 428, p90 1157, p99 5017, p99.9 25269, max 540062 ns; 0 blocks decompressed
+depth warm: 281506 probes/s, mean 3516 ns, p50 540, p90 5615, p99 53415, p99.9 249403, max 2749231 ns; 0 blocks decompressed

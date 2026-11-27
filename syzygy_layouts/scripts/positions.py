@@ -2,7 +2,7 @@
 # Game-related probe positions for the timing runs: games played out from the start position by a random mover that
 # prefers captures, until at most `pieces` men are left; from there every position of the game and all its children
 # are written (a search around a game line), for up to 40 plies. Positions with an en passant square are skipped.
-# usage: positions.py <out> <count> <pieces> <seed> [materials]
+# usage: positions.py <out> <count> <pieces> <seed> [materials [more materials]]
 # Record (72 bytes, little-endian): white, black, kings, queens, rooks, bishops, knights, pawns (u64 each), turn, 7 pad.
 import chess, random, struct, sys
 out, n, pieces, seed = sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4])
@@ -33,10 +33,10 @@ def random_position(material):
         if ok and b.is_valid(): return b
 if len(sys.argv) > 5:
     # 6th argument: materials (KRPvKRP,KRBvKRN): games start from a random position of one of them and are followed, with
-    # all children, for as long as the material stays one of them
+    # all children, for as long as the material stays one of them or of the 7th argument (the tables they capture into)
     materials = sys.argv[5].split(',')
     wanted = set()
-    for m in materials:
+    for m in materials + (sys.argv[6].split(',') if len(sys.argv) > 6 else []):
         w, bl = m.split('v'); wanted.add(frozenset((''.join(sorted(w)), ''.join(sorted(bl)))))
     inside = lambda b: signature(b)[0] in wanted and b.ep_square is None
     with open(out, 'wb') as f:

@@ -13,6 +13,7 @@ def mb(x): return '%.2f' % (x / 1e6)
 
 sizes = {}
 for path in glob.glob(os.path.join(res, 'sizes_*.csv')):
+    if path.endswith('sizes_all.csv'): continue
     rows = list(csv.DictReader(open(path)))
     if rows: sizes[rows[0]['variant']] = rows
 variants = [v for v in ORDER if v in sizes]

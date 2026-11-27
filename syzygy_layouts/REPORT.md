@@ -88,6 +88,30 @@ taken as the simpler of the two.
 109.9 % (d2) of the Syzygy size, with lookup times that match c0 within noise. Allowing symbols of up to 65,536
 positions instead of 1,560 gains one more point and makes 2,173 pages use a third header line.
 
+## Don't-care positions
+
+His generator knows which positions do not matter and chooses their values to help the compression; d is rebuilt from
+his finished values. To see what that costs d, a patched copy of the generator wrote out each sub-table as its
+compression step receives it, with the don't-cares still marked (possible here for the 51 dependent tables, not for
+the 6-piece ones). Variant e builds the grammar from that: his neighbour fill first, then open positions are settled
+by the pairs of the fixed-width grammar. The regenerated tables are byte-identical to the originals.
+
+| 51 dependent tables, 6.7 billion positions | |
+|---|---|
+| Don't-care positions | 2,954,253,017 (44 %) |
+| Still open after his neighbour fill | 4,531,952 (0.15 % of them) |
+| Settled differently by e than by him | about 32,000 |
+
+| | a | c0 | d0 | e0 | d2 | e2 |
+|---|---|---|---|---|---|---|
+| Total | 85.56 MB | 119.27 MB | 94.89 MB | 94.93 MB | 90.05 MB | 90.08 MB |
+| Against a | 100.0 % | 139.4 % | 110.9 % | 110.9 % | 105.2 % | 105.3 % |
+
+Nearly all of his don't-care handling is the neighbour fill, which runs before the pairing and does not depend on the
+grammar. So his finished values are as good a starting point as the open table, d has no handicap from this, and e
+adds nothing. e0 and e2 pass their check: every value fits the generator's table, as do his, and every lookup agrees
+with the sequential decode (`results/check_e.txt`).
+
 ## Cold lookups
 
 | Variant | Uniform: mean | p50 | p99 | Game trace: mean | p99 |
@@ -115,9 +139,9 @@ layouts looked three times faster cold; those rows are not used.
 - The game trace: 4 million positions from random play that starts in one of the three 6-piece materials and follows
   captures into the dependent tables, each position with all its children; 6.1 million table lookups. It is not a
   search log of an engine.
-- d starts at a disadvantage. His grammar was built together with the choice of values for the positions that do not
-  matter; d is rebuilt from his finished values. For sub-tables above about 2^29 positions d builds its grammar on a
-  sample and applies it in chunks of 2^22 positions, since this machine cannot hold a 6-piece sub-table in memory.
+- For sub-tables above about 2^29 positions d builds its grammar on a sample and applies it in chunks of 2^22
+  positions, since this machine cannot hold a 6-piece sub-table in memory. A build on the whole sub-table could be
+  somewhat smaller. Rebuilding from his finished values, on the other hand, costs nothing (see the don't-care section).
 - b cannot always cut a symbol at a subdivision. Some of his symbols occur only inside other symbols and have no
   Huffman code. At 2^31 positions per subdivision all 68 cuts were possible. With subdivisions shrunk to 2^17 as a
   stress test, c0, c1 and c2 pass on the full set, b fails on one sub-table (KQRvKP) where a single value has no code.
@@ -140,7 +164,8 @@ written to.
 
 ## Reproducing
 
-`scripts/setup.sh` clones and builds both at those commits and builds the tool. `scripts/generate.sh` makes the tables
+`scripts/setup.sh` clones and builds both at those commits and builds the tool. `scripts/patch_tb.py` patches a copy
+of the generator to write the tables that variant e reads (`SL_DUMP` when generating, `SL_DC` when converting). `scripts/generate.sh` makes the tables
 of 3 to 5 pieces. `scripts/run.sh` converts, checks and measures a directory of tables (`TB`, `VARIANTS`, `MATERIALS`,
 `REACHED`, `STEPS`, `CACHES`), and `scripts/report.py` prints the tables from its CSV files. The three 6-piece files
 were downloaded and checked with `tbcheck`.

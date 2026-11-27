@@ -1,0 +1,340 @@
+== ctbgen uniform zstd
+probebench dtm uniform: 134 materials, 163437148 slots, 1 threads, 1000000 probes each, cache 65536 blocks (256 MB)
+parts (1000000 probes: 47.72 % captures, 7.1703 % pending captures, 0.3475 % without moves):
+  capture test: 16.1537 ns per probe (sum 477200)
+  capture test + quiet-move test: 79.6773 ns per probe (sum 924822)
+  full move list: 164.33 ns per probe (sum 3415132)
+  index (mirror, material, rank): 67.183 ns per probe (sum 500585)
+  index + read: 188.397 ns per probe (sum 431441)
+  whole probe (pwdl): 663.593 ns per probe (sum 1398143)
+  no capture for either side: 30.3226 %; only the other side could capture: 21.9574 % (of which stored now: 16.3912 %); quiet for both but a pending capture (not stored now): 1.6996 %
+  two capture tests (both sides): 28.9083 ns per probe (sum 696774)
+  resolving the 696774 positions where a side could capture, by search down to positions where neither can: 7.44106 nodes on average, 2214 at most, deepest 30 plies, 7 gave up (30 plies or 200000 nodes), 0 wrong
+  quiet probe (pwdl_quiet) on the 447622 stored positions: 176.574 ns per probe; 0 differ from pwdl (sum 633458)
+wdl   cold: 1349429 probes/s, mean 700 ns, p50 477, p90 1029, p99 4605, p99.9 15060, max 951782 ns; 0 blocks decompressed
+wdl   warm: 1361272 probes/s, mean 697 ns, p50 472, p90 1016, p99 4553, p99.9 15334, max 5400692 ns; 0 blocks decompressed
+depth cold: 202886 probes/s, mean 4886 ns, p50 1370, p90 12102, p99 47909, p99.9 117180, max 4244839 ns; 39702 blocks decompressed
+depth warm: 241338 probes/s, mean 4101 ns, p50 1225, p90 9577, p99 40555, p99.9 98740, max 4108317 ns; 0 blocks decompressed
+== ctbgen uniform zstd, 4 MB cache
+probebench dtm uniform: 134 materials, 163437148 slots, 1 threads, 1000000 probes each, cache 1024 blocks (4 MB)
+parts (1000000 probes: 47.72 % captures, 7.1703 % pending captures, 0.3475 % without moves):
+  capture test: 15.9869 ns per probe (sum 477200)
+  capture test + quiet-move test: 78.7459 ns per probe (sum 924822)
+  full move list: 147.213 ns per probe (sum 3415132)
+  index (mirror, material, rank): 63.5327 ns per probe (sum 500585)
+  index + read: 4076.15 ns per probe (sum 431441)
+  whole probe (pwdl): 4177.03 ns per probe (sum 1398143)
+  no capture for either side: 30.3226 %; only the other side could capture: 21.9574 % (of which stored now: 16.3912 %); quiet for both but a pending capture (not stored now): 1.6996 %
+  two capture tests (both sides): 27.4122 ns per probe (sum 696774)
+  resolving the 696774 positions where a side could capture, by search down to positions where neither can: 7.44106 nodes on average, 2214 at most, deepest 30 plies, 7 gave up (30 plies or 200000 nodes), 0 wrong
+  quiet probe (pwdl_quiet) on the 447622 stored positions: 4128.35 ns per probe; 0 differ from pwdl (sum 633458)
+wdl   cold: 225533 probes/s, mean 4385 ns, p50 1806, p90 10404, p99 26887, p99.9 62194, max 2057056 ns; 803764 blocks decompressed
+wdl   warm: 231371 probes/s, mean 4279 ns, p50 1750, p90 10156, p99 26124, p99.9 60340, max 11316009 ns; 803615 blocks decompressed
+depth cold: 27219 probes/s, mean 36689 ns, p50 15124, p90 95247, p99 274692, p99.9 508578, max 10816158 ns; 4879412 blocks decompressed
+depth warm: 27704 probes/s, mean 36049 ns, p50 14830, p90 93838, p99 270568, p99.9 497807, max 3664775 ns; 4879323 blocks decompressed
+== ctbgen uniform page
+probebench dtm uniform: 134 materials, 163437148 slots, 1 threads, 1000000 probes each, cache 65536 blocks (256 MB)
+parts (1000000 probes: 47.72 % captures, 7.1703 % pending captures, 0.3475 % without moves):
+  capture test: 15.5153 ns per probe (sum 477200)
+  capture test + quiet-move test: 75.8552 ns per probe (sum 924822)
+  full move list: 144.233 ns per probe (sum 3415132)
+  index (mirror, material, rank): 60.7414 ns per probe (sum 500585)
+  index + read: 396.932 ns per probe (sum 431441)
+  whole probe (pwdl): 857.258 ns per probe (sum 1398143)
+  no capture for either side: 30.3226 %; only the other side could capture: 21.9574 % (of which stored now: 16.3912 %); quiet for both but a pending capture (not stored now): 1.6996 %
+  two capture tests (both sides): 22.6725 ns per probe (sum 696774)
+  resolving the 696774 positions where a side could capture, by search down to positions where neither can: 7.44106 nodes on average, 2214 at most, deepest 30 plies, 7 gave up (30 plies or 200000 nodes), 0 wrong
+  quiet probe (pwdl_quiet) on the 447622 stored positions: 399.481 ns per probe; 0 differ from pwdl (sum 633458)
+wdl   cold: 1002327 probes/s, mean 955 ns, p50 683, p90 1393, p99 6068, p99.9 19367, max 1681141 ns; 0 blocks decompressed
+wdl   warm: 967347 probes/s, mean 995 ns, p50 706, p90 1438, p99 6295, p99.9 20052, max 4027137 ns; 0 blocks decompressed
+depth cold: 112277 probes/s, mean 8863 ns, p50 2672, p90 21292, p99 86259, p99.9 207945, max 2971025 ns; 0 blocks decompressed
+depth warm: 110537 probes/s, mean 9001 ns, p50 2685, p90 21490, p99 87802, p99.9 213428, max 4180152 ns; 0 blocks decompressed
+== ctbgen uniform page12
+probebench dtm uniform: 134 materials, 163437148 slots, 1 threads, 1000000 probes each, cache 65536 blocks (256 MB)
+parts (1000000 probes: 47.72 % captures, 7.1703 % pending captures, 0.3475 % without moves):
+  capture test: 14.6874 ns per probe (sum 477200)
+  capture test + quiet-move test: 74.0419 ns per probe (sum 924822)
+  full move list: 143.369 ns per probe (sum 3415132)
+  index (mirror, material, rank): 62.0958 ns per probe (sum 500585)
+  index + read: 384.269 ns per probe (sum 431441)
+  whole probe (pwdl): 891.7 ns per probe (sum 1398143)
+  no capture for either side: 30.3226 %; only the other side could capture: 21.9574 % (of which stored now: 16.3912 %); quiet for both but a pending capture (not stored now): 1.6996 %
+  two capture tests (both sides): 25.4995 ns per probe (sum 696774)
+  resolving the 696774 positions where a side could capture, by search down to positions where neither can: 7.44106 nodes on average, 2214 at most, deepest 30 plies, 7 gave up (30 plies or 200000 nodes), 0 wrong
+  quiet probe (pwdl_quiet) on the 447622 stored positions: 386.053 ns per probe; 0 differ from pwdl (sum 633458)
+wdl   cold: 1071051 probes/s, mean 898 ns, p50 648, p90 1314, p99 5727, p99.9 17280, max 380219 ns; 0 blocks decompressed
+wdl   warm: 1055381 probes/s, mean 913 ns, p50 655, p90 1331, p99 5814, p99.9 17855, max 574086 ns; 0 blocks decompressed
+depth cold: 129917 probes/s, mean 7654 ns, p50 2384, p90 18186, p99 72840, p99.9 176675, max 20423584 ns; 0 blocks decompressed
+depth warm: 128773 probes/s, mean 7721 ns, p50 2403, p90 18327, p99 74164, p99.9 182235, max 4333382 ns; 0 blocks decompressed
+== ctbgen uniform pageh
+probebench dtm uniform: 134 materials, 163437148 slots, 1 threads, 1000000 probes each, cache 65536 blocks (256 MB)
+parts (1000000 probes: 47.72 % captures, 7.1703 % pending captures, 0.3475 % without moves):
+  capture test: 15.5939 ns per probe (sum 477200)
+  capture test + quiet-move test: 80.3577 ns per probe (sum 924822)
+  full move list: 158.977 ns per probe (sum 3415132)
+  index (mirror, material, rank): 64.0921 ns per probe (sum 500585)
+  index + read: 566.831 ns per probe (sum 431441)
+  whole probe (pwdl): 1207.54 ns per probe (sum 1398143)
+  no capture for either side: 30.3226 %; only the other side could capture: 21.9574 % (of which stored now: 16.3912 %); quiet for both but a pending capture (not stored now): 1.6996 %
+  two capture tests (both sides): 24.6578 ns per probe (sum 696774)
+  resolving the 696774 positions where a side could capture, by search down to positions where neither can: 7.44106 nodes on average, 2214 at most, deepest 30 plies, 7 gave up (30 plies or 200000 nodes), 0 wrong
+  quiet probe (pwdl_quiet) on the 447622 stored positions: 557.13 ns per probe; 0 differ from pwdl (sum 633458)
+wdl   cold: 802411 probes/s, mean 1207 ns, p50 856, p90 1819, p99 8107, p99.9 22286, max 638942 ns; 0 blocks decompressed
+wdl   warm: 772038 probes/s, mean 1256 ns, p50 873, p90 1858, p99 8324, p99.9 22932, max 4197587 ns; 0 blocks decompressed
+depth cold: 94617 probes/s, mean 10523 ns, p50 3008, p90 25174, p99 103872, p99.9 250573, max 6932051 ns; 0 blocks decompressed
+depth warm: 90591 probes/s, mean 10992 ns, p50 3139, p90 26133, p99 109403, p99.9 273161, max 10154961 ns; 0 blocks decompressed
+== ctbgen walk zstd
+probebench dtm walk: 134 materials, 163437148 slots, 1 threads, 1000000 probes each, cache 65536 blocks (256 MB)
+parts (1000000 probes: 25.8102 % captures, 3.4894 % pending captures, 1.7094 % without moves):
+  capture test: 12.329 ns per probe (sum 258102)
+  capture test + quiet-move test: 61.8345 ns per probe (sum 948012)
+  full move list: 104.771 ns per probe (sum 3314750)
+  index (mirror, material, rank): 40.5086 ns per probe (sum 495547)
+  index + read: 126.07 ns per probe (sum 504396)
+  whole probe (pwdl): 269.481 ns per probe (sum 1233302)
+  no capture for either side: 67.2829 %; only the other side could capture: 6.9069 % (of which stored now: 6.1357 %); quiet for both but a pending capture (not stored now): 2.7358 %
+  two capture tests (both sides): 18.75 ns per probe (sum 327171)
+  resolving the 327171 positions where a side could capture, by search down to positions where neither can: 4.03949 nodes on average, 755 at most, deepest 30 plies, 3 gave up (30 plies or 200000 nodes), 0 wrong
+  quiet probe (pwdl_quiet) on the 689910 stored positions: 97.4182 ns per probe; 0 differ from pwdl (sum 811074)
+wdl   cold: 2952641 probes/s, mean 304 ns, p50 227, p90 502, p99 1362, p99.9 4895, max 65036 ns; 0 blocks decompressed
+wdl   warm: 2882596 probes/s, mean 314 ns, p50 236, p90 521, p99 1397, p99.9 5147, max 105626 ns; 0 blocks decompressed
+depth cold: 566432 probes/s, mean 1729 ns, p50 523, p90 3051, p99 23364, p99.9 63147, max 2594203 ns; 28475 blocks decompressed
+depth warm: 773120 probes/s, mean 1259 ns, p50 474, p90 2572, p99 13270, p99.9 39010, max 351661 ns; 0 blocks decompressed
+== ctbgen walk zstd, 4 MB cache
+probebench dtm walk: 134 materials, 163437148 slots, 1 threads, 1000000 probes each, cache 1024 blocks (4 MB)
+parts (1000000 probes: 25.8102 % captures, 3.4894 % pending captures, 1.7094 % without moves):
+  capture test: 12.5668 ns per probe (sum 258102)
+  capture test + quiet-move test: 68.3229 ns per probe (sum 948012)
+  full move list: 113.816 ns per probe (sum 3314750)
+  index (mirror, material, rank): 39.5089 ns per probe (sum 495547)
+  index + read: 733.791 ns per probe (sum 504396)
+  whole probe (pwdl): 825.02 ns per probe (sum 1233302)
+  no capture for either side: 67.2829 %; only the other side could capture: 6.9069 % (of which stored now: 6.1357 %); quiet for both but a pending capture (not stored now): 2.7358 %
+  two capture tests (both sides): 20.0456 ns per probe (sum 327171)
+  resolving the 327171 positions where a side could capture, by search down to positions where neither can: 4.03949 nodes on average, 755 at most, deepest 30 plies, 3 gave up (30 plies or 200000 nodes), 0 wrong
+  quiet probe (pwdl_quiet) on the 689910 stored positions: 735.795 ns per probe; 0 differ from pwdl (sum 811074)
+wdl   cold: 1151671 probes/s, mean 832 ns, p50 221, p90 1526, p99 10492, p99.9 21670, max 547584 ns; 130791 blocks decompressed
+wdl   warm: 1216458 probes/s, mean 787 ns, p50 212, p90 1444, p99 9934, p99.9 20265, max 431489 ns; 130757 blocks decompressed
+depth cold: 194430 probes/s, mean 5102 ns, p50 549, p90 11577, p99 82960, p99.9 230083, max 12572012 ns; 560469 blocks decompressed
+depth warm: 196010 probes/s, mean 5060 ns, p50 544, p90 11519, p99 82709, p99.9 230583, max 1922934 ns; 560414 blocks decompressed
+== ctbgen walk page
+probebench dtm walk: 134 materials, 163437148 slots, 1 threads, 1000000 probes each, cache 65536 blocks (256 MB)
+parts (1000000 probes: 25.8102 % captures, 3.4894 % pending captures, 1.7094 % without moves):
+  capture test: 11.6471 ns per probe (sum 258102)
+  capture test + quiet-move test: 61.4241 ns per probe (sum 948012)
+  full move list: 111.219 ns per probe (sum 3314750)
+  index (mirror, material, rank): 40.6399 ns per probe (sum 495547)
+  index + read: 245.942 ns per probe (sum 504396)
+  whole probe (pwdl): 375.017 ns per probe (sum 1233302)
+  no capture for either side: 67.2829 %; only the other side could capture: 6.9069 % (of which stored now: 6.1357 %); quiet for both but a pending capture (not stored now): 2.7358 %
+  two capture tests (both sides): 19.3518 ns per probe (sum 327171)
+  resolving the 327171 positions where a side could capture, by search down to positions where neither can: 4.03949 nodes on average, 755 at most, deepest 30 plies, 3 gave up (30 plies or 200000 nodes), 0 wrong
+  quiet probe (pwdl_quiet) on the 689910 stored positions: 247.792 ns per probe; 0 differ from pwdl (sum 811074)
+wdl   cold: 2324803 probes/s, mean 393 ns, p50 298, p90 633, p99 1609, p99.9 6268, max 148293 ns; 0 blocks decompressed
+wdl   warm: 2193026 probes/s, mean 420 ns, p50 314, p90 669, p99 1752, p99.9 6665, max 4020127 ns; 0 blocks decompressed
+depth cold: 384199 probes/s, mean 2559 ns, p50 777, p90 5470, p99 27945, p99.9 82700, max 833919 ns; 0 blocks decompressed
+depth warm: 372159 probes/s, mean 2647 ns, p50 799, p90 5590, p99 28871, p99.9 88514, max 4027229 ns; 0 blocks decompressed
+== ctbgen walk page12
+probebench dtm walk: 134 materials, 163437148 slots, 1 threads, 1000000 probes each, cache 65536 blocks (256 MB)
+parts (1000000 probes: 25.8102 % captures, 3.4894 % pending captures, 1.7094 % without moves):
+  capture test: 12.8595 ns per probe (sum 258102)
+  capture test + quiet-move test: 65.4074 ns per probe (sum 948012)
+  full move list: 124.549 ns per probe (sum 3314750)
+  index (mirror, material, rank): 44.7994 ns per probe (sum 495547)
+  index + read: 303.58 ns per probe (sum 504396)
+  whole probe (pwdl): 377.132 ns per probe (sum 1233302)
+  no capture for either side: 67.2829 %; only the other side could capture: 6.9069 % (of which stored now: 6.1357 %); quiet for both but a pending capture (not stored now): 2.7358 %
+  two capture tests (both sides): 19.3368 ns per probe (sum 327171)
+  resolving the 327171 positions where a side could capture, by search down to positions where neither can: 4.03949 nodes on average, 755 at most, deepest 30 plies, 3 gave up (30 plies or 200000 nodes), 0 wrong
+  quiet probe (pwdl_quiet) on the 689910 stored positions: 236.889 ns per probe; 0 differ from pwdl (sum 811074)
+wdl   cold: 2095428 probes/s, mean 439 ns, p50 325, p90 711, p99 1843, p99.9 7512, max 169636 ns; 0 blocks decompressed
+wdl   warm: 2139301 probes/s, mean 432 ns, p50 322, p90 693, p99 1798, p99.9 7325, max 170648 ns; 0 blocks decompressed
+depth cold: 449474 probes/s, mean 2187 ns, p50 715, p90 4544, p99 24087, p99.9 71471, max 1959679 ns; 0 blocks decompressed
+depth warm: 458307 probes/s, mean 2144 ns, p50 705, p90 4446, p99 23417, p99.9 69449, max 1992568 ns; 0 blocks decompressed
+== ctbgen walk pageh
+probebench dtm walk: 134 materials, 163437148 slots, 1 threads, 1000000 probes each, cache 65536 blocks (256 MB)
+parts (1000000 probes: 25.8102 % captures, 3.4894 % pending captures, 1.7094 % without moves):
+  capture test: 12.2577 ns per probe (sum 258102)
+  capture test + quiet-move test: 66.8421 ns per probe (sum 948012)
+  full move list: 111.181 ns per probe (sum 3314750)
+  index (mirror, material, rank): 41.092 ns per probe (sum 495547)
+  index + read: 319.039 ns per probe (sum 504396)
+  whole probe (pwdl): 462.87 ns per probe (sum 1233302)
+  no capture for either side: 67.2829 %; only the other side could capture: 6.9069 % (of which stored now: 6.1357 %); quiet for both but a pending capture (not stored now): 2.7358 %
+  two capture tests (both sides): 19.1369 ns per probe (sum 327171)
+  resolving the 327171 positions where a side could capture, by search down to positions where neither can: 4.03949 nodes on average, 755 at most, deepest 30 plies, 3 gave up (30 plies or 200000 nodes), 0 wrong
+  quiet probe (pwdl_quiet) on the 689910 stored positions: 339.185 ns per probe; 0 differ from pwdl (sum 811074)
+wdl   cold: 1877488 probes/s, mean 495 ns, p50 341, p90 932, p99 2088, p99.9 9566, max 774306 ns; 0 blocks decompressed
+wdl   warm: 1819676 probes/s, mean 515 ns, p50 346, p90 938, p99 2113, p99.9 9065, max 4027553 ns; 0 blocks decompressed
+depth cold: 310256 probes/s, mean 3184 ns, p50 934, p90 6593, p99 35169, p99.9 111033, max 4115053 ns; 0 blocks decompressed
+depth warm: 329233 probes/s, mean 2999 ns, p50 906, p90 6369, p99 33157, p99.9 102132, max 4167012 ns; 0 blocks decompressed
+== itbgen uniform zstd
+probebench dtm uniform: 134 materials, 163437148 slots, 1 threads, 1000000 probes each, cache 65536 blocks (256 MB)
+parts (1000000 probes: 64.9871 % captures, 8.4781 % pending captures, 0.2973 % without moves):
+  capture test: 58.9479 ns per probe (sum 649871)
+  capture test + quiet-move test: 181.035 ns per probe (sum 912246)
+  full move list: 276.43 ns per probe (sum 3811315)
+  index (mirror, material, rank): 61.7904 ns per probe (sum 500585)
+  index + read: 180.776 ns per probe (sum 295598)
+  whole probe (pwdl): 2462.73 ns per probe (sum 1101839)
+  no capture for either side: 13.7644 %; only the other side could capture: 21.2485 % (of which stored now: 14.0129 %); quiet for both but a pending capture (not stored now): 1.3197 %
+  two capture tests (both sides): 83.0845 ns per probe (sum 862356)
+  resolving the 862356 positions where a side could capture, by search down to positions where neither can: 53.4628 nodes on average, 200189 at most, deepest 30 plies, 464 gave up (30 plies or 200000 nodes), 0 wrong
+  quiet probe (pwdl_quiet) on the 262375 stored positions: 218.674 ns per probe; 0 differ from pwdl (sum 316448)
+wdl   cold: 386204 probes/s, mean 2544 ns, p50 1045, p90 4168, p99 28301, p99.9 95145, max 2826438 ns; 0 blocks decompressed
+wdl   warm: 397062 probes/s, mean 2477 ns, p50 1027, p90 4062, p99 27415, p99.9 90285, max 4028674 ns; 0 blocks decompressed
+depth cold: 71537 probes/s, mean 13932 ns, p50 2262, p90 29837, p99 189075, p99.9 586440, max 6077001 ns; 30881 blocks decompressed
+depth warm: 75016 probes/s, mean 13286 ns, p50 2083, p90 28268, p99 182445, p99.9 565287, max 5840613 ns; 0 blocks decompressed
+== itbgen uniform zstd, 4 MB cache
+probebench dtm uniform: 134 materials, 163437148 slots, 1 threads, 1000000 probes each, cache 1024 blocks (4 MB)
+parts (1000000 probes: 64.9871 % captures, 8.4781 % pending captures, 0.2973 % without moves):
+  capture test: 53.2781 ns per probe (sum 649871)
+  capture test + quiet-move test: 169.055 ns per probe (sum 912246)
+  full move list: 267.734 ns per probe (sum 3811315)
+  index (mirror, material, rank): 63.3307 ns per probe (sum 500585)
+  index + read: 4803.18 ns per probe (sum 295598)
+  whole probe (pwdl): 6264.81 ns per probe (sum 1101839)
+  no capture for either side: 13.7644 %; only the other side could capture: 21.2485 % (of which stored now: 14.0129 %); quiet for both but a pending capture (not stored now): 1.3197 %
+  two capture tests (both sides): 72.5886 ns per probe (sum 862356)
+  resolving the 862356 positions where a side could capture, by search down to positions where neither can: 53.4628 nodes on average, 200189 at most, deepest 30 plies, 464 gave up (30 plies or 200000 nodes), 0 wrong
+  quiet probe (pwdl_quiet) on the 262375 stored positions: 4393.81 ns per probe; 0 differ from pwdl (sum 316448)
+wdl   cold: 156983 probes/s, mean 6320 ns, p50 2613, p90 12118, p99 50702, p99.9 128537, max 4032931 ns; 658272 blocks decompressed
+wdl   warm: 156385 probes/s, mean 6350 ns, p50 2618, p90 12113, p99 50493, p99.9 127927, max 16576961 ns; 658052 blocks decompressed
+depth cold: 29513 probes/s, mean 33829 ns, p50 11280, p90 85429, p99 334779, p99.9 802796, max 35699804 ns; 2949783 blocks decompressed
+depth warm: 29694 probes/s, mean 33624 ns, p50 11187, p90 84983, p99 335212, p99.9 803516, max 9197524 ns; 2949687 blocks decompressed
+== itbgen uniform page
+probebench dtm uniform: 134 materials, 163437148 slots, 1 threads, 1000000 probes each, cache 65536 blocks (256 MB)
+parts (1000000 probes: 64.9871 % captures, 8.4781 % pending captures, 0.2973 % without moves):
+  capture test: 55.9352 ns per probe (sum 649871)
+  capture test + quiet-move test: 171.569 ns per probe (sum 912246)
+  full move list: 272.57 ns per probe (sum 3811315)
+  index (mirror, material, rank): 64.5643 ns per probe (sum 500585)
+  index + read: 431.109 ns per probe (sum 295598)
+  whole probe (pwdl): 2870.46 ns per probe (sum 1101839)
+  no capture for either side: 13.7644 %; only the other side could capture: 21.2485 % (of which stored now: 14.0129 %); quiet for both but a pending capture (not stored now): 1.3197 %
+  two capture tests (both sides): 102.64 ns per probe (sum 862356)
+  resolving the 862356 positions where a side could capture, by search down to positions where neither can: 53.4628 nodes on average, 200189 at most, deepest 30 plies, 464 gave up (30 plies or 200000 nodes), 0 wrong
+  quiet probe (pwdl_quiet) on the 262375 stored positions: 525.676 ns per probe; 0 differ from pwdl (sum 316448)
+wdl   cold: 317429 probes/s, mean 3104 ns, p50 1336, p90 5035, p99 33906, p99.9 113216, max 1789651 ns; 0 blocks decompressed
+wdl   warm: 297573 probes/s, mean 3301 ns, p50 1408, p90 5221, p99 35307, p99.9 120289, max 18262327 ns; 0 blocks decompressed
+depth cold: 48516 probes/s, mean 20565 ns, p50 3505, p90 44663, p99 272952, p99.9 826451, max 9097505 ns; 0 blocks decompressed
+depth warm: 46777 probes/s, mean 21330 ns, p50 3629, p90 46289, p99 283038, p99.9 879529, max 9604396 ns; 0 blocks decompressed
+== itbgen uniform page12
+probebench dtm uniform: 134 materials, 163437148 slots, 1 threads, 1000000 probes each, cache 65536 blocks (256 MB)
+parts (1000000 probes: 64.9871 % captures, 8.4781 % pending captures, 0.2973 % without moves):
+  capture test: 57.3187 ns per probe (sum 649871)
+  capture test + quiet-move test: 174.792 ns per probe (sum 912246)
+  full move list: 285.187 ns per probe (sum 3811315)
+  index (mirror, material, rank): 62.719 ns per probe (sum 500585)
+  index + read: 451.527 ns per probe (sum 295598)
+  whole probe (pwdl): 2962.43 ns per probe (sum 1101839)
+  no capture for either side: 13.7644 %; only the other side could capture: 21.2485 % (of which stored now: 14.0129 %); quiet for both but a pending capture (not stored now): 1.3197 %
+  two capture tests (both sides): 73.9449 ns per probe (sum 862356)
+  resolving the 862356 positions where a side could capture, by search down to positions where neither can: 53.4628 nodes on average, 200189 at most, deepest 30 plies, 464 gave up (30 plies or 200000 nodes), 0 wrong
+  quiet probe (pwdl_quiet) on the 262375 stored positions: 436.224 ns per probe; 0 differ from pwdl (sum 316448)
+wdl   cold: 336997 probes/s, mean 2927 ns, p50 1279, p90 4732, p99 31770, p99.9 103242, max 2219225 ns; 0 blocks decompressed
+wdl   warm: 312174 probes/s, mean 3163 ns, p50 1378, p90 5098, p99 34470, p99.9 115123, max 1309311 ns; 0 blocks decompressed
+depth cold: 54538 probes/s, mean 18291 ns, p50 3150, p90 39429, p99 243444, p99.9 752792, max 8687510 ns; 0 blocks decompressed
+depth warm: 54092 probes/s, mean 18442 ns, p50 3140, p90 39680, p99 245257, p99.9 771533, max 7160499 ns; 0 blocks decompressed
+== itbgen uniform pageh
+probebench dtm uniform: 134 materials, 163437148 slots, 1 threads, 1000000 probes each, cache 65536 blocks (256 MB)
+parts (1000000 probes: 64.9871 % captures, 8.4781 % pending captures, 0.2973 % without moves):
+  capture test: 56.4709 ns per probe (sum 649871)
+  capture test + quiet-move test: 195.177 ns per probe (sum 912246)
+  full move list: 278.059 ns per probe (sum 3811315)
+  index (mirror, material, rank): 65.7538 ns per probe (sum 500585)
+  index + read: 717.057 ns per probe (sum 295598)
+  whole probe (pwdl): 3768.85 ns per probe (sum 1101839)
+  no capture for either side: 13.7644 %; only the other side could capture: 21.2485 % (of which stored now: 14.0129 %); quiet for both but a pending capture (not stored now): 1.3197 %
+  two capture tests (both sides): 72.9484 ns per probe (sum 862356)
+  resolving the 862356 positions where a side could capture, by search down to positions where neither can: 53.4628 nodes on average, 200189 at most, deepest 30 plies, 464 gave up (30 plies or 200000 nodes), 0 wrong
+  quiet probe (pwdl_quiet) on the 262375 stored positions: 679.206 ns per probe; 0 differ from pwdl (sum 316448)
+wdl   cold: 272133 probes/s, mean 3626 ns, p50 1618, p90 5929, p99 38726, p99.9 130254, max 3253475 ns; 0 blocks decompressed
+wdl   warm: 285093 probes/s, mean 3468 ns, p50 1566, p90 5732, p99 37200, p99.9 120868, max 2430180 ns; 0 blocks decompressed
+depth cold: 43776 probes/s, mean 22791 ns, p50 3833, p90 50448, p99 299812, p99.9 899859, max 9096751 ns; 0 blocks decompressed
+depth warm: 43543 probes/s, mean 22919 ns, p50 3852, p90 50647, p99 300101, p99.9 890629, max 16347531 ns; 0 blocks decompressed
+== itbgen walk zstd
+probebench dtm walk: 134 materials, 163437148 slots, 1 threads, 1000000 probes each, cache 65536 blocks (256 MB)
+parts (1000000 probes: 37.3032 % captures, 4.3033 % pending captures, 3.3633 % without moves):
+  capture test: 34.5713 ns per probe (sum 373032)
+  capture test + quiet-move test: 126.718 ns per probe (sum 923334)
+  full move list: 142.501 ns per probe (sum 4321061)
+  index (mirror, material, rank): 35.8266 ns per probe (sum 485333)
+  index + read: 129.122 ns per probe (sum 308778)
+  whole probe (pwdl): 506.452 ns per probe (sum 845682)
+  no capture for either side: 55.8474 %; only the other side could capture: 6.8494 % (of which stored now: 5.8625 %); quiet for both but a pending capture (not stored now): 3.3321 %
+  two capture tests (both sides): 74.2331 ns per probe (sum 441526)
+  resolving the 441526 positions where a side could capture, by search down to positions where neither can: 14.5234 nodes on average, 120651 at most, deepest 30 plies, 66 gave up (30 plies or 200000 nodes), 0 wrong
+  quiet probe (pwdl_quiet) on the 550302 stored positions: 86.7317 ns per probe; 0 differ from pwdl (sum 366243)
+wdl   cold: 1657435 probes/s, mean 568 ns, p50 327, p90 902, p99 4139, p99.9 20612, max 458632 ns; 0 blocks decompressed
+wdl   warm: 1482519 probes/s, mean 638 ns, p50 369, p90 1020, p99 4747, p99.9 23134, max 992846 ns; 0 blocks decompressed
+depth cold: 393655 probes/s, mean 2504 ns, p50 419, p90 3725, p99 38610, p99.9 175587, max 2185715 ns; 13740 blocks decompressed
+depth warm: 433549 probes/s, mean 2271 ns, p50 401, p90 3417, p99 33881, p99.9 162297, max 1696550 ns; 0 blocks decompressed
+== itbgen walk zstd, 4 MB cache
+probebench dtm walk: 134 materials, 163437148 slots, 1 threads, 1000000 probes each, cache 1024 blocks (4 MB)
+parts (1000000 probes: 37.3032 % captures, 4.3033 % pending captures, 3.3633 % without moves):
+  capture test: 35.0334 ns per probe (sum 373032)
+  capture test + quiet-move test: 138.71 ns per probe (sum 923334)
+  full move list: 158.58 ns per probe (sum 4321061)
+  index (mirror, material, rank): 37.3728 ns per probe (sum 485333)
+  index + read: 693.085 ns per probe (sum 308778)
+  whole probe (pwdl): 995.127 ns per probe (sum 845682)
+  no capture for either side: 55.8474 %; only the other side could capture: 6.8494 % (of which stored now: 5.8625 %); quiet for both but a pending capture (not stored now): 3.3321 %
+  two capture tests (both sides): 67.9412 ns per probe (sum 441526)
+  resolving the 441526 positions where a side could capture, by search down to positions where neither can: 14.5234 nodes on average, 120651 at most, deepest 30 plies, 66 gave up (30 plies or 200000 nodes), 0 wrong
+  quiet probe (pwdl_quiet) on the 550302 stored positions: 722.272 ns per probe; 0 differ from pwdl (sum 366243)
+wdl   cold: 954901 probes/s, mean 1009 ns, p50 351, p90 1517, p99 11461, p99.9 34867, max 6686703 ns; 67151 blocks decompressed
+wdl   warm: 944042 probes/s, mean 1023 ns, p50 361, p90 1558, p99 11755, p99.9 35229, max 1827287 ns; 67119 blocks decompressed
+depth cold: 237171 probes/s, mean 4178 ns, p50 442, p90 6819, p99 70682, p99.9 284676, max 14268463 ns; 231805 blocks decompressed
+depth warm: 249932 probes/s, mean 3958 ns, p50 419, p90 6527, p99 67333, p99.9 272340, max 4928673 ns; 231723 blocks decompressed
+== itbgen walk page
+probebench dtm walk: 134 materials, 163437148 slots, 1 threads, 1000000 probes each, cache 65536 blocks (256 MB)
+parts (1000000 probes: 37.3032 % captures, 4.3033 % pending captures, 3.3633 % without moves):
+  capture test: 34.7922 ns per probe (sum 373032)
+  capture test + quiet-move test: 129.612 ns per probe (sum 923334)
+  full move list: 174.981 ns per probe (sum 4321061)
+  index (mirror, material, rank): 39.5 ns per probe (sum 485333)
+  index + read: 235.226 ns per probe (sum 308778)
+  whole probe (pwdl): 640.599 ns per probe (sum 845682)
+  no capture for either side: 55.8474 %; only the other side could capture: 6.8494 % (of which stored now: 5.8625 %); quiet for both but a pending capture (not stored now): 3.3321 %
+  two capture tests (both sides): 64.9121 ns per probe (sum 441526)
+  resolving the 441526 positions where a side could capture, by search down to positions where neither can: 14.5234 nodes on average, 120651 at most, deepest 30 plies, 66 gave up (30 plies or 200000 nodes), 0 wrong
+  quiet probe (pwdl_quiet) on the 550302 stored positions: 235.566 ns per probe; 0 differ from pwdl (sum 366243)
+wdl   cold: 1332901 probes/s, mean 710 ns, p50 415, p90 1126, p99 4974, p99.9 25682, max 3264008 ns; 0 blocks decompressed
+wdl   warm: 1417513 probes/s, mean 672 ns, p50 400, p90 1067, p99 4663, p99.9 23178, max 4349585 ns; 0 blocks decompressed
+depth cold: 288237 probes/s, mean 3432 ns, p50 530, p90 5490, p99 52031, p99.9 243040, max 2813265 ns; 0 blocks decompressed
+depth warm: 282567 probes/s, mean 3500 ns, p50 534, p90 5547, p99 53128, p99.9 245312, max 4039776 ns; 0 blocks decompressed
+== itbgen walk page12
+probebench dtm walk: 134 materials, 163437148 slots, 1 threads, 1000000 probes each, cache 65536 blocks (256 MB)
+parts (1000000 probes: 37.3032 % captures, 4.3033 % pending captures, 3.3633 % without moves):
+  capture test: 34.5745 ns per probe (sum 373032)
+  capture test + quiet-move test: 130.387 ns per probe (sum 923334)
+  full move list: 161.569 ns per probe (sum 4321061)
+  index (mirror, material, rank): 39.1593 ns per probe (sum 485333)
+  index + read: 240.974 ns per probe (sum 308778)
+  whole probe (pwdl): 739.836 ns per probe (sum 845682)
+  no capture for either side: 55.8474 %; only the other side could capture: 6.8494 % (of which stored now: 5.8625 %); quiet for both but a pending capture (not stored now): 3.3321 %
+  two capture tests (both sides): 67.4802 ns per probe (sum 441526)
+  resolving the 441526 positions where a side could capture, by search down to positions where neither can: 14.5234 nodes on average, 120651 at most, deepest 30 plies, 66 gave up (30 plies or 200000 nodes), 0 wrong
+  quiet probe (pwdl_quiet) on the 550302 stored positions: 225.946 ns per probe; 0 differ from pwdl (sum 366243)
+wdl   cold: 1428275 probes/s, mean 665 ns, p50 397, p90 1067, p99 4660, p99.9 22866, max 639021 ns; 0 blocks decompressed
+wdl   warm: 1371069 probes/s, mean 695 ns, p50 413, p90 1112, p99 4886, p99.9 24564, max 481639 ns; 0 blocks decompressed
+depth cold: 328727 probes/s, mean 3005 ns, p50 493, p90 4676, p99 45143, p99.9 210444, max 2462213 ns; 0 blocks decompressed
+depth warm: 309121 probes/s, mean 3197 ns, p50 523, p90 4927, p99 47921, p99.9 228803, max 2926638 ns; 0 blocks decompressed
+== itbgen walk pageh
+probebench dtm walk: 134 materials, 163437148 slots, 1 threads, 1000000 probes each, cache 65536 blocks (256 MB)
+parts (1000000 probes: 37.3032 % captures, 4.3033 % pending captures, 3.3633 % without moves):
+  capture test: 45.5001 ns per probe (sum 373032)
+  capture test + quiet-move test: 124.817 ns per probe (sum 923334)
+  full move list: 152.872 ns per probe (sum 4321061)
+  index (mirror, material, rank): 34.8686 ns per probe (sum 485333)
+  index + read: 337.283 ns per probe (sum 308778)
+  whole probe (pwdl): 780.827 ns per probe (sum 845682)
+  no capture for either side: 55.8474 %; only the other side could capture: 6.8494 % (of which stored now: 5.8625 %); quiet for both but a pending capture (not stored now): 3.3321 %
+  two capture tests (both sides): 63.8308 ns per probe (sum 441526)
+  resolving the 441526 positions where a side could capture, by search down to positions where neither can: 14.5234 nodes on average, 120651 at most, deepest 30 plies, 66 gave up (30 plies or 200000 nodes), 0 wrong
+  quiet probe (pwdl_quiet) on the 550302 stored positions: 373.441 ns per probe; 0 differ from pwdl (sum 366243)
+wdl   cold: 1043528 probes/s, mean 919 ns, p50 522, p90 1559, p99 6433, p99.9 32200, max 848635 ns; 0 blocks decompressed
+wdl   warm: 1096842 probes/s, mean 876 ns, p50 499, p90 1488, p99 6101, p99.9 30756, max 1520016 ns; 0 blocks decompressed
+depth cold: 248837 probes/s, mean 3983 ns, p50 619, p90 6302, p99 61076, p99.9 279765, max 2827223 ns; 0 blocks decompressed
+depth warm: 246753 probes/s, mean 4015 ns, p50 623, p90 6377, p99 61414, p99.9 284103, max 3071989 ns; 0 blocks decompressed

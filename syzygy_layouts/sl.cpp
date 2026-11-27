@@ -127,7 +127,7 @@ Stats convert_one(Source const& S, Variant const& V, std::string const& prefix, 
         };
         Stats const a = run(D12, false, prefix + ".w12"), b = run(D10, true, prefix + ".w10");
         bool const ten = b.total() < a.total();
-        for (char const* ext : { ".dat", ".pri", ".org", ".sub", ".gra", ".man" }) {
+        for (char const* ext : { ".dat", ".pri", ".top", ".sub", ".gra", ".man" }) {
                 std::filesystem::rename(prefix + (ten ? ".w10" : ".w12") + ext, prefix + ext);
                 std::filesystem::remove(prefix + (ten ? ".w12" : ".w10") + ext);
         }
@@ -154,7 +154,7 @@ int pieces_of(char const* name) { int n = 0; for (char const* c = name; *c; ++c)
 int info(char const* tbdir)
 {
         int const n = open_tables(tbdir);
-        std::cout << "variant,table,subtable,pieces,tb_size,const,line_bytes,code_bits,symbols,codes,coded_bytes,padding_bytes,index_bytes,grammar_bytes,total_bytes,pages,header3,header4,subdivisions\n";
+        std::cout << "variant,table,subtable,pieces,tb_size,const,line_bytes,code_bits,symbols,codes,coded_bytes,padding_bytes,index_bytes,grammar_bytes,total_bytes,pages,header3,header4,split_symbols\n";
         for (int i = 0; i < n; ++i) {
                 SlSub const& s = *sl_sub(i);
                 std::uint64_t data, index, sizes, grammar, subst = 0;
@@ -197,11 +197,11 @@ int convert_all(char const* tbdir, std::string const& outdir, std::string const&
                 std::ostringstream o;
                 o << vname << ',' << s.name << ',' << s.k << ',' << pieces_of(s.name) << ',' << s.tb_size << ',' << s.is_const << ',' << (s.is_const ? "0" : get("line_bytes")) << ','
                   << (s.is_const ? "0" : get("code_bits")) << ',' << get("symbols") << ',' << st.symbols << ',' << (st.code_bits + 7) / 8 << ',' << (s.is_const ? 0 : st.padding()) << ','
-                  << st.index() << ',' << st.grammar << ',' << st.total() << ',' << st.pages << ',' << st.hdr3 << ',' << st.hdr4 << ',' << st.subdivisions << "\n";
+                  << st.index() << ',' << st.grammar << ',' << st.total() << ',' << st.pages << ',' << st.hdr3 << ',' << st.hdr4 << ',' << st.split_symbols << "\n";
                 rows[std::size_t(i)] = o.str();
         });
         std::ofstream csv(outdir + "/" + vname + "/sizes.csv");
-        csv << "variant,table,subtable,pieces,tb_size,const,line_bytes,code_bits,symbols,codes,coded_bytes,padding_bytes,index_bytes,grammar_bytes,total_bytes,pages,header3,header4,subdivisions\n";
+        csv << "variant,table,subtable,pieces,tb_size,const,line_bytes,code_bits,symbols,codes,coded_bytes,padding_bytes,index_bytes,grammar_bytes,total_bytes,pages,header3,header4,split_symbols\n";
         for (auto const& r : rows) csv << r;
         std::cerr << "convert " << vname << ": " << n << " sub-tables, " << seconds_since(t0) << " s" << std::endl;
         return 0;

@@ -9,16 +9,17 @@
 // is stored as
 //   <p>.dat   pages of 4,096 bytes (layout.hpp)
 //   <p>.pri   u64 per page: its first position
-//   <p>.top   u64 per 1,024 pages: top[k] = pri[1024 k]
+//   <p>.top   u64 per 512 pages: top[k] = pri[512 k] (512 entries of pri are 4 KiB: the search in pri stays in one page)
 //   <p>.gra   u32 symbols, then 3 bytes per symbol (two 12-bit children; a terminal: its value and 0xfff), as in the
 //             Syzygy files
 //   <p>.huf   Huffman codes only: shortest and longest code, then per length the first symbol and the first code
 //   <p>.man   the manifest, "key value" lines
-// A lookup of index x: the page by a binary search over top and then over the 1,024 entries of pri it points at; the
+// A lookup of index x: the page by a binary search over top and then over the 512 entries of pri it points at; the
 // line from the page header; the symbol by adding symbol lengths along the line; the
 // value by walking down the symbol's rules.
 
 #include "layout.hpp"
+#include <xstd/ints/memory.hpp>      // align_up
 #include <fcntl.h>
 #include <immintrin.h>
 #include <sys/mman.h>
@@ -157,7 +158,7 @@ inline std::uint8_t const* map_file(std::string const& path, std::size_t& size, 
         struct stat st;
         ::fstat(fd, &st);
         size = std::size_t(st.st_size);
-        std::size_t const span = (size + 4095) / 4096 * 4096 + 4096;
+        std::size_t const span = xstd::align_up(size, 4096) + 4096;
         void* const m = ::mmap(nullptr, span, PROT_READ, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
         if (m == MAP_FAILED) { std::fprintf(stderr, "mmap failed\n"); std::exit(1); }
         if (size && ::mmap(m, size, PROT_READ, MAP_PRIVATE | MAP_FIXED, fd, 0) == MAP_FAILED) { std::fprintf(stderr, "mmap failed %s\n", path.c_str()); std::exit(1); }
@@ -200,7 +201,7 @@ struct Table {
         Manifest man;
 };
 
-constexpr std::size_t TOP = 1024;
+constexpr std::size_t TOP = 512;
 
 // the page of index x; t: x's position within the page (below 2^31)
 inline std::uint8_t const* find_page(Table const& T, std::size_t x, std::uint32_t& t)

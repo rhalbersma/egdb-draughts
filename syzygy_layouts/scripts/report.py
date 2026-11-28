@@ -44,7 +44,7 @@ if sizes:
     small = {(r['table'], r['subtable']) for r in a if r['const'] == '0' and int(r['total_bytes']) < 4096}
     if small: size_table('Only the %d sub-tables below 4 KiB in the Syzygy file (each takes at least one page here)' % len(small), lambda r: (r['table'], r['subtable']) in small)
     print('### Details\n')
-    print('| Variant | Codes | Pages | Lines of 64 / 32 / 16 bytes (sub-tables) | Pages with 3 / 4 header lines | Symbols split at subdivisions (a: at his block ends) |')
+    print('| Variant | Codes | Pages | Lines of 64 / 32 / 16 bytes (sub-tables) | Pages with 3 / 4 header lines | Symbols written as their children (a: cut at his block ends) |')
     print('|---|---|---|---|---|---|')
     for v in variants:
         r = sizes[v]

@@ -16,8 +16,7 @@
 //               or 4 when a page covers too many positions for that
 // Every header ends with the CRC32C of the page (computed with those 4 bytes zero).
 //
-// Positions are cut into subdivisions of 2^SUB_BITS; a page lies within one, and every stored 32-bit number is below
-// 2^31.
+// A page's first position is a 64-bit number in the page index (tables.hpp); positions within a page are below 2^31.
 
 #include <cstddef>
 #include <cstdint>
@@ -27,10 +26,6 @@ namespace sl {
 static_assert(sizeof(std::size_t) == 8, "the arithmetic is in size_t and needs 64 bits");
 
 enum class Header { counts16, totals32, eliasfano };
-
-#ifndef SL_SUB_BITS
-#define SL_SUB_BITS 31
-#endif
 
 // the header lines of a page with `lines` lines of c bytes and slots of `slot` bytes: one slot per data line and
 // `meta` more at the end
@@ -47,8 +42,6 @@ struct Layout {
         static constexpr std::size_t C = C_;                    // a line
         static constexpr int W = W_;                            // bits per code; 0: Huffman codes
         static constexpr Header H = H_;
-        static constexpr int SUB_BITS = SL_SUB_BITS;
-        static constexpr std::size_t SUB = std::size_t(1) << SUB_BITS;
         static constexpr std::size_t LINES = B / C;
         // codes of W bits in a line: the last byte of the line is their number
         static constexpr std::size_t CODES = W ? (8 * C - 8) / std::size_t(W) : 0;
@@ -61,7 +54,6 @@ struct Layout {
 
         static_assert(B % C == 0 && C % 16 == 0 && C <= 64);
         static_assert(W == 0 || W == 10 || W == 12);
-        static_assert(SUB_BITS >= 12 && SUB_BITS <= 31, "positions relative to a subdivision are stored in 32 bits, below 2^31");
         static_assert(HDR_LINES < LINES);
 };
 

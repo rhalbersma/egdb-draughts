@@ -12,7 +12,7 @@ if has convert; then
   for v in $VARIANTS; do $SL convert $TB $OUT $v; cp $OUT/$v/sizes.csv $RES/sizes_$v.csv; done
 fi
 if has check; then
-  for v in $VARIANTS; do $SL check $TB $OUT $v | tee -a $RES/check.txt; $WORK/sl_sub17 convert $TB $OUT.sub17 $v 2>/dev/null || true; echo "subdivisions of 2^17: $($WORK/sl_sub17 check $TB $OUT.sub17 $v 100000)" | tee -a $RES/check.txt; rm -rf "${OUT:?}.sub17"; done
+  for v in $VARIANTS; do $SL check $TB $OUT $v | tee -a $RES/check.txt; done
 fi
 if has positions; then
   for s in 1 2 3 4; do python3 $HERE/scripts/positions.py $WORK/pos.$s ${POSITIONS:-1000000} 5 $s $MATERIALS $REACHED & done; wait

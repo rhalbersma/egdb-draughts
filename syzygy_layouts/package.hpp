@@ -11,7 +11,7 @@
 //   header        64 bytes: magic, the number of sub-tables, the size of the front part and its CRC32C, the file size
 //   directory     one entry per sub-table: what it is, how it is coded, where its sections are
 //   grammars      per sub-table: the symbols (and the Huffman code table)
-//   page indexes  per sub-table: sub, top, pri (tables.hpp)
+//   page indexes  per sub-table: top, pri (tables.hpp)
 //   small data    the pages of every sub-table of at most one page, 64-byte aligned
 //   -- the front part ends here: it is small and is read once when the file is opened --
 //   data          the pages of every larger sub-table, each sub-table starting on a 4 KiB boundary of the file
@@ -26,7 +26,7 @@
 
 namespace sl {
 
-constexpr char PACK_MAGIC[8] = { 'E', 'G', 'D', 'B', 'P', 'K', '1', 0 };
+constexpr char PACK_MAGIC[8] = { 'E', 'G', 'D', 'B', 'P', 'K', '2', 0 };
 
 struct PackHeader {
         char magic[8];
@@ -36,7 +36,7 @@ struct PackHeader {
 };
 static_assert(sizeof(PackHeader) == 64);
 
-enum : std::uint32_t { SEC_GRA, SEC_HUF, SEC_SUB, SEC_TOP, SEC_PRI, SEC_DAT, SECTIONS };
+enum : std::uint32_t { SEC_GRA, SEC_HUF, SEC_TOP, SEC_PRI, SEC_DAT, SECTIONS };
 
 struct PackEntry {
         std::uint32_t kind, side;                               // the caller's: e.g. 0 wdl, 1 depth; the side to move
@@ -84,9 +84,8 @@ inline std::vector<std::uint8_t> pack(std::vector<PackItem> const& items, PackSi
         for (std::size_t i = 0; i < items.size(); ++i) {
                 Packed const& p = *items[i].p;
                 if (p.is_const) continue;
-                put(dir[i], SEC_SUB, p.sub.data(), 4 * p.sub.size(), 8);
-                put(dir[i], SEC_TOP, p.top.data(), 4 * p.top.size(), 8);
-                put(dir[i], SEC_PRI, p.pri.data(), 4 * p.pri.size(), 8);
+                put(dir[i], SEC_TOP, p.top.data(), 8 * p.top.size(), 8);
+                put(dir[i], SEC_PRI, p.pri.data(), 8 * p.pri.size(), 8);
         }
         z.index = out.size() - mark; mark = out.size();
         for (std::size_t i = 0; i < items.size(); ++i) {
@@ -145,9 +144,8 @@ inline bool open_package(std::uint8_t const* base, std::size_t size, Package& K,
                         if (e.pages > 1 && e.off[SEC_DAT] % 4096) return fail("data not on a page boundary");
                         P.C = e.line_bytes; P.W = e.code_bits; P.H = Header(e.header); P.positions = e.positions;
                         P.dat = base + e.off[SEC_DAT]; P.n_dat = e.len[SEC_DAT];
-                        P.pri = reinterpret_cast<std::uint32_t const*>(base + e.off[SEC_PRI]); P.n_pri = e.len[SEC_PRI];
-                        P.top = reinterpret_cast<std::uint32_t const*>(base + e.off[SEC_TOP]); P.n_top = e.len[SEC_TOP];
-                        P.sub = reinterpret_cast<std::uint32_t const*>(base + e.off[SEC_SUB]); P.n_sub = e.len[SEC_SUB];
+                        P.pri = reinterpret_cast<std::uint64_t const*>(base + e.off[SEC_PRI]); P.n_pri = e.len[SEC_PRI];
+                        P.top = reinterpret_cast<std::uint64_t const*>(base + e.off[SEC_TOP]); P.n_top = e.len[SEC_TOP];
                         P.gra = base + e.off[SEC_GRA]; P.n_gra = e.len[SEC_GRA];
                         P.huf = base + e.off[SEC_HUF];
                         if (P.W == 0 && e.len[SEC_HUF] < 2) return fail("no code table");

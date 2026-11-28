@@ -234,7 +234,7 @@ Stats convert_one(Source const& S, Variant const& V, std::string const& prefix)
         };
         Stats const a = run(D12, false, prefix + ".w12"), b = run(D10, true, prefix + ".w10");
         bool const ten = b.total() < a.total();
-        for (char const* ext : { ".dat", ".pri", ".top", ".sub", ".gra", ".man" }) {
+        for (char const* ext : { ".dat", ".pri", ".top", ".gra", ".man" }) {
                 std::filesystem::rename(prefix + (ten ? ".w10" : ".w12") + ext, prefix + ext);
                 std::filesystem::remove(prefix + (ten ? ".w12" : ".w10") + ext);
         }

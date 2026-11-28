@@ -4003,6 +4003,76 @@ bool pg_pack(std::string const& dir, int n, ExecutionPolicy const& policy)
         return bad.load() == 0;
 }
 
+// pgorder <dir> n: would another order of the index compress better? The joint index is a product of three digits: the
+// men configuration M (most significant), the white kings Kw and the black kings Kb (least). For each of the six orders
+// of the digits, every sub-table's values are put in that order, its don't-cares (recomputed from the positions) are
+// filled with the previous value in that order, as the probe conversion does, and the grammar and codes are built.
+// Sizes: the codes and the grammar (no page padding). A size experiment only: nothing is written.
+template<class ExecutionPolicy>
+bool pg_order(std::string const& dir, int n, ExecutionPolicy const& policy)
+{
+        g_dir = dir;
+        std::vector<Material> mats;
+        for (Material const m : stored_materials_up_to(n))
+                if (std::filesystem::exists(zpath(probe_path(dir, m, "wdl", 0))) && std::filesystem::exists(zpath(probe_path(dir, m, "wdl", 1)))) mats.push_back(m);
+        for (Material const m : mats) mat_index(m).size;
+        std::uint32_t const maxlen = std::getenv("EGDB_PG_MAXLEN") ? std::uint32_t(std::atoll(std::getenv("EGDB_PG_MAXLEN"))) : 4096;
+        static char const* const name[6] = { "M Kw Kb (now)", "M Kb Kw", "Kw M Kb", "Kw Kb M", "Kb M Kw", "Kb Kw M" };
+        static int const perm[6][3] = { { 0, 1, 2 }, { 0, 2, 1 }, { 1, 0, 2 }, { 1, 2, 0 }, { 2, 0, 1 }, { 2, 1, 0 } };     // digits (0 M, 1 Kw, 2 Kb), most significant first
+        std::atomic<std::uint64_t> bytes[2][6]{}, best[2]{}, wins[2][6]{}, refill_differs{ 0 }, dcs[2]{}, slots[2]{};
+        auto const t0 = std::chrono::steady_clock::now();
+        std::for_each(policy, mats.begin(), mats.end(), [&](Material const m) {
+                MatIndex const& mi = mat_index(m);
+                std::uint64_t const size = mi.size, radix[3] = { mi.men, mi.nk1, mi.nk2 };
+                for (int side : { 0, 1 }) {
+                        std::vector<std::uint16_t> const w = pg_values(probe_path(dir, m, "wdl", side), size, false);
+                        std::vector<std::uint8_t> dc(size);
+                        for (std::uint64_t i = 0; i < size; ++i) {
+                                Pos p;
+                                if (!mi.pos(i, side, p)) { dc[i] = 1; continue; }
+                                auto const ml = moves(p);
+                                dc[i] = (!ml.empty() && is_capture(*ml.begin())) || pending_capture(ml);
+                        }
+                        bool const has_depth = std::filesystem::exists(zpath(probe_path(dir, m, metric_name(), side)));
+                        std::vector<std::uint16_t> const d = has_depth ? pg_values(probe_path(dir, m, metric_name(), side), size, true) : std::vector<std::uint16_t>{};
+                        for (int kind = 0; kind < (has_depth ? 2 : 1); ++kind) {
+                                std::vector<std::uint16_t> const& v = kind ? d : w;
+                                std::uint64_t sz[6], ndc = 0;
+                                for (int o = 0; o < 6; ++o) {
+                                        std::uint64_t const r0 = radix[perm[o][0]], r1 = radix[perm[o][1]], r2 = radix[perm[o][2]];
+                                        std::vector<std::uint16_t> u(size);
+                                        std::uint16_t prev = kind ? 0 : std::uint16_t(WDL_DRAW);
+                                        std::uint64_t at = 0, digit[3];
+                                        for (std::uint64_t a = 0; a < r0; ++a)
+                                                for (std::uint64_t b = 0; b < r1; ++b)
+                                                        for (std::uint64_t c = 0; c < r2; ++c, ++at) {
+                                                                digit[perm[o][0]] = a; digit[perm[o][1]] = b; digit[perm[o][2]] = c;
+                                                                std::uint64_t const i = (digit[0] * radix[1] + digit[1]) * radix[2] + digit[2];
+                                                                bool const open = dc[i] || (kind && w[i] == WDL_DRAW);
+                                                                if (!open) prev = v[i];
+                                                                u[at] = prev;
+                                                                if (o == 0) { ndc += open; if (u[at] != v[i]) ++refill_differs; }
+                                                        }
+                                        sl::Packed const p = pg_build(u, kind != 0, maxlen, m.name());
+                                        sz[o] = (p.st.code_bits + 7) / 8 + p.st.grammar;
+                                        bytes[kind][o] += sz[o];
+                                }
+                                int const b = int(std::min_element(sz, sz + 6) - sz);
+                                best[kind] += sz[b]; ++wins[kind][b]; dcs[kind] += ndc; slots[kind] += size;
+                        }
+                }
+        });
+        std::cout << "pgorder: " << mats.size() << " materials, " << seconds_since(t0) << " s; refilling in the present order differs from the stored values at " << refill_differs.load() << " slots\n";
+        for (int kind : { 0, 1 }) {
+                std::cout << "  " << (kind ? metric_name() : "wdl") << " (" << (kind ? "Huffman" : "12-bit") << " codes; " << 100.0 * double(dcs[kind].load()) / double(std::max<std::uint64_t>(1, slots[kind].load())) << " % don't-cares): codes and grammar\n";
+                for (int o = 0; o < 6; ++o)
+                        std::cout << "    " << name[o] << ": " << bytes[kind][o].load() << " bytes (" << 100.0 * double(bytes[kind][o].load()) / double(bytes[kind][0].load()) << " %), smallest for " << wins[kind][o].load() << " sub-tables\n";
+                std::cout << "    the smallest order per sub-table: " << best[kind].load() << " bytes (" << 100.0 * double(best[kind].load()) / double(bytes[kind][0].load()) << " %)\n";
+        }
+        std::cout << std::flush;
+        return true;
+}
+
 // probebench: throughput and latency of the prober on the probe files of a store.
 //   uniform   positions drawn uniformly over the slots of all materials (no locality: the worst case for the cache)
 //   walk      random games: from a uniform position, 12 random moves; at every node the position and each of its
@@ -4461,6 +4531,7 @@ int main(int argc, char* argv[])
         if (a.size() == 3 && a[0] == "order") return check_order(a[1], std::stoi(a[2])) ? 0 : 1;
         if (a.size() == 3 && a[0] == "rpconvert") return rp_convert(a[1], std::stoi(a[2]), std::execution::par) ? 0 : 1;
         if (a.size() == 3 && a[0] == "pgconvert") return pg_convert(a[1], std::stoi(a[2]), std::execution::par) ? 0 : 1;
+        if (a.size() == 3 && a[0] == "pgorder") return pg_order(a[1], std::stoi(a[2]), std::execution::par) ? 0 : 1;
         if (a.size() == 3 && a[0] == "pgpack") return pg_pack(a[1], std::stoi(a[2]), std::execution::par) ? 0 : 1;
         // probebench <dir> n <metric> [threads] [probes per thread] [uniform|walk]
         if (a.size() >= 4 && a.size() <= 7 && a[0] == "probebench" && parse_metric(a[3]))

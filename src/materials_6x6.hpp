@@ -3,8 +3,9 @@
 //    (See accompanying file LICENSE_1_0.txt or copy at
 //          http://www.boost.org/LICENSE_1_0.txt)
 
-// Per-material building blocks for 6x6 international draughts, shared by thompson86/thompson86.cpp and
-// syzygy/syzygy.cpp: the metrics (dtm, dtc, dtz) and the moves that end their count, the materials (named
+// Per-material building blocks for 6x6 international draughts (or the board and rules egdb_6x6.cpp was built for:
+// EGDB_WIDTH, EGDB_HEIGHT, EGDB_6X6_CHECKERS; the numbers in the comments are those of 6x6), shared by thompson86/thompson86.cpp and
+// tbgen/tbgen.cpp: the metrics (dtm, dtc, dtz) and the moves that end their count, the materials (named
 // wp-bp-wm-bm) and their index (a product of four colex ranks), bit planes, groups of egdb_6x6 slices solved together
 // and their unmoves, and the list of materials. Included after src/egdb_6x6.cpp (with its main renamed), whose
 // positions, moves, slices and ranks it uses.
@@ -34,13 +35,15 @@
 
 namespace {
 
-// ---------------------------------------------------------------- binomials up to C(32, 32)
+// ---------------------------------------------------------------- binomials up to C(N, N) (at least C(64, 64); the large
+// ones wrap around, but only those with few pieces are used)
 
-std::array<std::array<std::uint64_t, 33>, 33> CC{};
+constexpr std::size_t CC_MAX = std::max(N, 64);
+std::array<std::array<std::uint64_t, CC_MAX + 1>, CC_MAX + 1> CC{};
 
 void init_cc()
 {
-        for (std::size_t n = 0; n <= 32; ++n) {
+        for (std::size_t n = 0; n <= CC_MAX; ++n) {
                 CC[n][0] = 1;
                 for (std::size_t k = 1; k <= n; ++k) CC[n][k] = CC[n - 1][k - 1] + (k <= n - 1 ? CC[n - 1][k] : 0);
         }
@@ -130,7 +133,7 @@ struct Material {
         }
         std::string tree() const                        // its directory, the subdivisions above it: db/np/wp-bp/
         {
-                return std::format("6x6/{:02}/{:02}-{:02}/", pieces(), wp(), bp());
+                return std::format("{}/{:02}/{:02}-{:02}/", board_name(), pieces(), wp(), bp());
         }
         std::string stem() const                        // its files' names in that directory start with wm-bm
         {
@@ -147,8 +150,8 @@ Material material_of(Pos const& p)
         return { int(p.m[0].size()), int(p.k[0].size()), int(p.m[1].size()), int(p.k[1].size()) };
 }
 
-constexpr bitboard DOM_WM = FULL - PROMO_WHITE;    // squares a white man may stand on (15)
-constexpr bitboard DOM_BM = FULL - PROMO_BLACK;    // squares a black man may stand on (15)
+constexpr bitboard DOM_WM = FULL - PROMO_WHITE;    // squares a white man may stand on (15 on 6x6)
+constexpr bitboard DOM_BM = FULL - PROMO_BLACK;    // squares a black man may stand on (15 on 6x6)
 
 // The index of a material's files. Joint (the default): the white men over the 15 squares a white man may stand on, the
 // black men over theirs that the white men leave (an offset per white-men rank), the white kings over the empty
@@ -158,39 +161,110 @@ constexpr bitboard DOM_BM = FULL - PROMO_BLACK;    // squares a black man may st
 #ifndef EGDB_JOINT_INDEX
 #define EGDB_JOINT_INDEX 1
 #endif
+
+// Dual indexing (Lincke), EGDB_DUAL_INDEX: one side to move's positions numbered in the colour-swapped order (black men,
+// then white men over what they leave; black kings, then white kings; the men stay outermost). A move changes only the
+// mover's pieces, so with the Black-to-move positions swapped (1) the successors of a move lie close together (the loss
+// checks), with the White-to-move positions swapped (2) the predecessors of an unmove do (the unmoves); 0: both sides in
+// the material's order. The order holds everywhere a position meets its slot: the cells, the sinks, the build and probe
+// files, so the files stay congruent with the cells and are written as one stream. A format choice: one setting per store
+// (joint index only)
+int const g_dual_index = std::getenv("EGDB_DUAL_INDEX") ? std::atoi(std::getenv("EGDB_DUAL_INDEX")) : 0;
+constexpr bool dual_side_allowed = EGDB_JOINT_INDEX != 0;
+inline bool dual_side(int stm) { return dual_side_allowed && g_dual_index != 0 && stm == 2 - g_dual_index; }
+// The joint index's two parts also number the positions of the groups (whichever index the files use): the men index of
+// a configuration of the men (white men, then black men over what the white men leave) and the king index within it
+// (white kings over the free squares, black kings over what is left). Every configuration of a material leaves the same
+// number of free squares, so it holds the same number K = nk1 nk2 of king placements.
 struct MatIndex {
         Material c;
         std::uint64_t swm, sbm, swk, sbk, size;
-#if EGDB_JOINT_INDEX
-        std::uint64_t nk1 = 0, nk2 = 0, men = 0;
+        std::uint64_t nk1 = 0, nk2 = 0, men = 0;                // king placements (white, black); configurations
         std::vector<std::uint64_t> off;                         // per white-men rank: its first men index
-#endif
+        // the dual order (colours swapped: black men, then white men over what they leave; black kings, then white kings):
+        // per black-men rank its first men index, and the white king placements over what the black kings leave
+        std::vector<std::uint64_t> offd;
+        std::uint64_t nkd2 = 0;
 
         explicit MatIndex(Material m)
         :
-                c(m), swm(CC[15][std::size_t(m.wm)]), sbm(CC[15][std::size_t(m.bm)]), swk(CC[18][std::size_t(m.wk)]),
-                sbk(CC[18][std::size_t(m.bk)]), size(swm * sbm * swk * sbk)
+                c(m), swm(CC[DOM_WM.size()][std::size_t(m.wm)]), sbm(CC[DOM_BM.size()][std::size_t(m.bm)]), swk(CC[N][std::size_t(m.wk)]),
+                sbk(CC[N][std::size_t(m.bk)]), size(swm * sbm * swk * sbk)
         {
-#if EGDB_JOINT_INDEX
-                int const e = 18 - m.wm - m.bm;
-                nk1 = CC[std::size_t(e)][std::size_t(m.wk)];
-                nk2 = CC[std::size_t(e - m.wk)][std::size_t(m.bk)];
+                int const e = N - m.wm - m.bm;
+                if (e >= m.wk + m.bk) {
+                        nk1 = CC[std::size_t(e)][std::size_t(m.wk)];
+                        nk2 = CC[std::size_t(e - m.wk)][std::size_t(m.bk)];
+                }
                 off.resize(swm + 1);
                 for (std::uint64_t r = 0; r < swm; ++r) {
                         off[r] = men;
                         men += CC[(DOM_BM - unrank_in(r, m.wm, DOM_WM)).size()][std::size_t(m.bm)];
                 }
                 off[swm] = men;
+                if (e >= m.wk + m.bk) nkd2 = CC[std::size_t(e - m.bk)][std::size_t(m.wk)];
+                offd.resize(sbm + 1);
+                std::uint64_t md = 0;
+                for (std::uint64_t r = 0; r < sbm; ++r) {
+                        offd[r] = md;
+                        md += CC[(DOM_WM - unrank_in(r, m.bm, DOM_BM)).size()][std::size_t(m.wm)];
+                }
+                offd[sbm] = md;
+#if EGDB_JOINT_INDEX
                 size = men * nk1 * nk2;
 #endif
+        }
+
+        std::uint64_t kings() const { return nk1 * nk2; }      // K: king placements per configuration
+
+        std::uint64_t men_index(bitboard const& wm, bitboard const& bm) const
+        {
+                return off[rank_in(wm, DOM_WM)] + rank_in(bm, DOM_BM - wm);
+        }
+
+        std::uint64_t king_index(Pos const& p) const { return king_index(FULL - p.m[0] - p.m[1], p.k[0], p.k[1]); }
+        std::uint64_t king_index(bitboard const& free, bitboard const& wk, bitboard const& bk) const
+        {
+                return rank_in(wk, free) * nk2 + rank_in(bk, free - wk);
+        }
+
+        // the dual order's men and king indices (the same counts: men configurations, K king placements)
+        std::uint64_t men_index_dual(bitboard const& wm, bitboard const& bm) const
+        {
+                return offd[rank_in(bm, DOM_BM)] + rank_in(wm, DOM_WM - bm);
+        }
+        std::uint64_t king_index_dual(bitboard const& free, bitboard const& wk, bitboard const& bk) const
+        {
+                return rank_in(bk, free) * nkd2 + rank_in(wk, free - bk);
+        }
+        void place_dual(std::uint64_t mi, std::uint64_t ki, int stm, Pos& p) const
+        {
+                std::uint64_t const rb = std::uint64_t(std::ranges::upper_bound(offd, mi) - offd.begin()) - 1;
+                p.stm = stm;
+                p.m[1] = unrank_in(rb, c.bm, DOM_BM);
+                p.m[0] = unrank_in(mi - offd[rb], c.wm, DOM_WM - p.m[1]);
+                bitboard const free = FULL - p.m[0] - p.m[1];
+                p.k[1] = unrank_in(ki / nkd2, c.bk, free);
+                p.k[0] = unrank_in(ki % nkd2, c.wk, free - p.k[1]);
+        }
+
+        // the position of configuration mi (a men index) and king placement ki
+        void place(std::uint64_t mi, std::uint64_t ki, int stm, Pos& p) const
+        {
+                std::uint64_t const rw = std::uint64_t(std::ranges::upper_bound(off, mi) - off.begin()) - 1;
+                p.stm = stm;
+                p.m[0] = unrank_in(rw, c.wm, DOM_WM);
+                p.m[1] = unrank_in(mi - off[rw], c.bm, DOM_BM - p.m[0]);
+                bitboard const free = FULL - p.m[0] - p.m[1];
+                p.k[0] = unrank_in(ki / nk2, c.wk, free);
+                p.k[1] = unrank_in(ki % nk2, c.bk, free - p.k[0]);
         }
 
         std::uint64_t index(Pos const& p) const
         {
 #if EGDB_JOINT_INDEX
-                std::uint64_t const mi = off[rank_in(p.m[0], DOM_WM)] + rank_in(p.m[1], DOM_BM - p.m[0]);
-                bitboard const free = FULL - p.m[0] - p.m[1];
-                return (mi * nk1 + rank_in(p.k[0], free)) * nk2 + rank_in(p.k[1], free - p.k[0]);
+                if (dual_side(p.stm)) return men_index_dual(p.m[0], p.m[1]) * kings() + king_index_dual(FULL - p.m[0] - p.m[1], p.k[0], p.k[1]);
+                return men_index(p.m[0], p.m[1]) * kings() + king_index(p);
 #else
                 return ((rank_in(p.m[0], DOM_WM) * sbm + rank_in(p.m[1], DOM_BM)) * swk + rank_in(p.k[0], FULL)) * sbk
                      + rank_in(p.k[1], FULL);
@@ -202,13 +276,8 @@ struct MatIndex {
         {
                 p.stm = stm;
 #if EGDB_JOINT_INDEX
-                std::uint64_t const rk2 = slot % nk2, t = slot / nk2, rk1 = t % nk1, mi = t / nk1;
-                std::uint64_t const rw = std::uint64_t(std::ranges::upper_bound(off, mi) - off.begin()) - 1;
-                p.m[0] = unrank_in(rw, c.wm, DOM_WM);
-                p.m[1] = unrank_in(mi - off[rw], c.bm, DOM_BM - p.m[0]);
-                bitboard const free = FULL - p.m[0] - p.m[1];
-                p.k[0] = unrank_in(rk1, c.wk, free);
-                p.k[1] = unrank_in(rk2, c.bk, free - p.k[0]);
+                if (dual_side(stm)) place_dual(slot / kings(), slot % kings(), stm, p);
+                else place(slot / kings(), slot % kings(), stm, p);
                 return true;
 #else
                 std::uint64_t const rbk = slot % sbk, t1 = slot / sbk, rwk = t1 % swk, t2 = t1 / swk;
@@ -331,53 +400,176 @@ struct Plane {
         }
 };
 
-// ---------------------------------------------------------------- a group of slices, solved together
 
+// ---------------------------------------------------------------- a group of configurations, solved together
+//
+// A group is a set of configurations of the men (each with all its K king placements), numbered by MatIndex's men and
+// king indices: the whole material (`all`: the group's index is the joint index), or a list of men indices in ascending
+// order (local index = the rank of the men index in the list x K + the king index). The configurations of a group are
+// those with a given total tempo (`distance`, -1: any) and White tempo (`white`, -1: any), or the one configuration
+// `only`. The sizes come from counting (tempo_counts) and the lists are generated on demand (load) by walking the rows
+// for the exact tempi, so a build holds only the lists it needs: none for a whole material, one group's for dtz.
 struct Group {
-        std::vector<Meta> units;
-        std::vector<std::uint64_t> base;                                // first index of each slice
-        std::unordered_map<std::uint64_t, std::size_t> slot;            // slice key -> its number in the group
-        std::uint64_t P = 0;                                            // positions per side to move
+        MatIndex const* mi = nullptr;
+        bool all = false;
+        int distance = -1, white = -1;
+        std::uint64_t only = ~std::uint64_t(0);
+        std::uint64_t K = 0;                                            // king placements per configuration
+        std::uint64_t count = 0;                                        // configurations
+        std::uint64_t P = 0;                                            // positions per side to move: count x K
+        std::vector<std::uint64_t> men;                                 // the men indices (after load), ascending
 
-        void add(Meta const& m) { slot[m.key.pack()] = units.size(); units.push_back(m); base.push_back(P); P += m.P; }
+        bool loaded() const { return all || men.size() == count; }
+        void load();
+        void release() { if (!all) std::vector<std::uint64_t>().swap(men); }
+        std::uint64_t configurations() const { return count; }
+
+        // dual indexing (EGDB_DUAL_INDEX, whole-material groups; Lincke's dual indexing): one side to move's positions in
+        // the colour-swapped order. A move changes only the mover's pieces, so with the Black-to-move positions swapped
+        // (1) the successors of a White move lie close together among them, and those of a Black move among the
+        // White-to-move positions: the loss checks; with the White-to-move positions swapped (2) the same holds for the
+        // predecessors of an unmove: the unmoves. Only the group's own numbering changes: the sinks and the files keep
+        // the material's index
+        bool dual(int stm) const { return all && dual_side(stm); }
 
         std::uint64_t index(Pos const& p) const
         {
-                std::size_t const u = slot.at(key_of(p).pack());
-                return base[u] + index_of(units[u], p);
+                if (dual(p.stm)) return mi->men_index_dual(p.m[0], p.m[1]) * K + mi->king_index_dual(FULL - p.m[0] - p.m[1], p.k[0], p.k[1]);
+                std::uint64_t const m = mi->men_index(p.m[0], p.m[1]);
+                std::uint64_t const u = all ? m : std::uint64_t(std::ranges::lower_bound(men, m) - men.begin());
+                return u * K + mi->king_index(p);
         }
 
         Pos pos(std::uint64_t g, int stm) const
         {
-                std::size_t const u = std::size_t(std::ranges::upper_bound(base, g) - base.begin()) - 1;
-                return pos_of(units[u], g - base[u], stm);
+                Pos p;
+                if (dual(stm)) mi->place_dual(g / K, g % K, stm, p);
+                else mi->place(all ? g / K : men[g / K], g % K, stm, p);
+                return p;
+        }
+
+        // the local index of p with one of mover's kings moved from a to b (dense squares), numbered for side `to`
+        // (the side to move after the move, or before it for an unmove); g: p's own local index, for side p.stm. The men
+        // stay, so in one order only the king index is recomputed; across the orders the men index too
+        std::uint64_t king_moved_to(Pos const& p, std::uint64_t g, int mover, int a, int b, int to) const
+        {
+                if (dual(p.stm) == dual(to)) return king_moved(p, g, mover, a, b);    // one order: the configuration part stays
+                bitboard k[2] = { p.k[0], p.k[1] };
+                k[mover].erase(std::size_t(a));
+                k[mover].insert(std::size_t(b));
+                bitboard const free = FULL - p.m[0] - p.m[1];
+                if (dual(to)) return mi->men_index_dual(p.m[0], p.m[1]) * K + mi->king_index_dual(free, k[0], k[1]);
+                return mi->men_index(p.m[0], p.m[1]) * K + mi->king_index(free, k[0], k[1]);
+        }
+
+        // the index update: the local index of p (at local index g) with one of side's kings moved from a to b (dense
+        // squares). The men stay, so the configuration and the free squares stay: only the king index is recomputed
+        std::uint64_t king_moved(Pos const& p, std::uint64_t g, int side, int a, int b) const
+        {
+                bitboard k[2] = { p.k[0], p.k[1] };
+                k[side].erase(std::size_t(a));
+                k[side].insert(std::size_t(b));
+                if (dual(p.stm)) return g - g % K + mi->king_index_dual(FULL - p.m[0] - p.m[1], k[0], k[1]);
+                return g - g % K + mi->king_index(FULL - p.m[0] - p.m[1], k[0], k[1]);
         }
 };
 
-// the positions of the group from which a move inside the group leads to q: king unmoves (along a free diagonal with
-// long kings, one square with short kings: English checkers, egdb_6x6's LONG_KINGS), and in a wave man unmoves (men
-// move one square forward in both games). Captures and promotions leave the group, so their rules never enter here
+// the tempo of a colour's men: the rows they still have to go (White up to row 0, Black down to the last row)
+int white_tempo(bitboard const& wm) { int t = 0; for (auto const sq : wm) t += row_of(int(sq)); return t; }
+int black_tempo(bitboard const& bm) { int t = 0; for (auto const sq : bm) t += BOARD_H - 1 - row_of(int(sq)); return t; }
+
+// every k-subset of mask whose squares add up to tempo t, row by row (weight(r): the tempo of a square in row r)
+template<class W, class F>
+void for_each_subset_with_tempo(bitboard const& mask, int k, int t, W&& weight, F&& f)
+{
+        auto rec = [&](auto&& self, int r, int k_left, int t_left, bitboard const& acc) -> void {
+                if (k_left == 0) { if (t_left == 0) f(acc); return; }
+                if (r == BOARD_H) return;
+                int hi = 0, lo = BOARD_H;                       // the tempi still within reach: rows r.. hold weights in [lo, hi]
+                for (int q = r; q < BOARD_H; ++q) { hi = std::max(hi, weight(q)); lo = std::min(lo, weight(q)); }
+                if (t_left > k_left * hi || t_left < k_left * lo) return;
+                bitboard const a = mask & row_squares(r);
+                int const w = weight(r);
+                for (int j = 0; j <= std::min(k_left, int(a.size())) && j * w <= t_left; ++j)
+                        for_each_subset(a, j, [&](bitboard const& s) { self(self, r + 1, k_left - j, t_left - j * w, acc | s); });
+        };
+        rec(rec, 0, k, t, bitboard{});
+}
+
+void Group::load()
+{
+        if (loaded()) return;
+        men.clear();
+        men.reserve(count);
+        if (only != ~std::uint64_t(0)) men.push_back(only);
+        else {
+                Material const c = mi->c;
+                auto const wrow = [](int r) { return r; };
+                auto const brow = [](int r) { return BOARD_H - 1 - r; };
+                for (int tw = 0; tw <= distance; ++tw) {
+                        if (white >= 0 && tw != white) continue;
+                        for_each_subset_with_tempo(DOM_WM, c.wm, tw, wrow, [&](bitboard const& wm) {
+                                for_each_subset_with_tempo(DOM_BM - wm, c.bm, distance - tw, brow, [&](bitboard const& bm) {
+                                        men.push_back(mi->men_index(wm, bm));
+                                });
+                        });
+                }
+                std::ranges::sort(men);
+        }
+        if (men.size() != count) { std::cerr << "group: " << men.size() << " configurations generated, " << count << " counted" << std::endl; std::abort(); }
+}
+
+// the number of configurations of a material's men per (White tempo, Black tempo), by counting row by row: a row's
+// squares are alike (the same tempo for each colour), so i white and j black men go into a row of ROW squares in
+// C(n, i) C(n - i, j) ways (n: the row's squares) (no white man on the top row, no black man on the bottom row)
+std::map<std::pair<int, int>, std::uint64_t> tempo_counts(Material c)
+{
+        std::map<std::tuple<int, int, int, int>, std::uint64_t> cur{ { { 0, 0, 0, 0 }, 1 } };     // (white men, black men, tw, tb)
+        for (int r = 0; r < BOARD_H; ++r) {
+                std::map<std::tuple<int, int, int, int>, std::uint64_t> next;
+                for (auto const& [st, n] : cur) {
+                        auto const [iw, ib, tw, tb] = st;
+                        int const row = int(row_squares(r).size());
+                        for (int i = 0; iw + i <= c.wm && i <= row && (r > 0 || i == 0); ++i)
+                                for (int j = 0; ib + j <= c.bm && i + j <= row && (r < BOARD_H - 1 || j == 0); ++j)
+                                        next[{ iw + i, ib + j, tw + i * r, tb + j * (BOARD_H - 1 - r) }]
+                                                += n * CC[std::size_t(row)][std::size_t(i)] * CC[std::size_t(row - i)][std::size_t(j)];
+                }
+                cur = std::move(next);
+        }
+        std::map<std::pair<int, int>, std::uint64_t> out;
+        for (auto const& [st, n] : cur)
+                if (std::get<0>(st) == c.wm && std::get<1>(st) == c.bm) out[{ std::get<2>(st), std::get<3>(st) }] += n;     // every man placed
+        return out;
+}
+
+// the positions of the group from which a move inside the group leads to q (at local index gq), by their local index:
+// king unmoves from the ray attacks on padded bitboards (a king on t came from a square it reaches over empty squares;
+// one square with short kings: English checkers, egdb_6x6's LONG_KINGS), their indices by the index update; and in a
+// wave man unmoves (men move one square forward in both games), by the full index. Captures and promotions leave the
+// group, so their rules never enter here
 template<class F>
-void for_each_inside_predecessor(Group const& g, Pos const& q, F&& f)
+void for_each_inside_predecessor(Group const& g, Pos const& q, std::uint64_t gq, F&& f)
 {
         int const mover = 1 - q.stm;
-        bitboard const occ = q.occ();
-        for (auto const t : q.k[mover])
-                for (int d = 0; d < 4; ++d)
-                        for (int fr : rays[std::size_t(t)][std::size_t(d)]) {
-                                if (occ.contains(std::size_t(fr))) break;
-                                Pos pr = q;
-                                pr.k[mover].erase(t);
-                                pr.k[mover].insert(std::size_t(fr));
-                                pr.stm = mover;
-                                f(g.index(pr));
-                                if (!LONG_KINGS) break;                 // short kings: one square back
+        pboard const empty = PLAYABLE - to_pad(q.occ());
+        for (auto const t : q.k[mover]) {
+                int const tp = PAD_OF[t];
+                for (int d = 0; d < 4; ++d) {
+                        pboard reach;
+                        if constexpr (LONG_KINGS) { int b; reach = king_reach(tp, d, empty, b); }
+                        else {
+                                int const fr = tp + STEP[d];
+                                if (fr >= 0 && fr < PAD_SIZE && empty.contains(std::size_t(fr))) reach.insert(std::size_t(fr));
                         }
+                        for (auto const fr : reach) f(g.king_moved_to(q, gq, mover, int(t), DENSE_OF[fr], mover));
+                }
+        }
         if (!men_inside()) return;
         for (auto const t : q.m[mover])
                 for (int d = mover == 0 ? 2 : 0; d < (mover == 0 ? 4 : 2); ++d) {     // a man came from behind
                         auto const& ray = rays[std::size_t(t)][std::size_t(d)];
-                        if (ray.empty() || occ.contains(std::size_t(ray[0]))) continue;
+                        if (ray.empty() || q.occ().contains(std::size_t(ray[0]))) continue;
                         Pos pr = q;
                         pr.m[mover].erase(t);
                         pr.m[mover].insert(std::size_t(ray[0]));
@@ -386,47 +578,86 @@ void for_each_inside_predecessor(Group const& g, Pos const& q, F&& f)
                 }
 }
 
+template<class F>
+void for_each_inside_predecessor(Group const& g, Pos const& q, F&& f) { for_each_inside_predecessor(g, q, g.index(q), f); }
+
+// the moves inside the group, their successors by local index: a king move by the index update, a man move (inside only
+// in a wave) by the full index
+bool inside_ref(MoveRef const& m)
+{
+        if (m.capture() || m.promotes) return false;
+        return m.king || men_inside();
+}
+
+std::uint64_t successor_index(Group const& g, Pos const& p, std::uint64_t gp, MoveRef const& m)
+{
+        if (m.king) return g.king_moved_to(p, gp, p.stm, m.from_sq(), m.to_sq(), 1 - p.stm);
+        return g.index(apply(p, m));
+}
+
 // ---------------------------------------------------------------- the groups of a material, in dependency order
 
+// in dependency order: a man move lowers its colour's tempo (and the total), so smaller totals come first
 std::vector<Group> groups_of(Material c)
 {
-        struct SliceUnit { int distance, white; std::uint64_t key; Meta meta; };      // a configuration, with its tempi
-        std::vector<SliceUnit> units;
-        for (std::uint32_t w = u32(DOM_WM);; w = (w - 1) & u32(DOM_WM)) {
-                bitboard const wm = bb_of(w);
-                if (int(wm.size()) == c.wm) {
-                        std::uint32_t const bdom = u32(DOM_BM - wm);
-                        for (std::uint32_t b = bdom;; b = (b - 1) & bdom) {
-                                bitboard const bm = bb_of(b);
-                                if (int(bm.size()) == c.bm) {
-                                        Key const k{ wm, bm, c.wk, c.bk };
-                                        Meta const m = meta_of(k);
-                                        int white = 0;
-                                        for (auto const sq : wm) white += int(sq) / 3;
-                                        if (m.P != 0) units.push_back({ distance(k), white, k.pack(), m });
-                                }
-                                if (b == 0) break;
-                        }
-                }
-                if (w == 0) break;
-        }
-        // in dependency order: a man move lowers its colour's tempo (and the total), so smaller totals come first
-        std::ranges::sort(units, {}, [](SliceUnit const& u) { return std::tuple(u.distance, u.white, u.key); });
-        auto const group_key = [](SliceUnit const& u) -> std::uint64_t {    // a new group whenever this changes
-                switch (g_granularity) {
-                case Granularity::material: return g_metric == Metric::dtz ? std::uint64_t(u.distance) : 0;
-                case Granularity::tempi: return std::uint64_t(u.distance) << 32 | std::uint64_t(u.white);
-                case Granularity::configuration: return u.key;
-                }
-                return u.key;
-        };
+        MatIndex const& mi = mat_index(c);
         std::vector<Group> out;
-        for (std::size_t i = 0; i < units.size(); ++i) {
-                if (out.empty() || group_key(units[i]) != group_key(units[i - 1])) out.emplace_back();
-                out.back().add(units[i].meta);
+        std::uint64_t const K = mi.kings();
+        if (K == 0 || mi.men == 0) return out;
+        auto const make = [&](int distance, int white, std::uint64_t count) {
+                Group g;
+                g.mi = &mi; g.distance = distance; g.white = white; g.K = K; g.count = count; g.P = count * K;
+                return g;
+        };
+        if (g_granularity == Granularity::material && g_metric != Metric::dtz) {
+                Group g = make(-1, -1, mi.men);
+                g.all = true;
+                out.push_back(std::move(g));
+        } else if (g_granularity == Granularity::configuration) {   // one group per configuration (the 1986 style)
+                struct One { int distance, white; std::uint64_t m; };
+                std::vector<One> ones;
+                for_each_subset(DOM_WM, c.wm, [&](bitboard const& wm) {
+                        int const tw = white_tempo(wm);
+                        for_each_subset(DOM_BM - wm, c.bm, [&](bitboard const& bm) {
+                                ones.push_back({ tw + black_tempo(bm), tw, mi.men_index(wm, bm) });
+                        });
+                });
+                std::ranges::sort(ones, {}, [](One const& o) { return std::tuple(o.distance, o.white, o.m); });
+                for (One const& o : ones) { Group g = make(o.distance, o.white, 1); g.only = o.m; out.push_back(std::move(g)); }
+        } else {                                                        // tempi: (total, White's); dtz material: total
+                bool const by_white = g_granularity == Granularity::tempi;
+                std::map<std::pair<int, int>, std::uint64_t> by;        // (total, White's or -1) -> configurations
+                for (auto const& [t, n] : tempo_counts(c)) by[{ t.first + t.second, by_white ? t.first : -1 }] += n;
+                for (auto const& [k, n] : by) out.push_back(make(k.first, k.second, n));
         }
         return out;
 }
+
+// the groups with their lists loaded (for the checks, which visit every position of every group)
+std::vector<Group> loaded_groups_of(Material c)
+{
+        auto groups = groups_of(c);
+        for (auto& g : groups) g.load();
+        return groups;
+}
+
+// the group of a position: its number in groups_of's list
+struct GroupFinder {
+        std::map<std::tuple<int, int, std::uint64_t>, std::size_t> at;
+        explicit GroupFinder(std::vector<Group> const& groups)
+        {
+                for (std::size_t k = 0; k < groups.size(); ++k) at[{ groups[k].distance, groups[k].white, groups[k].only }] = k;
+        }
+        std::size_t operator()(std::vector<Group> const& groups, Pos const& p) const
+        {
+                if (groups.size() == 1 && groups[0].all) return 0;
+                Group const& g0 = groups[0];
+                int const tw = white_tempo(p.m[0]), t = tw + black_tempo(p.m[1]);
+                std::uint64_t const only = g0.only == ~std::uint64_t(0) ? g0.only : g0.mi->men_index(p.m[0], p.m[1]);
+                auto const it = at.find({ t, g0.white >= 0 || g0.only != ~std::uint64_t(0) ? tw : -1, only });
+                return it == at.end() ? groups.size() : it->second;
+        }
+};
 
 // the materials that one move can lead into: a promotion, or a capture of at least one piece and not the last (the
 // capturing man possibly promoted), by either side (as deps in the Snakefiles)
@@ -452,7 +683,7 @@ std::vector<Material> successor_materials(Material c)
 
 // ---------------------------------------------------------------- depth sinks: where the depths of the material being built go
 //
-// The rounds only put depths (V: a byte in thompson86, a 16-bit value in syzygy) and never read them back for their own
+// The rounds only put depths (V: a byte in thompson86, a 16-bit value in tbgen) and never read them back for their own
 // group; moves out of a group read the depths of earlier, finished groups of the same material. Two backends:
 //   array    the whole material's bytes in RAM, indexed like its files (rung 0)
 //   groups   only the current group's bytes in RAM; each finished group is appended to one file per side in group
@@ -465,6 +696,7 @@ class DepthSink
 {
 public:
         virtual ~DepthSink() = default;
+        virtual bool keeps_groups() const { return false; }         // reads finished groups by their lists (keep them loaded)
         virtual void begin_group(std::size_t k, Group const& g) = 0;
         virtual void put(int side, std::uint64_t local, Pos const& p, V value) = 0;      // local: index in the group
         virtual void end_group() = 0;
@@ -490,13 +722,11 @@ public:
 template<class V>
 class GroupSink final : public DepthSink<V>
 {
-        struct Slice { std::uint64_t offset; Meta const* meta; std::size_t group; };
-
         Material c_;
         MatIndex const& mi_;
         std::vector<Group> const& groups_;
+        GroupFinder find_;                                              // the group of a position
         std::vector<std::uint64_t> gbase_;                              // offset of each group in the group-order files
-        std::unordered_map<std::uint64_t, Slice> slice_;                // slice key -> where its positions are
         std::vector<char> done_;                                        // finished groups
         std::array<std::string, 2> path_;
         std::array<int, 2> fd_{ -1, -1 };
@@ -505,30 +735,13 @@ class GroupSink final : public DepthSink<V>
         std::size_t k_ = 0;
         std::array<std::vector<V>, 2> buf_;                  // the current group, both sides to move
 
-        Slice const* find(Pos const& p) const           // with the last slice cached per thread
-        {
-                thread_local GroupSink const* owner = nullptr;
-                thread_local std::uint64_t last_key = 0;
-                thread_local Slice const* last = nullptr;
-                std::uint64_t const key = key_of(p).pack();
-                if (owner != this || key != last_key) {
-                        auto const it = slice_.find(key);
-                        last = it == slice_.end() ? nullptr : &it->second;
-                        owner = this;
-                        last_key = key;
-                }
-                return last;
-        }
-
 public:
         GroupSink(std::string const& dir, Material c, MatIndex const& mi, std::vector<Group> const& groups)
         :
-                c_(c), mi_(mi), groups_(groups), done_(groups.size(), 0)
+                c_(c), mi_(mi), groups_(groups), find_(groups), done_(groups.size(), 0)
         {
                 for (std::size_t k = 0; k < groups.size(); ++k) {
                         gbase_.push_back(total_);
-                        for (std::size_t u = 0; u < groups[k].units.size(); ++u)
-                                slice_[groups[k].units[u].key.pack()] = { total_ + groups[k].base[u], &groups[k].units[u], k };
                         total_ += groups[k].P;
                 }
                 for (int side : { 0, 1 }) {     // one file per side, in group order, sized up front, mapped once read-only
@@ -551,6 +764,8 @@ public:
                         std::filesystem::remove(path_[std::size_t(side)]);
                 }
         }
+
+        bool keeps_groups() const override { return true; }
 
         void begin_group(std::size_t k, Group const& g) override
         {
@@ -578,9 +793,9 @@ public:
 
         V read(int side, Pos const& p) const override
         {
-                Slice const* s = find(p);
-                if (!s || !done_[s->group]) return 0;
-                return map_[std::size_t(side)][s->offset + index_of(*s->meta, p)];
+                std::size_t const k = find_(groups_, p);
+                if (k >= groups_.size() || !done_[k]) return 0;
+                return map_[std::size_t(side)][gbase_[k] + groups_[k].index(p)];
         }
 
         V at(int side, std::uint64_t slot) const override  // un-rank the slot, then read its group
@@ -601,31 +816,16 @@ struct Tempi { int white = 0, black = 0; std::uint64_t configurations = 0, posit
 
 [[maybe_unused]] std::vector<Tempi> tempi_of(Material c)
 {
+        std::uint64_t const K = mat_index(c).kings();
         std::map<std::pair<int, int>, Tempi> by;                        // by (total, white)
-        for (std::uint32_t w = u32(DOM_WM);; w = (w - 1) & u32(DOM_WM)) {
-                bitboard const wm = bb_of(w);
-                if (int(wm.size()) == c.wm) {
-                        std::uint32_t const bdom = u32(DOM_BM - wm);
-                        for (std::uint32_t b = bdom;; b = (b - 1) & bdom) {
-                                bitboard const bm = bb_of(b);
-                                if (int(bm.size()) == c.bm) {
-                                        Key const k{ wm, bm, c.wk, c.bk };
-                                        Meta const m = meta_of(k);
-                                        if (m.P != 0) {
-                                                int white = 0;
-                                                for (auto const sq : wm) white += int(sq) / 3;
-                                                Tempi& t = by[{ distance(k), white }];
-                                                t.white = white;
-                                                t.black = distance(k) - white;
-                                                ++t.configurations;
-                                                t.positions += m.P;
-                                        }
-                                }
-                                if (b == 0) break;
-                        }
+        if (K != 0)
+                for (auto const& [t, n] : tempo_counts(c)) {
+                        Tempi& x = by[{ t.first + t.second, t.first }];
+                        x.white = t.first;
+                        x.black = t.second;
+                        x.configurations = n;
+                        x.positions = n * K;
                 }
-                if (w == 0) break;
-        }
         std::vector<Tempi> out;
         for (auto const& [key, t] : by) out.push_back(t);
         return out;
@@ -641,6 +841,19 @@ constexpr std::uint64_t FIXED_BYTES = std::uint64_t(16) << 20;  // the binary an
 
 struct MemoryNeed {
         std::uint64_t slots = 0, positions = 0, groups = 0, slices = 0, max_group = 0;  // max_group: positions per side
+        std::uint64_t listed = 0, max_listed = 0;               // configurations in listed groups (not whole materials), the most in one
+        void add(Group const& g)
+        {
+                ++groups;
+                positions += 2 * g.P;
+                max_group = std::max(max_group, g.P);
+                slices += g.configurations();
+                if (!g.all) { listed += g.count; max_listed = std::max(max_listed, g.count); }
+        }
+        // the groups' own memory: about 128 bytes a group, and 8 bytes per configuration of a listed group (its men
+        // index); only the group being solved holds its list, except with the group sink, which reads the finished
+        // groups through their lists
+        std::uint64_t meta(bool group_sink) const { return 128 * groups + 8 * (group_sink ? listed : max_listed); }
         std::uint64_t rung0 = 0, rung1 = 0;                                             // bytes
 };
 

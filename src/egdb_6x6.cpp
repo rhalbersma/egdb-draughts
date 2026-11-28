@@ -4,7 +4,10 @@
 //          http://www.boost.org/LICENSE_1_0.txt)
 
 // Exact endgame databases for international draughts on the 6x6 board, with men and kings, or (built with
-// -DEGDB_6X6_CHECKERS=1, as egdb_6x6_checkers) for English checkers on the same board.
+// -DEGDB_6X6_CHECKERS=1, as egdb_6x6_checkers) for English checkers on the same board. Other boards: any tabula
+// draughts board of any size (width, height, the colour of a1, a lake; see "The board" below; bitboards in blocks of 64), e.g.
+// 8x8 for English checkers and 10x10 for international draughts, where perft reproduces the published counts. The text
+// below describes the 6x6 board.
 //
 // Rules: international draughts on 6x6: men move one square diagonally forward and capture forwards
 // and backwards, flying kings, mandatory capture, majority capture (kings and men count the same),
@@ -67,6 +70,9 @@
 // FEN: W:W17,K16:B2,K15 (side to move, white pieces, black pieces; K = king).
 // Values: "W<n>" win in n plies, "L<n>" loss in n plies, "D" draw (for the side to move).
 
+#include <tabula/games/draughts.hpp>               // basic_draughts, draughts:: boards
+#include <tabula/grids/chequer.hpp>               // chequer
+#include <tabula/lake.hpp>                        // basic_lake, square_literals
 #include <xstd/bits/bit/bit_compress.hpp>          // bit_compress
 #include <xstd/bits/bit/bit_convert.hpp>           // bit_convert
 #include <xstd/bits/bit/bit_expand.hpp>            // bit_expand
@@ -89,11 +95,13 @@
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
+#include <limits>
 #include <map>
 #include <new>
 #include <sstream>
 #include <string>
 #include <tuple>
+#include <type_traits>
 #include <utility>
 #include <fcntl.h>
 #include <sys/mman.h>
@@ -110,7 +118,76 @@
 
 namespace {
 
-constexpr int N = 18;
+// The board: any tabula draughts board (tabula::basic_draughts: width, height, the colour of the corner a1, squares
+// removed as a lake), chosen at compile time: -DEGDB_BOARD=<a tabula board type> (e.g. tabula::draughts::mertens_cut_j10),
+// else -DEGDB_WIDTH=, -DEGDB_HEIGHT=, -DEGDB_PARITY= (1: a1 dark, playable, the default; 0: a1 light) and
+// -DEGDB_LAKE='"h8"_sq, ...' (default 6 x 6, parity 1, no lake). The playable squares (dark, not in the lake) are
+// numbered as in PDN: the squares of the chequer, lake squares included, 1.. in reading order from the top left
+// (tabula: the index on the board flipped upside down); inside, the playable squares are 0..N-1 in that order (dense),
+// so a row is a run of consecutive squares. White's men move up and promote on the top row, Black's down to the bottom
+// row.
+#ifndef EGDB_WIDTH
+#define EGDB_WIDTH 6
+#endif
+#ifndef EGDB_HEIGHT
+#define EGDB_HEIGHT 6
+#endif
+#ifndef EGDB_PARITY
+#define EGDB_PARITY 1
+#endif
+#ifndef EGDB_LAKE
+#define EGDB_LAKE
+#endif
+using namespace tabula::square_literals;
+#ifdef EGDB_BOARD
+using Board = EGDB_BOARD;
+#else
+using Board = tabula::basic_draughts<EGDB_WIDTH, EGDB_HEIGHT, EGDB_PARITY, tabula::basic_lake<EGDB_LAKE>>;
+#endif
+constexpr tabula::chequer GRID = Board::grid;
+constexpr int BOARD_W = GRID.width, BOARD_H = GRID.height;
+constexpr tabula::chequer PDN_GRID = GRID.flip();     // the same squares, rank 0 at the top: index = PDN number - 1
+constexpr int PDN_SIZE = PDN_GRID.size();              // the dark squares, lake squares included
+
+// a square (file, row from the top) is playable: on the board, dark and not in the lake
+constexpr bool playable(int file, int row)
+{
+        return PDN_GRID.is_valid(std::pair{ file, row }) && Board::is_valid(Board::square(file, BOARD_H - 1 - row));
+}
+
+struct Geometry {
+        int n = 0;                                      // playable squares
+        std::array<int, PDN_SIZE> dense{};              // PDN index -> playable square, -1 for a lake square
+        std::array<int, PDN_SIZE> pdn{}, row{}, col{};  // playable square -> PDN index, row from the top, file
+};
+constexpr Geometry GEO = [] {
+        Geometry g;
+        for (int i = 0; i < PDN_SIZE; ++i) {
+                auto const [c, r] = PDN_GRID.coordinates(i);
+                g.dense[std::size_t(i)] = -1;
+                if (!playable(c, r)) continue;
+                g.dense[std::size_t(i)] = g.n;
+                g.pdn[std::size_t(g.n)] = i; g.row[std::size_t(g.n)] = r; g.col[std::size_t(g.n)] = c;
+                ++g.n;
+        }
+        return g;
+}();
+constexpr int N = GEO.n;
+static_assert(BOARD_H >= 3 && N >= 2, "a board with a row between the promotion rows");
+static_assert([] { for (int i = 0; i < PDN_SIZE; ++i) { auto const [c, r] = PDN_GRID.coordinates(i); if (PDN_GRID.index(std::pair{ c, r }) != i) return false; } return true; }(),
+              "tabula's PDN numbering: index and coordinates are inverse");
+
+// the board's name, the top of the database tree: WxH, then -p0 for a light a1, then the lake squares (10x10-h8)
+std::string board_name()
+{
+        std::string s = std::to_string(BOARD_W) + "x" + std::to_string(BOARD_H) + (GRID.parity == 0 ? "-p0" : "");
+        for (int i = 0; i < PDN_SIZE; ++i)
+                if (GEO.dense[std::size_t(i)] < 0) {
+                        auto const [c, r] = PDN_GRID.coordinates(i);
+                        s += "-" + std::string(1, char('a' + c)) + std::to_string(BOARD_H - r);
+                }
+        return s;
+}
 
 // the rules (see the top of the file)
 #ifndef EGDB_6X6_CHECKERS
@@ -122,21 +199,54 @@ constexpr bool MEN_CAPTURE_BACK = !CHECKERS;      // men capture backwards too
 constexpr bool MAJORITY = !CHECKERS;              // the capture of the most pieces is compulsory
 bool keep_duplicates = false;                     // perft only: keep moves that give the same position
 
-// bitboards: the 18 squares in one std::uint32_t block (bit_least), widened to its 32 bits (bit_align); the full
-// board is FULL, so a complement is FULL - x
-using bitboard = xstd::bit_align<xstd::bit_least<xstd::bit_fixed_set<N>>>;
-constexpr bitboard bb_of(std::uint32_t x) { return xstd::bit_convert<bitboard>(x); }
-constexpr std::uint32_t u32(bitboard const& x) { return xstd::bit_convert<std::uint32_t>(x); }
+// bitboards: xstd::bit_fixed_set<N> aligned to whole blocks of 64 bits (xstd::bit_align, as egdb_fast): BLOCKS blocks.
+// Everything that treats a bitboard as integers goes through xstd's own conversions, a block at a time (block_bits:
+// squares 64 b ... 64 b + 63 of a bitboard as one std::uint64_t), so it does not depend on how the set stores its bits;
+// with one block (at most 64 squares) a bitboard converts to one std::uint64_t directly. The full board is
+// FULL, so a complement is FULL - x.
+constexpr int BLOCKS = (N + 63) / 64;
+using bitboard = xstd::bit_align<xstd::bit_fixed_set<N>>;
+static_assert(sizeof(bitboard) == 8 * BLOCKS, "whole blocks of 64 bits");
+using word = std::uint64_t;
+constexpr int WORD_BITS = 64;
+constexpr word low_bits(int n) { return n >= WORD_BITS ? ~word(0) : (word(1) << n) - 1; }
 bitboard square_bb(int s) { return bitboard{ std::size_t(s) }; }
-constexpr bitboard FULL = bb_of((1u << N) - 1);
-
-int row_of(int s) { return s / 3; }                                    // 0 = top row (squares 1-3)
-int col_of(int s) { return 2 * (s % 3) + (row_of(s) % 2 == 0 ? 1 : 0); } // 0 = file a
-int square_at(int r, int c)
+constexpr bitboard squares_from_to(int lo, int hi)      // the squares lo .. hi - 1
 {
-        if (r < 0 || r >= 6 || c < 0 || c >= 6 || (r + c) % 2 == 0) return -1;
-        return r * 3 + c / 2;
+        bitboard b;
+        for (int s = lo; s < hi; ++s) b.insert(std::size_t(s));
+        return b;
 }
+constexpr bitboard FULL = squares_from_to(0, N);
+constexpr std::array<bitboard, BLOCKS> BLOCK_SQUARES = [] {          // the squares of each block
+        std::array<bitboard, BLOCKS> a{};
+        for (int b = 0; b < BLOCKS; ++b) a[std::size_t(b)] = squares_from_to(64 * b, std::min(N, 64 * b + 64));
+        return a;
+}();
+template<class B = bitboard>                            // (a template: the one-block conversion is compiled only for one block)
+word block_bits(B const& x, int b)                      // squares 64 b .. 64 b + 63 of x, as the bits of one integer
+{
+        if constexpr (BLOCKS == 1) return xstd::bit_convert<word>(x);
+        else return xstd::bit_compress<word>(x & BLOCK_SQUARES[std::size_t(b)], BLOCK_SQUARES[std::size_t(b)]);
+}
+template<class B = bitboard>
+B bitboard_of_block(word w, int b)                      // the inverse: one block's integer as squares
+{
+        if constexpr (BLOCKS == 1) return xstd::bit_convert<B>(w);
+        else return xstd::bit_expand(w, BLOCK_SQUARES[std::size_t(b)]);
+}
+
+constexpr int row_of(int s) { return GEO.row[std::size_t(s)]; }        // 0 = the top row
+constexpr int col_of(int s) { return GEO.col[std::size_t(s)]; }        // 0 = file a
+constexpr int square_at(int r, int c) { return playable(c, r) ? GEO.dense[std::size_t(PDN_GRID.index(std::pair{ c, r }))] : -1; }
+
+// the squares of each row, from the top
+constexpr std::array<bitboard, BOARD_H> ROW_SQUARES = [] {
+        std::array<bitboard, BOARD_H> a{};
+        for (int s = 0; s < N; ++s) a[std::size_t(GEO.row[std::size_t(s)])].insert(std::size_t(s));
+        return a;
+}();
+constexpr bitboard row_squares(int r) { return ROW_SQUARES[std::size_t(r)]; }
 
 // directions: 0 = up-left, 1 = up-right, 2 = down-left, 3 = down-right
 constexpr int DR[4] = { -1, -1, 1, 1 };
@@ -146,10 +256,14 @@ std::array<std::array<std::vector<int>, 4>, N> rays;
 std::array<std::array<std::uint64_t, N + 1>, N + 1> binom{};
 
 // colex ranks of the kings packed onto consecutive bits (xstd::bit_compress / bit_expand): the rank of a packed subset
-// does not depend on the mask it was packed from, so one table of 2^18 ranks serves every mask, and per number of
-// kings k one table of the packed subsets in rank order (2^18 entries over all k)
+// does not depend on the mask it was packed from, so one table of 2^N ranks serves every mask, and per number of
+// kings k one table of the packed subsets in rank order (2^N entries over all k). Only for small boards (2^20 entries
+// at most); on larger ones the ranks are sums of binomials over the set bits, and the unranks the greedy inverse.
+constexpr bool RANK_TABLES = N <= 20;                  // (one block)
 std::vector<std::uint32_t> rank_table, unrank_table;
 std::array<std::uint32_t, N + 2> unrank_offset{};
+
+void init_rays_padded();                // the move generator's rays (below)
 
 void init_tables()
 {
@@ -157,24 +271,28 @@ void init_tables()
                 for (int d = 0; d < 4; ++d)
                         for (int r = row_of(s) + DR[d], c = col_of(s) + DC[d]; square_at(r, c) >= 0; r += DR[d], c += DC[d])
                                 rays[s][d].push_back(square_at(r, c));
+        init_rays_padded();
         for (int n = 0; n <= N; ++n) {
                 binom[n][0] = 1;
                 for (int k = 1; k <= n; ++k) binom[n][k] = binom[n - 1][k - 1] + (k <= n - 1 ? binom[n - 1][k] : 0);
         }
-        rank_table.assign(std::size_t(1) << N, 0);
-        unrank_table.assign(std::size_t(1) << N, 0);
-        for (std::uint32_t c = 0; c < (1u << N); ++c) {
-                std::uint64_t r = 0;
-                int i = 0;
-                for (auto const sq : bb_of(c)) r += binom[std::size_t(sq)][std::size_t(++i)];
-                rank_table[c] = std::uint32_t(r);
+        if constexpr (RANK_TABLES) {
+                rank_table.assign(std::size_t(1) << N, 0);
+                unrank_table.assign(std::size_t(1) << N, 0);
+                constexpr word all = word(1) << std::min(N, 63);
+                for (word c = 0; c < all; ++c) {
+                        std::uint64_t r = 0;
+                        int i = 0;
+                        for (auto const sq : bitboard_of_block(c, 0)) r += binom[std::size_t(sq)][std::size_t(++i)];
+                        rank_table[c] = std::uint32_t(r);
+                }
+                for (int k = 0; k <= N; ++k) unrank_offset[std::size_t(k) + 1] = unrank_offset[std::size_t(k)] + std::uint32_t(binom[N][std::size_t(k)]);
+                for (word c = 0; c < all; ++c) unrank_table[unrank_offset[std::size_t(std::popcount(c))] + rank_table[c]] = std::uint32_t(c);
         }
-        for (int k = 0; k <= N; ++k) unrank_offset[std::size_t(k) + 1] = unrank_offset[std::size_t(k)] + std::uint32_t(binom[N][std::size_t(k)]);
-        for (std::uint32_t c = 0; c < (1u << N); ++c) unrank_table[unrank_offset[bb_of(c).size()] + rank_table[c]] = c;
 }
 
-constexpr bitboard PROMO_WHITE = bb_of(0b111);                // squares 1-3
-constexpr bitboard PROMO_BLACK = bb_of(0b111u << 15);         // squares 16-18
+constexpr bitboard PROMO_WHITE = row_squares(0);                             // the top row: White promotes there
+constexpr bitboard PROMO_BLACK = row_squares(BOARD_H - 1);                   // the bottom row: Black promotes there
 
 struct Pos {
         bitboard m[2]{};        // men   [0] = white, [1] = black
@@ -185,10 +303,41 @@ struct Pos {
         bool operator==(Pos const&) const = default;
 };
 
-// 180 degree rotation with colours swapped: square n <-> 19 - n, white <-> black (the 32 bits reversed, shifted down)
+// The colour mirror: a symmetry of the playable squares that swaps the top and the bottom row, so that with the colours
+// swapped every position has a mirror image of the same value. The 180 degree rotation (square n <-> N + 1 - n: the word
+// reversed) where it maps the playable squares onto themselves (even W + H and a symmetric lake), else the reflection in
+// the middle row (odd H), else none: then every material is built in both colours (HAS_MIRROR).
+enum class MirrorKind { none, rotation, reflection };
+constexpr MirrorKind MIRROR = [] {
+#ifdef EGDB_NO_MIRROR
+        return MirrorKind::none;                        // for tests: every material in both colours, no lookup through the mirror
+#endif
+        auto const maps = [](auto f) {
+                for (int s = 0; s < N; ++s) { auto const [c, r] = f(GEO.col[std::size_t(s)], GEO.row[std::size_t(s)]); if (!playable(c, r)) return false; }
+                return true;
+        };
+        if (maps([](int c, int r) { return std::pair{ BOARD_W - 1 - c, BOARD_H - 1 - r }; })) return MirrorKind::rotation;
+        if (maps([](int c, int r) { return std::pair{ c, BOARD_H - 1 - r }; })) return MirrorKind::reflection;
+        return MirrorKind::none;
+}();
+constexpr bool HAS_MIRROR = MIRROR != MirrorKind::none;
+constexpr std::array<int, std::size_t(N)> MIRROR_SQ = [] {             // the reflection, square by square
+        std::array<int, std::size_t(N)> a{};
+        for (int s = 0; s < N; ++s) a[std::size_t(s)] = MIRROR == MirrorKind::reflection ? square_at(BOARD_H - 1 - GEO.row[std::size_t(s)], GEO.col[std::size_t(s)]) : N - 1 - s;
+        return a;
+}();
+static_assert(MIRROR != MirrorKind::rotation || [] { for (int s = 0; s < N; ++s) if (square_at(BOARD_H - 1 - GEO.row[std::size_t(s)], BOARD_W - 1 - GEO.col[std::size_t(s)]) != N - 1 - s) return false; return true; }(),
+              "the rotation reverses the numbering");
+char const* mirror_name() { return MIRROR == MirrorKind::rotation ? "rotation" : MIRROR == MirrorKind::reflection ? "reflection" : "none"; }
+
 bitboard flip(bitboard const& x)
 {
-        return bb_of(xstd::bit_reverse(u32(x)) >> (32 - N));
+        if constexpr (MIRROR == MirrorKind::rotation && BLOCKS == 1) return bitboard_of_block(word(xstd::bit_reverse(block_bits(x, 0)) >> (WORD_BITS - N)), 0);
+        else {
+                bitboard y;
+                for (auto const sq : x) y.insert(std::size_t(MIRROR_SQ[sq]));
+                return y;
+        }
 }
 
 Pos mirror(Pos const& p)
@@ -208,9 +357,10 @@ struct Move {
         Pos next;
 };
 
-// the moves of a position, without heap allocation (at most 12 pieces on 18 squares: far fewer than 128 moves)
+// the moves of a position, without heap allocation (at most 12 pieces on 18 squares: far fewer than 128 moves; a king
+// on a larger board has fewer than W + H moves, so 12 pieces fewer than 12 (W + H))
 struct MoveList {
-        static constexpr std::size_t CAP = 128;
+        static constexpr std::size_t CAP = std::max<std::size_t>(128, 12 * std::size_t(BOARD_W + BOARD_H) + 16);
         alignas(Move) unsigned char buf[CAP * sizeof(Move)];   // uninitialised: no zeroing of 128 moves per call
         std::size_t n = 0;
         Move* data() { return std::launder(reinterpret_cast<Move*>(buf)); }
@@ -232,117 +382,263 @@ struct MoveList {
         }
 };
 
-struct Gen {
-        Pos const& p;
-        int us, them;
-        bitboard enemy, empty0;
-        int best = 0;
-        MoveList* out;
-        int from = 0;
-        bool is_king = false;
+// ---------------------------------------------------------------- the move generator: padded bitboards (after dctl)
+//
+// Moves are generated on padded bitboards: the board flipped (row 0 at the top, as the PDN numbering) and padded with
+// ghost squares on the right (tabula: pad_right(1); the padded width PW is odd), numbered row by row from the top left.
+// Every diagonal step is then one fixed stride (up-left -SR, up-right -SL, down-left +SL, down-right +SR, with
+// SL = (PW - 1) / 2 and SR = (PW + 1) / 2), so a step of a whole set of pieces is one shift; a step off the board lands
+// on a ghost square or off the bitboard, never on a playable square. The padded numbering keeps the PDN order of the
+// playable squares, so a dense bitboard (the squares 0..N-1 of positions, indices and files) converts to the padded one
+// by one PDEP onto the playable squares, and back by one PEXT.
+//   captures first: per direction, the men that can capture are men & shift(targets, -d) & shift(empty, -2 d) (dctl's
+//   jump_from), the kings' by the classical ray attack (a table of the squares along each ray, the first piece on it
+//   by a bit scan); from each, a depth-first search of the continuations (Turkish strike: captured pieces stay on the
+//   board until the capture is complete and cannot be jumped twice), keeping the longest where the majority rule holds;
+//   moves without capture only when there is no capture: men by one shift per forward direction, kings by the ray attack.
+constexpr tabula::chequer PAD_GRID = PDN_GRID.pad(tabula::pad_right(1));
+constexpr int PW = PAD_GRID.width;
+static_assert(PW % 2 == 1, "an odd padded width: every diagonal a constant stride");
+constexpr int SL = (PW - 1) / 2, SR = (PW + 1) / 2;
+constexpr int STEP[4] = { -SR, -SL, SL, SR };          // the directions of DR / DC: up-left, up-right, down-left, down-right
+constexpr std::array<int, std::size_t(N)> PAD_OF = [] {       // dense square -> padded square
+        std::array<int, std::size_t(N)> a{};
+        for (int s = 0; s < N; ++s) a[std::size_t(s)] = PAD_GRID.index(std::pair{ GEO.col[std::size_t(s)], GEO.row[std::size_t(s)] });
+        return a;
+}();
+constexpr int PAD_SIZE = PAD_OF[std::size_t(N - 1)] + 1;
+static_assert([] { for (int s = 1; s < N; ++s) if (PAD_OF[std::size_t(s)] <= PAD_OF[std::size_t(s - 1)]) return false; return true; }(),
+              "the padded numbering keeps the PDN order");
+static_assert([] { for (int s = 0; s < N; ++s) for (int d = 0; d < 4; ++d) {
+                        int const t = square_at(GEO.row[std::size_t(s)] + DR[d], GEO.col[std::size_t(s)] + DC[d]);
+                        if (t >= 0 && PAD_OF[std::size_t(t)] != PAD_OF[std::size_t(s)] + STEP[d]) return false;
+                } return true; }(), "every diagonal step is its stride");
 
-        Gen(Pos const& pp, MoveList* o) : p(pp), us(pp.stm), them(1 - pp.stm), out(o)
-        {
-                enemy = p.m[them] | p.k[them];
-        }
+using pboard = xstd::bit_align<xstd::bit_fixed_set<PAD_SIZE>>;
+constexpr std::array<int, std::size_t(PAD_SIZE)> DENSE_OF = [] {       // padded square -> dense square, -1 for a ghost
+        std::array<int, std::size_t(PAD_SIZE)> a{};
+        for (auto& x : a) x = -1;
+        for (int s = 0; s < N; ++s) a[std::size_t(PAD_OF[std::size_t(s)])] = s;
+        return a;
+}();
+constexpr pboard PLAYABLE = [] { pboard b; for (int s = 0; s < N; ++s) b.insert(std::size_t(PAD_OF[std::size_t(s)])); return b; }();
 
-        void emit(int to, bitboard const& cap, int n)
-        {
-                if constexpr (!MAJORITY) n = n > 0 ? 1 : 0;     // every capture counts the same, but a capture is compulsory
-                if (n < best) return;
-                if (n > best) { best = n; out->clear(); }
-                Pos q = p;
-                std::size_t const fb = std::size_t(from), tb = std::size_t(to);
-                bool promote = !is_king && (us == 0 ? PROMO_WHITE : PROMO_BLACK).contains(tb);
-                if (is_king) { q.k[us].erase(fb); q.k[us].insert(tb); }
-                else if (promote) { q.m[us].erase(fb); q.k[us].insert(tb); }
-                else { q.m[us].erase(fb); q.m[us].insert(tb); }
-                q.m[them] -= cap; q.k[them] -= cap;
-                q.stm = them;
-                if (!keep_duplicates)
-                        for (auto const& mv : *out) if (mv.next == q) return;  // same resulting position
-                out->push_back({ from, to, cap, q });
+// dense <-> padded: the dense bitboard's bits deposited onto the playable squares (PDEP), and gathered back (PEXT)
+pboard to_pad(bitboard const& x)
+{
+        pboard y;
+        if constexpr (BLOCKS == 1 && PAD_SIZE <= 64) return xstd::bit_expand(block_bits(x, 0), PLAYABLE);
+        else for (auto const sq : x) y.insert(std::size_t(PAD_OF[sq]));
+        return y;
+}
+bitboard to_dense(pboard const& y)
+{
+        if constexpr (BLOCKS == 1 && PAD_SIZE <= 64) return bitboard_of_block(xstd::bit_compress<word>(y, PLAYABLE), 0);
+        else {
+                bitboard x;
+                for (auto const sq : y) x.insert(std::size_t(DENSE_OF[sq]));
+                return x;
         }
+}
 
-        // empty: squares that are empty during this capture (origin is vacated; captured pieces stay)
-        void capture(int s, bitboard const& empty, bitboard const& cap, int n)
-        {
-                bool any = false;
-                for (int d = 0; d < 4; ++d) {
-                        if (!MEN_CAPTURE_BACK && !is_king && (us == 0 ? d >= 2 : d < 2)) continue;
-                        auto const& ray = rays[s][d];
-                        std::size_t i = 0;
-                        if (LONG_KINGS && is_king) while (i < ray.size() && empty.contains(std::size_t(ray[i]))) ++i;
-                        if (i >= ray.size()) continue;
-                        int v = ray[i];
-                        if (!enemy.contains(std::size_t(v)) || cap.contains(std::size_t(v))) continue;
-                        std::size_t j = i + 1;
-                        if (j >= ray.size() || !empty.contains(std::size_t(ray[j]))) continue;
-                        for (; j < ray.size() && empty.contains(std::size_t(ray[j])); ++j) {
-                                any = true;
-                                capture(ray[j], empty, cap | square_bb(v), n + 1);
-                                if (!LONG_KINGS || !is_king) break;
-                        }
-                }
-                if (!any && n > 0) emit(s, cap, n);
-        }
+pboard shifted(pboard x, int k)                         // every square moved by k (positive: down the board)
+{
+        if (k > 0) x <<= std::size_t(k);
+        else x >>= std::size_t(-k);
+        return x;
+}
 
-        void run()
-        {
-                bitboard const occ = p.occ();
-                bitboard const pieces = p.m[us] | p.k[us];
-                // captures
-                for (auto const sq : pieces) {
-                        from = int(sq);
-                        is_king = p.k[us].contains(sq);
-                        capture(from, (FULL - occ) | square_bb(from), bitboard{}, 0);
-                }
-                if (best > 0) return;
-                // quiet moves
-                for (auto const sq : pieces) {
-                        from = int(sq);
-                        is_king = p.k[us].contains(sq);
-                        for (int d = 0; d < 4; ++d) {
-                                if (!is_king && (us == 0 ? d >= 2 : d < 2)) continue;
-                                for (int t : rays[from][d]) {
-                                        if (occ.contains(std::size_t(t))) break;
-                                        emit(t, bitboard{}, 0);
-                                        if (!LONG_KINGS || !is_king) break;
-                                }
-                        }
-                }
+// the squares along each ray, from (not including) a square, and the ray from a square including it
+std::array<std::array<pboard, 4>, std::size_t(PAD_SIZE)> RAY{};
+
+void init_rays_padded()
+{
+        for (int s = 0; s < N; ++s)
+                for (int d = 0; d < 4; ++d)
+                        for (int t : rays[std::size_t(s)][std::size_t(d)]) RAY[std::size_t(PAD_OF[std::size_t(s)])][std::size_t(d)].insert(std::size_t(PAD_OF[std::size_t(t)]));
+}
+
+// the first square of a nonempty set along direction d (the nearest one: the lowest going down, the highest going up)
+int first_along(pboard const& x, int d) { return int(STEP[d] > 0 ? x.front() : x.back()); }
+
+// the empty squares a king on sq reaches in direction d (its ray up to the first piece), and that first piece (-1: none)
+pboard king_reach(int sq, int d, pboard const& empty, int& blocker)
+{
+        pboard ray = RAY[std::size_t(sq)][std::size_t(d)];
+        pboard const occupied = ray - empty;
+        blocker = -1;
+        if (occupied.empty()) return ray;
+        blocker = first_along(occupied, d);
+        ray -= RAY[std::size_t(blocker)][std::size_t(d)];
+        ray.erase(std::size_t(blocker));
+        return ray;
+}
+
+constexpr bool man_dir(int us, int d) { return us == 0 ? d < 2 : d >= 2; }    // a man's forward directions
+constexpr std::array<pboard, 2> PROMO_PAD = [] {        // the promotion rows, padded: White's the top row, Black's the bottom
+        std::array<pboard, 2> a{};
+        for (int s = 0; s < N; ++s) {
+                if (GEO.row[std::size_t(s)] == 0) a[0].insert(std::size_t(PAD_OF[std::size_t(s)]));
+                if (GEO.row[std::size_t(s)] == BOARD_H - 1) a[1].insert(std::size_t(PAD_OF[std::size_t(s)]));
         }
+        return a;
+}();
+
+// a position on padded bitboards, from the side to move: its men and kings, the opponent's pieces, the empty squares
+struct PadPos {
+        pboard men, kings, enemy, empty;
+        int us = 0;
 };
+PadPos pad_pos(Pos const& p)
+{
+        PadPos q;
+        q.us = p.stm;
+        q.men = to_pad(p.m[p.stm]); q.kings = to_pad(p.k[p.stm]); q.enemy = to_pad(p.m[1 - p.stm] | p.k[1 - p.stm]);
+        q.empty = PLAYABLE - q.men - q.kings - q.enemy;
+        return q;
+}
+
+// a move without its successor: padded squares, the captured pieces (padded), a king or a man, a promotion
+struct MoveRef {
+        int from, to;
+        pboard captured;
+        bool king;
+        bool promotes;
+        bool capture() const { return !captured.empty(); }
+        int from_sq() const { return DENSE_OF[std::size_t(from)]; }     // the dense squares
+        int to_sq() const { return DENSE_OF[std::size_t(to)]; }
+};
+
+// every legal move of a position, without building its successor: f(MoveRef const&) returns false to stop, and then
+// for_each_move returns false. Captures first: all of them are found before the first is passed on (a later piece can
+// still have a longer capture under the majority rule), into a buffer, where the same capture by another path is dropped;
+// moves without capture only when there is no capture, streamed straight from the shifts and the rays.
+template<class F>
+bool for_each_move(PadPos const& pp, F&& f)
+{
+        struct Cap { int from, to; pboard captured; bool king; };
+        alignas(Cap) unsigned char raw[MoveList::CAP * sizeof(Cap)];   // uninitialised: no zeroing per call
+        Cap* const buf = std::launder(reinterpret_cast<Cap*>(raw));
+        std::size_t nbuf = 0;
+        int best = 0, from = 0;
+        bool is_king = false;
+        int const us = pp.us;
+        auto const add = [&](int to, pboard const& cap, int n) {
+                if constexpr (!MAJORITY) n = 1;         // every capture counts the same, but a capture is compulsory
+                if (n < best) return;
+                if (n > best) { best = n; nbuf = 0; }
+                if (!keep_duplicates)
+                        for (std::size_t i = 0; i < nbuf; ++i) if (buf[i].from == from && buf[i].to == to && buf[i].captured == cap) return;
+                if (nbuf == MoveList::CAP) { std::cerr << "too many captures" << std::endl; std::abort(); }
+                ::new (static_cast<void*>(buf + nbuf++)) Cap{ from, to, cap, is_king };
+        };
+        // the continuations from sq: empty during the capture (the origin vacated, the captured pieces still there)
+        auto const capture = [&](auto&& self, int sq, pboard const& empty, pboard const& cap, int n) -> void {
+                bool any = false;
+                pboard const targets = pp.enemy - cap;
+                for (int d = 0; d < 4; ++d) {
+                        if (!MEN_CAPTURE_BACK && !is_king && !man_dir(us, d)) continue;
+                        if (LONG_KINGS && is_king) {
+                                int v;
+                                king_reach(sq, d, empty, v);
+                                if (v < 0 || !targets.contains(std::size_t(v))) continue;
+                                int w;
+                                pboard const land = king_reach(v, d, empty, w);
+                                for (auto const t : land) { any = true; self(self, int(t), empty, cap | pboard{ std::size_t(v) }, n + 1); }
+                        } else {
+                                int const v = sq + STEP[d], t = v + STEP[d];
+                                if (v < 0 || t < 0 || t >= PAD_SIZE || !targets.contains(std::size_t(v)) || !empty.contains(std::size_t(t))) continue;
+                                any = true;
+                                self(self, t, empty, cap | pboard{ std::size_t(v) }, n + 1);
+                        }
+                }
+                if (!any && n > 0) add(sq, cap, n);
+        };
+        pboard jumpers;
+        for (int d = 0; d < 4; ++d)
+                if (MEN_CAPTURE_BACK || man_dir(us, d))
+                        jumpers |= pp.men & shifted(pp.enemy, -STEP[d]) & shifted(pp.empty, -2 * STEP[d]);
+        is_king = false;
+        for (auto const sq : jumpers) { from = int(sq); capture(capture, from, pp.empty | pboard{ std::size_t(sq) }, pboard{}, 0); }
+        is_king = true;
+        for (auto const sq : pp.kings) { from = int(sq); capture(capture, from, pp.empty | pboard{ std::size_t(sq) }, pboard{}, 0); }
+        if (best > 0) {
+                for (std::size_t i = 0; i < nbuf; ++i) {
+                        Cap const& c = buf[i];
+                        if (!f(MoveRef{ c.from, c.to, c.captured, c.king, !c.king && PROMO_PAD[std::size_t(us)].contains(std::size_t(c.to)) })) return false;
+                }
+                return true;
+        }
+        for (int d = 0; d < 4; ++d) {                   // men, one shift per forward direction
+                if (!man_dir(us, d)) continue;
+                for (auto const t : shifted(pp.men, STEP[d]) & pp.empty)
+                        if (!f(MoveRef{ int(t) - STEP[d], int(t), pboard{}, false, PROMO_PAD[std::size_t(us)].contains(std::size_t(t)) })) return false;
+        }
+        for (auto const sq : pp.kings)                  // kings, by their rays (one step for short kings)
+                for (int d = 0; d < 4; ++d) {
+                        pboard reach;
+                        if constexpr (LONG_KINGS) { int b; reach = king_reach(int(sq), d, pp.empty, b); }
+                        else {
+                                int const t = int(sq) + STEP[d];
+                                if (t >= 0 && t < PAD_SIZE && pp.empty.contains(std::size_t(t))) reach.insert(std::size_t(t));
+                        }
+                        for (auto const t : reach) if (!f(MoveRef{ int(sq), int(t), pboard{}, true, false })) return false;
+                }
+        return true;
+}
+
+// the successor of a move
+Pos apply(Pos const& p, MoveRef const& m)
+{
+        Pos q = p;
+        int const us = p.stm, them = 1 - us;
+        std::size_t const f = std::size_t(m.from_sq()), t = std::size_t(m.to_sq());
+        if (m.king) { q.k[us].erase(f); q.k[us].insert(t); }
+        else if (m.promotes) { q.m[us].erase(f); q.k[us].insert(t); }
+        else { q.m[us].erase(f); q.m[us].insert(t); }
+        if (m.capture()) { bitboard const c = to_dense(m.captured); q.m[them] -= c; q.k[them] -= c; }
+        q.stm = them;
+        return q;
+}
+
+Move to_move(Pos const& p, MoveRef const& m) { return { m.from_sq(), m.to_sq(), m.capture() ? to_dense(m.captured) : bitboard{}, apply(p, m) }; }
 
 MoveList moves(Pos const& p)
 {
         MoveList out;
-        Gen g(p, &out);
-        g.run();
+        for_each_move(pad_pos(p), [&](MoveRef const& m) { out.push_back(to_move(p, m)); return true; });
         return out;
 }
 
+// whether the side to move can capture: the men by shifts, the kings by their rays
 bool has_capture(Pos const& p)
 {
-        int us = p.stm, them = 1 - us;
-        bitboard const enemy = p.m[them] | p.k[them];
-        bitboard const empty = FULL - p.occ();
-        for (auto const sq : p.m[us]) {
-                for (int d = 0; d < 4; ++d) {
-                        if (!MEN_CAPTURE_BACK && (us == 0 ? d >= 2 : d < 2)) continue;
-                        auto const& r = rays[std::size_t(sq)][std::size_t(d)];
-                        if (r.size() >= 2 && enemy.contains(std::size_t(r[0])) && empty.contains(std::size_t(r[1]))) return true;
-                }
+        int const us = p.stm, them = 1 - us;
+        pboard const men = to_pad(p.m[us]), kings = to_pad(p.k[us]), enemy = to_pad(p.m[them] | p.k[them]);
+        pboard const empty = PLAYABLE - men - kings - enemy;
+        for (int d = 0; d < 4; ++d) {
+                if (!MEN_CAPTURE_BACK && !man_dir(us, d)) continue;
+                if (!(men & shifted(enemy, -STEP[d]) & shifted(empty, -2 * STEP[d])).empty()) return true;
         }
-        for (auto const sq : p.k[us]) {
-                for (int d = 0; d < 4; ++d) {
-                        auto const& r = rays[std::size_t(sq)][std::size_t(d)];
-                        std::size_t i = 0;
-                        if constexpr (LONG_KINGS) while (i < r.size() && empty.contains(std::size_t(r[i]))) ++i;
-                        if (i + 1 < r.size() && enemy.contains(std::size_t(r[i])) && empty.contains(std::size_t(r[i + 1]))) return true;
-                }
+        if (kings.empty()) return false;
+        if constexpr (!LONG_KINGS) {
+                for (int d = 0; d < 4; ++d)
+                        if (!(kings & shifted(enemy, -STEP[d]) & shifted(empty, -2 * STEP[d])).empty()) return true;
+                return false;
+        } else {
+                pboard const victims = enemy & [&] { pboard x; for (int d = 0; d < 4; ++d) x |= shifted(empty, -STEP[d]); return x; }();
+                if (victims.empty()) return false;
+                for (auto const sq : kings)
+                        for (int d = 0; d < 4; ++d) {
+                                int b;
+                                king_reach(int(sq), d, empty, b);
+                                if (b >= 0 && enemy.contains(std::size_t(b))) {
+                                        int const t = b + STEP[d];
+                                        if (t >= 0 && t < PAD_SIZE && empty.contains(std::size_t(t)) && RAY[std::size_t(b)][std::size_t(d)].contains(std::size_t(t))) return true;
+                                }
+                        }
+                return false;
         }
-        return false;
 }
 
 // ---------------------------------------------------------------- values
@@ -367,14 +663,46 @@ std::string show(std::uint16_t v)
 
 // ---------------------------------------------------------------- slices
 
+// a slice's key packed into one integer: the white men, the black men (N bits each), the numbers of white and black kings
+// (4 bits each); 64 bits up to 28 squares, 128 up to 60; beyond, the numbers of men and kings (4 bits each) and the two
+// colex ranks of the men (white over the board, black over what is left) in mixed radix, in 128 bits
+using KeyPack = std::conditional_t<(2 * N + 8 <= 64), std::uint64_t, unsigned __int128>;
+constexpr bool RANKED_KEY = 2 * N + 8 > 128;
+struct KeyPackHash {
+        std::size_t operator()(KeyPack x) const
+        {
+                std::uint64_t h = std::uint64_t(x) * 0x9E3779B97F4A7C15ull;
+                if constexpr (sizeof(KeyPack) > 8) h ^= std::uint64_t(x >> 64) * 0xC2B2AE3D27D4EB4Full;
+                return std::size_t(h ^ (h >> 31));
+        }
+};
+
+std::uint64_t rank_in(bitboard const& x, bitboard const& mask);
+bitboard unrank_in(std::uint64_t r, int k, bitboard const& mask);
+
 struct Key {
         bitboard wm, bm;
         int nwk, nbk;
-        std::uint64_t pack() const { return std::uint64_t(u32(wm)) | std::uint64_t(u32(bm)) << 18 | std::uint64_t(nwk) << 36 | std::uint64_t(nbk) << 40; }
-        static Key unpack(std::uint64_t x)
+        KeyPack pack() const
         {
-                constexpr std::uint32_t low = (1u << N) - 1;
-                return { bb_of(std::uint32_t(x) & low), bb_of(std::uint32_t(x >> 18) & low), int(x >> 36 & 15), int(x >> 40 & 15) };
+                if constexpr (!RANKED_KEY)
+                        return KeyPack(block_bits(wm, 0)) | KeyPack(block_bits(bm, 0)) << N | KeyPack(nwk) << (2 * N) | KeyPack(nbk) << (2 * N + 4);
+                else {
+                        std::size_t const a = wm.size(), b = bm.size();
+                        KeyPack const r = KeyPack(rank_in(wm, FULL)) + KeyPack(binom[N][a]) * KeyPack(rank_in(bm, FULL - wm));
+                        return r << 16 | KeyPack(a) << 12 | KeyPack(b) << 8 | KeyPack(nwk) << 4 | KeyPack(nbk);
+                }
+        }
+        static Key unpack(KeyPack x)
+        {
+                if constexpr (!RANKED_KEY)
+                        return { bitboard_of_block(word(x) & low_bits(N), 0), bitboard_of_block(word(x >> N) & low_bits(N), 0), int(x >> (2 * N) & 15), int(x >> (2 * N + 4) & 15) };
+                else {
+                        int const a = int(x >> 12 & 15), b = int(x >> 8 & 15);
+                        KeyPack const r = x >> 16, c = KeyPack(binom[N][std::size_t(a)]);
+                        bitboard const wm = unrank_in(std::uint64_t(r % c), a, FULL);
+                        return { wm, unrank_in(std::uint64_t(r / c), b, FULL - wm), int(x >> 4 & 15), int(x & 15) };
+                }
         }
 };
 
@@ -385,9 +713,10 @@ Key key_of(Pos const& p)
 
 int pieces(Key const& k) { return int(k.wm.size() + k.bm.size()) + k.nwk + k.nbk; }
 
-// slices are stored for one of each pair (slice, mirror(slice)) only
+// slices are stored for one of each pair (slice, mirror(slice)) only (every slice on a board without the colour mirror)
 bool canonical_key(Key const& k)
 {
+        if constexpr (!HAS_MIRROR) return true;
         Key m{ flip(k.bm), flip(k.wm), k.nbk, k.nwk };
         return k.pack() <= m.pack();
 }
@@ -410,16 +739,100 @@ Meta meta_of(Key const& key)
         return s;
 }
 
-// colex rank of x within mask (x subset of mask): x packed onto the low bits (PEXT), then one table entry
+// colex rank of x within mask (x subset of mask): x packed onto the low bits (PEXT), then one table entry (small
+// boards) or the sum of C(position, i) over its i-th set bit; with several blocks, each block packed on its own and its
+// positions offset by the mask's squares in the blocks before it
 std::uint64_t rank_in(bitboard const& x, bitboard const& mask)
 {
-        return rank_table[xstd::bit_compress<std::uint32_t>(x, mask)];
+        if constexpr (BLOCKS == 1) {
+                word const c = xstd::bit_compress<word>(x, mask);
+                if constexpr (RANK_TABLES) return rank_table[c];
+                else {
+                        std::uint64_t r = 0;
+                        std::size_t i = 0;
+                        for (word b = c; b != 0; b &= b - 1) r += binom[std::size_t(std::countr_zero(b))][++i];
+                        return r;
+                }
+        } else {
+                std::uint64_t r = 0;
+                std::size_t i = 0, off = 0;
+                for (int k = 0; k < BLOCKS; ++k) {
+                        bitboard const m = mask & BLOCK_SQUARES[std::size_t(k)];
+                        for (word b = xstd::bit_compress<word>(x & m, m); b != 0; b &= b - 1) r += binom[off + std::size_t(std::countr_zero(b))][++i];
+                        off += m.size();
+                }
+                return r;
+        }
 }
 
-// the k-subset of mask with colex rank r: one table entry, spread over the mask (PDEP)
+// the packed positions in c (bits 0 .. |mask| - 1, at most 64) spread over the mask (PDEP), block by block
+bitboard expand_packed(word c, bitboard const& mask)
+{
+        if constexpr (BLOCKS == 1) return xstd::bit_expand(c, mask);
+        else {
+                bitboard out;
+                for (int k = 0; k < BLOCKS && c != 0; ++k) {
+                        bitboard const m = mask & BLOCK_SQUARES[std::size_t(k)];
+                        int const n = int(m.size());
+                        out |= xstd::bit_expand(word(c & low_bits(n)), m);
+                        c = n >= WORD_BITS ? 0 : c >> n;
+                }
+                return out;
+        }
+}
+
+// the k-subset of mask with colex rank r: one table entry (small boards) or greedily, from the highest set bit down (the
+// largest p with C(p, i) <= r is the i-th bit), spread over the mask (PDEP; with several blocks, each packed position into
+// its block)
 bitboard unrank_in(std::uint64_t r, int k, bitboard const& mask)
 {
-        return xstd::bit_expand(unrank_table[unrank_offset[std::size_t(k)] + r], mask);
+        if constexpr (RANK_TABLES) return xstd::bit_expand(word(unrank_table[unrank_offset[std::size_t(k)] + r]), mask);
+        else {
+                std::size_t const n = mask.size();
+                std::size_t p = n;
+                if (n <= std::size_t(WORD_BITS)) {
+                        word c = 0;
+                        for (std::size_t i = std::size_t(k); i > 0; --i) {
+                                do --p; while (binom[p][i] > r);
+                                r -= binom[p][i];
+                                c |= word(1) << p;
+                        }
+                        return expand_packed(c, mask);
+                }
+                std::array<word, BLOCKS> w{}, off{}, cnt{};             // the mask's squares in each block, and before it
+                for (std::size_t b = 0, o = 0; b < std::size_t(BLOCKS); ++b) { off[b] = o; cnt[b] = (mask & BLOCK_SQUARES[b]).size(); o += cnt[b]; }
+                for (std::size_t i = std::size_t(k); i > 0; --i) {
+                        do --p; while (binom[p][i] > r);
+                        r -= binom[p][i];
+                        std::size_t b = 0;
+                        while (p >= off[b] + cnt[b]) ++b;
+                        w[b] |= word(1) << (p - off[b]);
+                }
+                bitboard out;
+                for (std::size_t b = 0; b < std::size_t(BLOCKS); ++b) if (w[b]) out |= xstd::bit_expand(w[b], mask & BLOCK_SQUARES[b]);
+                return out;
+        }
+}
+
+// every k-subset of mask, in colex order: Gosper's next combination on the packed bits, spread over the mask (a mask of
+// at most 64 squares), else every rank unranked
+template<class F>
+void for_each_subset(bitboard const& mask, int k, F&& f)
+{
+        int const n = int(mask.size());
+        if (k < 0 || k > n) return;
+        if (k == 0) { f(bitboard{}); return; }
+        if (n > WORD_BITS) {
+                for (std::uint64_t r = 0; r < binom[std::size_t(n)][std::size_t(k)]; ++r) f(unrank_in(r, k, mask));
+                return;
+        }
+        word const end = n == WORD_BITS ? 0 : word(1) << n;
+        for (word c = low_bits(k);;) {
+                f(expand_packed(c, mask));
+                word const u = c & (~c + 1), v = c + u;
+                if (v == 0 || (end != 0 && v >= end)) break;
+                c = v | (((v ^ c) >> 2) / u);
+        }
 }
 
 std::uint64_t index_of(Meta const& s, Pos const& p)
@@ -460,8 +873,8 @@ constexpr std::uint64_t WDL_FLAG = 1ull << 63;
 constexpr std::uint64_t DB2_FLAG = 1ull << 62;    // offset into db2: a layer of DTM slices in a memory-mapped file
 std::uint8_t* db2 = nullptr;
 std::size_t db2_size = 0;
-std::vector<std::uint64_t> tab_key, tab_off;      // tab_key = pack + 1 (0 = empty); tab_off = byte offset or WDL_FLAG | position offset
-std::unordered_map<std::uint64_t, std::vector<std::uint16_t>> extra;
+std::vector<KeyPack> tab_key; std::vector<std::uint64_t> tab_off;      // tab_key = pack + 1 (0 = empty); tab_off = byte offset or WDL_FLAG | position offset
+std::unordered_map<KeyPack, std::vector<std::uint16_t>, KeyPackHash> extra;
 std::uint64_t extra_positions = 0;
 bool allow_on_demand = true;   // false: a slice that is not prebuilt is an error (no on-demand solving)
 struct NotInDatabase {};
@@ -481,13 +894,14 @@ std::uint16_t ref_value(SliceRef const& r, std::uint64_t i)
         return c == 2 ? DRAW : std::uint16_t(c);
 }
 
-std::size_t tab_slot(std::uint64_t k)
+std::size_t tab_slot(KeyPack k)
 {
-        std::uint64_t h = k * 0x9E3779B97F4A7C15ull;
+        std::uint64_t h = std::uint64_t(k) * 0x9E3779B97F4A7C15ull;
+        if constexpr (sizeof(KeyPack) > 8) h ^= std::uint64_t(k >> 64) * 0xC2B2AE3D27D4EB4Full;
         return std::size_t(h >> 20) & (tab_key.size() - 1);
 }
 
-bool find_prebuilt(std::uint64_t k, SliceRef& r)
+bool find_prebuilt(KeyPack k, SliceRef& r)
 {
         if (tab_key.empty()) return false;
         for (std::size_t i = tab_slot(k);; i = (i + 1) & (tab_key.size() - 1)) {
@@ -505,7 +919,7 @@ void solve_slice(Meta const& s, std::uint16_t* out);
 
 SliceRef slice_values(Key const& key)
 {
-        std::uint64_t k = key.pack();
+        KeyPack const k = key.pack();
         SliceRef r;
         if (pieces(key) <= built_max && find_prebuilt(k, r)) return r;
         auto it = extra.find(k);
@@ -530,15 +944,51 @@ SliceRef slice_values(Key const& key)
 // kings has to move a man or capture), so their exact value, with DTM, follows from a forward
 // alpha-beta search down to the slices (see below).
 
-using PosKey = unsigned __int128;
-PosKey pack(Pos const& p)
+// a position packed into one key: four bitboards and the side to move, 4 N + 1 bits; one 128-bit integer up to 31
+// squares, else the blocks of the four bitboards and the side to move
+struct WidePosKey {
+        std::array<word, 4 * BLOCKS> b{};
+        int stm = 0;
+        auto operator<=>(WidePosKey const&) const = default;
+};
+constexpr bool NARROW_POSKEY = 4 * N + 1 <= 128;
+using PosKey = std::conditional_t<NARROW_POSKEY, unsigned __int128, WidePosKey>;
+template<class K = PosKey>                              // a template, so that only the branch for K is compiled
+K pack(Pos const& p)
 {
-        return PosKey(u32(p.m[0])) | PosKey(u32(p.m[1])) << 18 | PosKey(u32(p.k[0])) << 36 | PosKey(u32(p.k[1])) << 54 | PosKey(p.stm) << 72;
+        if constexpr (std::is_same_v<K, unsigned __int128>)
+                return K(block_bits(p.m[0], 0)) | K(block_bits(p.m[1], 0)) << N | K(block_bits(p.k[0], 0)) << (2 * N)
+                     | K(block_bits(p.k[1], 0)) << (3 * N) | K(p.stm) << (4 * N);
+        else {
+                K k;
+                for (int b = 0; b < BLOCKS; ++b) {
+                        std::size_t const i = std::size_t(4 * b);
+                        k.b[i] = block_bits(p.m[0], b); k.b[i + 1] = block_bits(p.m[1], b);
+                        k.b[i + 2] = block_bits(p.k[0], b); k.b[i + 3] = block_bits(p.k[1], b);
+                }
+                k.stm = p.stm;
+                return k;
+        }
+}
+// two 64-bit halves of a key (for hashing and checksums)
+template<class K>
+std::pair<std::uint64_t, std::uint64_t> halves(K const& x)
+{
+        if constexpr (std::is_same_v<K, unsigned __int128>) return { std::uint64_t(x), std::uint64_t(x >> 64) };
+        else {
+                std::uint64_t lo = 0, hi = std::uint64_t(x.stm);
+                for (std::size_t i = 0; i < x.b.size(); i += 2) {
+                        lo = (lo ^ x.b[i]) * 0xD6E8FEB86659FD93ull;
+                        hi = (hi ^ x.b[i + 1]) * 0x9E3779B97F4A7C15ull;
+                }
+                return { lo, hi };
+        }
 }
 struct PosKeyHash {
-        std::size_t operator()(PosKey x) const
+        std::size_t operator()(PosKey const& x) const
         {
-                std::uint64_t h = std::uint64_t(x) * 0x9E3779B97F4A7C15ull ^ std::uint64_t(x >> 64) * 0xC2B2AE3D27D4EB4Full;
+                auto const [lo, hi] = halves(x);
+                std::uint64_t h = lo * 0x9E3779B97F4A7C15ull ^ hi * 0xC2B2AE3D27D4EB4Full;
                 return std::size_t(h ^ (h >> 31));
         }
 };
@@ -581,7 +1031,7 @@ std::uint16_t lookup_slice(Pos const& p0)
         Pos const p = canonical_key(key_of(p0)) ? p0 : mirror(p0);
         Key const key = key_of(p);
         thread_local SliceRef last;
-        thread_local std::uint64_t last_key = ~0ull;
+        thread_local KeyPack last_key = ~KeyPack(0);
         thread_local Meta last_meta;
         if (key.pack() != last_key) { last = slice_values(key); last_key = key.pack(); last_meta = meta_of(key); }
         return ref_value(last, p.stm * last_meta.P + index_of(last_meta, p));
@@ -590,7 +1040,7 @@ std::uint16_t lookup_slice(Pos const& p0)
 int alphabeta(Pos const& p, int alpha, int beta)
 {
         if (in_slices(p)) return to_score((lookup_slice(p)));
-        PosKey const key = std::min(pack(p), pack(mirror(p)));
+        PosKey const key = HAS_MIRROR ? std::min(pack(p), pack(mirror(p))) : pack(p);
         if (auto it = tt.find(key); it != tt.end()) {
                 Bounds const b = it->second;
                 if (b.lo == b.hi || b.lo >= beta) return b.lo;
@@ -1335,13 +1785,13 @@ void solve_slice_par(Meta const& s, std::uint16_t* out, Pool& pool)
 
 // ---------------------------------------------------------------- building all slices up to n pieces
 
-struct Job { std::uint64_t key; int level_n, men, dist; std::uint64_t P; };
+struct Job { KeyPack key; int level_n, men, dist; std::uint64_t P; };
 
 int distance(Key const& k)
 {
         int d = 0;
-        for (auto const sq : k.wm) d += int(sq) / 3;           // white: rows to row 0
-        for (auto const sq : k.bm) d += 5 - int(sq) / 3;       // black: rows to row 5
+        for (auto const sq : k.wm) d += row_of(int(sq));                       // white: rows to the top row
+        for (auto const sq : k.bm) d += BOARD_H - 1 - row_of(int(sq));         // black: rows to the bottom row
         return d;
 }
 
@@ -1350,31 +1800,23 @@ int distance(Key const& k)
 std::vector<Job> make_jobs(int nmin, int nmax)
 {
         std::vector<Job> jobs;
-        // the subsets of a mask by the integer enumeration s = (s - 1) & mask, from the mask down to the empty set
-        std::uint32_t const allowW = u32(FULL - PROMO_WHITE), allowB = u32(FULL - PROMO_BLACK);
-        std::vector<bitboard> wsets;
-        for (std::uint32_t w = allowW;; w = (w - 1) & allowW) {
-                if (int(bb_of(w).size()) <= nmax) wsets.push_back(bb_of(w));
-                if (w == 0) break;
-        }
-        for (bitboard const& wm : wsets) {
-                std::uint32_t const ab = allowB & ~u32(wm);
-                int rest0 = nmax - int(wm.size());
-                for (std::uint32_t b = ab;; b = (b - 1) & ab) {
-                        bitboard const bm = bb_of(b);
-                        int rest = rest0 - int(bm.size());
-                        if (rest >= 0)
-                                for (int nwk = 0; nwk <= rest; ++nwk)
-                                        for (int nbk = 0; nwk + nbk <= rest; ++nbk) {
-                                                Key k{ wm, bm, nwk, nbk };
-                                                if (pieces(k) < std::max(1, nmin) || !canonical_key(k)) continue;
-                                                Meta m = meta_of(k);
-                                                if (m.P == 0) continue;
-                                                jobs.push_back({ k.pack(), pieces(k), int((wm | bm).size()), distance(k), m.P });
-                                        }
-                        if (b == 0) break;
-                }
-        }
+        // the placements of at most nmax men (k-subsets of the squares each colour's men may stand on), then the kings
+        bitboard const allowW = FULL - PROMO_WHITE, allowB = FULL - PROMO_BLACK;
+        for (int nw = 0; nw <= nmax; ++nw)
+                for_each_subset(allowW, nw, [&](bitboard const& wm) {
+                        for (int nb = 0; nw + nb <= nmax; ++nb)
+                                for_each_subset(allowB - wm, nb, [&](bitboard const& bm) {
+                                        int const rest = nmax - nw - nb;
+                                        for (int nwk = 0; nwk <= rest; ++nwk)
+                                                for (int nbk = 0; nwk + nbk <= rest; ++nbk) {
+                                                        Key k{ wm, bm, nwk, nbk };
+                                                        if (pieces(k) < std::max(1, nmin) || !canonical_key(k)) continue;
+                                                        Meta m = meta_of(k);
+                                                        if (m.P == 0) continue;
+                                                        jobs.push_back({ k.pack(), pieces(k), int((wm | bm).size()), distance(k), m.P });
+                                                }
+                                });
+                });
         std::sort(jobs.begin(), jobs.end(), [](Job const& a, Job const& b) {
                 return std::tie(a.level_n, a.men, a.dist, a.key) < std::tie(b.level_n, b.men, b.dist, b.key);
         });
@@ -1440,7 +1882,7 @@ void build(int nmax, int threads, int dmax)
 }
 
 // insert (key, offset) pairs into a fresh table with room for all of them
-void rebuild_table(std::vector<std::pair<std::uint64_t, std::uint64_t>> const& entries)
+void rebuild_table(std::vector<std::pair<KeyPack, std::uint64_t>> const& entries)
 {
         std::size_t cap = 1;
         while (cap < 2 * entries.size()) cap <<= 1;
@@ -1454,9 +1896,9 @@ void rebuild_table(std::vector<std::pair<std::uint64_t, std::uint64_t>> const& e
         }
 }
 
-std::vector<std::pair<std::uint64_t, std::uint64_t>> table_entries()
+std::vector<std::pair<KeyPack, std::uint64_t>> table_entries()
 {
-        std::vector<std::pair<std::uint64_t, std::uint64_t>> e;
+        std::vector<std::pair<KeyPack, std::uint64_t>> e;
         for (std::size_t i = 0; i < tab_key.size(); ++i)
                 if (tab_key[i]) e.push_back({ tab_key[i] - 1, tab_off[i] });
         return e;
@@ -1492,7 +1934,7 @@ bool extend(int n, int threads, std::string const& path, bool resume = false)
                 return std::tie(a.level_n, a.men, a.dist, a.key) < std::tie(b.level_n, b.men, b.dist, b.key);
         });
         auto entries = table_entries();
-        std::vector<std::pair<std::uint64_t, std::uint64_t>> layer;
+        std::vector<std::pair<KeyPack, std::uint64_t>> layer;
         std::uint64_t total = 0;
         for (auto const& j : jobs) { layer.push_back({ j.key, DB2_FLAG | total }); total += 2 * j.P; }
         std::cerr << "extend: " << jobs.size() << " slices, " << total << " positions (" << total / 1e9 << " GB) in " << path << std::endl;
@@ -1559,7 +2001,7 @@ bool attach(std::string const& path)
         if (!f) return false;
         std::uint64_t hdr[4];
         bool ok = std::fread(hdr, sizeof hdr, 1, f) == 1 && hdr[0] == 0x3678364244424747ull && built_max == int(hdr[1]) - 1;
-        std::vector<std::pair<std::uint64_t, std::uint64_t>> layer(ok ? hdr[2] : 0);
+        std::vector<std::pair<KeyPack, std::uint64_t>> layer(ok ? hdr[2] : 0);
         if (ok) ok = std::fread(layer.data(), sizeof layer[0], layer.size(), f) == layer.size();
         std::fclose(f);
         if (!ok || !map_file(path, hdr[3], 0)) return false;
@@ -1582,7 +2024,7 @@ bool save(std::string const& path)
         if (!f) return false;
         std::uint64_t hdr[6] = { MAGIC2, std::uint64_t(built_max), std::uint64_t(dtm_max), tab_key.size(), db.size(), wdlbits.size() };
         std::fwrite(hdr, sizeof hdr, 1, f);
-        std::fwrite(tab_key.data(), 8, tab_key.size(), f);
+        std::fwrite(tab_key.data(), sizeof(KeyPack), tab_key.size(), f);
         std::fwrite(tab_off.data(), 8, tab_off.size(), f);
         std::fwrite(db.data(), 1, db.size(), f);
         std::fwrite(wdlbits.data(), 8, wdlbits.size(), f);
@@ -1603,7 +2045,7 @@ bool load(std::string const& path)
         } else ok = false;
         if (ok) {
                 tab_key.resize(hdr[2]); tab_off.resize(hdr[2]); db.resize(hdr[3]); wdlbits.resize(hdr[4]);
-                ok = std::fread(tab_key.data(), 8, hdr[2], f) == hdr[2] && std::fread(tab_off.data(), 8, hdr[2], f) == hdr[2]
+                ok = std::fread(tab_key.data(), sizeof(KeyPack), hdr[2], f) == hdr[2] && std::fread(tab_off.data(), 8, hdr[2], f) == hdr[2]
                   && std::fread(db.data(), 1, hdr[3], f) == hdr[3] && std::fread(wdlbits.data(), 8, hdr[4], f) == hdr[4];
                 built_max = int(hdr[0]);
                 dtm_max = int(hdr[1]);
@@ -1620,11 +2062,11 @@ std::uint64_t verify(int threads)
 {
         // in storage order (the order in which the slices were built), so that successor slices in the
         // memory-mapped layer are read with good locality
-        std::vector<std::pair<std::uint64_t, std::uint64_t>> order;
+        std::vector<std::pair<std::uint64_t, KeyPack>> order;
         for (std::size_t i = 0; i < tab_key.size(); ++i)
                 if (tab_key[i]) order.push_back({ tab_off[i], tab_key[i] - 1 });
         std::sort(order.begin(), order.end());
-        std::vector<std::uint64_t> keys;
+        std::vector<KeyPack> keys;
         for (auto const& [off, k] : order) keys.push_back(k);
         for (auto const& [k, v] : extra) keys.push_back(k);
         std::uint64_t errors = 0, done = 0;
@@ -1653,6 +2095,8 @@ std::uint64_t verify(int threads)
 
 // ---------------------------------------------------------------- I/O
 
+int pdn_number(int sq) { return GEO.pdn[std::size_t(sq)] + 1; }   // a playable square's PDN number
+
 bool parse_fen(std::string const& fen, Pos& p)
 {
         p = Pos{};
@@ -1671,8 +2115,9 @@ bool parse_fen(std::string const& fen, Pos& p)
                 while (std::getline(ss, item, ',')) {
                         if (item.empty()) continue;
                         bool king = item[0] == 'K';
-                        int sq = std::stoi(king ? item.substr(1) : item) - 1;
-                        if (sq < 0 || sq >= N) return false;
+                        int const i = std::stoi(king ? item.substr(1) : item) - 1;      // a PDN number
+                        if (i < 0 || i >= PDN_SIZE || GEO.dense[std::size_t(i)] < 0) return false;
+                        int const sq = GEO.dense[std::size_t(i)];
                         (king ? p.k[side] : p.m[side]).insert(std::size_t(sq));
                 }
                 i = j;
@@ -1694,15 +2139,25 @@ std::string fen_of(Pos const& p)
                         if (!first) s += ',';
                         first = false;
                         if (k) s += 'K';
-                        s += std::to_string(sq + 1);
+                        s += std::to_string(pdn_number(sq));
                 }
         }
         return s;
 }
 
+// the start position: (BOARD_H - 2) / 2 rows of men per side (W:W13,...,18:B1,...,6 on 6x6)
+Pos start_pos()
+{
+        Pos p;
+        for (int r = 0; r < (BOARD_H - 2) / 2; ++r) { p.m[1] |= row_squares(r); p.m[0] |= row_squares(BOARD_H - 1 - r); }
+        return p;
+}
+std::string start_fen() { return fen_of(start_pos()); }
+int start_men() { Pos const p = start_pos(); return int(std::max(p.m[0].size(), p.m[1].size())); }   // a side's men at the start
+
 std::string notation(Move const& mv)
 {
-        return std::to_string(mv.from + 1) + (!mv.captured.empty() ? "x" : "-") + std::to_string(mv.to + 1);
+        return std::to_string(pdn_number(mv.from)) + (!mv.captured.empty() ? "x" : "-") + std::to_string(pdn_number(mv.to));
 }
 
 // ---------------------------------------------------------------- store: units of compressed DTM
@@ -1727,23 +2182,24 @@ std::string notation(Move const& mv)
 
 constexpr bitboard MEN_W = FULL - PROMO_WHITE;            // squares where a white man can stand
 constexpr bitboard MEN_B = FULL - PROMO_BLACK;            // squares where a black man can stand
-constexpr bitboard MEN_MID = MEN_W & MEN_B;               // squares 4-15
+constexpr bitboard MEN_MID = MEN_W & MEN_B;               // between the promotion rows (4-15 on 6x6)
 constexpr std::uint64_t BLOCK = 4096;                     // positions (bytes) per compressed block
 constexpr std::uint64_t CDB_MAGIC = 0x3678364244424331ull;     // version 1: draw 253, no escapes (still read)
 constexpr std::uint64_t CDB_MAGIC2 = 0x3678364244424332ull;    // version 2: draw 255, escape codes E..254 (see ESC8)
 constexpr int ZLEVEL = 19;
 
-// placements of nwm white and nbm black men with j white men on squares 16-18
+// placements of nwm white and nbm black men with j white men on the bottom row (squares 16-18 on 6x6)
+constexpr int BOTTOM = int(PROMO_BLACK.size()), MID = int(MEN_MID.size()), MEN_SQ = int(MEN_B.size());   // the bottom row; between the promotion rows; Black's men's squares
 std::uint64_t men_part(int nwm, int nbm, int j)
 {
-        if (j > 3 || j > nwm || nwm - j > 12 || nbm > 15 - (nwm - j)) return 0;
-        return binom[3][j] * binom[12][nwm - j] * binom[15 - (nwm - j)][nbm];
+        if (j > BOTTOM || j > nwm || nwm - j > MID || nbm > MEN_SQ - (nwm - j)) return 0;
+        return binom[BOTTOM][j] * binom[MID][nwm - j] * binom[MEN_SQ - (nwm - j)][nbm];
 }
 
 std::uint64_t men_count(int nwm, int nbm)
 {
         std::uint64_t c = 0;
-        for (int j = 0; j <= 3; ++j) c += men_part(nwm, nbm, j);
+        for (int j = 0; j <= BOTTOM; ++j) c += men_part(nwm, nbm, j);
         return c;
 }
 
@@ -1753,7 +2209,7 @@ std::uint64_t men_rank(bitboard const& wm, bitboard const& bm)
         int const nwm = int(wm.size()), nbm = int(bm.size()), j = int((wm & PROMO_BLACK).size());
         std::uint64_t r = 0;
         for (int i = 0; i < j; ++i) r += men_part(nwm, nbm, i);
-        std::uint64_t const cm = binom[12][nwm - j], cb = binom[15 - (nwm - j)][nbm];
+        std::uint64_t const cm = binom[MID][nwm - j], cb = binom[MEN_SQ - (nwm - j)][nbm];
         return r + (rank_in(wm & PROMO_BLACK, PROMO_BLACK) * cm + rank_in(wm & MEN_MID, MEN_MID)) * cb + rank_in(bm, MEN_B - wm);
 }
 
@@ -1761,7 +2217,7 @@ void men_unrank(int nwm, int nbm, std::uint64_t r, bitboard& wm, bitboard& bm)
 {
         int j = 0;
         while (r >= men_part(nwm, nbm, j)) r -= men_part(nwm, nbm, j++);
-        std::uint64_t const cm = binom[12][nwm - j], cb = binom[15 - (nwm - j)][nbm];
+        std::uint64_t const cm = binom[MID][nwm - j], cb = binom[MEN_SQ - (nwm - j)][nbm];
         std::uint64_t const c = r % cb;
         r /= cb;
         wm = unrank_in(r / cm, j, PROMO_BLACK) | unrank_in(r % cm, nwm - j, MEN_MID);
@@ -1913,16 +2369,16 @@ std::uint64_t store_gen = 0;           // changes whenever the store is opened a
 
 std::string mat_path(std::string const& dir, int wm, int bm, int wk, int bk, char const* ext)
 {
-        char name[40];   // 6x6-wp-bp-wm-bm
-        std::snprintf(name, sizeof name, "/6x6-%02d-%02d-%02d-%02d", wm + wk, bm + bk, wm, bm);
+        char name[48];   // 6x6-wp-bp-wm-bm (the board's name)
+        std::snprintf(name, sizeof name, "/%s-%02d-%02d-%02d-%02d", board_name().c_str(), wm + wk, bm + bk, wm, bm);
         return dir + name + ext;
 }
 
 std::string unit_path(std::string const& dir, int n, int m, char const* ext)
 {
         if (only_mat.on && n == only_mat.n() && m == only_mat.m()) return mat_path(dir, only_mat.wm, only_mat.bm, only_mat.wk, only_mat.bk, ext);
-        char name[32];   // 6x6-nn-mm: with leading zeros the names sort in build order
-        std::snprintf(name, sizeof name, "/6x6-%02d-%02d", n, m);
+        char name[40];   // 6x6-nn-mm (the board's name): with leading zeros the names sort in build order
+        std::snprintf(name, sizeof name, "/%s-%02d-%02d", board_name().c_str(), n, m);
         return dir + name + ext;
 }
 
@@ -1950,6 +2406,7 @@ void store_close()
 // open a unit: raw (mode 0 read only, 1 create, 2 existing for writing) or compressed (mode 3)
 bool unit_open(std::string const& dir, int n, int m, int mode)
 {
+        if constexpr (!HAS_MIRROR) { std::cerr << "store: the units keep one of each mirror pair; this board has no colour mirror" << std::endl; return false; }
         auto const lay = unit_layout(n, m);
         if (lay.empty()) return true;
         Unit u;
@@ -2146,7 +2603,7 @@ MatRef const& mat_of(Pos const& q)
 // a capture position is often a successor of several positions that are built or checked one after the other
 struct CaptureCache {
         static constexpr std::size_t SLOTS = std::size_t(1) << 20;
-        std::vector<PosKey> key = std::vector<PosKey>(SLOTS, 0);
+        std::vector<PosKey> key = std::vector<PosKey>(SLOTS, PosKey{});
         std::vector<std::uint64_t> gen = std::vector<std::uint64_t>(SLOTS, 0);
         std::vector<std::uint16_t> val = std::vector<std::uint16_t>(SLOTS, 0);
 };
@@ -2356,7 +2813,7 @@ bool mat_build(std::string const& dir, int threads)
                 std::memset(u.p, UNKNOWN8, std::size_t(npos));
                 write_progress(prog, "0\n");
         }
-        std::vector<std::pair<int, std::uint64_t>> jobs;       // (distance, slice key), in build order
+        std::vector<std::pair<int, KeyPack>> jobs;       // (distance, slice key), in build order
         for (auto const& x : lay)
                 for (std::uint64_t r = 0; r < x.men; ++r) {
                         bitboard wm, bm;
@@ -2463,7 +2920,7 @@ bool unit_build(std::string const& dir, int n, int m, int threads, double mem_gb
         }
         // the slices to solve: every slice of an asymmetric material, the canonical slices of a symmetric one
         // (whose positions with black to move are stored as the mirrored slice with white to move)
-        std::vector<std::pair<int, std::uint64_t>> jobs;
+        std::vector<std::pair<int, KeyPack>> jobs;
         for (auto const& x : lay)
                 for (std::uint64_t r = 0; r < x.men; ++r) {
                         bitboard wm, bm;
@@ -2702,8 +3159,8 @@ bool unit_values(std::string const& dir, int n, int m, int threads)
                 std::uint16_t const v = block_cache.value(u, off);
                 std::size_t const t = std::size_t(omp_get_thread_num());
                 sum[t] += mix(off << 16 | v); ++cnt[t];
-                PosKey const k = pack(q);       // keyed by the position, not its offset: the same in any layout
-                msum[t * M + cur.mi] += mix(mix(std::uint64_t(k)) ^ std::uint64_t(k >> 64) ^ (std::uint64_t(v) << 48)); ++mcnt[t * M + cur.mi];
+                auto const [klo, khi] = halves(pack(q));       // keyed by the position, not its offset: the same in any layout
+                msum[t * M + cur.mi] += mix(mix(klo) ^ khi ^ (std::uint64_t(v) << 48)); ++mcnt[t * M + cur.mi];
         });
         for (std::size_t mi = 0; mi < M; ++mi) {
                 std::uint64_t a = 0, b = 0;
@@ -3062,7 +3519,7 @@ int main()
                         // perft <depth> [FEN] [dups]: leaf counts per depth from the position (default: the start position)
                         int depth = 0;
                         rs >> depth;
-                        std::string fen = "W:W13,14,15,16,17,18:B1,2,3,4,5,6", word;
+                        std::string fen = start_fen(), word;
                         keep_duplicates = false;
                         while (rs >> word) { if (word == "dups") keep_duplicates = true; else fen = word; }
                         Pos p0;

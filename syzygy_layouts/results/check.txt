@@ -1,0 +1,10 @@
+check b: 230 sub-tables; 37469171376 positions decoded in order, 138131136 looked up exhaustively, 1020000000 at random; 1030923948 reference values confirmed by Fathom's lookup; 0 failures; 411.206 s
+subdivisions of 2^17: check b: 230 sub-tables; 36845920224 positions decoded in order, 121063824 looked up exhaustively, 9300000 at random; 20382982 reference values confirmed by Fathom's lookup; 21 failures; 144.513 s
+check c0: 230 sub-tables; 37469171376 positions decoded in order, 138131136 looked up exhaustively, 1020000000 at random; 1030966827 reference values confirmed by Fathom's lookup; 0 failures; 318.286 s
+subdivisions of 2^17: check c0: 230 sub-tables; 37469171376 positions decoded in order, 138131136 looked up exhaustively, 10200000 at random; 21318415 reference values confirmed by Fathom's lookup; 0 failures; 129.085 s
+check c1: 230 sub-tables; 37469171376 positions decoded in order, 138131136 looked up exhaustively, 1020000000 at random; 1030975720 reference values confirmed by Fathom's lookup; 0 failures; 314.356 s
+subdivisions of 2^17: check c1: 230 sub-tables; 37469171376 positions decoded in order, 138131136 looked up exhaustively, 10200000 at random; 21326358 reference values confirmed by Fathom's lookup; 0 failures; 128.238 s
+check c2: 230 sub-tables; 37469171376 positions decoded in order, 138131136 looked up exhaustively, 1020000000 at random; 1030966827 reference values confirmed by Fathom's lookup; 0 failures; 316.47 s
+subdivisions of 2^17: check c2: 230 sub-tables; 37469171376 positions decoded in order, 138131136 looked up exhaustively, 10200000 at random; 21318415 reference values confirmed by Fathom's lookup; 0 failures; 127.25 s
+check d0: 230 sub-tables; 37469171376 positions decoded in order, 138131136 looked up exhaustively, 1020000000 at random; 1030948083 reference values confirmed by Fathom's lookup; 0 failures; 322.143 s
+check d2: 230 sub-tables; 37469171376 positions decoded in order, 138131136 looked up exhaustively, 1020000000 at random; 1030945750 reference values confirmed by Fathom's lookup; 0 failures; 327.342 s

@@ -1,0 +1,20 @@
+== ctbgen
+pgconvert: 402 files, 490311444 positions, 0 lookups differ, 0 files skipped (more than 255 values), 152.899 s
+  wdl: 268 files, zstd 7171887 bytes
+    pages, 12-bit codes : 8117115 bytes (113.18 % of zstd): coded 6405666, padding 954974, index 248076, grammar 508399; 4270402 codes, 169109 symbols
+    pages, Huffman codes: 7153239 bytes (99.74 % of zstd): coded 5534298, padding 945446, index 218772, grammar 454723; 4339434 codes, 145675 symbols
+    the 28 files of at least 64 KiB as zstd: zstd 5857433, 12-bit 6036658 (103.06 %), Huffman 5306652 (90.5969 %)
+  dtm: 134 files, zstd 34793458 bytes
+    pages, 12-bit codes : 39625955 bytes (113.889 % of zstd): coded 36453508, padding 841724, index 1242276, grammar 1088447; 24302318 codes, 362637 symbols
+    pages, Huffman codes: 34623302 bytes (99.511 % of zstd): coded 31968534, padding 577002, index 1084272, grammar 993494; 24406611 codes, 326920 symbols
+    the 66 files of at least 64 KiB as zstd: zstd 33628936, 12-bit 37916963 (112.751 %), Huffman 33170576 (98.637 %)
+== itbgen
+pgconvert: 402 files, 490311444 positions, 0 lookups differ, 0 files skipped (more than 255 values), 122.978 s
+  wdl: 268 files, zstd 7349526 bytes
+    pages, 12-bit codes : 8015125 bytes (109.056 % of zstd): coded 6315395, padding 827005, index 240816, grammar 631909; 4210221 codes, 210279 symbols
+    pages, Huffman codes: 7024913 bytes (95.5832 % of zstd): coded 5432729, padding 860519, index 212568, grammar 519097; 4339098 codes, 166963 symbols
+    the 30 files of at least 64 KiB as zstd: zstd 5270507, 12-bit 5186627 (98.4085 %), Huffman 4566906 (86.6502 %)
+  dtm: 134 files, zstd 15361211 bytes
+    pages, 12-bit codes : 16211902 bytes (105.538 % of zstd): coded 14355864, padding 504296, index 495948, grammar 855794; 9570553 codes, 285086 symbols
+    pages, Huffman codes: 14209088 bytes (92.4998 % of zstd): coded 12596725, padding 422283, index 434700, grammar 755380; 9680340 codes, 247922 symbols
+    the 49 files of at least 64 KiB as zstd: zstd 13958588, 12-bit 14375783 (102.989 %), Huffman 12643275 (90.577 %)

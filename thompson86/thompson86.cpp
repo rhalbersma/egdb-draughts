@@ -390,19 +390,12 @@ MemoryNeed memory_need(Material c)
         MatIndex const& mi = mat_index(c);
         auto const groups = groups_of(c);
         m.slots = mi.size;
-        m.groups = groups.size();
-        for (auto const& g : groups) {
-                m.positions += 2 * g.P;
-                m.max_group = std::max(m.max_group, g.P);
-                m.slices += g.units.size();
-        }
+        for (auto const& g : groups) m.add(g);
         std::uint64_t const P = m.max_group;
         // calibrated on 6 pieces (peak RSS against these): the seed lists, with their copies while merging, measured
         // from about 4 to 21 bytes per position (8-byte entries, at most two per position, one list copied at a time:
-        // 24 at most), counted at that bound; a group costs about 480 bytes and a slice 160 (Group, its offsets and
-        // hash map); the group sink's slice map about 64 bytes per slice
+        // 24 at most), counted at that bound; the groups' own memory: MemoryNeed::meta
         std::uint64_t const transient = 11 * ((P + 63) / 64) * 8 + 24 * P;     // 11 bit planes, seed lists
-        std::uint64_t const meta = 160 * m.slices + 480 * m.groups;
         std::uint64_t const writing = std::uint64_t(5) << 18;                  // the final pass's chunk buffers
         // the memory-mapped files count in the resident set as their pages are touched: the inputs (the materials the
         // moves lead into: dmW and dmL for dtm, the bit files for dtc and dtz) and, at rung 1, the group-order files
@@ -413,8 +406,8 @@ MemoryNeed memory_need(Material c)
                 std::uint64_t const n = mat_index(s).size;
                 inputs += g_metric == Metric::dtm ? 2 * n : 2 * ((n + 7) / 8);
         }
-        m.rung0 = FIXED_BYTES + meta + inputs + 2 * mi.size + std::max(transient, writing);
-        m.rung1 = FIXED_BYTES + meta + inputs + 64 * m.slices + 2 * P + m.positions + std::max(transient, writing);
+        m.rung0 = FIXED_BYTES + m.meta(false) + inputs + 2 * mi.size + std::max(transient, writing);
+        m.rung1 = FIXED_BYTES + m.meta(true) + inputs + 2 * P + m.positions + std::max(transient, writing);
         return m;
 }
 
@@ -437,7 +430,7 @@ bool build_material(std::string const& dir, Material c, ExecutionPolicy const& p
         g_dir = dir;
         g_current = c;
         MatIndex const& mi = mat_index(c);
-        auto const groups = groups_of(c);
+        auto groups = groups_of(c);
         if (g_mem_mb != 0 || g_sink_auto) {                     // the claim against the estimates, and the sink
                 MemoryNeed const need = memory_need(c);
                 std::uint64_t const r0 = to_mb(need.rung0), r1 = to_mb(need.rung1);
@@ -458,10 +451,12 @@ bool build_material(std::string const& dir, Material c, ExecutionPolicy const& p
         auto const t0 = std::chrono::steady_clock::now();
         std::uint64_t positions = 0;
         for (std::size_t k = 0; k < groups.size(); ++k) {
+                groups[k].load();                               // its list of configurations, if it has one
                 sink->begin_group(k, groups[k]);
                 solve_group(groups[k], *sink, policy);
                 sink->end_group();
                 positions += 2 * groups[k].P;
+                if (!sink->keeps_groups()) groups[k].release();
         }
 
         // the four files of the material, each written once, sequentially, in index order: the bytes gathered from the
@@ -528,7 +523,7 @@ bool check_all(std::string const& dir, int n, int threads)
         std::uint64_t total = 0;
         for (Material const c : materials_up_to(n)) {
                 std::uint64_t checked = 0, bad_w = 0, bad_b = 0, bad_s = 0, bad_bit = 0;
-                for (auto const& g : groups_of(c))
+                for (auto const& g : loaded_groups_of(c))
                         for (std::uint64_t i = 0; i < g.P; ++i) {
                                 Pos const pw = g.pos(i, 0), pb = g.pos(i, 1);
                                 std::uint16_t const v = lookup(pw), u = lookup(pb);
@@ -597,6 +592,10 @@ int main(int argc, char* argv[])
         init_tables();
         init_cc();
         std::vector<std::string> const a(argv + 1, argv + argc);
+        if (a.size() == 1 && a[0] == "board") {                      // the board this binary was built for (its tree's name)
+                std::cout << board_name() << (CHECKERS ? " checkers" : " international") << " mirror=" << mirror_name() << std::endl;
+                return 0;
+        }
         auto mat_at = [&](std::size_t i) {                             // wp bp wm bm
                 int const wp = std::stoi(a[i]), bp = std::stoi(a[i + 1]), wm = std::stoi(a[i + 2]), bm = std::stoi(a[i + 3]);
                 if (wm < 0 || bm < 0 || wm > wp || bm > bp) { std::cerr << "not a material: wp bp wm bm" << std::endl; std::exit(2); }

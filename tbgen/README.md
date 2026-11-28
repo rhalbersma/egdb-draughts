@@ -1,12 +1,18 @@
-# Syzygy style builds for 6×6 international draughts
+# tbgen: Syzygy style builds for draughts and checkers
 
-`syzygy.cpp` builds endgame databases in the manner of R. de Man's `rtbgen` (the generator of the Syzygy tablebases
-for chess), adapted to draughts and to the design notes in
+`tbgen.cpp` builds endgame databases in the manner of R. de Man's `rtbgen` (the generator of the Syzygy tablebases
+for chess, whose `r` names its variant, regular chess, as `a` names atomic and `s` suicide). Here the first letter names
+the rules: **`itbgen`** for international draughts and **`ctbgen`** for English checkers (`-DEGDB_6X6_CHECKERS=1`),
+on 6×6 by default, on any tabula draughts board (bitboards in blocks of 64 squares) with `-DEGDB_WIDTH`, `-DEGDB_HEIGHT`,
+`-DEGDB_PARITY` (a1 dark or light) and `-DEGDB_LAKE` (removed squares), or a tabula preset with `-DEGDB_BOARD` (CMake:
+`ctbgen_8x8`, `itbgen_10x10`, `ctbgen_8x8_p0`, `itbgen_10x10_j10`, `itbgen_6x5`). Where the board has no colour mirror
+(an odd width with an even height, or a lake that is not symmetric), every material is built in both colours.
+Below, `tbgen` stands for either. It is adapted to draughts and to the design notes in
 [`literature/egdb_primitives.md`](../literature/egdb_primitives.md). It shares its metrics, materials, index, groups
 and unmoves with [`thompson86`](../thompson86/) (`src/materials_6x6.hpp`); what differs is the sidedness and the
 passes.
 
-| | `thompson86` | `syzygy` |
+| | `thompson86` | `tbgen` |
 |---|---|---|
 | sides | one, half results: White-to-move wins (`dmW-wtm`), Black-to-move losses (`dmL-btm`) | two, full results: both sides to move, wins, draws and losses (`dtm-wtm`, `dtm-btm`) |
 | materials (≤ 6 pieces) | 155: every material and its colour mirror | 82: one of each mirror pair, the other looked up as its mirror image |
@@ -88,29 +94,74 @@ deeper than n − 1.
 Disk, as rule 6: the group's arrays in RAM; finished materials read through read-only memory maps; each file written
 once, sequentially, to a temporary name and then renamed.
 
+## The generic engine (the default)
+
+```
+tbgen build <dir> wp bp wm bm wdl|dtz|dtc|dtm [bits=8|4|3|2] [primary=depth|wdl] [material|tempi|configuration] ...
+tbgen verify <dir> wp bp wm bm wdl|dtz|dtc|dtm [par]
+```
+
+One loop (`solve_group_engine`, synthesis 7.9) builds every target: rtbgen's sweeps with rtbgenp's codes, a sliding
+window with reductions, a direction (forward or retrograde) chosen per sweep, over cells of 8, 4 or 3 bits.
+* `wdl` writes wdl files only, on dtz's groups; `bits=3` (21 cells per word), `4` or `8` (fastest); `bits=2` is a four-state
+  loop on 2-bit cells (4 per byte): losses mark their wins once, forward passes over the unknown cells, then a queue.
+* `dtz`, `dtc`, `dtm`: 8 bits. `primary=wdl` (dtz, and dtc on whole-material groups) builds the depths as a
+  by-product of a 4-bit table: a reduction every other ply, whose snapshots are the log of the plies.
+* `tempi` and `configuration` cut a material into finer groups (man moves become exits with their depths).
+* `verify` for `wdl` checks outcomes against the moves; a depth build into the same directory completes the check.
+* The older loops stay available by name as references: `cell8`, `rtb`, `wdl3`, `wdl2`, `wdlz`, `frontier`, `scan`.
+* `EGDB_RTB_WINDOW=k` forces a small window, `EGDB_RTB_DIR=retro|forward|auto` the direction, `EGDB_CACHE_MB=n` the size
+  of the cache of decompressed input blocks (default 256; `src/block_cache.hpp`: one cache for all threads, bounded,
+  lock-free for readers; stress test `src/block_cache_test.cpp`).
+* `tbgen probebench <dir> n <metric> [threads] [probes] [uniform|walk]`: throughput and latency of the prober on a
+  store's probe files (percentiles per probe; uniform positions, or random games probing every node and its children;
+  a pass with an empty cache and a pass with a warm one).
+* `tbgen/Snakefile` drives a whole run: memory first, then cores (`policy=share`), the critical path on all cores,
+  and `granularity=auto`: a material is cut into finer groups only if it does not fit the budget whole.
+
+## rtbgen's sweeps (`rtb`) and the WDL loops (`wdl3`, `wdl2`)
+
+Instead of `cell8`, the build options take (synthesis §7.6–7.8):
+
+* **`rtb`** (`solve_group_rtb`, dtm, dtz and dtc, a sliding window with reductions; `EGDB_RTB_WINDOW=k` forces a small
+  one for tests): rtbgen's iteration with rtbgenp's codes and names
+  (`WIN_IN_ONE + k`, `MATE − k`, `PAWN_WIN`, `PAWN_DRAW`, `CAPT_DRAW`, `CHANGED`, `UNKNOWN`): one sweep per ply over
+  one colour, fused win marking, the loss depth from the successors' codes, no exit lists (provisional exit wins as
+  `PAWN_WIN` with their depths in a zstd snapshot per block), no test of compulsory capture. Byte-identical to `cell8`.
+  `EGDB_RTB_DIR=retro|forward|auto` (default auto) chooses each sweep's direction per table, `EGDB_RTB_ALPHA` (default
+  2) its threshold, `EGDB_RTB_TRACE` prints a line per sweep.
+* **`wdl3`, `wdl2`** (`solve_group_wdl`): win, draw or loss only, as rule tables on one loop; wdl3 with 8 states
+  (fresh and candidate states in the cell, retrograde sweeps), wdl2 Chinook-style with 4 states (forward passes, then a
+  queue). Both read only the successors' wdl files; for now they write placeholder depth files beside the wdl files,
+  which are the results (identical to `cell8`'s). `EGDB_WDL_NIBBLES=1` stores a cell in a nibble (half the table).
+* **`wdlz`** (`solve_group_wdlz`, dtz or dtc): WDL with the depth as a by-product. The WDL loop with rtbgen's ply
+  discipline (every exit has depth 1, so a value's depth is the round that decides it), fresh codes in two generations
+  (10 states, 4 bits per side), and a log of each round's decisions (a zstd bit map per block), merged at the end into
+  the depths. Its dtz and wdl files are identical to `cell8`'s.
+
 ## Build and run
 
 With CMake's two steps, which check the machine (cores, memory, disk) and write the Snakemake profile, see
-[`databases/`](../databases/): `cmake -S databases -B build/x -DBUILDER=syzygy -DPIECES=6`, then `cmake --build build/x`.
+[`databases/`](../databases/): `cmake -S databases -B build/x -DBUILDER=tbgen -DPIECES=6`, then `cmake --build build/x`.
 By hand:
 
 ```bash
-g++-14 -std=c++23 -O2 -march=native -fopenmp -I<xstd-bits>/include -I<xstd-ints>/include -I<xstd-misc>/include syzygy/syzygy.cpp -lzstd -ltbb -o build/syzygy
+g++-14 -std=c++23 -O2 -march=native -fopenmp -I<xstd-bits>/include -I<xstd-ints>/include -I<xstd-misc>/include -I<tabula>/include tbgen/tbgen.cpp -lzstd -ltbb -o build/itbgen
 ```
 
 ```bash
-snakemake -s syzygy/Snakefile --cores 4 --config engine=build/syzygy dir=data/syzygy pieces=6 metric=dtz
+snakemake -s tbgen/Snakefile --cores 4 --config engine=build/itbgen dir=data/itbgen pieces=6 metric=dtz
 ```
 
-or with CMake, target `syzygy`. `policy=par` runs each build with `std::execution::par`; `rounds=scan` finds the
+or with CMake, targets `itbgen` and `ctbgen` (`ctbgen_8x8`, `itbgen_10x10` on the full boards). `policy=par` runs each build with `std::execution::par`; `rounds=scan` finds the
 frontiers by full scans. The last Snakemake job
 (`checkall`) builds `egdb_6x6`'s databases in memory and compares every position of every material, both sides to
 move: dtm exactly, dtc and dtz their wins and losses; every value against its recomputation from the successors; the
 `wdl` files against the values. Further checks:
 
-* `syzygy cmp86 <dir> <dir_thompson86> n <metric>`: for every material with at most n pieces, both colours, the
+* `tbgen cmp86 <dir> <dir_thompson86> n <metric>`: for every material with at most n pieces, both colours, the
   `thompson86` files (`dmW` the White-to-move wins, `dmL` the Black-to-move losses) against the two-sided values;
-* `syzygy order <dtz> <dtc> <dtm> n`: dtz ≤ dtc ≤ dtm for every win and every loss, and the same WDL and `wdl` files
+* `tbgen order <dtz> <dtc> <dtm> n`: dtz ≤ dtc ≤ dtm for every win and every loss, and the same WDL and `wdl` files
   in all three.
 
 **Scalable storage.** The algorithm is rtbgen's; the storage is `thompson86`'s, so a build can shed memory:
@@ -129,7 +180,7 @@ move: dtm exactly, dtc and dtz their wins and losses; every value against its re
   `material` every man move is an exit into an earlier group (rung 2). `tempi` gives the smallest largest group (rung 0
   at most 58 MB at 6 pieces, 2,652 groups, against 103 MB at `material` and 94 MB at `configuration`, where the
   all-men materials' ~100,000 one-position configurations dominate by their metadata).
-* **memory-aware scheduling** (synthesis §7.3): `syzygy plan n <metric> [granularity]` prints each stored material's
+* **memory-aware scheduling** (synthesis §7.3): `tbgen plan n <metric> [granularity]` prints each stored material's
   sizes and its MB at rung 0 and rung 1, counting the memory-mapped inputs and group-order files whose touched pages
   are resident; the Snakefile turns it into claims (`resources: mem_mb`) and critical-path priorities. Over 1,736
   logged 6-piece builds (both builders, granularities, sinks and modes) no peak exceeded its estimate, which averages
@@ -166,11 +217,11 @@ with `par` takes 13–16 s wall: the small materials do not keep four threads bu
 |---|---|---|---|---|
 | `egdb_6x6 build 6` (two-sided, slices, leapfrog) | 51,237,726 | 22.6 s | 0.44 µs | 6.6 s |
 | `thompson86` (one-sided, bit planes, 1986 style, configurations) | 97,762,498 | 34.3 s | 0.35 µs | 10.0 s |
-| `syzygy`, frontier (two-sided, bit planes) | 53,366,312 | 36.4 s | 0.68 µs | 11.8 s |
-| `syzygy`, scan (two-sided, full scans) | 53,366,312 | 53.1 s | 1.00 µs | 18.0 s |
+| `tbgen`, frontier (two-sided, bit planes) | 53,366,312 | 36.4 s | 0.68 µs | 11.8 s |
+| `tbgen`, scan (two-sided, full scans) | 53,366,312 | 53.1 s | 1.00 µs | 18.0 s |
 
 The scans cost dtm a third of its time: a dtm material is one group with up to 69 rounds, and every round scans the
-whole group twice. With frontiers `syzygy` is level with `thompson86` for dtm and ahead for dtz. A position here
+whole group twice. With frontiers `tbgen` is level with `thompson86` for dtm and ahead for dtz. A position here
 settles both colours, so per settled cell (positions × colours) the frontier build costs 0.34 µs for dtm and 0.26 µs
 for dtz, against `thompson86`'s 0.35 and 0.32. (`egdb_6x6` stores a symmetric material with White to move only,
 hence its slightly smaller count.)

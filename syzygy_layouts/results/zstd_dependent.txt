@@ -1,0 +1,2 @@
+zstd level 19, blocks of 4096 positions: 6725120976 positions, 1641985 blocks, 123123926 bytes of blocks + 13135880 of offsets = 136.26 MB; one block decompresses in 5389.68 ns
+zstd level 19, blocks of 65536 positions: 6725120976 positions, 102702 blocks, 72152000 bytes of blocks + 821616 of offsets = 72.9736 MB; one block decompresses in 36243.1 ns

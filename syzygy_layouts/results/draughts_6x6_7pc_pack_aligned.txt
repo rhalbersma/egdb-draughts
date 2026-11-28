@@ -1,0 +1,15 @@
+check c0: 30 sub-tables; 14487186 positions decoded in order, 14487186 looked up exhaustively, 0 at random; 1900000 reference values confirmed by Fathom's lookup; 0 failu
+== ctbgen
+pgpack: 134 materials, 402 sub-tables (54 a single value), 490311444 positions looked up, 0 differ, 41.8046 s
+  zstd probe files: wdl 7171887 + dtm 34793458 = 41965345 bytes
+  packaged files (wdl 12-bit, dtm Huffman): 44051520 bytes (104.971 % of zstd)
+    headers and directories 56816, grammars and code tables 1501118, page indexes 1284770, pages of small sub-tables 731760, pages of the others 40468480, alignment and the closing bytes 2278169
+wdl   warm: 1271388 probes/s, mean 754 ns, p50 535, p90 1097, p99 4698, p99.9 18060, max 1
+depth warm: 228819 probes/s, mean 4338 ns, p50 1361, p90 10119, p99 42930, p99.9 102738, m
+== itbgen
+pgpack: 134 materials, 402 sub-tables (21 a single value), 490311444 positions looked up, 0 differ, 30.7707 s
+  zstd probe files: wdl 7349526 + dtm 15361211 = 22710737 bytes
+  packaged files (wdl 12-bit, dtm Huffman): 23766144 bytes (104.647 % of zstd)
+    headers and directories 56816, grammars and code tables 1387806, page indexes 1362810, pages of small sub-tables 804504, pages of the others 20145632, alignment and the closing bytes 2454387
+wdl   warm: 462783 probes/s, mean 2128 ns, p50 937, p90 3416, p99 23656, p99.9 77294, max 
+depth warm: 93310 probes/s, mean 10683 ns, p50 1811, p90 23018, p99 142936, p99.9 434754, 

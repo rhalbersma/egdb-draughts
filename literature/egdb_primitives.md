@@ -29,24 +29,25 @@ for every primitive is what the pass ranges over and whether it writes only the 
 
 ## Settled decisions (the defaults of the 6×6 builders)
 
-Decided in the design discussions and implemented in `syzygy/` (the two-sided builder; `syzygy_checkers` for English
+Decided in the design discussions and implemented in `tbgen/` (the two-sided builder: `itbgen` for international draughts, `ctbgen` for English
 checkers). Change one only on purpose, and update this list with it.
 
 | topic | decision | where |
 |---|---|---|
 | values | exact plies for every metric, never rounded or halved; no draw-rule band | §7.5, §10 |
-| index | the joint index: legal placements only (white men, black men over what the white men leave, kings over the free squares), ranked with PEXT (`bit_compress`, physical to logical squares) and colex tables, unranked with PDEP; men outermost | `src/materials_6x6.hpp` (`EGDB_JOINT_INDEX=1`) |
+| board | a compile-time parameter: any tabula draughts board, of any size (bitboards are `xstd::bit_fixed_set` aligned to blocks of 64 bits, as in `egdb_fast`; ranks by PEXT/PDEP a block at a time; one block keeps the integer fast paths): `EGDB_WIDTH` × `EGDB_HEIGHT`, `EGDB_PARITY` (a1 dark or light), `EGDB_LAKE` (removed squares), or a tabula preset (`EGDB_BOARD`); squares numbered as in PDN; the rules by `EGDB_6X6_CHECKERS`; the tree starts with the board's name (`tbgen board`: `10x10-j10`, `8x8-p0`). The colour mirror is computed: the 180° rotation, else the reflection in the middle row (odd height), else none, and then every material is built in both colours. Checked by perft (8×8 checkers, 10×10 international) and against `egdb_fast` (kings only) | `src/egdb_6x6.cpp`, CMake `egdb_board()` |
+| index | the joint index: legal placements only (white men, black men over what the white men leave, kings over the free squares), ranked with PEXT (`bit_compress`, physical to logical squares) and colex tables (up to 20 squares; beyond, sums of binomials), unranked with PDEP; men outermost | `src/materials_6x6.hpp` (`EGDB_JOINT_INDEX=1`) |
 | build cell | 8 bits per position and side (cell8), reductions every 240 codes into value-preserving zstd snapshots, merged as a transform-reduce over the windows | §7.5, `rounds=cell8` |
 | loss checks | delayed (rtbgen's `CHANGED`): mark the candidates, check each once | cell8 and frontier modes |
-| inputs | read only in pass 0; DTM builds read only the DTM build files (self-contained: 1 + plies, 0 a draw), DTC and DTZ builds only the WDL build files | `syzygy/syzygy.cpp` |
+| inputs | read only in pass 0; DTM builds read only the DTM build files (self-contained: 1 + plies, 0 a draw), DTC and DTZ builds only the WDL build files | `tbgen/tbgen.cpp` |
 | build format | both sides, every position stored (captures, pending captures, draws); zstd blocks of 4 KiB read through a per-thread block cache (64 MiB); escape tokens beyond the direct range (E = 241, one extra byte, up to 3,840) | `store=compressed` |
 | sink | the 8-bit sink in anonymous memory, each file written once, sequentially: no random writes | `sink=bytes` |
 | WDL | one shared directory `<dir>/wdl/`, written by the first metric built, compared (not rewritten) by the others | Snakefile |
 | metrics | WDL + DTM to solve; DTZ before DTC; DTC reuses DTZ for kings-only materials | Snakefile |
-| probe format | one side to move; captures and draws as don't-cares (pending captures planned); depth without class (from WDL): DTM in moves, DTC and DTZ in plies, 16 escape tokens, no draw code; zstd blocks of 4 KiB; converted once the materials a material leads into are converted, then its depth build files are deleted | §10, `probe=1`, `syzygy convert` |
+| probe format | one side to move; captures and draws as don't-cares (pending captures planned); depth without class (from WDL): DTM in moves, DTC and DTZ in plies, 16 escape tokens, no draw code; zstd blocks of 4 KiB; converted once the materials a material leads into are converted, then its depth build files are deleted | §10, `probe=1`, `tbgen convert` |
 | fills | don't-cares take the dominant or the run-extending value, never an escape token | §10 |
 | parallelism | `for_blocks<B>(policy, n, f)`, B a multiple of 8 cache lines; Snakemake `policy=auto`: the largest materials (at least 1 / (4 × cores) of all positions, those at the end of the critical path) with `std::execution::par` on all cores, alone; the rest on one core each, side by side as far as `--cores` and the memory claims allow | `src/materials_6x6.hpp`, Snakefile |
-| layout | `<dir>/<metric>/6x6/<np>/<wp>-<bp>/<wm>-<bm>-<kind>-<side>.z`, `<dir>/wdl/…`, `<dir>/probe/<kind>/…` | Snakefile |
+| layout | `<dir>/<metric>/<board>/<np>/<wp>-<bp>/<wm>-<bm>-<kind>-<side>.z` (board 6x6, 8x8, 10x10, …), `<dir>/wdl/…`, `<dir>/probe/<kind>/…` | Snakefile |
 
 ## 1. Vocabulary
 
@@ -102,8 +103,8 @@ too. Ours come in two granularities, the coarser a union of the finer:
 
 | slice, labelled by | |
 |---|---|
-| the **tempi**: each colour's tempo, its men's distance to promotion summed over its men (rows still to go) | `thompson86`, `syzygy` (`granularity=tempi`) |
-| the **configuration**: every man's square | `egdb_6x6`, `thompson86`, `syzygy` (`granularity=configuration`) |
+| the **tempi**: each colour's tempo, its men's distance to promotion summed over its men (rows still to go) | `thompson86`, `tbgen` (`granularity=tempi`) |
+| the **configuration**: every man's square | `egdb_6x6`, `thompson86`, `tbgen` (`granularity=configuration`) |
 
 The tempi factorize by colour: every man move lowers its own colour's tempo by exactly one, a white man move from
 (tw, tb) to (tw − 1, tb), a black one to (tw, tb − 1). So the tempi are a grid, every man move leads to a neighbour
@@ -142,7 +143,7 @@ builders):
 | granularity | a group is | moves inside | default for |
 |---|---|---|---|
 | (run) | a material class and all its subsets (Thompson 1986, 1996; not offered) | king and man moves, captures as uncaptures | |
-| `material` | the whole material class (dtz: one total tempo at a time, since a man move ends the count) | king and man moves | `syzygy`, `thompson86` (both styles) |
+| `material` | the whole material class (dtz: one total tempo at a time, since a man move ends the count) | king and man moves | `tbgen`, `thompson86` (both styles) |
 | `tempi` | one (White tempo, Black tempo) cell | king moves | |
 | `configuration` | one configuration of the men | king moves | `egdb_6x6` |
 
@@ -156,7 +157,7 @@ by the pawn's rank, which for a single pawn is its tempo.
 
 Below `material` every man move is an exit into a group solved earlier (it lowers its colour's tempo), looked up in
 pass 0 like a capture. At 6 pieces `tempi` gives the smallest largest group in both builders: rung 0 at most 58 MB in
-`syzygy` (2,652 groups) and 49 MB in `thompson86` (4,897), against 94–103 MB at `material` (82 and 155 groups) or at
+`tbgen` (2,652 groups) and 49 MB in `thompson86` (4,897), against 94–103 MB at `material` (82 and 155 groups) or at
 `configuration` (483,750 and 830,793 groups, where the metadata of the all-men materials' one-position configurations
 dominates).
 
@@ -178,7 +179,7 @@ ones through the depth sink.
 | one solve | **group** | a slice with its mirror | a slice: "A portion of the endgame database (a slice) is computed by resolving all positions" | a "subdivision" (tiers 2 and 3 only above 900 MB; 64,369) | a "subdivision" (about 200K) |
 | a job (what is scheduled) | one material class | a job queue line: one pass over a slice or mini-slice | slices (TrellisDAG) | one subdivision per program instance | one subdivision per instance |
 | a parallel index range | a block of 4096 positions | a **"mini-slice"**: page-aligned, about 10 million positions | POSIX threads dividing "the range of positions" equally | — | — |
-| the other colour | syzygy: one of each mirror pair; thompson86: both | the **"mirror"** node (4112 ↔ 1421) | "its mirror database 2332.77 with white to move" | — | — |
+| the other colour | tbgen: one of each mirror pair; thompson86: both | the **"mirror"** node (4112 ↔ 1421) | "its mirror database 2332.77 with white to move" | — | — |
 
 In this vocabulary: Chinook's node (1994) or sub-database (2003) and Gilbert's 2005 "slice" are material classes;
 Chinook 2003's "material" is the pieces-per-side subdivision; Chinook's "slice" is a leading-rank slice; Gilbert's
@@ -584,10 +585,10 @@ position in RAM** for that group. Taking the rungs in order as a group outgrows 
 
 | rung | in RAM per position of the group | on disk | depth | from |
 |---|---|---|---|---|
-| 0 | everything (depth bytes, bit planes, seeds) | finished files only | exact | `thompson86`, `syzygy`, `egdb_6x6` today |
+| 0 | everything (depth bytes, bit planes, seeds) | finished files only | exact | `thompson86`, `tbgen`, `egdb_6x6` today |
 | 0′ | 1 byte: the 8-bit cell, statuses inside, rounds by scanning (§7.5) | snapshots, one per 240-ply window | exact | rtbgen, made value-preserving |
 | 1 | bit planes (cumulative W/B, frontier, candidates): a few bits | depth as appended frontier lists, one merge at the end | exact | §7.1 |
-| 2 | the same, for a smaller group: wave → slice (cheap once the half results are stored, since a move out is one read) | | exact | `thompson86`, `syzygy` (`granularity=tempi\|configuration`), `egdb_6x6` |
+| 2 | the same, for a smaller group: wave → slice (cheap once the half results are stored, since a move out is one read) | | exact | `thompson86`, `tbgen` (`granularity=tempi\|configuration`), `egdb_6x6` |
 | 3 | 1 bit: the cumulative win bit; candidates and losses streamed | the byte database, merged per level (Wu–Beal), or the W/L/D/U state streamed (Lincke) | exact (Wu–Beal) or WDL (Lincke) | Wu–Beal, Lincke |
 | 4 | a cached fraction of 1 bit, dual-indexed for locality | as rung 3 | as rung 3 | Lincke |
 | 5 | sort runs only | everything; scatters as sorted batches | exact | Wu–Liu–Hsu |
@@ -595,7 +596,7 @@ position in RAM** for that group. Taking the rungs in order as a group outgrows 
 Before rung 3, the 4× symmetry of kings-only slices (§6) shrinks the largest groups for free. Each rung keeps the
 pass code and changes only where its inputs and outputs live, so a memory budget can pick the rung per group from
 the sizes known before the build (`Meta.P` of the slices). Both builders now reach rung 1 (a depth sink with
-group-order files, `sink=auto` by the job's claim). `syzygy` first had to split its 16-bit value array, which was both
+group-order files, `sink=auto` by the job's claim). `tbgen` first had to split its 16-bit value array, which was both
 depth store and cumulative state (about 7.5 bytes per position and side to move against rtbgen's 1 byte), into
 cumulative bit planes for the state and write-only values in the sink; its frontier rounds now hold about 10 bit planes (one for the delayed check's candidates)
 and the level lists, its scan mode (rtbgen's) still the value array, which its frontier scans. Both also offer groups
@@ -647,9 +648,9 @@ byte; the previous metric's build gives a better estimate).
 
 | pass or choice | work | access | measured |
 |---|---|---|---|
-| whole build, `seq` | about 2P positions per group, moves generated, exits looked up | CPU, random reads into finished files | `thompson86` 0.35 µs per position; frontier `syzygy` 0.34 µs (dtm) and 0.26 µs (dtz) per settled cell |
+| whole build, `seq` | about 2P positions per group, moves generated, exits looked up | CPU, random reads into finished files | `thompson86` 0.35 µs per position; frontier `tbgen` 0.34 µs (dtm) and 0.26 µs (dtz) per settled cell |
 | pass 0 lookups into finished files | a few per position | random reads | page cache: part of the above; cold memory map: 3–8 µs per lookup (§7, rule 6), so pass 0 explodes once the inputs fall out of the cache |
-| rounds by full scans instead of frontiers | 2 × 2P per round, L rounds | sequential reads of the group | `syzygy` dtm +46 % (53.1 s against 36.4 s), dtz +14 % |
+| rounds by full scans instead of frontiers | 2 × 2P per round, L rounds | sequential reads of the group | `tbgen` dtm +46 % (53.1 s against 36.4 s), dtz +14 % |
 | depth sink, group-order files instead of the array | the gathering pass, slice lookups | sequential writes, random reads in RAM | +10–15 % CPU; the largest material's peak memory 19.3 MB instead of 24.9 MB |
 | `par` within a group | the same work, split in blocks of 4096 positions | | whole-material groups: 2.0× on 4 cores (43.0 s → 21.1 s); configuration groups: none, only thread-pool overhead |
 | scattered updates on disk | one per update | random against sorted | Wu–Liu–Hsu 2004: 10^6 updates 3787 s random against 6.5 s sorted |
@@ -822,7 +823,7 @@ cache.
 **The cost per position depends on the game**, so the plan measures it rather than carry a constant over: the
 engine's `bench` samples every material and times the move generator (the core of every pass), with the branching
 factor and the shares of captures and promotions (pass 0's lookups into other materials). One ratio, fixed by the
-measured builds (thompson86 1.23, syzygy 2.39 move generations per position and side), turns a bench of any rules into
+measured builds (thompson86 1.23, tbgen 2.39 move generations per position and side), turns a bench of any rules into
 a cost per position. On the same 6×6 board, engine and machine, international draughts costs 0.284 µs per move
 generation with 4.07 moves (24.5 % captures, 5.3 % promotions), English checkers 0.153 µs with 3.44 (15.2 %, 8.4 %):
 flying kings, long captures and men capturing backwards make the first nearly twice as dear. Larger boards cost more
@@ -832,7 +833,7 @@ per position again (longer rays, more pieces to scan), so a build on another boa
 count their levels and frontiers (a few popcounts per round), one `stats` line per material, and the plan extrapolates
 from a small build of the same rules, engine and machine (fewer pieces) to the large one: the cost per position,
 geometrically from the last two piece counts. Calibrated on thompson86's build to 5 pieces, the 6-piece materials come
-out at 0.40 µs per position and side (measured 0.419) and about 36 s of CPU (40.5 s); syzygy's three metrics on 4 cores at 32 s, as measured (36.4 + 33.3 + 28.0 s of CPU). Gilbert's "average
+out at 0.40 µs per position and side (measured 0.419) and about 36 s of CPU (40.5 s); tbgen's three metrics on 4 cores at 32 s, as measured (36.4 + 33.3 + 28.0 s of CPU). Gilbert's "average
 build speed per CPU, 197,529 positions/sec" (5.06 µs per position on 2.4–2.5 GHz cores) is this kind of number:
 whole-build throughput, his 16.5 T positions over 2.65 CPU-years, his passes, caching and I/O included.
 
@@ -854,14 +855,14 @@ I/O: the configure step of `databases/` reports, for rungs 0–2,
 * the disk time at the disk's sequential speed (`DISK_MBPS`, by default 150 MB/s for an HDD, 500 MB/s otherwise), and
   for an SSD the writes against its endurance (`DISK_TBW`).
 
-`syzygy` to 6 pieces, all three metrics: 404 MB written (1.1 GB with group files), 590 MB to 1.5 GB read, 6 to 17 s of
+`tbgen` to 6 pieces, all three metrics: 404 MB written (1.1 GB with group files), 590 MB to 1.5 GB read, 6 to 17 s of
 disk time at 150 MB/s, 1 ppm of a 600 TBW drive. At the lower rungs the plan adds the per-level streams of rung 3 and
 the random accesses of rung 4 (frontier × moves × (1 − r) × t_access): a build whose plan shows those terms dominant is
 one to move to an SSD, to a finer granularity, or to sorted batches.
 
 ### 7.5 The 8-bit cell: one byte per position, reductions, value-preserving snapshots
 
-Without outcounting (the syzygy builder: a loss candidate is verified forward, as rtbgen's `check_loss`), the build
+Without outcounting (the tbgen builder: a loss candidate is verified forward, as rtbgen's `check_loss`), the build
 needs **one byte per position and side to move**, and no bit planes: rtbgen's design, with its reduction step made
 value-preserving and aligned with the storage escapes of §10.
 
@@ -914,7 +915,7 @@ DTC take their sign from WDL; DTM goes to moves); window i ≥ 2 becomes **stora
 byte is the extra byte, verbatim**. Every value stays exact from the first round to the stored byte: no rounding, no
 halving, no margin for an engine to keep, and the token is the window number: a multiple of the reduction interval.
 
-**Implemented** as `syzygy build … cell8` (`solve_group_cell8`); `EGDB_CELL8_WINDOW=k` forces windows of k plies, to
+**Implemented** as `tbgen build … cell8` (`solve_group_cell8`); `EGDB_CELL8_WINDOW=k` forces windows of k plies, to
 exercise the reductions on small builds. Up to 6 pieces it agrees with egdb_6x6 and with every position's successors
 for all three metrics, with the full window (no reductions) and with windows of 7 and 2 plies (up to 35 reductions
 in one group). At 8 pieces (DTM, every material up to 7 pieces plus the 21 eight-piece ones with at most 2 men: 81
@@ -935,6 +936,289 @@ every game: chess DTZ 1,193 plies (8 pieces, the opposing-pair tables) and DTM 1
 statistics); checkers 253 plies at 7 pieces (Trice–Dodgen) and 279 at 10 (Gilbert); 6×6 checkers 147 at 8 pieces.
 A build that goes deeper stops with an error naming the material and its depth; the remedy is a larger S, not a side
 path.
+
+### 7.6 rtbgen's sweeps carried over to DTM (`rtb`)
+
+`tbgen build … rtb` (`solve_group_rtb`) is R. de Man's rtbgen iteration on our byte cell, for DTM within one window.
+Two tables of one byte per position (`table_w`, `table_b`), **one sweep per ply over one colour** (white at even
+plies, black at odd), rtbgen's `tbl` dispatch on the code, the loss depth computed from the successors' codes, and
+the predecessors of a new loss marked won at once (rtbgen's fused `iter()`). In DTM a code covers two plies (wins
+odd, losses even), so a window is 245 plies (wins) / 246 (losses).
+
+**Codes: rtbgenp's (his generator with pawns; our men are his pawns), his names, values and order**, wins from the
+bottom up, losses from the top down:
+
+| code | value | meaning |
+|---|---|---|
+| `ILLEGAL` | 0 | unused: draughts has no illegal positions |
+| `CAPT_WIN` | 1 | unused: a capture win has a depth here, a `WIN_IN_ONE + k` |
+| `PAWN_WIN` | 2 | a man move out of the group wins and moves inside remain: **provisional**, its depth in the snapshot |
+| `WIN_IN_ONE + k` | 3 … 125 | a win in 2k + 1 plies |
+| `MATE − k` | 249 … 126 | a loss in 2k plies (`MATE`: no moves); 0xf8 = `MATE − 1` is a loss in 2, not rtbgen's `LOSS_IN_ONE` |
+| `CAPT_DRAW` | 0xfa | decided in pass 0 as a draw (all moves leave the group) |
+| `PAWN_DRAW` | 0xfb | undecided, cannot lose: a man move out of the group draws |
+| `CAPT_CLOSS` | 0xfc | unused: no 50-move rule |
+| `CHANGED` | 0xfd | a loss candidate |
+| `UNKNOWN` | 0xfe | undecided; a draw at the end |
+| `BROKEN` | 0xff | unused: the index has no broken slots |
+
+**Compulsory capture makes `CAPT_` final and leaves `PAWN_` provisional.** In chess both are lower bounds (a quiet
+move may be better). In draughts a capture position has only captures, decided in pass 0; a man move out of the group
+stands next to king moves inside, which may be better. The win marking writes only over `UNKNOWN`, `CHANGED`,
+`PAWN_DRAW` and `PAWN_WIN`, and **no win is ever replaced**: a loss marks its predecessors exactly once, at its ply
+(a loss found in time by a check at once; the losses of pass 0 and the early ones, below, by dispatch on their code at
+their ply, as rtbgen's `tbl[MATE]`), so a win written then is final. That makes the unmoves safe **without a test of
+compulsory capture**: a "fake" predecessor (a position with a capture, which the unmove cannot see) holds a decided
+code, which no marking touches. A first version with rtbgen's keep-the-smaller-byte overwrite gave 7 M wrong wins
+(decided capture wins replaced by faster fake ones), caught by the successor check.
+
+**No exit lists.** The loss check, once every move inside reaches an opened win, looks the exits up again and writes
+loss(max(slowest win + 1, slowest losing exit)): a loss deeper than the current ply is written early (exact, final)
+and marks its wins at its own ply. A provisional exit win is the single code `PAWN_WIN`; its depth goes into a
+**snapshot per colour, zstd per 4096-position block of the sweeps, with a mask of the depths in each block**: the
+sweep of its colour unpacks only the blocks with a `PAWN_WIN` of its depth, in step with its own blocks (sequential,
+so it compresses: a few % of the table on the largest 10×10 materials), and turns it into a `WIN_IN_ONE + k` there.
+A check never needs that depth: a `PAWN_WIN` still in the table is no opened win yet.
+
+**The sweep reads 8 cells at a time** (the exact zero-byte test for the codes it handles, as cell8's `scan_eq`): a
+plain byte loop made the same work 16 % slower; with the word scan the loop is about 19 % faster than before.
+
+**Ways to tell a slower win from a decided one** (measured before settling on the snapshot; sweeps, all byte-identical):
+
+| | 6×6 intl to 7 | 6×6 checkers to 7 | 8×8 checkers to 5 | 10×10 intl to 5 |
+|---|---|---|---|---|
+| decode + `has_capture` | 27.8 s | 34.8 s | 15.8 s | 118.2 s |
+| position from the unmove + `has_capture` | 26.8 | 34.4 | 15.3 | 116.1 |
+| separate codes (`EXIT_WIN + k`, window 168 plies) | 21.7 | 29.2 | 15.3 | 110.0 |
+| raw bit map of decided positions | 25.7 | 32.3 | 15.2 | 113.8 |
+| zstd bit map (1 KB blocks, random access) | 50.2 | 60.2 | 18.3 | 145.2 |
+| **snapshot with block masks** (no test, 240 plies) | 24.9 (codes 24.2) | 29.6 (codes 29.8) | 16.1 (codes 15.3) | 112.4 (codes 110.8) |
+
+The last row ran later, next to codes again (in brackets); within the noise of the runs, the two are level.
+
+**Adaptive directions, per table per sweep** (`EGDB_RTB_DIR=retro|forward|auto`, `EGDB_RTB_ALPHA`): a sweep of X
+decides the next sweep of Y, forward (every undecided cell checked) when U_Y < α F (U_Y from Y's last scan, F the
+wins this sweep marks from), and then marks no candidates for Y. Measured per sweep on 6×6 checkers 03-04-01-02:
+retrograde 10.7 ms + 48.7 ns per win of F, forward 11.5 ms + 24.9 ns per undecided cell, so α = 2; the best direction
+per sweep in hindsight gains 3 %. The draws keep U large: auto saves 6 % (international) and 1.4 % (checkers) of the
+sweeps on the 6×6 ladders.
+
+**Results.** Byte-identical to cell8 on 8×8 3-4 and 10×10 2-4 kings and on every material of 6×6 international and
+checkers to 7 pieces, 8×8 checkers and 10×10 international to 5 pieces (`checkall` passes on the 6×6 ladders). Sweeps
+against cell8's rounds: 8×8 kings 3-4 38.5 against 51.9 s; 10×10 kings 2-4 level; the ladders' totals 3–18 % faster.
+**DTZ and DTC** use rtbgen's DTZ layout (no parity: a win in d is `WIN_IN_ONE + d − 1`, a loss in d is `MATE − d`,
+a window of 123 / 122 plies). Every exit has depth 1, so a winning exit is a win in 1 and final (no `PAWN_WIN`, no
+snapshot) and the check needs no exit lookups. A sweep handles losses and wins of both depths p − 1 and p, so a win in
+p + 1 may reach a cell before its win in p: there the win marking also replaces a slower win, safe because every win
+decided in pass 0 is a win in 1. Byte-identical to cell8; rounds 40–50 % faster (dtz 9.2 against 14.8 s and 9.8
+against 18.3 s, dtc 11.0 against 17.2 s and 12.9 against 25.7 s on the 6×6 ladders to 7 pieces), about half of wdlz's.
+
+**Reductions: a sliding window.** The codes hold depth − base (base even, so DTM keeps its parity; a win's offset is at
+least 1, so a DTZ win at the base is not confused with `PAWN_WIN`). When a sweep's depths would no longer fit, the base
+moves just behind the ply (p − 2 in DTM, p − 4 in DTZ and DTC, where a check may still need a win of p − 2); the
+depths below it go to a snapshot (their codes as they are, zstd per block) and become `WON` or `LOST`; the rest is
+re-encoded; `WIN_LATER` and `LOSS_LATER` (DTM: deep pass-0 values, early losses) are re-evaluated from their exits.
+`PAWN_WIN` depths are 16 bits in their snapshot. The merge takes a `WON` or `LOST` cell's value from the one snapshot
+that has it. `EGDB_RTB_WINDOW=k` forces a small window: with 8 plies (346–2,140 reductions per ladder) every file of
+dtm, dtz and dtc on the 6×6 ladders to 7 pieces is identical to cell8's. A forced DTM reduction costs about 15 ms on
+these groups (a pass over the table, the late cells re-evaluated); at the real window no build here reduces.
+
+**rtbgen's own fusion, measured** (a scratch copy of rtbgen with its `iter()` split into separate sweeps, which find
+the new losses again by their codes, byte-identical tables): unfused is 1.18–1.28× slower at 4 pieces and 1.23–1.31×
+at 5 pieces pawnless (310.6 s fused against 382.6 and 408.3 s over 60 tables). Without a list of new losses an extra
+sweep costs a full pass; cell8's separate win marking already scanned by code, which is why fusing did not pay there.
+
+### 7.7 WDL loops as rule tables (`wdl3`, `wdl2`)
+
+Without depths there is no ply order: a value may be used as soon as it is written. A WDL loop is **a state machine
+on the cell codes**: (forward, value, successors) → value, and (retro, value of the decided successor, value of the
+predecessor) → value. rtbgen's three tables are such a machine, updated every ply: `tbl[code]` is the dispatch (what
+a sweep does with a cell), `win_loss[code]` a successor's contribution to the loss check (a win of the opponent → my
+loss, 0 if it does not count yet), `loss_win[code]` the retro target (my loss → my predecessor's win). Without a ply
+order the tables stay fixed. `solve_group_wdl` takes a rule set of 256-entry tables (pass-0 codes, `act`, `after`,
+`counts_win`, `counts_loss`, `on_loss`, `on_win`, the forward transitions) and runs it with one loop: retrograde
+sweeps (word-wise, over the codes with an action), forward passes, a queue in levels.
+
+| rule set | states | per side to move | loop |
+|---|---|---|---|
+| `wdl3` | `UNKNOWN`, `CHANGED`, `WIN_FRESH`, `WIN`, `LOSS_FRESH`, `LOSS`, `PAWN_DRAW`, `CAPT_DRAW` | 3 bits (6 per slot) | retrograde sweeps alternating between the colours: a fresh loss marks its predecessors `WIN_FRESH` (a write), a fresh win marks them `CHANGED`, a candidate is checked once and a loss marks its wins at once, until two sweeps in a row find nothing |
+| `wdl2` (Chinook-style, minimal) | `UNKNOWN`, `WIN`, `LOSS`, `ANY_DRAW` (Chinook's at-least-a-draw) | 2 bits (4 per slot) | forward passes in place (a capture test on `ANY_DRAW` cells), then the changes of the next pass as a queue, in levels: a queued loss makes U predecessors W directly, D ones after a capture test; a queued win makes U predecessors be evaluated at once |
+
+Freshness replaces the ply: `WIN_FRESH` and `LOSS_FRESH` make every value propagate exactly once. A winning exit is
+final at once (WDL has no faster win), so wdl3 needs no snapshot. Both read only the successors' wdl files and match
+cell8's wdl files on 6×6 international and checkers to 7 pieces (268 + 268). Rounds: wdl3 23.6 s and 34.2 s, wdl2
+52.6 s and 61.2 s; wdl3 does half the evaluations (62 M against 131 M, 109 M against 223 M) and no capture tests
+(wdl2: 129 M and 71 M). They write placeholder depth files beside the wdl files for now.
+
+**Packing: a nibble per cell** (`EGDB_WDL_NIBBLES=1`). The rule tables keep their byte codes: the low nibbles of the
+wdl3 and wdl2 codes are distinct, so a cell stores `c & 15` and reads back `n < 8 ? n : 0xf0 | n`. The colours are
+stored apart (each block of a sweep owns its bytes), the scan takes 16 cells per word, and every write is a byte
+compare-and-swap (a predecessor's write may meet the neighbour's). Identical wdl files. On the largest material of the
+6×6 ladders to 7 pieces (one material per process, peak RSS): the table drops from 23.0 to 11.5 MB, peak RSS from 86.0
+to 76.1 MiB (international) and 82.8 to 75.7 MiB (checkers), the rounds grow 7–12 % (wdl3 20.4 → 21.9 s and 27.0 →
+29.5 s, wdl2 32.6 → 36.5 s and 40.0 → 43.8 s). The table is a quarter of the peak: the rest is the output (2.5 bytes
+per slot for the four files) and the successors (their wdl files). For comparison, rtb dtz 85 MiB (a byte table,
+the successors' wdl files only), rtb dtm 184–196 MiB (it also reads the successors' depth files for the exits), cell8
+dtm 257–290 MiB. Next steps: an encoding in which every write by another thread only sets bits (`UNKNOWN` 000,
+`CHANGED` 001, `PAWN_DRAW` 010, `WIN_FRESH` 011, the decided states with the high bit), so that a predecessor's write
+is one atomic or without a retry and the owner's own writes an xor of a code it knows; then 21 cells of 3 bits per
+64-bit word (3.05 bits per cell).
+
+**Chinook against 3 bits** (Lake–Schaeffer–Lu 1994, Schaeffer et al. 2003): with 2 bits, the fresh state lives
+outside the table (the queue: the changes of the last forward pass, then appended), there is no candidate state (a
+predecessor of a win is re-evaluated at every successor that becomes won), the predecessor of a loss gets a full
+re-evaluation instead of a write, and the merged D (a capture draw is exact, an exit draw is at least a draw) costs a
+decode and a capture test per D cell per forward pass. Counted on our ladders, capture draws are 6–7 % of all
+positions (capture positions are mostly wins for the capturer in even material: 78 % on 6×6, 95 % on 8×8; most capture
+draws are one piece up). The third bit removes the queue, the repeated evaluations, the evaluation of predecessors of
+losses and the capture tests. In the partial-information databases (Björnsson–Schaeffer–Sturtevant 2005) our
+`PAWN_DRAW` is their TW (at least a draw) and `CAPT_DRAW` their TT.
+
+### 7.8 Exact DTC or DTZ at WDL memory, by per-ply decision logs (`wdlz`)
+
+In DTC and DTZ every exit has depth 1 (a conversion or a zeroing move ends the count), so a cell never needs an exit
+depth: **with rtbgen's ply discipline the depth of a value is the round in which it is decided**. The WDL loop with
+that discipline plus a log gives the exact metric. Without parity (unlike DTM) the check must tell the wins of the
+previous ply from those of the current one, so the fresh codes come in two generations (by the parity of the ply):
+10 states, **4 bits per side** (8 per slot), not 3. Implemented as `tbgen build … wdlz` (`solve_group_wdlz`), round n
+over both colours in three word-wise scans: the losses of ply n − 1 mark their wins, the wins of ply n − 1 mark
+candidates, the candidates are checked against wins of earlier plies only. It stops after two idle rounds (pass 0's
+codes of parity 1 wait for round 2; a first version stopped after one and lost the wins in 1 of materials without
+positions lacking moves) and aborts on a fresh code left over. The log stays in RAM for now (the data an append-only
+file would hold). On 6×6 international and checkers to 7 pieces its dtz and wdl files are identical to cell8 dtz's
+(536 + 536); the rounds take about as long, the merge adds 4–5 s (45.0 against 40.4 s, 42.4 against 37.4 s in total),
+the log is 63 and 74 MB (about 1.5–1.8 bits per position). Its memory gain shows only once the cells are nibbles.
+
+The design:
+
+- **what is logged**: per colour and ply, the positions decided at that ply, as a bit map (the class is in the WDL).
+  A loss is logged by the sweep that finds it, at the scan position; a win when its own colour's next sweep turns
+  `WIN_FRESH` into `WIN`; both in index order, so the bit maps compress;
+- **sequential writes only**: each block of a sweep compresses its piece into its own buffer; after the sweep the
+  pieces, in block order, with a small header (ply, colour, piece sizes), go into **one append to one log file**;
+- **the merge**: per colour, all segments of that colour read side by side, each sequentially, block by block (cell8's
+  merge of window snapshots, with a window of one ply), written sequentially as the DTC or DTZ file; two levels if the
+  number of plies outgrows the read-ahead;
+- **the slicing chooses the metric**: whole-material groups (man moves inside, captures and promotions exits) give
+  DTC; one men configuration per group (only king moves inside, every man move an exit) gives DTZ; Chinook-style slices
+  by leading rank give neither (the distance to leaving the slice). In-place (Gauss–Seidel) sweeps give only lower
+  bounds (Lake et al. 1992); the log needs the ply discipline. DTM does not fit: there an exit carries a depth.
+
+### 7.9 Plan: one generic builder on the rtb engine
+
+One builder for every target, in the spirit of chesstb (one generator, five metrics), on the rtb infrastructure:
+rtbgen's sweeps (one colour per ply, the dispatch table, the fused check), the sliding window with reductions, the
+adaptive forward/retrograde choice, and the cell stores. Four independent choices:
+
+| choice | values | constraint |
+|---|---|---|
+| target | wdl, dtz, dtc, dtm (later the -K variants) | |
+| primary | depth (byte codes; wdl derived at the output, as now) or wdl (rule tables; dtz or dtc derived from per-ply logs, as `wdlz`) | wdl-primary depth needs every exit at depth 1: dtz always, dtc only on whole-material groups, never dtm |
+| cell | 8 bits (depth codes, window and reductions), 4 (wdlz's 10 states, wdl3 in nibbles), 3 (wdl3, 21 per 64-bit word), 2 (wdl2: no fresh state, so forward passes and a queue) | depth-primary needs 8 |
+| slicing | material, tempi, configuration | chosen per target (below) |
+
+**The engine.** One loop over (ply, colour). Before each sweep the rule set fills small tables indexed by the cell
+code (256 entries for bytes, 2^w for w bits), as rtbgen updates `tbl`, `win_loss`, `loss_win` every ply:
+`dispatch[c]` (none, mark wins, mark candidates, check, finalise a `PAWN_WIN`), `after[c]` (the owner's code after
+handling), `on_loss[c]` (a predecessor of a fresh loss: rtbgen's `SET_WIN_VALUE`), `on_win[c]` (a predecessor of a
+fresh win: `SET_CHANGED`), `win_rank[c]` (the check's fold: not counted, or the depth it contributes) and
+`loss_rank[c]` (a forward evaluation's). Hooks: the exits (the `PAWN_WIN` snapshot, a loss's exit depths when exits
+carry depths), the log (wdl-primary depth), the reduction (byte window). The direction choice (forward when
+c_f U < α F) and the word-wise scan apply to every rule set. The rule sets:
+
+| rule set | tables | cell |
+|---|---|---|
+| rtb dtm, dtz, dtc | per ply (the window moves) | 8 |
+| wdlz (dtz or dtc by logs) | by ply parity (two generations of fresh codes) | 4 |
+| wdl3 | fixed (the ply order is not needed, and costs nothing) | 3 or 4 |
+| wdl2 | fixed; its own driver (forward passes, then a queue) | 2 |
+
+**Slicing per target.** A finer slice means smaller tables and fewer plies per group, at the price of more exits
+(lookups into finished groups) and, where exits carry depths, `PAWN_WIN` snapshots:
+- wdl: the finest (configuration): WDL does not depend on the slicing (wdl3 on the dtz groups: identical files,
+  rounds 20.4 → 14.4 s on 6×6 international to 7 pieces);
+- dtz: configuration (every man move zeroes: exits at depth 1);
+- dtc: whole material for wdl-primary (only captures and promotions leave); configuration for depth-primary, the man
+  moves as exits with their DTC depth (the `PAWN_WIN` path in the DTZ layout: to build and verify);
+- dtm: configuration with exit depths (the `PAWN_WIN` path, as now): to verify against whole-material groups.
+
+**Memory.** The decompression cache of the inputs is per thread (8,192 blocks of 4 KB each): with dtm's depth
+files it dominates the peak (6×6 international 03-04-02-02: 186 MB, against 94 MB with 512 blocks, 7 % slower;
+the table is 19 MB). A cache shared by the threads, sized from the memory budget, comes first among the memory
+steps; then the packed cells.
+
+**Stages**, each checked byte for byte against the current modes:
+1. the engine: rtb's sweep as an engine over a cell store and a rule set; rtb as the depth rule set (bytes);
+   identical to cell8 for dtm, dtz and dtc, and no slower;
+2. wdl3 and wdlz as rule sets of the engine: the adaptive direction (rtb dtz: 9.6 → 6.4 s from it), nibble cells,
+   wdlz's log as a hook;
+3. slicing per target, exits with depths in the DTZ layout (dtc on configuration groups), dtm on configuration groups;
+4. packed cells: 3 bits (21 per word), the set-bits encoding (a predecessor's write one atomic or, the owner's an xor);
+5. the shared decompression cache, sized by the budget;
+6. one command line (`target`, `primary`, `bits`, `slice`, with automatic defaults); the old modes retired once
+   matched. Later: the -K variants and paging (chesstb's in-RAM compression of idle groups).
+
+**Built** (`solve_group_engine`, the default of `tbgen build`): stages 1 to 6 except the set-bits encoding.
+
+```
+tbgen build <dir> wp bp wm bm wdl|dtz|dtc|dtm [bits=8|4|3|2] [primary=depth|wdl] [material|tempi|configuration]
+```
+
+- **One loop.** The codes come from a codec (rtbgenp's layout in 8 bits or with exit depths, a compact one otherwise),
+  the cells from a store (bytes, nibbles, 21 cells of 3 bits per word). Ordered with depths for dtm (parity), dtz and
+  dtc; unordered for wdl: one fresh win and one fresh loss code, handled whenever met and then `WON` or `LOST` (8 codes).
+- **The depths as a by-product of wdl are the same loop with a narrow cell**: a 4-bit cell has 5 win and 5 loss codes,
+  so the window is 5 plies and a reduction runs every other ply; its snapshots are the log of the plies. `primary=wdl`
+  selects it; wdlz's own loop is not needed.
+- **Exits with depths without parity** (dtc on tempi or configuration groups): `PAWN_WIN` in the DTZ layout. A sweep
+  finalises the provisional wins of both its depths, and corrects an inside win in p written over a `PAWN_WIN` in p − 1.
+- **wdl target**: on dtz's groups, wdl files only (the sink keeps 0.5 byte per slot). `bits=2`: four states
+  (`UNKNOWN`, `WIN`, `LOSS`, `ANY_DRAW`) in 2-bit cells, 4 per byte, with the engine's shape and no fresh or candidate
+  code (`solve_group_wdl4s`): **every loss marks its predecessors won exactly once** (pass 0's in one scan, a later one
+  when it is found; an `ANY_DRAW` predecessor after a capture test), the forward passes evaluate **only the `UNKNOWN`
+  cells** for a loss, and when a pass changes little the wins written by two more passes are a queue, propagated in
+  levels. `ANY_DRAW` cells are never evaluated: they can only become wins, through the marks. Against the Chinook-style
+  loop (every forward pass evaluates the `ANY_DRAW` cells too, after a capture test each): 43 M evaluations and 15 M
+  capture tests instead of 79 M and 136 M, rounds 9.1 and 9.0 s instead of 40.1 and 34.6 s.
+- **verify** for wdl checks every outcome against its moves (necessary, not sufficient); a depth build into the same
+  directory compares its outcomes with the wdl files, which completes it.
+- **The inputs' decompression cache is shared by the threads** (a block is decompressed once, in place).
+
+6×6 international / checkers to 7 pieces, one material per process, 4 threads (rounds; peak RSS of the largest
+material). Every file identical to the references; `verify` passes on all 134 materials for wdl, dtz and dtm;
+`checkall` to 5 pieces passes for dtm, dtz and dtc.
+
+**Candidates, on a deeper table** (8×8 checkers, 3 v 4 kings, 2.4 × 10⁸ positions, wdl; identical files):
+
+| build | rounds | evaluations | peak RSS |
+|---|---|---|---|
+| `bits=3` (candidates in the cell, 73 sweeps) | 16.8 s | | 174 MB |
+| `bits=2`, the queue of wins (3 forward passes, 31 levels, 35 M entries) | 22–23 s | 246 M | 251 MB |
+| `bits=2`, the level's candidates a flat_set (`EGDB_WDL2_UNIQ`): one range insertion per block of the queue, the sets merged in pairs | 22.4 s | 233 M | 544 MiB |
+| `bits=2`, one vector of all candidates, sorted and uniqued (`EGDB_WDL2_UNIQ=vector`) | 21.5 s | 233 M | 900 MiB |
+| (flat_sets filled by single insertions) | 39.8 s | 233 M | 784 MB |
+
+On the shallow 6×6 groups 2 and 3 bits are level; here the candidate code is worth a quarter, and the queue (8 bytes
+per entry, outside the table) costs more memory than the third bit saves. A uniqued candidate list checks once, as
+the code does, but holds the candidates before the unique: 4.6 times the wins.
+
+| build | rounds int. | rounds checkers | peak RSS |
+|---|---|---|---|
+| dtm | 17.7 s | 23.6 s | 122 / 119 MiB |
+| dtz | 7.4 s | 8.6 s | 62 MiB |
+| dtc | 8.9 s | 11.9 s | 73 MiB |
+| dtz `primary=wdl` (4 bits) | 13.5 s | 15.3 s | 63 MiB |
+| dtc `primary=wdl` (4 bits) | 18.1 s | 23.4 s | 72 / 79 MiB |
+| wdl (8 bits) | 7.1 s | 8.5 s | 35 MiB |
+| wdl `bits=4` | 8.1 s | 9.0 s | 34 MiB |
+| wdl `bits=3` | 8.7 s | 9.5 s | 34 MiB |
+| wdl `bits=2` (four states) | 9.1 s | 9.0 s | 34 MiB |
+
+Before: cell8 dtm 257 / 290 MiB, rtb dtm 184 / 196 MiB, wdl3 20.4 / 27.0 s and 86 MiB. On these small tables the
+narrow cells cost time and save nothing: the output and the inputs are the peak, the largest group's table is 2.6 MB
+(19 MB for dtm and dtc, whole material). Finer groups are identical in value (dtc, dtm, dtz on tempi and configuration
+groups to 6 pieces) and slower here (thousands of tiny groups); both are for tables that do not fit. Open: the
+set-bits encoding, retiring the older loops, the -K variants, paging.
 
 ## 8. Best of breed for draughts
 
@@ -1287,7 +1571,7 @@ syzygy's rtbgen without `-p` stores DTZ up to 100 plies in moves, unless a side 
 always halves the cursed band beyond 100; chesstb keeps DTZ exact up to 100 but halves the cursed band when a table fits
 one byte. The engine then needs a margin (Stockfish counts a win as certain only if DTZ + counter ≤ 99), and a second
 limit (FIDE's automatic draw at 75 moves) falls inside the halved band. The one reduction allowed is lossless: a DTM
-win is odd and a loss even, so a DTM can be stored in moves and its plies recovered from WDL (the thompson86 and syzygy
+win is odd and a loss even, so a DTM can be stored in moves and its plies recovered from WDL (the thompson86 and tbgen
 byte, up to 509 plies). DTZ and DTC have no such parity (either side's move can end the count) and stay in plies.
 
 **Escapes: S = 16 tokens, one extra byte each, for every game.** Each position has one code byte. Codes 0 … 239
@@ -1325,6 +1609,35 @@ Products per material: **WDL** (2 bits, dense, the probe for search), **DTZ** (b
 exactly from one ply of search, cheap with compulsory capture: an exit counts 1 from the WDL of its target, an internal
 move one more than the stored value; unlike syzygy, depths stay in plies, never in moves), and a search for the man/king order that compresses best (syzygy's
 `permute_piece_wdl`); Zakharov adds bounded fills (≥ n, ≤ n) for DTM.
+
+### 10.x Sketch: the escape bytes in frames of their own (not built)
+
+Today a block's extra bytes follow its 4,096 position bytes in the same zstd frame, so a decompressed block is up to
+8 KiB and a token's extra byte is found by counting the tokens before it in the block. A container that keeps every
+frame at 4 KiB and stays sound for files of any size:
+
+- **position frames**: 4,096 position bytes each (a depth below E, or an escape token E + k), zstd, variable length;
+- **extra frames**, after them: the extra bytes of all escape tokens of the file in position order, cut into runs of
+  4,096, zstd; they are further entries of the same offset table;
+- **the token table**: per position frame, the number of escape tokens before it. Since the extra bytes are in
+  position order, that number is also the index of the frame's first extra byte. Stored as 4 bytes counting from the
+  start of a group of 2²⁰ frames (at most (2²⁰ − 1) · 4,096 < 2³²: the largest group that cannot overflow), with an
+  8-byte total per group; a file below 4.3 G positions has one group and no totals. The entries, 1,024 per 4 KiB,
+  are frames too: across frames without tokens the value repeats, so they compress to almost nothing;
+- **the offset table**: per frame, its start among the compressed bytes; 8 bytes now, or 4 bytes within groups (of
+  2¹⁹ frames, or a new group whenever 4 bytes would overflow) with an 8-byte base per group.
+
+A lookup of position p: frame b = p / 4,096, offset j; the byte c at j; if c < E it is the depth. Else the rank
+r = tokens before frame b (the table) + the escape codes among the first j bytes of the frame (a count on the cached
+block), the extra byte x = byte r mod 4,096 of extra frame r / 4,096, and d = E + 240 (c − E) + x. No location is
+stored: the escape codes mark their own places. A file without tokens (every file of 6×6 international draughts: the
+longest win of the 12-piece set is 111 plies) has neither extra frames nor a token table. If most positions carry
+tokens the file is two byte streams of similar length: no separate wide layout is needed.
+
+Sizes: 1 G positions is 262,144 position frames (offsets 2 MiB at 8 bytes, token entries 1 MiB); 1 T positions is
+2²⁸ frames, 1–2 GiB of offsets, which against data compressed 50-fold is 5–10 % of the file. Beyond that scale the
+remedies are sizes instead of offsets, larger frames, or the reverse layout of Chinook and Gilbert: compressed blocks
+of a fixed size with an index of each block's first position.
 
 ## 11. Verification
 

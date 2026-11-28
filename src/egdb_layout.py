@@ -49,7 +49,7 @@ squares), the disjoint index; --cost gives the RAM per position of a group (both
     bit           0.25 B   1 bit per position and side (rung 3: Wu-Beal, Lincke)
     byte          3 B      1 depth byte and 4 bit planes per position and side, both in RAM (rungs 0-2: "comfortable")
     thompson86    27.4 B   11 bit planes, seed lists at their worst-case bound (24 B), depth bytes (rung 1)
-    syzygy        30.3 B   9 bit planes per side, level lists at their bound, 16-bit values (rung 1)
+    tbgen         30.3 B   9 bit planes per side, level lists at their bound, 16-bit values (rung 1)
     or a number of bytes per position.
 """
 
@@ -62,7 +62,7 @@ from collections import defaultdict
 
 C = math.comb
 BOARDS = {'6x6': (6, 3), '8x8': (8, 4), '10x10': (10, 5)}       # rows, playable squares per row
-COSTS = {'gilbert2005': 0.25, 'wdl': 0.5, 'bit': 0.25, 'byte': 2 * (1 + 4 / 8), 'thompson86': 11 / 8 + 24 + 2, 'syzygy': 9 * 2 / 8 + 24 + 4}
+COSTS = {'gilbert2005': 0.25, 'wdl': 0.5, 'bit': 0.25, 'byte': 2 * (1 + 4 / 8), 'thompson86': 11 / 8 + 24 + 2, 'tbgen': 9 * 2 / 8 + 24 + 4}
 
 
 # the builders: RAM per position of a group (both sides to move), file bytes per position and side (depth, outcome),
@@ -72,7 +72,7 @@ COSTS = {'gilbert2005': 0.25, 'wdl': 0.5, 'bit': 0.25, 'byte': 2 * (1 + 4 / 8), 
 # (--calibration, `<engine> bench n`) gives their cost per position
 BUILDERS = {
     'thompson86': dict(cost=COSTS['thompson86'], depth=1, outcome=1 / 8, us=0.35, two_sided=False, movegen=0.35 / 0.284),
-    'syzygy': dict(cost=COSTS['syzygy'], depth=1, outcome=2 / 8, us=0.68, two_sided=True, movegen=0.68 / 0.284),
+    'tbgen': dict(cost=COSTS['tbgen'], depth=1, outcome=2 / 8, us=0.68, two_sided=True, movegen=0.68 / 0.284),
     'wdl': dict(cost=COSTS['wdl'], depth=0, outcome=2 / 8, us=0.52, two_sided=True, movegen=0.52 / 0.284),
 }
 REF_GHZ = 2.1
@@ -385,7 +385,7 @@ def main():
     ap.add_argument('--cost', help=f'bytes per position: {", ".join(COSTS)}, or a number (default: the builder\'s, else '
                                    f'gilbert2005)')
     ap.add_argument('--builder', choices=BUILDERS, help='estimate space, I/O and time for this builder: thompson86 '
-                    '(one-sided, half results), syzygy (two-sided, full results), wdl (two-sided, outcomes only)')
+                    '(one-sided, half results), tbgen (two-sided, full results), wdl (two-sided, outcomes only)')
     ap.add_argument('--metrics', type=int, default=1, help='with --builder: depth metrics built (dtm, dtc, dtz), default 1')
     ap.add_argument('--ghz', type=float, help=f'with --builder: the clock (default: the machine\'s, else {REF_GHZ} GHz)')
     ap.add_argument('--us', type=float, help='with --builder: microseconds per position and side to move at --ghz, '
@@ -401,7 +401,7 @@ def main():
     ap.add_argument('--tbw', type=float, help='with --builder: the SSD\'s endurance in TB written')
     ap.add_argument('--index', choices=('disjoint', 'overlapping'), default='disjoint',
                     help='with --builder: file slots per legal placement (disjoint, the default) or per independent '
-                         'colex ranks per colour and type, as thompson86 and syzygy index today (overlapping)')
+                         'colex ranks per colour and type, as thompson86 and tbgen index today (overlapping)')
     ap.add_argument('--levels', type=int,
                     help='with --builder: levels of a group that needs rung 3 (its per-level streams). The levels are an '
                          'outcome of the build (the longest win), not predictable: by default a range, from the most '
@@ -568,7 +568,7 @@ def estimate(a, b, board, ms, plan, positions, canon, refine, max_pos, cost):
     files = depth + outcome
     # scratch: the depth sink's group-order files of the jobs writing side by side (a file written under a temporary
     # name becomes the final one by a rename, so it is counted in the files already); values of 1 byte (thompson86) or
-    # 2 (syzygy) per position and side
+    # 2 (tbgen) per position and side
     v = 0 if not b['depth'] else (2 if b['two_sided'] else 1)
     scratch = sum(sorted((2 * pos(m) * v for m in ms), reverse=True)[:a.cores])
     # reads: each build reads the files of the materials it leads into (depths for dtm, outcomes otherwise)

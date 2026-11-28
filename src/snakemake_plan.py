@@ -3,7 +3,7 @@
 #    (See accompanying file LICENSE_1_0.txt or copy at
 #          http://www.boost.org/LICENSE_1_0.txt)
 
-"""The plan of a per-material build, shared by the Snakefiles of thompson86 and syzygy (synthesis section 7.3).
+"""The plan of a per-material build, shared by the Snakefiles of thompson86 and tbgen (synthesis section 7.3).
 
 Each engine reports, per material, its sizes and the memory a build needs at each rung of the memory ladder (its
 `plan` command, estimated from its own data structures and calibrated against measured peaks). From that:
@@ -24,7 +24,8 @@ import subprocess
 
 def memory_budget_mb(workflow, config):
     if 'mem_mb' in workflow.global_resources:
-        return int(workflow.global_resources['mem_mb'])
+        v = workflow.global_resources['mem_mb']
+        return int(getattr(v, 'value', v))                 # Snakemake 9 wraps a resource in an object
     if 'mem_mb' in config:
         return int(config['mem_mb'])
     with open('/proc/meminfo') as f:
@@ -67,9 +68,31 @@ def priorities(plan, deps):
     return {m: int(1000 * rank(m) / top) for m in plan}
 
 
+def criticality(plan, deps):
+    """per material, the longest chain of work that passes through it (the materials it needs, itself, the materials
+    that need it) as a fraction of the longest chain of the run: 1 on the critical path. With unlimited cores the run
+    still takes as long as its longest chain, so the jobs on it are the ones worth running on many cores."""
+    users = {m: [] for m in plan}
+    for m, ds in deps.items():
+        for d in ds:
+            if d in users and m in plan:
+                users[d].append(m)
+
+    @functools.lru_cache(maxsize=None)
+    def after(m):
+        return plan[m]['positions'] + max((after(u) for u in users[m]), default=0)
+
+    @functools.lru_cache(maxsize=None)
+    def before(m):
+        return plan[m]['positions'] + max((before(d) for d in deps.get(m, []) if d in plan), default=0)
+
+    longest = max((after(m) for m in plan), default=1) or 1
+    return {m: (before(m) + after(m) - plan[m]['positions']) / longest for m in plan}, longest
+
+
 def check_budget(plan, budget, config):
     """raise if any material needs more than the budget at its lowest rung (rung 1), unless config mem_check=0"""
-    over = sorted((p['rung1'], m) for m, p in plan.items() if p['rung1'] > budget)
+    over = sorted((min(p['rung0'], p['rung1']), m) for m, p in plan.items() if min(p['rung0'], p['rung1']) > budget)
     if over and str(config.get('mem_check', '1')) != '0':
         worst = ', '.join(f'{m} ({mb} MB)' for mb, m in reversed(over[-5:]))
         raise ValueError(f'{len(over)} materials need more than the memory budget of {budget} MB even at rung 1: '
@@ -81,7 +104,7 @@ def report(plan, budget, claim):
     """one line for the log: how many materials fit at rung 0, how many need a lower rung, the largest needs"""
     fit = sum(p['rung0'] <= budget for p in plan.values())
     lower = sum(p['rung0'] > budget >= p['rung1'] for p in plan.values())
-    over = sum(p['rung1'] > budget for p in plan.values())
+    over = sum(min(p['rung0'], p['rung1']) > budget for p in plan.values())
     big = max(plan, key=lambda m: plan[m]['rung0'])
     return (f'plan: {len(plan)} materials, budget {budget} MB: {fit} at rung 0, {lower} at rung 1, {over} over the budget '
             f'even at rung 1; largest {big} (rung 0 {plan[big]["rung0"]} MB, rung 1 {plan[big]["rung1"]} MB, claim '

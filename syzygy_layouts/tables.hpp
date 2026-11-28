@@ -235,6 +235,17 @@ inline std::size_t line_counts16(std::uint8_t const* page, std::uint32_t& t)
         }
 }
 
+// counts24: the same with 3-byte counts
+inline std::size_t line_counts24(std::uint8_t const* page, std::uint32_t& t)
+{
+        for (std::size_t g = 0;; ++g) {
+                std::uint32_t c = 0;
+                std::memcpy(&c, page + 3 * g, 3);
+                if (t <= c) return g;
+                t -= c + 1;
+        }
+}
+
 // totals32: 60 running totals and 4 meta slots
 inline std::size_t line_totals32(std::uint8_t const* page, std::uint32_t& t)
 {
@@ -365,7 +376,7 @@ int probe(Table const& T, std::uint64_t x)
         std::uint32_t t;
         std::uint8_t const* const page = find_page(T, x, t);
         std::size_t hdr = L::HDR_LINES;
-        std::size_t const j = L::H == Header::counts16 ? line_counts16(page, t) : L::H == Header::totals32 ? line_totals32(page, t) : line_eliasfano(page, t, hdr);
+        std::size_t const j = L::H == Header::counts16 ? line_counts16(page, t) : L::H == Header::counts24 ? line_counts24(page, t) : L::H == Header::totals32 ? line_totals32(page, t) : line_eliasfano(page, t, hdr);
         std::uint8_t const* const line = page + (hdr + j) * L::C;
         unsigned const s = L::W ? code_in_line<L::W ? L::W : 12, L::W ? L::CODES : 42>(T.len, line, t) : huff_in_line(T, line, t);
         return descend(T, s, t);
@@ -435,7 +446,7 @@ Packed build(Source const& S, std::string const& variant)
         P.C = unsigned(L::C); P.W = unsigned(L::W); P.H = L::H;
         man["variant"] = variant; man["table"] = S.name; man["subtable"] = std::to_string(S.k); man["tb_size"] = std::to_string(S.tb_size);
         man["line_bytes"] = std::to_string(L::C); man["code_bits"] = std::to_string(L::W);
-        man["header"] = L::H == Header::counts16 ? "counts16" : L::H == Header::totals32 ? "totals32" : "eliasfano";
+        man["header"] = L::H == Header::counts16 ? "counts16" : L::H == Header::counts24 ? "counts24" : L::H == Header::totals32 ? "totals32" : "eliasfano";
         if (S.is_const) {
                 man["const"] = std::to_string(S.const_value);
                 P.is_const = true; P.const_value = S.const_value;
@@ -519,6 +530,9 @@ Packed build(Source const& S, std::string const& variant)
                                 if (L::H == Header::counts16) {
                                         std::uint16_t const c = j < n ? std::uint16_t(lines[i + j].pos - 1) : std::uint16_t(0);
                                         std::memcpy(page.data() + 2 * j, &c, 2);
+                                } else if (L::H == Header::counts24) {
+                                        std::uint32_t const c = j < n ? lines[i + j].pos - 1 : 0;
+                                        std::memcpy(page.data() + 3 * j, &c, 3);
                                 } else {
                                         std::uint32_t const c = j < n ? p : 0x7fffffffu;
                                         std::memcpy(page.data() + 4 * j, &c, 4);
@@ -633,9 +647,9 @@ inline bool open_parts(Parts const& P, Table& T, std::string const& name, std::s
                 std::uint8_t const* const huf = P.huf;
                 T.min_len = huf[0];
                 for (unsigned l = huf[0], at = 2; l <= huf[1]; ++l, at += 10) { std::memcpy(&T.hoffset[l], huf + at, 2); std::memcpy(&T.hbase[l], huf + at + 2, 8); }
-                T.fn = T.C == 64 ? probe_fn<LB64>() : T.C == 32 ? probe_fn<LB32>() : T.C == 16 ? probe_fn<LB16>() : nullptr;
+                T.fn = T.C == 64 ? (T.H == Header::counts24 ? probe_fn<LB64_24>() : probe_fn<LB64>()) : T.C == 32 ? probe_fn<LB32>() : T.C == 16 ? probe_fn<LB16>() : nullptr;
         } else if (T.W == 12)
-                T.fn = T.H == Header::counts16 ? probe_fn<LC0>() : T.H == Header::totals32 ? probe_fn<LC1>() : probe_fn<LC2>();
+                T.fn = T.H == Header::counts16 ? probe_fn<LC0>() : T.H == Header::counts24 ? probe_fn<LC3>() : T.H == Header::totals32 ? probe_fn<LC1>() : probe_fn<LC2>();
         else if (T.W == 10)
                 T.fn = T.H == Header::counts16 ? probe_fn<LC0_10>() : T.H == Header::totals32 ? probe_fn<LC1_10>() : probe_fn<LC2_10>();
         if (!T.fn) return fail("no lookup for this layout");
@@ -651,7 +665,7 @@ inline bool open_table(std::string const& prefix, Table& T, std::string* why = n
         Parts P;
         if (T.man.count("const")) { P.is_const = true; P.const_value = std::stoi(T.man["const"]); return open_parts(P, T, prefix, why, validate); }
         P.C = unsigned(std::stoul(T.man["line_bytes"])); P.W = unsigned(std::stoul(T.man["code_bits"]));
-        P.H = T.man["header"] == "counts16" ? Header::counts16 : T.man["header"] == "totals32" ? Header::totals32 : Header::eliasfano;
+        P.H = T.man["header"] == "counts16" ? Header::counts16 : T.man["header"] == "counts24" ? Header::counts24 : T.man["header"] == "totals32" ? Header::totals32 : Header::eliasfano;
         P.positions = std::stoull(T.man["positions"]);
         P.dat = map_file(prefix + ".dat", P.n_dat, true);
         P.pri = reinterpret_cast<std::uint64_t const*>(map_file(prefix + ".pri", P.n_pri));
@@ -672,7 +686,7 @@ bool decode_pages(Table const& T, Sink sink, std::string* why = nullptr)
         std::vector<std::uint8_t> out;
         std::size_t done = 0;
         std::size_t const lines = 4096 / T.C;
-        std::size_t const fixed_hdr = T.H == Header::counts16 ? header_lines(lines, T.C, 2, 2) : header_lines(lines, T.C, 4, 4);
+        std::size_t const fixed_hdr = T.H == Header::counts16 ? header_lines(lines, T.C, 2, 2) : T.H == Header::counts24 ? header_lines(lines, T.C, 3, 2) : header_lines(lines, T.C, 4, 4);
         std::vector<unsigned> stack;
         auto const expand = [&](unsigned s0) {
                 stack.push_back(s0);
@@ -692,6 +706,8 @@ bool decode_pages(Table const& T, Sink sink, std::string* why = nullptr)
                         std::vector<std::size_t> starts;                // of each line, then the total
                         if (T.H == Header::counts16) {
                                 for (std::size_t j = 0, p = 0; p < total; ++j) { std::uint16_t c; std::memcpy(&c, page + 2 * j, 2); starts.push_back(p); p += std::size_t(c) + 1; }
+                        } else if (T.H == Header::counts24) {
+                                for (std::size_t j = 0, p = 0; p < total; ++j) { std::uint32_t c = 0; std::memcpy(&c, page + 3 * j, 3); starts.push_back(p); p += std::size_t(c) + 1; }
                         } else if (T.H == Header::totals32) {
                                 for (std::size_t j = 0; j < 60; ++j) { std::uint32_t c; std::memcpy(&c, page + 4 * j, 4); if (c == 0x7fffffffu) break; starts.push_back(c); }
                         } else {

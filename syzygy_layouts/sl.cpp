@@ -86,7 +86,7 @@ std::vector<std::uint8_t> values_of(Source const& S)
 // The values are never all in memory: they are produced in chunks from his symbols. The grammar is built on a sample
 // (every step-th chunk, at most about 2^29 positions; all of a smaller sub-table) and then applied to every chunk in the
 // order its rules were made, which is what the builder itself does. A pair across two chunks stays unpaired.
-Source rebuilt(Source const& S, unsigned max_symbols, unsigned code_bits, std::uint32_t maxlen)
+Source rebuilt(Source const& S, unsigned max_symbols, unsigned code_bits, std::uint32_t maxlen, std::uint32_t pair_count = 0)
 {
         Source D = S;
         if (S.is_const) return D;
@@ -122,7 +122,7 @@ Source rebuilt(Source const& S, unsigned max_symbols, unsigned code_bits, std::u
         sample.reserve(std::min<std::size_t>(S.tb_size, SAMPLE + CHUNK));
         each_chunk([&](std::size_t c, std::vector<std::uint16_t> const& buf) { if (c % step == 0) sample.insert(sample.end(), buf.begin(), buf.end()); });
         // a rule costs 3 bytes; replacing one pair saves code_bits / 8 bytes
-        std::uint32_t const min_count = std::uint32_t(3 * 8 / code_bits + 1);
+        std::uint32_t const min_count = pair_count ? pair_count : std::uint32_t(3 * 8 / code_bits + 1);
         std::size_t const sample_positions = sample.size();
         std::vector<std::uint8_t> const file = rpvf::compress_wide(std::move(sample), sample_positions, terminals, value, maxlen, min_count, max_symbols);
         rpvf::Wide const w = rpvf::open_wide(file.data());
@@ -170,11 +170,44 @@ Source rebuilt(Source const& S, unsigned max_symbols, unsigned code_bits, std::u
         return D;
 }
 
-struct Variant { std::string name; char kind; int header; };    // kind: b, c, d, e
+// h: Huffman codes on a rebuilt grammar. The symbols are renumbered by code length, the longest first, then those
+// without a code (they occur only inside other symbols), as the page layout's Huffman lines expect
+void add_huffman(Source& D)
+{
+        rpvf::Wide w{};
+        w.nsym = D.g.nsym;
+        rpvf::Canon const C = rpvf::canonical(w, D.seq);
+        unsigned const n = D.g.nsym;
+        std::vector<unsigned> order(n);
+        for (unsigned s = 0; s < n; ++s) order[s] = s;
+        std::stable_sort(order.begin(), order.end(), [&](unsigned a, unsigned b) { return (C.len[a] ? C.len[a] : -1) > (C.len[b] ? C.len[b] : -1); });
+        std::array<std::uint64_t, 40> count{}, first{};
+        D.h = Huffman{};
+        D.h.min_len = C.min_len; D.h.max_len = C.max_len;
+        for (unsigned s = 0; s < n; ++s) if (C.len[s]) ++count[std::size_t(C.len[s])];
+        std::uint16_t at = 0;
+        for (int l = C.max_len; l >= C.min_len; --l) { D.h.offset[l] = at; at = std::uint16_t(at + count[std::size_t(l)]); }
+        for (int l = C.max_len; l > C.min_len; --l) first[std::size_t(l - 1)] = (first[std::size_t(l)] + count[std::size_t(l)]) >> 1;
+        for (int l = C.min_len; l <= C.max_len; ++l) D.h.base[l] = first[std::size_t(l)] << (64 - l);
+        std::vector<std::uint16_t> renum(n), left(n), right(n), val(n, 0xffff);
+        for (unsigned k = 0; k < n; ++k) renum[order[k]] = std::uint16_t(k);
+        for (unsigned s = 0; s < n; ++s) {
+                unsigned const k = renum[s];
+                if (D.g.len[s] == 1) { left[k] = right[k] = std::uint16_t(k); val[k] = D.g.val12[s]; }
+                else { left[k] = renum[D.g.left[s]]; right[k] = renum[D.g.right[s]]; }
+        }
+        std::vector<std::uint8_t> const pat = sympat_of12(left, right, val);
+        D.g = grammar_from_sympat(pat.data(), n);
+        for (std::uint16_t& c : D.seq) c = renum[c];
+        D.block_bytes = 64;
+}
+
+struct Variant { std::string name; char kind; int header; };    // kind: b, c, d, e, h
 Variant parse_variant(std::string const& v)
 {
         if (v == "b") return { v, 'b', 0 };
         if (v.size() == 2 && (v[0] == 'c' || v[0] == 'd' || v[0] == 'e') && v[1] >= '0' && v[1] <= '2') return { v, v[0], v[1] - '0' };
+        if (v == "h0" || v == "h3") return { v, 'h', v[1] - '0' };          // rebuilt grammar, Huffman codes; 16-bit or 24-bit line counts
         std::cerr << "unknown variant " << v << std::endl;
         std::exit(2);
 }
@@ -213,8 +246,13 @@ Stats convert_one(Source const& S, Variant const& V, std::string const& prefix)
 {
         if (V.kind == 'b') return S.block_bytes == 64 ? convert<LB64>(S, prefix, V.name) : S.block_bytes == 32 ? convert<LB32>(S, prefix, V.name) : convert<LB16>(S, prefix, V.name);
         if (V.kind == 'c') return V.header == 0 ? convert<LC0>(S, prefix, V.name) : V.header == 1 ? convert<LC1>(S, prefix, V.name) : convert<LC2>(S, prefix, V.name);
-        // d: 12-bit codes with up to 4,095 symbols, or 10-bit codes with up to 1,024; the smaller total
         if (S.is_const) return convert<LC0>(S, prefix, V.name);
+        if (V.kind == 'h') {            // a pair needs 4 occurrences; symbols of up to SL_MAXLEN positions (default 4096)
+                Source D = rebuilt(S, 4095, 12, std::getenv("SL_MAXLEN") ? std::uint32_t(std::atoi(std::getenv("SL_MAXLEN"))) : 4096, 4);
+                add_huffman(D);
+                return V.header == 3 ? convert<LB64_24>(D, prefix, V.name) : convert<LB64>(D, prefix, V.name);
+        }
+        // d: 12-bit codes with up to 4,095 symbols, or 10-bit codes with up to 1,024; the smaller total
         // u16 line counts: a symbol of at most 65,536 / 42 positions, so that a full line of codes always fits
         // SL_MAXLEN overrides (with u16 counts a line then closes early once it would pass 65,536 positions)
         std::uint32_t const maxlen = std::getenv("SL_MAXLEN") ? std::uint32_t(std::atoi(std::getenv("SL_MAXLEN"))) : V.header == 0 ? 1560 : 65536;

@@ -1,0 +1,20 @@
+BUILT
+convert h0: 30 sub-tables, 0.4604 s
+check h0: 30 sub-tables; 14487186 positions decoded in order, 14487186 looked up exhaustively, 0 at random; 1900000 reference values confirmed by Fathom's lookup; 0 failures; 0.534184 s
+convert h3: 30 sub-tables, 0.510714 s
+check h3: 30 sub-tables; 14487186 positions decoded in order, 14487186 looked up exhaustively, 0 at random; 1900000 reference values confirmed by Fathom's lookup; 0 failures; 1.1968 s
+convert c0: 30 sub-tables, 0.00140948 s
+check c0: 30 sub-tables; 14487186 positions decoded in order, 14487186 looked up exhaustively, 0 at random; 1900000 reference values confirmed by Fathom's lookup; 0 failures; 0.382985 s
+== h0 symbols up to 256
+convert h0: 9 sub-tables, 254.812 s
+check h0: 9 sub-tables; 23978218320 positions decoded in order, 0 looked up exhaustively, 90000000 at random; 90119840 reference values confirmed by Fathom's lookup; 0 failures; 130.854 s
+== h0 symbols up to 4096
+convert h0: 9 sub-tables, 245.361 s
+check h0: 9 sub-tables; 23978218320 positions decoded in order, 0 looked up exhaustively, 90000000 at random; 90117125 reference values confirmed by Fathom's lookup; 0 failures; 129.099 s
+== h3 symbols up to 4096
+convert h3: 9 sub-tables, 253.343 s
+check h3: 9 sub-tables; 23978218320 positions decoded in order, 0 looked up exhaustively, 90000000 at random; 90118566 reference values confirmed by Fathom's lookup; 0 failures; 131.931 s
+== h3 symbols up to 65536
+convert h3: 9 sub-tables, 245.313 s
+check h3: 9 sub-tables; 23978218320 positions decoded in order, 0 looked up exhaustively, 90000000 at random; 90118438 reference values confirmed by Fathom's lookup; 0 failures; 129.162 s
+ALL DONE

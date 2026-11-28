@@ -1,0 +1,112 @@
+== ctbgen
+pgorder2: 134 materials, 709.815 s; back rows of 3 squares, 12 between
+  wdl (12-bit codes): codes and grammar
+    the present index: 6902470 bytes (100 %), smallest for 137 sub-tables
+    Bb Wb Bm Wm: 6896432 bytes (99.9125 %), smallest for 45 sub-tables
+    Bb Wb Wm Bm: 6912400 bytes (100.144 %), smallest for 3 sub-tables
+    Bb Bm Wb Wm: 6900904 bytes (99.9773 %), smallest for 8 sub-tables
+    Bb Bm Wm Wb: 6906821 bytes (100.063 %), smallest for 1 sub-tables
+    Bb Wm Wb Bm: 6912735 bytes (100.149 %), smallest for 0 sub-tables
+    Bb Wm Bm Wb: 6919335 bytes (100.244 %), smallest for 3 sub-tables
+    Wb Bb Bm Wm: 6896380 bytes (99.9118 %), smallest for 6 sub-tables
+    Wb Bb Wm Bm: 6912119 bytes (100.14 %), smallest for 1 sub-tables
+    Wb Bm Bb Wm: 6896885 bytes (99.9191 %), smallest for 18 sub-tables
+    Wb Bm Wm Bb: 6894577 bytes (99.8856 %), smallest for 11 sub-tables
+    Wb Wm Bb Bm: 6913783 bytes (100.164 %), smallest for 1 sub-tables
+    Wb Wm Bm Bb: 6908910 bytes (100.093 %), smallest for 2 sub-tables
+    Bm Bb Wb Wm: 6901494 bytes (99.9859 %), smallest for 4 sub-tables
+    Bm Bb Wm Wb: 6906807 bytes (100.063 %), smallest for 1 sub-tables
+    Bm Wb Bb Wm: 6899437 bytes (99.9561 %), smallest for 8 sub-tables
+    Bm Wb Wm Bb: 6897119 bytes (99.9225 %), smallest for 10 sub-tables
+    Bm Wm Bb Wb: 6906068 bytes (100.052 %), smallest for 3 sub-tables
+    Bm Wm Wb Bb: 6905510 bytes (100.044 %), smallest for 0 sub-tables
+    Wm Bb Wb Bm: 6913822 bytes (100.164 %), smallest for 1 sub-tables
+    Wm Bb Bm Wb: 6919387 bytes (100.245 %), smallest for 2 sub-tables
+    Wm Wb Bb Bm: 6914033 bytes (100.168 %), smallest for 0 sub-tables
+    Wm Wb Bm Bb: 6908891 bytes (100.093 %), smallest for 0 sub-tables
+    Wm Bm Bb Wb: 6915435 bytes (100.188 %), smallest for 3 sub-tables
+    Wm Bm Wb Bb: 6914870 bytes (100.18 %), smallest for 0 sub-tables
+    the smallest order per sub-table: 6883796 bytes (99.7295 %)
+  dtm (Huffman codes): codes and grammar
+    the present index: 32962028 bytes (100 %), smallest for 62 sub-tables
+    Bb Wb Bm Wm: 33018027 bytes (100.17 %), smallest for 23 sub-tables
+    Bb Wb Wm Bm: 32996171 bytes (100.104 %), smallest for 1 sub-tables
+    Bb Bm Wb Wm: 33021600 bytes (100.181 %), smallest for 5 sub-tables
+    Bb Bm Wm Wb: 33015008 bytes (100.161 %), smallest for 0 sub-tables
+    Bb Wm Wb Bm: 32995768 bytes (100.102 %), smallest for 0 sub-tables
+    Bb Wm Bm Wb: 32996415 bytes (100.104 %), smallest for 1 sub-tables
+    Wb Bb Bm Wm: 33017886 bytes (100.169 %), smallest for 0 sub-tables
+    Wb Bb Wm Bm: 32996142 bytes (100.103 %), smallest for 3 sub-tables
+    Wb Bm Bb Wm: 33013955 bytes (100.158 %), smallest for 10 sub-tables
+    Wb Bm Wm Bb: 32993145 bytes (100.094 %), smallest for 3 sub-tables
+    Wb Wm Bb Bm: 32995659 bytes (100.102 %), smallest for 3 sub-tables
+    Wb Wm Bm Bb: 32974571 bytes (100.038 %), smallest for 5 sub-tables
+    Bm Bb Wb Wm: 33018950 bytes (100.173 %), smallest for 2 sub-tables
+    Bm Bb Wm Wb: 33012048 bytes (100.152 %), smallest for 0 sub-tables
+    Bm Wb Bb Wm: 33020712 bytes (100.178 %), smallest for 2 sub-tables
+    Bm Wb Wm Bb: 32999279 bytes (100.113 %), smallest for 2 sub-tables
+    Bm Wm Bb Wb: 32994788 bytes (100.099 %), smallest for 5 sub-tables
+    Bm Wm Wb Bb: 32996241 bytes (100.104 %), smallest for 1 sub-tables
+    Wm Bb Wb Bm: 32995054 bytes (100.1 %), smallest for 2 sub-tables
+    Wm Bb Bm Wb: 32996112 bytes (100.103 %), smallest for 2 sub-tables
+    Wm Wb Bb Bm: 32995187 bytes (100.101 %), smallest for 0 sub-tables
+    Wm Wb Bm Bb: 32974607 bytes (100.038 %), smallest for 0 sub-tables
+    Wm Bm Bb Wb: 32981445 bytes (100.059 %), smallest for 1 sub-tables
+    Wm Bm Wb Bb: 32982324 bytes (100.062 %), smallest for 1 sub-tables
+    the smallest order per sub-table: 32934819 bytes (99.9175 %)
+== itbgen
+pgorder2: 134 materials, 492.252 s; back rows of 3 squares, 12 between
+  wdl (12-bit codes): codes and grammar
+    the present index: 6942294 bytes (100 %), smallest for 160 sub-tables
+    Bb Wb Bm Wm: 6994154 bytes (100.747 %), smallest for 46 sub-tables
+    Bb Wb Wm Bm: 6984064 bytes (100.602 %), smallest for 3 sub-tables
+    Bb Bm Wb Wm: 6994649 bytes (100.754 %), smallest for 2 sub-tables
+    Bb Bm Wm Wb: 6986610 bytes (100.638 %), smallest for 0 sub-tables
+    Bb Wm Wb Bm: 6983996 bytes (100.601 %), smallest for 0 sub-tables
+    Bb Wm Bm Wb: 6979307 bytes (100.533 %), smallest for 4 sub-tables
+    Wb Bb Bm Wm: 6994413 bytes (100.751 %), smallest for 3 sub-tables
+    Wb Bb Wm Bm: 6984082 bytes (100.602 %), smallest for 3 sub-tables
+    Wb Bm Bb Wm: 6992681 bytes (100.726 %), smallest for 10 sub-tables
+    Wb Bm Wm Bb: 6973611 bytes (100.451 %), smallest for 4 sub-tables
+    Wb Wm Bb Bm: 6983838 bytes (100.598 %), smallest for 3 sub-tables
+    Wb Wm Bm Bb: 6966955 bytes (100.355 %), smallest for 4 sub-tables
+    Bm Bb Wb Wm: 6993785 bytes (100.742 %), smallest for 4 sub-tables
+    Bm Bb Wm Wb: 6986405 bytes (100.635 %), smallest for 1 sub-tables
+    Bm Wb Bb Wm: 6994510 bytes (100.752 %), smallest for 1 sub-tables
+    Bm Wb Wm Bb: 6974355 bytes (100.462 %), smallest for 5 sub-tables
+    Bm Wm Bb Wb: 6970895 bytes (100.412 %), smallest for 4 sub-tables
+    Bm Wm Wb Bb: 6969541 bytes (100.392 %), smallest for 0 sub-tables
+    Wm Bb Wb Bm: 6983560 bytes (100.594 %), smallest for 3 sub-tables
+    Wm Bb Bm Wb: 6979230 bytes (100.532 %), smallest for 3 sub-tables
+    Wm Wb Bb Bm: 6983641 bytes (100.596 %), smallest for 1 sub-tables
+    Wm Wb Bm Bb: 6966194 bytes (100.344 %), smallest for 1 sub-tables
+    Wm Bm Bb Wb: 6965836 bytes (100.339 %), smallest for 1 sub-tables
+    Wm Bm Wb Bb: 6964260 bytes (100.316 %), smallest for 2 sub-tables
+    the smallest order per sub-table: 6936659 bytes (99.9188 %)
+  dtm (Huffman codes): codes and grammar
+    the present index: 13352105 bytes (100 %), smallest for 77 sub-tables
+    Bb Wb Bm Wm: 13450176 bytes (100.734 %), smallest for 18 sub-tables
+    Bb Wb Wm Bm: 13406069 bytes (100.404 %), smallest for 2 sub-tables
+    Bb Bm Wb Wm: 13453787 bytes (100.762 %), smallest for 3 sub-tables
+    Bb Bm Wm Wb: 13438354 bytes (100.646 %), smallest for 0 sub-tables
+    Bb Wm Wb Bm: 13405636 bytes (100.401 %), smallest for 0 sub-tables
+    Bb Wm Bm Wb: 13404661 bytes (100.394 %), smallest for 0 sub-tables
+    Wb Bb Bm Wm: 13450145 bytes (100.734 %), smallest for 0 sub-tables
+    Wb Bb Wm Bm: 13405918 bytes (100.403 %), smallest for 1 sub-tables
+    Wb Bm Bb Wm: 13446519 bytes (100.707 %), smallest for 11 sub-tables
+    Wb Bm Wm Bb: 13406123 bytes (100.405 %), smallest for 0 sub-tables
+    Wb Wm Bb Bm: 13405607 bytes (100.401 %), smallest for 1 sub-tables
+    Wb Wm Bm Bb: 13378926 bytes (100.201 %), smallest for 2 sub-tables
+    Bm Bb Wb Wm: 13450959 bytes (100.74 %), smallest for 1 sub-tables
+    Bm Bb Wm Wb: 13435719 bytes (100.626 %), smallest for 1 sub-tables
+    Bm Wb Bb Wm: 13450791 bytes (100.739 %), smallest for 4 sub-tables
+    Bm Wb Wm Bb: 13413184 bytes (100.457 %), smallest for 3 sub-tables
+    Bm Wm Bb Wb: 13406249 bytes (100.406 %), smallest for 4 sub-tables
+    Bm Wm Wb Bb: 13402841 bytes (100.38 %), smallest for 0 sub-tables
+    Wm Bb Wb Bm: 13405090 bytes (100.397 %), smallest for 2 sub-tables
+    Wm Bb Bm Wb: 13404243 bytes (100.39 %), smallest for 3 sub-tables
+    Wm Wb Bb Bm: 13405280 bytes (100.398 %), smallest for 0 sub-tables
+    Wm Wb Bm Bb: 13378619 bytes (100.199 %), smallest for 1 sub-tables
+    Wm Bm Bb Wb: 13385786 bytes (100.252 %), smallest for 0 sub-tables
+    Wm Bm Wb Bb: 13382822 bytes (100.23 %), smallest for 0 sub-tables
+    the smallest order per sub-table: 13347687 bytes (99.9669 %)

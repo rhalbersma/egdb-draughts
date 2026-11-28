@@ -1,0 +1,36 @@
+== ctbgen
+pgorder: 134 materials, 196.15 s; refilling in the present order differs from the stored values at 0 slots
+  wdl (12-bit codes; 54.9499 % don't-cares): codes and grammar
+    M Kw Kb (now): 6902470 bytes (100 %), smallest for 151 sub-tables
+    M Kb Kw: 7088245 bytes (102.691 %), smallest for 23 sub-tables
+    Kw M Kb: 6925927 bytes (100.34 %), smallest for 33 sub-tables
+    Kw Kb M: 7210758 bytes (104.466 %), smallest for 20 sub-tables
+    Kb M Kw: 7103545 bytes (102.913 %), smallest for 37 sub-tables
+    Kb Kw M: 7204040 bytes (104.369 %), smallest for 4 sub-tables
+    the smallest order per sub-table: 6848325 bytes (99.2156 %)
+  dtm (Huffman codes; 59.6319 % don't-cares): codes and grammar
+    M Kw Kb (now): 32962028 bytes (100 %), smallest for 65 sub-tables
+    M Kb Kw: 34788878 bytes (105.542 %), smallest for 11 sub-tables
+    Kw M Kb: 33388424 bytes (101.294 %), smallest for 28 sub-tables
+    Kw Kb M: 33707030 bytes (102.26 %), smallest for 19 sub-tables
+    Kb M Kw: 34773219 bytes (105.495 %), smallest for 7 sub-tables
+    Kb Kw M: 33858262 bytes (102.719 %), smallest for 4 sub-tables
+    the smallest order per sub-table: 32262842 bytes (97.8788 %)
+== itbgen
+pgorder: 134 materials, 148.976 s; refilling in the present order differs from the stored values at 0 slots
+  wdl (12-bit codes; 73.4862 % don't-cares): codes and grammar
+    M Kw Kb (now): 6942294 bytes (100 %), smallest for 162 sub-tables
+    M Kb Kw: 7653160 bytes (110.24 %), smallest for 21 sub-tables
+    Kw M Kb: 6947805 bytes (100.079 %), smallest for 53 sub-tables
+    Kw Kb M: 7565834 bytes (108.982 %), smallest for 8 sub-tables
+    Kb M Kw: 7658597 bytes (110.318 %), smallest for 20 sub-tables
+    Kb Kw M: 7617000 bytes (109.719 %), smallest for 4 sub-tables
+    the smallest order per sub-table: 6759624 bytes (97.3687 %)
+  dtm (Huffman codes; 80.7067 % don't-cares): codes and grammar
+    M Kw Kb (now): 13352105 bytes (100 %), smallest for 78 sub-tables
+    M Kb Kw: 14793329 bytes (110.794 %), smallest for 18 sub-tables
+    Kw M Kb: 13574043 bytes (101.662 %), smallest for 26 sub-tables
+    Kw Kb M: 14100598 bytes (105.606 %), smallest for 11 sub-tables
+    Kb M Kw: 14810744 bytes (110.924 %), smallest for 1 sub-tables
+    Kb Kw M: 14166826 bytes (106.102 %), smallest for 0 sub-tables
+    the smallest order per sub-table: 13162063 bytes (98.5767 %)

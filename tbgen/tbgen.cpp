@@ -4073,6 +4073,107 @@ bool pg_order(std::string const& dir, int n, ExecutionPolicy const& policy)
         return true;
 }
 
+// pgorder2 <dir> n: the men factorised. Black's back row can hold only black men, White's only white men, and the rows
+// between hold both. With the numbers of men on each back row fixed (a class), a men configuration is a product of four
+// digits: Bb (black men on their back row), Wb (white men on theirs), Bm (black men on the middle rows), Wm (white men
+// on the middle rows the black men leave). The classes follow each other; within a class the digits can take any order.
+// For each of the 24 orders (the kings stay least significant, white then black), sizes as pgorder; the first line is
+// the present index.
+template<class ExecutionPolicy>
+bool pg_order2(std::string const& dir, int n, ExecutionPolicy const& policy)
+{
+        g_dir = dir;
+        std::vector<Material> mats;
+        for (Material const m : stored_materials_up_to(n))
+                if (std::filesystem::exists(zpath(probe_path(dir, m, "wdl", 0))) && std::filesystem::exists(zpath(probe_path(dir, m, "wdl", 1)))) mats.push_back(m);
+        for (Material const m : mats) mat_index(m).size;
+        std::uint32_t const maxlen = std::getenv("EGDB_PG_MAXLEN") ? std::uint32_t(std::atoll(std::getenv("EGDB_PG_MAXLEN"))) : 4096;
+        static char const* const dname[4] = { "Bb", "Wb", "Bm", "Wm" };
+        std::vector<std::array<int, 4>> perms;
+        { std::array<int, 4> p{ 0, 1, 2, 3 }; do perms.push_back(p); while (std::next_permutation(p.begin(), p.end())); }
+        constexpr int NO = 25;                                  // 0: the present index; 1..24: the orders
+        std::atomic<std::uint64_t> bytes[2][NO]{}, best[2]{}, wins[2][NO]{};
+        bitboard const BACK_B = FULL - DOM_WM, BACK_W = FULL - DOM_BM, MID = FULL - BACK_B - BACK_W;
+        auto const t0 = std::chrono::steady_clock::now();
+        std::for_each(policy, mats.begin(), mats.end(), [&](Material const m) {
+                MatIndex const& mi = mat_index(m);
+                std::uint64_t const size = mi.size, K = mi.kings(), men = mi.men;
+                // every men configuration: its class and digits
+                struct Cfg { std::uint8_t cls; std::uint32_t d[4]; };
+                std::vector<Cfg> cfg(men);
+                std::uint64_t radix[16][4] = {};
+                for (std::uint64_t c = 0; c < men; ++c) {
+                        Pos p;
+                        mi.place(c, 0, 0, p);
+                        bitboard const bb = p.m[1] - DOM_WM, wb = p.m[0] - DOM_BM, bm = p.m[1] - bb, wm = p.m[0] - wb;
+                        int const cls = int(bb.size()) * 4 + int(wb.size());
+                        cfg[c] = { std::uint8_t(cls), { std::uint32_t(rank_in(bb, BACK_B)), std::uint32_t(rank_in(wb, BACK_W)), std::uint32_t(rank_in(bm, MID)), std::uint32_t(rank_in(wm, MID - bm)) } };
+                        radix[cls][0] = CC[BACK_B.size()][bb.size()]; radix[cls][1] = CC[BACK_W.size()][wb.size()];
+                        radix[cls][2] = CC[MID.size()][bm.size()]; radix[cls][3] = CC[MID.size() - bm.size()][wm.size()];
+                }
+                std::uint64_t off[17] = {};
+                for (int k = 0; k < 16; ++k) off[k + 1] = off[k] + radix[k][0] * radix[k][1] * radix[k][2] * radix[k][3];
+                if (off[16] != men) { std::cerr << m.name() << ": the classes hold " << off[16] << " of " << men << " configurations" << std::endl; std::exit(1); }
+                std::vector<std::vector<std::uint32_t>> old_of(NO, std::vector<std::uint32_t>(men));
+                for (std::uint64_t c = 0; c < men; ++c) old_of[0][c] = std::uint32_t(c);
+                for (int o = 1; o < NO; ++o) {
+                        auto const& pm = perms[std::size_t(o - 1)];
+                        std::vector<std::uint8_t> seen(men, 0);
+                        for (std::uint64_t c = 0; c < men; ++c) {
+                                Cfg const& x = cfg[c];
+                                std::uint64_t r = 0;
+                                for (int k = 0; k < 4; ++k) r = r * radix[x.cls][pm[std::size_t(k)]] + x.d[pm[std::size_t(k)]];
+                                std::uint64_t const nm = off[x.cls] + r;
+                                if (nm >= men || seen[nm]++) { std::cerr << m.name() << ": the factorised index is not a numbering" << std::endl; std::exit(1); }
+                                old_of[std::size_t(o)][nm] = std::uint32_t(c);
+                        }
+                }
+                for (int side : { 0, 1 }) {
+                        std::vector<std::uint16_t> const w = pg_values(probe_path(dir, m, "wdl", side), size, false);
+                        std::vector<std::uint8_t> dc(size);
+                        for (std::uint64_t i = 0; i < size; ++i) {
+                                Pos p;
+                                if (!mi.pos(i, side, p)) { dc[i] = 1; continue; }
+                                auto const ml = moves(p);
+                                dc[i] = (!ml.empty() && is_capture(*ml.begin())) || pending_capture(ml);
+                        }
+                        bool const has_depth = std::filesystem::exists(zpath(probe_path(dir, m, metric_name(), side)));
+                        std::vector<std::uint16_t> const d = has_depth ? pg_values(probe_path(dir, m, metric_name(), side), size, true) : std::vector<std::uint16_t>{};
+                        for (int kind = 0; kind < (has_depth ? 2 : 1); ++kind) {
+                                std::vector<std::uint16_t> const& v = kind ? d : w;
+                                std::uint64_t sz[NO];
+                                for (int o = 0; o < NO; ++o) {
+                                        std::vector<std::uint16_t> u(size);
+                                        std::uint16_t prev = kind ? 0 : std::uint16_t(WDL_DRAW);
+                                        std::uint64_t at = 0;
+                                        for (std::uint64_t nm = 0; nm < men; ++nm)
+                                                for (std::uint64_t i = std::uint64_t(old_of[std::size_t(o)][nm]) * K, e = i + K; i < e; ++i, ++at) {
+                                                        if (!(dc[i] || (kind && w[i] == WDL_DRAW))) prev = v[i];
+                                                        u[at] = prev;
+                                                }
+                                        sl::Packed const p = pg_build(u, kind != 0, maxlen, m.name());
+                                        sz[o] = (p.st.code_bits + 7) / 8 + p.st.grammar;
+                                        bytes[kind][o] += sz[o];
+                                }
+                                int const b = int(std::min_element(sz, sz + NO) - sz);
+                                best[kind] += sz[b]; ++wins[kind][b];
+                        }
+                }
+        });
+        std::cout << "pgorder2: " << mats.size() << " materials, " << seconds_since(t0) << " s; back rows of " << BACK_B.size() << " squares, " << MID.size() << " between\n";
+        for (int kind : { 0, 1 }) {
+                std::cout << "  " << (kind ? metric_name() : "wdl") << " (" << (kind ? "Huffman" : "12-bit") << " codes): codes and grammar\n";
+                for (int o = 0; o < NO; ++o) {
+                        std::string nm = "the present index";
+                        if (o) { nm.clear(); for (int k = 0; k < 4; ++k) nm += std::string(k ? " " : "") + dname[perms[std::size_t(o - 1)][std::size_t(k)]]; }
+                        std::cout << "    " << nm << ": " << bytes[kind][o].load() << " bytes (" << 100.0 * double(bytes[kind][o].load()) / double(bytes[kind][0].load()) << " %), smallest for " << wins[kind][o].load() << " sub-tables\n";
+                }
+                std::cout << "    the smallest order per sub-table: " << best[kind].load() << " bytes (" << 100.0 * double(best[kind].load()) / double(bytes[kind][0].load()) << " %)\n";
+        }
+        std::cout << std::flush;
+        return true;
+}
+
 // probebench: throughput and latency of the prober on the probe files of a store.
 //   uniform   positions drawn uniformly over the slots of all materials (no locality: the worst case for the cache)
 //   walk      random games: from a uniform position, 12 random moves; at every node the position and each of its
@@ -4532,6 +4633,7 @@ int main(int argc, char* argv[])
         if (a.size() == 3 && a[0] == "rpconvert") return rp_convert(a[1], std::stoi(a[2]), std::execution::par) ? 0 : 1;
         if (a.size() == 3 && a[0] == "pgconvert") return pg_convert(a[1], std::stoi(a[2]), std::execution::par) ? 0 : 1;
         if (a.size() == 3 && a[0] == "pgorder") return pg_order(a[1], std::stoi(a[2]), std::execution::par) ? 0 : 1;
+        if (a.size() == 3 && a[0] == "pgorder2") return pg_order2(a[1], std::stoi(a[2]), std::execution::par) ? 0 : 1;
         if (a.size() == 3 && a[0] == "pgpack") return pg_pack(a[1], std::stoi(a[2]), std::execution::par) ? 0 : 1;
         // probebench <dir> n <metric> [threads] [probes per thread] [uniform|walk]
         if (a.size() >= 4 && a.size() <= 7 && a[0] == "probebench" && parse_metric(a[3]))

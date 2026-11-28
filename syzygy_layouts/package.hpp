@@ -12,9 +12,8 @@
 //   directory     one entry per sub-table: what it is, how it is coded, where its sections are
 //   grammars      per sub-table: the symbols (and the Huffman code table)
 //   page indexes  per sub-table: top, then pri (tables.hpp)
-//   small data    the pages of every sub-table of at most one page, 64-byte aligned
-//   (pri and the pages are read a 4 KiB page at a time: longer than a page, a section starts on a 4 KiB boundary of the
-//   file; shorter, it lies within one page of the file)
+//   small data    the page of every sub-table of at most one page
+//   (every pri and every data section starts on a 4 KiB boundary of the file; top on a cache line)
 //   -- the front part ends here: it is small and is read once when the file is opened --
 //   data          the pages of every larger sub-table, each sub-table starting on a 4 KiB boundary of the file
 //   64 zero bytes (a lookup reads a few bytes past the line it decodes)
@@ -67,13 +66,6 @@ inline std::vector<std::uint8_t> pack(std::vector<PackItem> const& items, PackSi
                 e.off[sec] = out.size(); e.len[sec] = n;
                 out.insert(out.end(), static_cast<std::uint8_t const*>(p), static_cast<std::uint8_t const*>(p) + n);
         };
-        // pri and the pages are read a 4 KiB page at a time: a section longer than a page starts on a page boundary of
-        // the file, and a shorter one lies within one page of the file (it moves to the next boundary if it would cross one)
-        auto const put_paged = [&](PackEntry& e, std::uint32_t sec, void const* p, std::size_t n, std::size_t a) {
-                align(a);
-                if (n > 4096 || xstd::align_down(out.size(), 4096) != xstd::align_down(out.size() + n - 1, 4096)) align(4096);
-                put(e, sec, p, n, 1);
-        };
         auto const dat_bytes = [](Packed const& p) { return p.dat.size() - 4096 + p.last_page_bytes; };
         for (std::size_t i = 0; i < items.size(); ++i) {
                 Packed const& p = *items[i].p;
@@ -99,12 +91,12 @@ inline std::vector<std::uint8_t> pack(std::vector<PackItem> const& items, PackSi
         // an entry of top names 512 entries of pri: exactly one 4 KiB page of the file
         for (std::size_t i = 0; i < items.size(); ++i) {
                 Packed const& p = *items[i].p;
-                if (!p.is_const) put_paged(dir[i], SEC_PRI, p.pri.data(), 8 * p.pri.size(), 64);
+                if (!p.is_const) put(dir[i], SEC_PRI, p.pri.data(), 8 * p.pri.size(), 4096);
         }
         z.index = out.size() - mark; mark = out.size();
         for (std::size_t i = 0; i < items.size(); ++i) {
                 Packed const& p = *items[i].p;
-                if (!p.is_const && p.pri.size() == 1) put_paged(dir[i], SEC_DAT, p.dat.data(), dat_bytes(p), 64);
+                if (!p.is_const && p.pri.size() == 1) put(dir[i], SEC_DAT, p.dat.data(), dat_bytes(p), 4096);
         }
         z.small_data = out.size() - mark;
         z.front = out.size();
@@ -156,13 +148,11 @@ inline bool open_package(std::uint8_t const* base, std::size_t size, Package& K,
                 if (!P.is_const) {
                         for (std::uint32_t s = 0; s < SECTIONS; ++s) if (e.off[s] > size || e.len[s] > size - e.off[s]) return fail("a section lies outside the file");
                                         // alignment: the mapping starts on a page, so offsets in the file are offsets in memory. A line of the
-                        // data and a line of pri start on a cache line; a section longer than a page starts on a page, a
-                        // shorter one lies within one page
+                        // data and a line of pri start on a cache line; pri and the data start on a page
                         if (!xstd::is_aligned(base, 4096)) return fail("the file is not mapped on a page boundary");
                         for (std::uint32_t sec : { SEC_TOP, SEC_PRI, SEC_DAT }) if (!xstd::is_aligned(e.off[sec], 64)) return fail("a section does not start on a cache line");
                         if (e.line_bytes != 64) return fail("lines are not cache lines");
-                        for (std::uint32_t sec : { SEC_PRI, SEC_DAT })
-                                if (e.len[sec] > 4096 ? !xstd::is_aligned(e.off[sec], 4096) : e.len[sec] != 0 && xstd::align_down(e.off[sec], 4096) != xstd::align_down(e.off[sec] + e.len[sec] - 1, 4096)) return fail("pri or data not within pages of the file");
+                        for (std::uint32_t sec : { SEC_PRI, SEC_DAT }) if (!xstd::is_aligned(e.off[sec], 4096)) return fail("pri or data does not start on a page of the file");
                         P.C = e.line_bytes; P.W = e.code_bits; P.H = Header(e.header); P.positions = e.positions;
                         P.dat = base + e.off[SEC_DAT]; P.n_dat = e.len[SEC_DAT];
                         P.pri = reinterpret_cast<std::uint64_t const*>(base + e.off[SEC_PRI]); P.n_pri = e.len[SEC_PRI];
